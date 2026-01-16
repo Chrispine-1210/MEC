@@ -1,0 +1,123 @@
+@import url('https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: hsl(0, 0%, 98%);
+  --foreground: hsl(210, 25%, 7.8431%);
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(210, 25%, 7.8431%);
+  --popover: hsl(225, 60%, 31%);
+  --popover-foreground: hsl(210, 25%, 7.8431%);
+  --primary: hsl(217, 91%, 60%);
+  --primary-foreground: hsl(0, 0%, 100%);
+  --secondary: hsl(210, 40%, 98%);
+  --secondary-foreground: hsl(210, 25%, 7.8431%);
+  --muted: hsl(210, 40%, 96%);
+  --muted-foreground: hsl(215, 13.8%, 34.1%);
+  --accent: hsl(170, 76%, 45%);
+  --accent-foreground: hsl(0, 0%, 100%);
+  --destructive: hsl(0, 84.2%, 60.2%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --border: hsl(210, 14%, 89%);
+  --input: hsl(210, 14%, 89%);
+  --ring: hsl(217, 91%, 60%);
+  --radius: 0.5rem;
+  --chart-1: hsl(217, 91%, 60%);
+  --chart-2: hsl(170, 76%, 45%);
+  --chart-3: hsl(43, 96%, 56%);
+  --chart-4: hsl(291, 64%, 42%);
+  --chart-5: hsl(12, 76%, 61%);
+}
+
+.dark {
+  --background: hsl(217, 32%, 17%);
+  --foreground: hsl(210, 40%, 98%);
+  --card: hsl(217, 32%, 22%);
+  --card-foreground: hsl(210, 40%, 98%);
+  --popover: hsl(217, 32%, 17%);
+  --popover-foreground: hsl(210, 40%, 98%);
+  --primary: hsl(217, 91%, 60%);
+  --primary-foreground: hsl(217, 32%, 17%);
+  --secondary: hsl(217, 32%, 28%);
+  --secondary-foreground: hsl(210, 40%, 98%);
+  --muted: hsl(217, 32%, 27%);
+  --muted-foreground: hsl(215, 20%, 65%);
+  --accent: hsl(170, 76%, 45%);
+  --accent-foreground: hsl(217, 32%, 17%);
+  --destructive: hsl(0, 84.2%, 60.2%);
+  --destructive-foreground: hsl(210, 40%, 98%);
+  --border: hsl(217, 32%, 28%);
+  --input: hsl(217, 32%, 28%);
+  --ring: hsl(217, 91%, 60%);
+  --chart-1: hsl(217, 91%, 60%);
+  --chart-2: hsl(170, 76%, 45%);
+  --chart-3: hsl(43, 96%, 56%);
+  --chart-4: hsl(291, 64%, 42%);
+  --chart-5: hsl(12, 76%, 61%);
+}
+
+* { border-color: hsl(var(--border)); }
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+@keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); } 50% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); } }
+@keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-10px); } }
+@keyframes shimmer { 0% { background-position: -1000px 0; } 100% { background-position: 1000px 0; } }
+@keyframes gradient { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+
+.animate-fadeIn { animation: fadeIn 0.5s ease-out; }
+.animate-slideInUp { animation: slideInUp 0.5s ease-out; }
+.animate-slideInDown { animation: slideInDown 0.5s ease-out; }
+.animate-scaleIn { animation: scaleIn 0.3s ease-out; }
+.animate-pulse-glow { animation: pulse-glow 2s infinite; }
+.animate-float { animation: float 3s ease-in-out infinite; }
+.animate-gradient { background-size: 200% 200%; animation: gradient 3s ease infinite; }
+
+.scrollbar-thin::-webkit-scrollbar { width: 4px; height: 4px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: hsl(var(--muted)); }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: hsl(var(--muted-foreground) / 0.3); border-radius: 2px; }
+
+.chart-container { height: 300px; position: relative; }
+.hover-lift:hover { transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); transition: all 0.2s ease-in-out; }
+.admin-sidebar { background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--muted)) 100%); }
+
+/* Form styling - Professional Modal Forms */
+[role="dialog"] { background: white !important; }
+[role="dialog"] form { background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius: 12px; }
+.form-section { background: rgba(255, 255, 255, 0.6); border-radius: 8px; padding: 16px; border: 1px solid rgba(59, 130, 246, 0.1); }
+input, textarea, [role="combobox"], input[type="text"], input[type="email"], input[type="url"], input[type="number"], textarea { 
+  background-color: white !important; 
+  color: #1f2937 !important;
+  border: 1px solid #e5e7eb !important;
+  transition: all 0.2s ease;
+}
+input:focus, textarea:focus, [role="combobox"]:focus { 
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2) !important;
+  border-color: #3b82f6 !important;
+}
+input::placeholder, textarea::placeholder { color: #9ca3af; }
+label { color: #374151; font-weight: 500; }
+
+/* Dark mode form styling */
+.dark [role="dialog"] form { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); }
+.dark input, .dark textarea, .dark [role="combobox"] { 
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+  border-color: #334155 !important;
+}
+.dark input:focus, .dark textarea:focus { 
+  border-color: #60a5fa !important;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2) !important;
+}
+.dark label { color: #e2e8f0; }
