@@ -95,6 +95,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const wss = new WebSocketServer({
     server: httpServer,
     path: "/ws",
+    verifyClient: (info, done) => done(true)
   });
 
   wss.on("connection", (ws: WebSocket, req) => {
