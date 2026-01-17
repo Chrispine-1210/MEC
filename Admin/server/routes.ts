@@ -14,11 +14,25 @@ import {
   insertApplicationSchema,
 } from "@shared/schema";
 import jwt from "jsonwebtoken";
+import { WebsocketServer, WebSocket } from "ws";
 import bcrypt from "bcrypt";
 import path from "path";
 import { createServer } from "http";
 
 const router = Router();
+
+/* =========================
+  ENV SAFETY
+========================= */
+
+const JWT_SECRET = process.env.JWT_SECRET;
+const NODE_ENV = process.env.NODE_ENV || "development";
+const FRONTEND_URL = process.env.FRONTEND_URL;
+
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET is not defined");
+}
+
 
 // Helper function to validate request body
 const validateBody = (schema: z.ZodSchema) => {
@@ -59,13 +73,13 @@ router.post("/auth/login", async (req, res) => {
 
     const token = jwt.sign(
       { userId: user.id, role: user.role },
-      process.env.JWT_SECRET || "your-secret-key",
+      process.env.JWT_SECRET!,
       { expiresIn: "1h" }
     );
 
     const refreshToken = jwt.sign(
       { userId: user.id },
-      process.env.JWT_SECRET || "your-secret-key",
+      process.env.JWT_SECRET!,
       { expiresIn: "7d" }
     );
 
@@ -119,7 +133,7 @@ router.post("/auth/refresh", async (req, res) => {
 
     const newToken = jwt.sign(
       { userId: user.id, role: user.role },
-      process.env.JWT_SECRET || "your-secret-key",
+      process.env.JWT_SECRET!,
       { expiresIn: "1h" }
     );
 
@@ -158,13 +172,13 @@ router.post("/auth/register", async (req, res) => {
 
     const token = jwt.sign(
       { userId: user.id, role: user.role },
-      process.env.JWT_SECRET || "your-secret-key",
+      process.env.JWT_SECRET!,
       { expiresIn: "1h" }
     );
 
     const refreshToken = jwt.sign(
       { userId: user.id },
-      process.env.JWT_SECRET || "your-secret-key",
+      process.env.JWT_SECRET!,
       { expiresIn: "7d" }
     );
 
