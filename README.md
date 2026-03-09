@@ -1,4 +1,4 @@
-# Replit.md - Mtendere Education Platform
+# Mtendere Education Platform
 
 ## Overview
 
@@ -82,5 +82,6 @@ This is a full-stack web application for Mtendere Education Consultants, an educ
 - July 08, 2025. Initial setup
 
 ## User Preferences
+
 
 Preferred communication style: Simple, everyday language.
