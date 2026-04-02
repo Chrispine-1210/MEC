@@ -1,4 +1,5 @@
 import ExpandingNav from "@/components/expanding-nav";
+import Footer from "@/components/footer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -64,17 +65,25 @@ export default function About() {
       <ExpandingNav />
       
       {/* Hero Section */}
-      <section className="bg-gradient-to-r from-mtendere-blue to-mtendere-green text-white py-20">
-        <div className="container mx-auto px-4">
+      <section 
+        className="relative py-28 text-white overflow-hidden"
+        style={ {
+          backgroundImage: `url(${'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&q=80&w=2000'})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center'
+        } }
+      >
+        <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/80 to-mtendere-green/80 z-0" />
+        <div className="container relative z-10 mx-auto px-4">
           <div className="max-w-4xl mx-auto text-center">
-            <h1 className="text-4xl md:text-6xl font-bold mb-6">
+            <h1 className="text-5xl md:text-7xl font-bold mb-6 drop-shadow-2xl">
               About Mtendere Education
             </h1>
-            <p className="text-xl md:text-2xl mb-8 opacity-90">
+            <p className="text-xl md:text-3xl mb-10 opacity-95 drop-shadow-lg leading-relaxed">
               Empowering students worldwide to achieve their educational dreams and career aspirations through personalized guidance and global opportunities
             </p>
             <div className="flex justify-center">
-              <Button asChild size="lg" className="bg-mtendere-orange hover:bg-orange-600">
+              <Button asChild size="lg" className="bg-mtendere-orange hover:bg-orange-600 shadow-xl transition-all hover:scale-105 px-8">
                 <Link href="/contact">
                   Get Started Today
                 </Link>
@@ -232,60 +241,75 @@ export default function About() {
       </section>
 
       {/* Team Section */}
-      <section className="py-16 bg-white">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-mtendere-blue mb-4">
-              Meet Our Team
+      <section id="team" className="py-24 bg-white relative">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-mtendere-blue/5 rounded-full -mr-32 -mt-32 blur-3xl" />
+        <div className="container mx-auto px-4 relative z-10">
+          <div className="text-center mb-16">
+            <Badge variant="outline" className="mb-4 text-mtendere-blue border-mtendere-blue px-4 py-1 uppercase tracking-wider text-xs font-bold">
+              Our Experts
+            </Badge>
+            <h2 className="text-4xl md:text-5xl font-extrabold text-mtendere-blue mb-6 tracking-tight">
+              Meet Our <span className="text-mtendere-green">Dedicated Team</span>
             </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Dedicated professionals committed to your success
+            <div className="w-24 h-1.5 bg-mtendere-orange mx-auto mb-8 rounded-full" />
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
+              Highly qualified professionals committed to providing you with the best educational and career guidance
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {teamMembers?.slice(0, 6).map((member) => (
-              <Card key={member.id} className="text-center hover:shadow-lg transition-shadow duration-300">
-                <CardHeader>
-                  <div className="w-24 h-24 rounded-full mx-auto mb-4 overflow-hidden bg-gradient-to-br from-mtendere-blue to-mtendere-green">
-                    {member.imageUrl ? (
-                      <img 
-                        src={member.imageUrl} 
-                        alt={member.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Users className="w-12 h-12 text-white" />
-                      </div>
-                    )}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+            {teamMembers?.map((member) => (
+              <Card key={member.id} className="text-center group hover:shadow-2xl transition-all duration-500 border-none bg-mtendere-gray/30 backdrop-blur-sm overflow-hidden">
+                <CardHeader className="pt-10">
+                  <div className="relative w-40 h-40 mx-auto mb-6">
+                    <div className="absolute inset-0 bg-gradient-to-br from-mtendere-blue to-mtendere-green rounded-full rotate-6 group-hover:rotate-12 transition-transform duration-500 scale-105 opacity-20" />
+                    <div className="relative w-full h-full rounded-full overflow-hidden border-4 border-white shadow-xl group-hover:border-mtendere-blue/20 transition-all duration-500">
+                      {member.imageUrl ? (
+                        <img 
+                          src={member.imageUrl} 
+                          alt={member.name}
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-mtendere-gray">
+                          <Users className="w-20 h-20 text-mtendere-blue/20" />
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <CardTitle className="text-xl text-mtendere-blue">
+                  <CardTitle className="text-2xl font-bold text-mtendere-blue group-hover:text-mtendere-green transition-colors">
                     {member.name}
                   </CardTitle>
-                  <CardDescription className="text-mtendere-green font-medium">
+                  <CardDescription className="text-mtendere-orange font-bold uppercase tracking-wider text-xs">
                     {member.position}
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 text-sm mb-4 line-clamp-3">
-                    {member.bio}
+                <CardContent className="px-8 pb-10">
+                  <div className="h-px bg-mtendere-blue/10 w-full mb-6" />
+                  <p className="text-gray-600 leading-relaxed mb-8 line-clamp-4 italic text-base">
+                    "{member.bio}"
                   </p>
-                  <div className="flex justify-center space-x-2">
+                  <div className="flex justify-center gap-4">
                     {member.linkedin && (
-                      <Button variant="ghost" size="sm">
-                        <Linkedin className="w-4 h-4" />
-                      </Button>
+                      <a href={member.linkedin} target="_blank" rel="noopener noreferrer">
+                        <Button variant="outline" size="icon" className="rounded-full hover:bg-mtendere-blue hover:text-white transition-all">
+                          <Linkedin className="w-4 h-4" />
+                        </Button>
+                      </a>
                     )}
                     {member.twitter && (
-                      <Button variant="ghost" size="sm">
-                        <Twitter className="w-4 h-4" />
-                      </Button>
+                      <a href={member.twitter} target="_blank" rel="noopener noreferrer">
+                        <Button variant="outline" size="icon" className="rounded-full hover:bg-blue-400 hover:text-white transition-all">
+                          <Twitter className="w-4 h-4" />
+                        </Button>
+                      </a>
                     )}
                     {member.email && (
-                      <Button variant="ghost" size="sm">
-                        <Mail className="w-4 h-4" />
-                      </Button>
+                      <a href={`mailto:${member.email}`}>
+                        <Button variant="outline" size="icon" className="rounded-full hover:bg-red-500 hover:text-white transition-all">
+                          <Mail className="w-4 h-4" />
+                        </Button>
+                      </a>
                     )}
                   </div>
                 </CardContent>
@@ -361,21 +385,29 @@ export default function About() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-16 bg-gradient-to-r from-mtendere-blue to-mtendere-green text-white">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
+      <section 
+        className="relative py-24 text-white overflow-hidden"
+        style={ {
+          backgroundImage: `url(${'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?auto=format&fit=crop&q=80&w=2000'})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center'
+        } }
+      >
+        <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/90 to-mtendere-green/90 z-0" />
+        <div className="container relative z-10 mx-auto px-4 text-center">
+          <h2 className="text-4xl md:text-5xl font-bold mb-6 drop-shadow-2xl">
             Ready to Start Your Journey?
           </h2>
-          <p className="text-xl mb-8 opacity-90">
+          <p className="text-xl md:text-2xl mb-10 opacity-95 drop-shadow-lg max-w-2xl mx-auto">
             Join thousands of students who have transformed their lives with Mtendere
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button asChild size="lg" className="bg-mtendere-orange hover:bg-orange-600">
+          <div className="flex flex-col sm:flex-row gap-6 justify-center">
+            <Button asChild size="lg" className="bg-mtendere-orange hover:bg-orange-600 shadow-xl transition-all hover:scale-105 px-8">
               <Link href="/register">
                 Get Started Now
               </Link>
             </Button>
-            <Button asChild size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-mtendere-blue">
+            <Button asChild size="lg" variant="outline" className="border-white text-white hover:bg-white/10 shadow-xl transition-all hover:scale-105 px-8">
               <Link href="/contact">
                 Contact Us
               </Link>
@@ -383,6 +415,7 @@ export default function About() {
           </div>
         </div>
       </section>
+      <Footer />
     </div>
   );
 }

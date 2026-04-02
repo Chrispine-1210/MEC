@@ -18,6 +18,12 @@ import About from "@/pages/about";
 import Contact from "@/pages/contact";
 import AIChat from "@/components/ai-chat";
 import BackToTop from "@/components/back-to-top";
+import Blog from "@/pages/blog";
+import BlogDetail from "@/pages/blog-detail";
+import StudyAbroad from "@/pages/study-abroad";
+import UniversityApplications from "@/pages/university-applications";
+import CareerCounseling from "@/pages/career-counseling";
+import ResumeBuilding from "@/pages/resume-building";
 
 function Router() {
   return (
@@ -32,6 +38,12 @@ function Router() {
       <Route path="/partners" component={Partners} />
       <Route path="/about" component={About} />
       <Route path="/contact" component={Contact} />
+      <Route path="/blog" component={Blog} />
+      <Route path="/blog/:id" component={BlogDetail} />
+      <Route path="/study-abroad" component={StudyAbroad} />
+      <Route path="/university-applications" component={UniversityApplications} />
+      <Route path="/career-counseling" component={CareerCounseling} />
+      <Route path="/resume-building" component={ResumeBuilding} />
       <Route component={NotFound} />
     </Switch>
   );

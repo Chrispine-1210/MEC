@@ -1,5 +1,6 @@
 import { useState } from "react";
 import ExpandingNav from "@/components/expanding-nav";
+import Footer from "@/components/footer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,11 @@ import {
   MessageCircle,
   Users,
   Globe,
-  Loader2
+  Loader2,
+  Facebook,
+  Twitter,
+  Instagram,
+  Linkedin
 } from "lucide-react";
 
 export default function Contact() {
@@ -77,19 +82,19 @@ export default function Contact() {
     {
       icon: MapPin,
       title: "Visit Our Office",
-      details: ["123 Education Street", "City, State 12345", "Country"],
+      details: ["Off Mandala Road, Area 3", "Behind NBS Bank, Lilongwe", "Malawi"],
       color: "text-mtendere-blue",
     },
     {
       icon: Phone,
       title: "Call Us",
-      details: ["+1 (555) 123-4567", "+1 (555) 123-4568", "Mon-Fri: 9AM-6PM"],
+      details: ["+265 998 882 786", "+265 887 209 531", "Mon-Fri: 9AM-6PM"],
       color: "text-mtendere-green",
     },
     {
       icon: Mail,
       title: "Email Us",
-      details: ["info@mtendere.com", "support@mtendere.com", "admissions@mtendere.com"],
+      details: ["mtendereeducationconsult@gmail.com"],
       color: "text-mtendere-orange",
     },
   ];
@@ -118,18 +123,18 @@ export default function Contact() {
               Have questions about our services? Ready to start your educational journey? 
               We're here to help you every step of the way.
             </p>
-            <div className="flex justify-center space-x-8 text-sm opacity-80">
+            <div className="flex justify-center space-x-8 text-sm opacity-90 font-bold drop-shadow-md">
               <div className="text-center">
                 <div className="text-2xl font-bold">24/7</div>
-                <div>Support Available</div>
+                <div className="uppercase tracking-tighter">Support</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold">&lt;24h</div>
-                <div>Response Time</div>
+                <div className="uppercase tracking-tighter">Response</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold">50+</div>
-                <div>Languages Supported</div>
+                <div className="uppercase tracking-tighter">Countries</div>
               </div>
             </div>
           </div>
@@ -428,28 +433,54 @@ export default function Contact() {
           </div>
         </section>
 
-        {/* Emergency Contact */}
+        {/* Social Media & Emergency Contact */}
         <section className="mt-16 bg-mtendere-gray rounded-2xl p-8">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-mtendere-blue mb-4">
-              Need Immediate Assistance?
-            </h2>
-            <p className="text-gray-600 mb-6">
-              For urgent matters or emergency support, contact us directly
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button className="bg-mtendere-green hover:bg-green-700">
-                <Phone className="w-4 h-4 mr-2" />
-                Call Emergency Line
-              </Button>
-              <Button variant="outline" className="border-mtendere-blue text-mtendere-blue">
-                <MessageCircle className="w-4 h-4 mr-2" />
-                Live Chat Support
-              </Button>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+            <div className="text-center md:text-left">
+              <h2 className="text-2xl font-bold text-mtendere-blue mb-4">
+                Follow Our Journey
+              </h2>
+              <p className="text-gray-600 mb-6">
+                Connect with us on social media for the latest scholarship updates and educational tips.
+              </p>
+              <div className="flex justify-center md:justify-start space-x-6">
+                <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-600 transition-colors">
+                  <Facebook className="w-8 h-8" />
+                </a>
+                <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-400 transition-colors">
+                  <Twitter className="w-8 h-8" />
+                </a>
+                <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-pink-600 transition-colors">
+                  <Instagram className="w-8 h-8" />
+                </a>
+                <a href="https://www.linkedin.com/in/mtendere-education-consult-478133298/" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-700 transition-colors">
+                  <Linkedin className="w-8 h-8" />
+                </a>
+              </div>
+            </div>
+            
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-mtendere-blue mb-4">
+                Need Immediate Assistance?
+              </h2>
+              <p className="text-gray-600 mb-6">
+                For urgent matters or emergency support, contact us directly
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button className="bg-mtendere-green hover:bg-green-700 text-white font-bold">
+                  <Phone className="w-4 h-4 mr-2" />
+                  Call Emergency Line
+                </Button>
+                <Button variant="outline" className="border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white font-bold">
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  Live Chat Support
+                </Button>
+              </div>
             </div>
           </div>
         </section>
       </div>
+      <Footer />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import ExpandingNav from "@/components/expanding-nav";
+import Footer from "@/components/footer";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -132,25 +133,33 @@ export default function Jobs() {
       <ExpandingNav />
       
       {/* Header Section */}
-      <section className="bg-gradient-to-r from-mtendere-green to-mtendere-blue text-white py-16">
-        <div className="container mx-auto px-4">
+      <section 
+        className="relative py-24 text-white overflow-hidden"
+        style={ {
+          backgroundImage: `url(${'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?auto=format&fit=crop&q=80&w=2000'})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center'
+        } }
+      >
+        <div className="absolute inset-0 bg-gradient-to-r from-mtendere-green/90 to-mtendere-blue/90 z-0" />
+        <div className="container relative z-10 mx-auto px-4">
           <div className="max-w-3xl mx-auto text-center">
-            <h1 className="text-4xl md:text-5xl font-bold mb-6">
+            <h1 className="text-5xl md:text-6xl font-bold mb-6 drop-shadow-2xl">
               Discover Your Next Career Opportunity
             </h1>
-            <p className="text-xl mb-8 opacity-90">
+            <p className="text-xl md:text-2xl mb-8 opacity-95 drop-shadow-lg">
               Find your perfect job from our curated list of opportunities with top employers worldwide
             </p>
             
             {/* Search Bar */}
-            <div className="relative max-w-2xl mx-auto">
+            <div className="relative max-w-2xl mx-auto drop-shadow-2xl">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <Input
                 type="text"
                 placeholder="Search jobs by title, company, or location..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-12 pr-4 py-4 text-lg bg-white text-gray-900 border-0 rounded-lg shadow-lg"
+                className="pl-12 pr-4 py-6 text-lg bg-white text-gray-900 border-0 rounded-xl shadow-2xl focus-visible:ring-primary"
               />
               {isSearching && (
                 <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
@@ -247,43 +256,50 @@ export default function Jobs() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {filteredJobs?.map((job) => (
-              <Card key={job.id} className="hover:shadow-lg transition-shadow duration-300">
-                <CardHeader>
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center space-x-2">
-                      <Badge 
-                        variant="secondary" 
-                        className="bg-mtendere-green text-white"
-                      >
-                        {job.jobType}
+            {filteredJobs?.map((job, idx) => {
+              const jobImages = [
+                "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=800",
+                "https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&q=80&w=800",
+                "https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&q=80&w=800",
+                "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&q=80&w=800",
+                "https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&q=80&w=800",
+              ];
+              const coverImg = job.imageUrl || jobImages[idx % jobImages.length];
+              return (
+              <Card key={job.id} className="hover:shadow-2xl transition-all duration-500 overflow-hidden group border-none bg-white shadow-md flex flex-col">
+                <div className="relative h-44 overflow-hidden">
+                  <img
+                    src={coverImg}
+                    alt={job.title}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                  <div className="absolute top-3 left-3 flex gap-2">
+                    <Badge className="bg-mtendere-green text-white font-bold text-xs">{job.jobType}</Badge>
+                    {job.isRemote && (
+                      <Badge className="bg-mtendere-blue text-white text-xs">
+                        <Wifi className="w-3 h-3 mr-1" />Remote
                       </Badge>
-                      {job.isRemote && (
-                        <Badge variant="outline" className="border-mtendere-blue text-mtendere-blue">
-                          <Wifi className="w-3 h-3 mr-1" />
-                          Remote
-                        </Badge>
-                      )}
-                    </div>
+                    )}
                     {job.deadline && isDeadlineApproaching(job.deadline) && (
-                      <Badge variant="destructive" className="animate-pulse">
-                        <Clock className="w-3 h-3 mr-1" />
-                        Urgent
+                      <Badge variant="destructive" className="animate-pulse text-xs">
+                        <Clock className="w-3 h-3 mr-1" />Urgent
                       </Badge>
                     )}
                   </div>
-                  <CardTitle className="text-xl text-mtendere-blue line-clamp-2">
+                  <div className="absolute bottom-3 left-3">
+                    <span className="text-white text-sm font-bold drop-shadow flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5" />{job.location}
+                    </span>
+                  </div>
+                </div>
+                <CardHeader className="pt-4">
+                  <CardTitle className="text-lg text-mtendere-blue line-clamp-2 font-bold group-hover:text-mtendere-green transition-colors">
                     {job.title}
                   </CardTitle>
-                  <CardDescription className="flex items-center space-x-4 text-sm">
-                    <span className="flex items-center">
-                      <Building className="w-4 h-4 mr-1" />
-                      {job.company}
-                    </span>
-                    <span className="flex items-center">
-                      <MapPin className="w-4 h-4 mr-1" />
-                      {job.location}
-                    </span>
+                  <CardDescription className="flex items-center gap-2 text-sm">
+                    <Building className="w-3.5 h-3.5 text-mtendere-blue" />
+                    {job.company}
                   </CardDescription>
                 </CardHeader>
                 
@@ -360,7 +376,8 @@ export default function Jobs() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+            );
+          })}
           </div>
         )}
 
@@ -386,6 +403,7 @@ export default function Jobs() {
           </div>
         )}
       </div>
+      <Footer />
     </div>
   );
 }

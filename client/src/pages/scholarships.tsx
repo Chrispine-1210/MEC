@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import ExpandingNav from "@/components/expanding-nav";
+import Footer from "@/components/footer";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -37,9 +38,29 @@ interface Scholarship {
   isActive: boolean;
 }
 
+const videoSources = [
+  {
+    url: "https://assets.mixkit.co/videos/preview/mixkit-group-of-students-working-in-a-university-library-40040-large.mp4",
+    title: "Collaborative Learning",
+    description: "Study together with peers from around the world",
+  },
+  {
+    url: "https://assets.mixkit.co/videos/preview/mixkit-students-walking-on-a-university-campus-40038-large.mp4",
+    title: "Campus Excellence",
+    description: "Experience top-tier educational facilities",
+  },
+  {
+    url: "https://assets.mixkit.co/videos/preview/mixkit-young-woman-working-on-a-laptop-in-a-library-40041-large.mp4",
+    title: "Academic Success",
+    description: "Achieve your educational goals",
+  },
+];
+
 export default function Scholarships() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [currentVideo, setCurrentVideo] = useState(0);
+  const [isPlayingVideo, setIsPlayingVideo] = useState(true);
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -52,6 +73,10 @@ export default function Scholarships() {
     queryKey: ["/api/scholarships/search", searchQuery],
     enabled: searchQuery.length > 2,
   });
+
+  const handleNextVideo = () => {
+    setCurrentVideo((prev) => (prev + 1) % videoSources.length);
+  };
 
   const applyMutation = useMutation({
     mutationFn: async (scholarshipId: number) => {
@@ -126,25 +151,33 @@ export default function Scholarships() {
       <ExpandingNav />
       
       {/* Header Section */}
-      <section className="bg-gradient-to-r from-mtendere-blue to-mtendere-green text-white py-16">
-        <div className="container mx-auto px-4">
+      <section 
+        className="relative py-24 text-white overflow-hidden"
+        style={ {
+          backgroundImage: `url(${'https://images.unsplash.com/photo-1541339907198-e08756ebafe3?auto=format&fit=crop&q=80&w=2000'})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center'
+        } }
+      >
+        <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/90 to-mtendere-green/90 z-0" />
+        <div className="container relative z-10 mx-auto px-4">
           <div className="max-w-3xl mx-auto text-center">
-            <h1 className="text-4xl md:text-5xl font-bold mb-6">
+            <h1 className="text-5xl md:text-6xl font-bold mb-6 drop-shadow-2xl">
               Find Your Perfect Scholarship
             </h1>
-            <p className="text-xl mb-8 opacity-90">
+            <p className="text-xl md:text-2xl mb-8 opacity-95 drop-shadow-lg">
               Discover funding opportunities from top institutions worldwide and make your educational dreams a reality
             </p>
             
             {/* Search Bar */}
-            <div className="relative max-w-2xl mx-auto">
+            <div className="relative max-w-2xl mx-auto drop-shadow-2xl">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <Input
                 type="text"
                 placeholder="Search scholarships by title, institution, or country..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-12 pr-4 py-4 text-lg bg-white text-gray-900 border-0 rounded-lg shadow-lg"
+                className="pl-12 pr-4 py-6 text-lg bg-white text-gray-900 border-0 rounded-xl shadow-2xl focus-visible:ring-primary"
               />
               {isSearching && (
                 <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
@@ -156,19 +189,56 @@ export default function Scholarships() {
         </div>
       </section>
 
-      <div className="container mx-auto px-4 py-12">
-        {/* Filters */}
-        <div className="mb-8">
+      {/* Video Section */}
+      <section className="py-20 bg-mtendere-gray">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-black rounded-2xl overflow-hidden shadow-2xl mb-8">
+              <video
+                src={videoSources[currentVideo].url}
+                className="w-full h-96 object-cover"
+                autoPlay
+                muted
+                loop
+                key={currentVideo}
+              />
+            </div>
+            <div className="bg-white rounded-xl shadow-lg p-8">
+              <h3 className="text-2xl font-bold text-mtendere-blue mb-2">
+                {videoSources[currentVideo].title}
+              </h3>
+              <p className="text-gray-600 mb-6">
+                {videoSources[currentVideo].description}
+              </p>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-500 font-medium">
+                  Video {currentVideo + 1} of {videoSources.length}
+                </span>
+                <Button 
+                  onClick={handleNextVideo}
+                  className="bg-mtendere-blue hover:bg-blue-700 text-white font-bold"
+                >
+                  Next Video
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="container mx-auto px-4 py-16">
+        {/* Filters Section with Background */}
+        <div className="mb-12 bg-gradient-to-r from-mtendere-blue/5 to-mtendere-green/5 rounded-2xl p-8 shadow-md">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center space-x-2">
-              <Filter className="w-5 h-5 text-gray-600" />
-              <span className="font-medium text-gray-700">Filter by category:</span>
+              <Filter className="w-5 h-5 text-mtendere-blue font-bold" />
+              <span className="font-bold text-mtendere-blue">Filter by category:</span>
             </div>
             <Button
               variant={selectedCategory === "" ? "default" : "outline"}
               size="sm"
               onClick={() => setSelectedCategory("")}
-              className={selectedCategory === "" ? "bg-mtendere-blue" : ""}
+              className={selectedCategory === "" ? "bg-mtendere-blue text-white font-bold hover:bg-blue-700" : "border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white"}
             >
               All Categories
             </Button>
@@ -178,7 +248,7 @@ export default function Scholarships() {
                 variant={selectedCategory === category ? "default" : "outline"}
                 size="sm"
                 onClick={() => setSelectedCategory(category)}
-                className={selectedCategory === category ? "bg-mtendere-blue" : ""}
+                className={selectedCategory === category ? "bg-mtendere-blue text-white font-bold hover:bg-blue-700" : "border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white"}
               >
                 {category}
               </Button>
@@ -215,33 +285,50 @@ export default function Scholarships() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredScholarships?.map((scholarship) => (
-              <Card key={scholarship.id} className="hover:shadow-lg transition-shadow duration-300">
-                <CardHeader>
-                  <div className="flex items-start justify-between mb-2">
-                    <Badge 
-                      variant="secondary" 
-                      className="bg-mtendere-green text-white"
-                    >
-                      {scholarship.category}
-                    </Badge>
-                    {isDeadlineApproaching(scholarship.deadline) && (
-                      <Badge variant="destructive" className="animate-pulse">
-                        <Clock className="w-3 h-3 mr-1" />
-                        Urgent
-                      </Badge>
-                    )}
+              <Card key={scholarship.id} className="hover:shadow-2xl transition-all duration-500 overflow-hidden group border-none bg-white shadow-md flex flex-col">
+                {scholarship.imageUrl && (
+                  <div className="relative h-48 overflow-hidden">
+                    <img
+                      src={scholarship.imageUrl}
+                      alt={scholarship.title}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                    <div className="absolute top-3 left-3 flex gap-2">
+                      <Badge className="bg-mtendere-green text-white font-bold text-xs">{scholarship.category}</Badge>
+                      {isDeadlineApproaching(scholarship.deadline) && (
+                        <Badge variant="destructive" className="animate-pulse text-xs">
+                          <Clock className="w-3 h-3 mr-1" />
+                          Urgent
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="absolute bottom-3 left-3">
+                      <span className="text-white text-sm font-bold drop-shadow flex items-center gap-1">
+                        <MapPin className="w-3.5 h-3.5" />{scholarship.country}
+                      </span>
+                    </div>
                   </div>
-                  <CardTitle className="text-xl text-mtendere-blue line-clamp-2">
+                )}
+                <CardHeader className={scholarship.imageUrl ? "pt-4" : ""}>
+                  {!scholarship.imageUrl && (
+                    <div className="flex items-start justify-between mb-2">
+                      <Badge className="bg-mtendere-green text-white">{scholarship.category}</Badge>
+                      {isDeadlineApproaching(scholarship.deadline) && (
+                        <Badge variant="destructive" className="animate-pulse">
+                          <Clock className="w-3 h-3 mr-1" />
+                          Urgent
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                  <CardTitle className="text-lg text-mtendere-blue line-clamp-2 font-bold group-hover:text-mtendere-green transition-colors">
                     {scholarship.title}
                   </CardTitle>
-                  <CardDescription className="flex items-center space-x-4 text-sm">
-                    <span className="flex items-center">
-                      <GraduationCap className="w-4 h-4 mr-1" />
+                  <CardDescription className="flex items-center gap-2 text-sm flex-wrap">
+                    <span className="flex items-center gap-1">
+                      <GraduationCap className="w-3.5 h-3.5 text-mtendere-blue" />
                       {scholarship.institution}
-                    </span>
-                    <span className="flex items-center">
-                      <MapPin className="w-4 h-4 mr-1" />
-                      {scholarship.country}
                     </span>
                   </CardDescription>
                 </CardHeader>
@@ -275,7 +362,7 @@ export default function Scholarships() {
 
                   <div className="flex space-x-2">
                     <Button
-                      className="flex-1 bg-mtendere-blue hover:bg-blue-700"
+                      className="flex-1 bg-mtendere-blue hover:bg-blue-700 text-white font-bold shadow-md"
                       onClick={() => handleApply(scholarship.id)}
                       disabled={applyMutation.isPending}
                     >
@@ -292,7 +379,7 @@ export default function Scholarships() {
                       )}
                     </Button>
                     
-                    <Button variant="outline" size="icon">
+                    <Button variant="outline" size="icon" className="border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white shadow-sm">
                       <ExternalLink className="w-4 h-4" />
                     </Button>
                   </div>
@@ -323,6 +410,7 @@ export default function Scholarships() {
           </div>
         )}
       </div>
+      <Footer />
     </div>
   );
 }

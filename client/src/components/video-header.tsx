@@ -1,23 +1,29 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { Play, Pause, Volume2, VolumeX, ChevronDown } from "lucide-react";
+import { Play, Pause, Volume2, VolumeX, ChevronDown, ArrowRight } from "lucide-react";
 
 const videoSources = [
   {
-    url: "https://player.vimeo.com/external/371433846.sd.mp4?s=236f4b6e3d7ef1c0d87e8b567736e57c18b64bb1&profile_id=165&oauth2_token_id=57447761",
-    title: "Campus Life at Leading Universities",
-    description: "Experience the vibrant campus culture",
+    url: "https://assets.mixkit.co/videos/preview/mixkit-group-of-students-working-in-a-university-library-40040-large.mp4",
+    headline: "Your Gateway to",
+    highlight: "Global Education",
+    caption: "We connect ambitious Malawian students with world-class universities, fully-funded scholarships, and life-changing career opportunities across 50+ countries.",
+    badge: "Trusted by 10,000+ Students",
   },
   {
-    url: "https://player.vimeo.com/external/371433846.sd.mp4?s=236f4b6e3d7ef1c0d87e8b567736e57c18b64bb1&profile_id=165&oauth2_token_id=57447761",
-    title: "Success Stories from Our Students", 
-    description: "Hear from graduates who achieved their dreams",
+    url: "https://assets.mixkit.co/videos/preview/mixkit-students-walking-on-a-university-campus-40038-large.mp4",
+    headline: "Access Over",
+    highlight: "200+ Top Universities",
+    caption: "From Oxford to MIT, our expert consultants help you apply, prepare, and succeed at the world's most prestigious institutions.",
+    badge: "200+ Partner Universities",
   },
   {
-    url: "https://player.vimeo.com/external/371433846.sd.mp4?s=236f4b6e3d7ef1c0d87e8b567736e57c18b64bb1&profile_id=165&oauth2_token_id=57447761",
-    title: "Global Education Opportunities",
-    description: "Discover programs worldwide",
+    url: "https://assets.mixkit.co/videos/preview/mixkit-young-woman-working-on-a-laptop-in-a-library-40041-large.mp4",
+    headline: "Scholarships,",
+    highlight: "Careers & Beyond",
+    caption: "Study abroad, secure scholarships, build a winning CV, and launch your career — all with personalised guidance from our Malawi-based team.",
+    badge: "50+ Countries • 10K+ Students Helped",
   },
 ];
 
@@ -27,6 +33,7 @@ export default function VideoHeader() {
   const [isMuted, setIsMuted] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -48,7 +55,6 @@ export default function VideoHeader() {
   }, [currentVideo]);
 
   useEffect(() => {
-    // Auto-advance videos every 30 seconds if playing
     if (isPlaying) {
       const interval = setInterval(() => {
         handleNextVideo();
@@ -60,7 +66,6 @@ export default function VideoHeader() {
   const handlePlayPause = () => {
     const video = videoRef.current;
     if (!video) return;
-
     if (isPlaying) {
       video.pause();
     } else {
@@ -72,17 +77,25 @@ export default function VideoHeader() {
   const handleMuteToggle = () => {
     const video = videoRef.current;
     if (!video) return;
-
     video.muted = !isMuted;
     setIsMuted(!isMuted);
   };
 
   const handleNextVideo = () => {
-    setCurrentVideo((prev) => (prev + 1) % videoSources.length);
+    setIsTransitioning(true);
+    setTimeout(() => {
+      setCurrentVideo((prev) => (prev + 1) % videoSources.length);
+      setIsTransitioning(false);
+    }, 300);
   };
 
   const handleVideoSelect = (index: number) => {
-    setCurrentVideo(index);
+    if (index === currentVideo) return;
+    setIsTransitioning(true);
+    setTimeout(() => {
+      setCurrentVideo(index);
+      setIsTransitioning(false);
+    }, 300);
   };
 
   const formatTime = (time: number) => {
@@ -90,6 +103,8 @@ export default function VideoHeader() {
     const seconds = Math.floor(time % 60);
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
+
+  const current = videoSources[currentVideo];
 
   return (
     <section className="video-header">
@@ -104,70 +119,61 @@ export default function VideoHeader() {
           playsInline
           key={currentVideo}
         >
-          <source src={videoSources[currentVideo].url} type="video/mp4" />
-          {/* Fallback image */}
-          <div 
+          <source src={current.url} type="video/mp4" />
+          <div
             className="w-full h-full bg-cover bg-center"
             style={{
               backgroundImage: "url('https://images.unsplash.com/photo-1523240795612-9a054b0db644?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080')"
             }}
           />
         </video>
-        
-        {/* Video overlay */}
-        <div className="video-overlay"></div>
+
+        {/* Gradient overlay — darker at bottom for text legibility */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70" />
       </div>
 
-      {/* Video Controls */}
-      <div className="absolute bottom-6 left-6 flex items-center space-x-4 z-20">
+      {/* Video Controls — bottom left */}
+      <div className="absolute bottom-6 left-6 flex items-center space-x-3 z-20">
         <Button
           variant="ghost"
           size="icon"
-          className="text-white hover:text-mtendere-orange hover:bg-white/20"
+          className="text-white hover:text-mtendere-orange hover:bg-white/20 h-8 w-8"
           onClick={handlePlayPause}
         >
-          {isPlaying ? (
-            <Pause className="w-6 h-6" />
-          ) : (
-            <Play className="w-6 h-6" />
-          )}
+          {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
         </Button>
 
         <Button
           variant="ghost"
           size="icon"
-          className="text-white hover:text-mtendere-orange hover:bg-white/20"
+          className="text-white hover:text-mtendere-orange hover:bg-white/20 h-8 w-8"
           onClick={handleMuteToggle}
         >
-          {isMuted ? (
-            <VolumeX className="w-5 h-5" />
-          ) : (
-            <Volume2 className="w-5 h-5" />
-          )}
+          {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
         </Button>
 
-        <div className="text-white text-sm">
+        <div className="text-white/70 text-xs font-mono">
           {formatTime(currentTime)} / {formatTime(duration)}
         </div>
 
-        {/* Video Progress */}
-        <div className="w-32 h-1 bg-white/30 rounded-full overflow-hidden">
-          <div 
+        <div className="w-24 h-1 bg-white/30 rounded-full overflow-hidden">
+          <div
             className="h-full bg-mtendere-orange transition-all duration-300"
             style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }}
           />
         </div>
       </div>
 
-      {/* Video Selector */}
+      {/* Slide Dots — bottom right */}
       <div className="absolute bottom-6 right-6 flex space-x-2 z-20">
         {videoSources.map((_, index) => (
           <button
             key={index}
-            className={`w-3 h-3 rounded-full transition-all duration-300 ${
+            aria-label={`Slide ${index + 1}`}
+            className={`transition-all duration-300 rounded-full ${
               index === currentVideo
-                ? 'bg-mtendere-orange'
-                : 'bg-white/50 hover:bg-white/80'
+                ? 'bg-mtendere-orange w-8 h-3'
+                : 'bg-white/50 hover:bg-white/80 w-3 h-3'
             }`}
             onClick={() => handleVideoSelect(index)}
           />
@@ -176,51 +182,75 @@ export default function VideoHeader() {
 
       {/* Hero Content */}
       <div className="video-content">
-        <div className="text-center text-white max-w-4xl mx-auto px-4 animate-fade-in">
-          <h1 className="text-4xl md:text-6xl font-bold mb-6 font-sans">
-            Your Gateway to <span className="text-mtendere-orange">Global Education</span>
+        <div
+          className={`text-center text-white max-w-5xl mx-auto px-6 transition-opacity duration-300 ${
+            isTransitioning ? 'opacity-0' : 'opacity-100'
+          }`}
+        >
+          {/* Top badge */}
+          <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm border border-white/30 text-white text-sm font-semibold px-4 py-1.5 rounded-full mb-6">
+            <span className="w-2 h-2 rounded-full bg-mtendere-orange animate-pulse" />
+            {current.badge}
+          </div>
+
+          {/* Company name caption */}
+          <p className="text-base md:text-lg font-bold tracking-[0.25em] text-mtendere-orange uppercase mb-3 drop-shadow">
+            Mtendere Education Consult
+          </p>
+
+          {/* Main headline */}
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-5 leading-tight drop-shadow-lg">
+            {current.headline}{" "}
+            <span className="text-mtendere-orange">{current.highlight}</span>
           </h1>
-          <p className="text-xl md:text-2xl mb-4 opacity-90">
-            {videoSources[currentVideo].description}
+
+          {/* Sub-caption */}
+          <p className="text-lg md:text-xl text-white/90 mb-10 max-w-3xl mx-auto leading-relaxed font-medium drop-shadow">
+            {current.caption}
           </p>
-          <p className="text-lg md:text-xl mb-8 opacity-80">
-            Connecting ambitious students with world-class universities and career opportunities
-          </p>
-          
+
+          {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button asChild size="lg" className="bg-mtendere-orange hover:bg-orange-600 text-white font-semibold px-8 py-4">
+            <Button
+              asChild
+              size="lg"
+              className="bg-mtendere-orange hover:bg-orange-500 text-white font-bold px-8 py-4 text-base shadow-xl hover:shadow-orange-500/30 transition-all"
+            >
               <Link href="/scholarships">
                 Explore Scholarships
+                <ArrowRight className="ml-2 w-4 h-4" />
               </Link>
             </Button>
-            <Button asChild size="lg" variant="outline" className="border-2 border-white text-white hover:bg-white hover:text-mtendere-blue font-semibold px-8 py-4">
-              <Link href="/jobs">
-                Find Jobs
+            <Button
+              asChild
+              size="lg"
+              className="bg-white/15 backdrop-blur-sm border-2 border-white text-white hover:bg-white hover:text-mtendere-blue font-bold px-8 py-4 text-base transition-all"
+            >
+              <Link href="/contact">
+                Book a Free Consultation
               </Link>
             </Button>
           </div>
 
-          {/* Current Video Info */}
-          <div className="mt-8 bg-black/30 backdrop-blur-sm rounded-lg p-4 max-w-md mx-auto">
-            <h3 className="font-semibold mb-2">{videoSources[currentVideo].title}</h3>
-            <div className="flex items-center justify-between text-sm opacity-80">
-              <span>Video {currentVideo + 1} of {videoSources.length}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-white hover:text-mtendere-orange"
-                onClick={handleNextVideo}
-              >
-                Next Video
-              </Button>
-            </div>
+          {/* Stats strip */}
+          <div className="mt-12 grid grid-cols-3 gap-6 max-w-xl mx-auto">
+            {[
+              { value: "10K+", label: "Students Helped" },
+              { value: "200+", label: "Universities" },
+              { value: "50+", label: "Countries" },
+            ].map((stat) => (
+              <div key={stat.label} className="text-center">
+                <div className="text-2xl md:text-3xl font-black text-mtendere-orange">{stat.value}</div>
+                <div className="text-xs md:text-sm text-white/80 font-medium mt-0.5">{stat.label}</div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Scroll Indicator */}
-      <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 text-white animate-bounce z-20">
-        <ChevronDown className="w-8 h-8" />
+      {/* Scroll indicator */}
+      <div className="absolute bottom-20 left-1/2 -translate-x-1/2 text-white/60 animate-bounce z-20 hidden md:block">
+        <ChevronDown className="w-7 h-7" />
       </div>
     </section>
   );

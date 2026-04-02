@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import ExpandingNav from "@/components/expanding-nav";
+import Footer from "@/components/footer";
 import { 
   Users, 
   Trophy, 
@@ -47,27 +48,35 @@ export default function Partners() {
       <ExpandingNav />
       
       {/* Header Section */}
-      <section className="bg-gradient-to-r from-mtendere-blue to-mtendere-green text-white py-16">
-        <div className="container mx-auto px-4">
+      <section 
+        className="relative py-24 text-white overflow-hidden"
+        style={ {
+          backgroundImage: `url(${'https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&q=80&w=2000'})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center'
+        } }
+      >
+        <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/90 to-mtendere-green/90 z-0" />
+        <div className="container relative z-10 mx-auto px-4">
           <div className="max-w-4xl mx-auto text-center">
-            <h1 className="text-4xl md:text-5xl font-bold mb-6">
+            <h1 className="text-5xl md:text-6xl font-bold mb-6 drop-shadow-2xl">
               Our Trusted Education Partners
             </h1>
-            <p className="text-xl mb-8 opacity-90">
+            <p className="text-xl md:text-2xl mb-8 opacity-95 drop-shadow-lg font-semibold">
               We've partnered with leading educational institutions worldwide to provide you with the best opportunities for your academic and career advancement
             </p>
-            <div className="flex justify-center space-x-8 text-sm opacity-80">
-              <div className="text-center">
-                <div className="text-2xl font-bold">200+</div>
-                <div>Universities</div>
+            <div className="flex justify-center space-x-8 text-sm opacity-95 drop-shadow-lg">
+              <div className="bg-white/10 backdrop-blur rounded-xl p-6">
+                <div className="text-3xl font-bold">200+</div>
+                <div className="font-semibold">Universities</div>
               </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold">50+</div>
-                <div>Countries</div>
+              <div className="bg-white/10 backdrop-blur rounded-xl p-6">
+                <div className="text-3xl font-bold">50+</div>
+                <div className="font-semibold">Countries</div>
               </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold">10K+</div>
-                <div>Students Placed</div>
+              <div className="bg-white/10 backdrop-blur rounded-xl p-6">
+                <div className="text-3xl font-bold">10K+</div>
+                <div className="font-semibold">Students Placed</div>
               </div>
             </div>
           </div>
@@ -244,73 +253,70 @@ export default function Partners() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {partners?.map((partner) => (
-                <Card key={partner.id} className="hover:shadow-lg transition-shadow duration-300">
-                  <CardHeader className="text-center">
-                    <div className="w-16 h-16 bg-gradient-to-br from-mtendere-blue to-mtendere-green rounded-full flex items-center justify-center mx-auto mb-4">
-                      {partner.logoUrl ? (
-                        <img 
-                          src={partner.logoUrl} 
-                          alt={partner.name}
-                          className="w-12 h-12 rounded-full object-cover"
-                        />
-                      ) : (
-                        <Building className="w-8 h-8 text-white" />
-                      )}
+              {partners?.map((partner, idx) => {
+                const universityImages = [
+                  "https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&q=80&w=800",
+                  "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?auto=format&fit=crop&q=80&w=800",
+                  "https://images.unsplash.com/photo-1607237138185-eedd9c632b0b?auto=format&fit=crop&q=80&w=800",
+                  "https://images.unsplash.com/photo-1571260899304-425eee4c7efc?auto=format&fit=crop&q=80&w=800",
+                  "https://images.unsplash.com/photo-1580582932707-520aed937b7b?auto=format&fit=crop&q=80&w=800",
+                  "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&q=80&w=800",
+                ];
+                const coverImg = partner.logoUrl || universityImages[idx % universityImages.length];
+                return (
+                <Card key={partner.id} className="hover:shadow-2xl transition-all duration-500 overflow-hidden group border-none bg-white shadow-md flex flex-col">
+                  <div className="relative h-44 overflow-hidden">
+                    <img
+                      src={coverImg}
+                      alt={partner.name}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                    <div className="absolute bottom-3 left-3 right-3">
+                      <div className="text-white font-bold text-base drop-shadow line-clamp-1">{partner.name}</div>
+                      <div className="text-white/80 text-xs flex items-center gap-1 mt-0.5">
+                        <MapPin className="w-3 h-3" />{partner.country}
+                      </div>
                     </div>
-                    <CardTitle className="text-lg text-mtendere-blue">
-                      {partner.name}
-                    </CardTitle>
-                    <CardDescription className="flex items-center justify-center space-x-1">
-                      <MapPin className="w-4 h-4" />
-                      <span>{partner.country}</span>
-                    </CardDescription>
-                  </CardHeader>
-                  
-                  <CardContent>
-                    <p className="text-gray-600 mb-4 line-clamp-3">
+                    {partner.ranking && (
+                      <div className="absolute top-3 right-3">
+                        <span className="bg-mtendere-orange text-white text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
+                          <Star className="w-3 h-3 fill-white" />{partner.ranking}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <CardContent className="pt-4 flex-1 flex flex-col">
+                    <p className="text-gray-600 mb-4 line-clamp-3 text-sm leading-relaxed flex-1">
                       {partner.description}
                     </p>
                     
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                      {partner.studentCount && (
-                        <div className="text-center">
-                          <div className="text-lg font-bold text-mtendere-blue">
-                            {formatStudentCount(partner.studentCount)}
-                          </div>
-                          <div className="text-xs text-gray-500">Students</div>
-                        </div>
-                      )}
-                      
-                      {partner.ranking && (
-                        <div className="text-center">
-                          <div className="text-lg font-bold text-mtendere-orange">
-                            <Star className="w-4 h-4 inline mr-1" />
-                            {partner.ranking}
-                          </div>
-                          <div className="text-xs text-gray-500">Ranking</div>
-                        </div>
-                      )}
-                    </div>
+                    {partner.studentCount && (
+                      <div className="flex items-center gap-2 mb-4 text-sm">
+                        <Users className="w-4 h-4 text-mtendere-blue" />
+                        <span className="font-bold text-mtendere-blue">{formatStudentCount(partner.studentCount)}</span>
+                        <span className="text-gray-500">students enrolled</span>
+                      </div>
+                    )}
 
-                    <div className="flex space-x-2">
-                      <Button 
-                        className="flex-1 bg-mtendere-blue hover:bg-blue-700"
-                        size="sm"
-                      >
+                    <div className="flex gap-2">
+                      <Button className="flex-1 bg-mtendere-blue hover:bg-blue-700 text-white font-bold" size="sm">
                         <BookOpen className="w-4 h-4 mr-2" />
-                        Programs
+                        View Programs
                       </Button>
-                      
                       {partner.website && (
-                        <Button variant="outline" size="sm">
-                          <ExternalLink className="w-4 h-4" />
-                        </Button>
+                        <a href={partner.website} target="_blank" rel="noopener noreferrer">
+                          <Button variant="outline" size="sm" className="border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white">
+                            <ExternalLink className="w-4 h-4" />
+                          </Button>
+                        </a>
                       )}
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -371,6 +377,7 @@ export default function Partners() {
           </div>
         </section>
       </div>
+      <Footer />
     </div>
   );
 }

@@ -19,6 +19,8 @@ import {
   LogOut
 } from "lucide-react";
 
+import logoImg from "@assets/Mtendere_Logo-removebg-preview_1768626463705.jpg";
+
 export default function ExpandingNav() {
   const [isOpen, setIsOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
@@ -79,8 +81,8 @@ export default function ExpandingNav() {
             icon: GraduationCap,
             items: [
               { label: "Scholarships", href: "/scholarships", icon: Award },
-              { label: "Study Abroad", href: "/about", icon: Globe },
-              { label: "University Applications", href: "/about", icon: BookOpen },
+              { label: "Study Abroad", href: "/study-abroad", icon: Globe },
+              { label: "University Applications", href: "/university-applications", icon: BookOpen },
             ]
           },
           {
@@ -88,8 +90,8 @@ export default function ExpandingNav() {
             icon: Briefcase,
             items: [
               { label: "Job Portal", href: "/jobs", icon: Briefcase },
-              { label: "Career Counseling", href: "/about", icon: TrendingUp },
-              { label: "Resume Building", href: "/about", icon: User },
+              { label: "Career Counseling", href: "/career-counseling", icon: TrendingUp },
+              { label: "Resume Building", href: "/resume-building", icon: User },
             ]
           }
         ]
@@ -99,6 +101,16 @@ export default function ExpandingNav() {
       label: "Partners",
       href: "/partners",
       active: location === "/partners",
+    },
+    {
+      label: "Blog",
+      href: "/blog",
+      active: location === "/blog",
+    },
+    {
+      label: "Team",
+      href: "/about#team",
+      active: false,
     },
     {
       label: "About",
@@ -123,9 +135,12 @@ export default function ExpandingNav() {
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <Link href="/" onClick={closeMenu}>
-            <div className="font-bold text-2xl">
-              <span className="text-mtendere-blue">Mtendere</span>{" "}
-              <span className="text-mtendere-green">Education</span>
+            <div className="flex items-center group">
+              <img
+                src={logoImg}
+                alt="Mtendere Education Consult"
+                className="h-12 w-auto object-contain transform group-hover:scale-105 transition-transform duration-300"
+              />
             </div>
           </Link>
 

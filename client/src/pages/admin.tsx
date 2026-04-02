@@ -28,12 +28,12 @@ export default function Admin() {
   const [activeView, setActiveView] = useState<AdminView>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const { data: analytics } = useQuery({
+  const { data: analytics } = useQuery<any>({
     queryKey: ["/api/analytics/summary"],
     enabled: !!user && (user.role === 'admin' || user.role === 'super_admin'),
   });
 
-  const { data: recentActivity } = useQuery({
+  const { data: recentActivity } = useQuery<any[]>({
     queryKey: ["/api/analytics"],
     enabled: !!user && (user.role === 'admin' || user.role === 'super_admin'),
   });
