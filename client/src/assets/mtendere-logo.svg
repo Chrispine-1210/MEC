@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 96" role="img" aria-labelledby="title desc">
+  <title id="title">Mtendere Education Consult</title>
+  <desc id="desc">Mtendere Education Consult wordmark with a graduation cap icon.</desc>
+  <defs>
+    <linearGradient id="cap" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f5fa8" />
+      <stop offset="100%" stop-color="#1f9d73" />
+    </linearGradient>
+  </defs>
+  <g fill="none" fill-rule="evenodd">
+    <g transform="translate(8 14)">
+      <path fill="url(#cap)" d="M40 0 0 18l40 18 32-14.4V45h8V18z" />
+      <path fill="#f28c28" d="M14 34v12c0 8.8 11.6 16 26 16s26-7.2 26-16V34L40 46z" />
+    </g>
+    <g transform="translate(96 20)">
+      <text x="0" y="24" font-family="Georgia, serif" font-size="28" font-weight="700" fill="#0f5fa8">
+        Mtendere
+      </text>
+      <text x="0" y="52" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="600" fill="#1f9d73" letter-spacing="1.2">
+        EDUCATION CONSULT
+      </text>
+    </g>
+  </g>
+</svg>
