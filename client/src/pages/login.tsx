@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Eye, EyeOff, GraduationCap, Globe, Award, ArrowRight } from "lucide-react";
-import logoImg from "@assets/Mtendere_Logo-removebg-preview_1768626463705.jpg";
+import logoImg from "@assets/mtendere-logo.svg";
 
 export default function Login() {
   const [, setLocation] = useLocation();

@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Home, BookOpen, GraduationCap, Search, ArrowLeft } from "lucide-react";
-import logoImg from "@assets/Mtendere_Logo-removebg-preview_1768626463705.jpg";
+import logoImg from "@assets/mtendere-logo.svg";
 
 export default function NotFound() {
   return (

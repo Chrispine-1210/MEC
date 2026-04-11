@@ -12,13 +12,14 @@ import {
   RefreshCw,
   Filter
 } from "lucide-react";
+import type { ApiAnalyticsEvent, ApiAnalyticsSummary } from "@/lib/api-types";
 
 export default function AnalyticsDashboard() {
-  const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useQuery({
+  const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useQuery<ApiAnalyticsSummary>({
     queryKey: ["/api/analytics/summary"],
   });
 
-  const { data: analytics, isLoading: analyticsLoading, refetch: refetchAnalytics } = useQuery({
+  const { data: analytics, isLoading: analyticsLoading, refetch: refetchAnalytics } = useQuery<ApiAnalyticsEvent[]>({
     queryKey: ["/api/analytics"],
   });
 

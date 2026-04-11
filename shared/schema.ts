@@ -1,4 +1,13 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, varchar } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  integer,
+  jsonb,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  varchar,
+} from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -59,8 +68,8 @@ export const jobs = pgTable("jobs", {
 export const applications = pgTable("applications", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
-  type: varchar("type", { length: 50 }).notNull(), // 'scholarship' or 'job'
-  referenceId: integer("reference_id").notNull(), // scholarship_id or job_id
+  type: varchar("type", { length: 50 }).notNull(),
+  referenceId: integer("reference_id").notNull(),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
   documents: jsonb("documents"),
   notes: text("notes"),
@@ -103,6 +112,16 @@ export const blogPosts = pgTable("blog_posts", {
   tags: text("tags").array(),
   isPublished: boolean("is_published").default(false),
   authorId: integer("author_id").notNull(),
+  likes: integer("likes").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const blogComments = pgTable("blog_comments", {
+  id: serial("id").primaryKey(),
+  blogPostId: integer("blog_post_id").notNull(),
+  userId: integer("user_id").notNull(),
+  content: text("content").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -116,6 +135,7 @@ export const teamMembers = pgTable("team_members", {
   email: varchar("email", { length: 255 }),
   linkedin: text("linkedin"),
   twitter: text("twitter"),
+  order: integer("display_order").default(0),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -136,17 +156,17 @@ export const analytics = pgTable("analytics", {
   id: serial("id").primaryKey(),
   event: varchar("event", { length: 100 }).notNull(),
   userId: integer("user_id"),
-  metadata: jsonb("metadata"),
+  metadata: jsonb("metadata").$type<Record<string, unknown> | null>(),
   ipAddress: varchar("ip_address", { length: 45 }),
   userAgent: text("user_agent"),
   timestamp: timestamp("timestamp").defaultNow(),
 });
 
-// Relations
 export const usersRelations = relations(users, ({ many }) => ({
   applications: many(applications),
   testimonials: many(testimonials),
   blogPosts: many(blogPosts),
+  blogComments: many(blogComments),
   referrals: many(referrals),
   analytics: many(analytics),
 }));
@@ -179,9 +199,21 @@ export const testimonialsRelations = relations(testimonials, ({ one }) => ({
   }),
 }));
 
-export const blogPostsRelations = relations(blogPosts, ({ one }) => ({
+export const blogPostsRelations = relations(blogPosts, ({ one, many }) => ({
   author: one(users, {
     fields: [blogPosts.authorId],
+    references: [users.id],
+  }),
+  comments: many(blogComments),
+}));
+
+export const blogCommentsRelations = relations(blogComments, ({ one }) => ({
+  post: one(blogPosts, {
+    fields: [blogComments.blogPostId],
+    references: [blogPosts.id],
+  }),
+  user: one(users, {
+    fields: [blogComments.userId],
     references: [users.id],
   }),
 }));
@@ -204,7 +236,6 @@ export const analyticsRelations = relations(analytics, ({ one }) => ({
   }),
 }));
 
-// Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -245,6 +276,13 @@ export const insertBlogPostSchema = createInsertSchema(blogPosts).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  likes: true,
+});
+
+export const insertBlogCommentSchema = createInsertSchema(blogComments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 export const insertTeamMemberSchema = createInsertSchema(teamMembers).omit({
@@ -264,7 +302,6 @@ export const insertAnalyticsSchema = createInsertSchema(analytics).omit({
   timestamp: true,
 });
 
-// Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Scholarship = typeof scholarships.$inferSelect;
@@ -279,6 +316,8 @@ export type Testimonial = typeof testimonials.$inferSelect;
 export type InsertTestimonial = z.infer<typeof insertTestimonialSchema>;
 export type BlogPost = typeof blogPosts.$inferSelect;
 export type InsertBlogPost = z.infer<typeof insertBlogPostSchema>;
+export type BlogComment = typeof blogComments.$inferSelect;
+export type InsertBlogComment = z.infer<typeof insertBlogCommentSchema>;
 export type TeamMember = typeof teamMembers.$inferSelect;
 export type InsertTeamMember = z.infer<typeof insertTeamMemberSchema>;
 export type Referral = typeof referrals.$inferSelect;

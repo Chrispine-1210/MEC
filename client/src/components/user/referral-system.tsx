@@ -26,12 +26,12 @@ import {
 interface Referral {
   id: number;
   referrerId: number;
-  referredUserId?: number;
+  referredUserId?: number | null;
   referredEmail: string;
   status: string;
-  rewardAmount: number;
+  rewardAmount: number | null;
   createdAt: string;
-  completedAt?: string;
+  completedAt?: string | null;
 }
 
 interface ReferralSystemProps {
@@ -137,7 +137,7 @@ export default function ReferralSystem({ referrals }: ReferralSystemProps) {
   const pendingReferrals = referrals.filter(r => r.status === 'pending').length;
   const totalEarnings = referrals
     .filter(r => r.status === 'completed')
-    .reduce((sum, r) => sum + r.rewardAmount, 0);
+    .reduce((sum, r) => sum + (r.rewardAmount ?? 0), 0);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {

@@ -1,13 +1,17 @@
 import OpenAI from "openai";
 
-const openai = new OpenAI({ 
-  apiKey: process.env.API_KEY!
-});
+const apiKey = process.env.OPENAI_API_KEY ?? process.env.API_KEY;
+const model = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
+const openai = apiKey ? new OpenAI({ apiKey }) : null;
 
 export async function getChatResponse(message: string): Promise<string> {
+  if (!openai) {
+    return "AI chat is not configured yet. Please contact our team directly and set OPENAI_API_KEY to enable assistant responses.";
+  }
+
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      model,
       messages: [
         {
           role: "system",

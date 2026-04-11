@@ -22,7 +22,7 @@ interface Application {
   referenceId: number;
   status: string;
   documents?: any;
-  notes?: string;
+  notes?: string | null;
   submittedAt: string;
   updatedAt: string;
 }

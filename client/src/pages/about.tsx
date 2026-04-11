@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
+import type { ApiTeamMember, ApiTestimonial } from "@/lib/api-types";
 import { 
   Target, 
   Eye, 
@@ -22,11 +23,11 @@ import {
 } from "lucide-react";
 
 export default function About() {
-  const { data: teamMembers } = useQuery({
+  const { data: teamMembers } = useQuery<ApiTeamMember[]>({
     queryKey: ["/api/team-members"],
   });
 
-  const { data: testimonials } = useQuery({
+  const { data: testimonials } = useQuery<ApiTestimonial[]>({
     queryKey: ["/api/testimonials"],
   });
 

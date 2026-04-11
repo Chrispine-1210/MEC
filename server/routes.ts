@@ -1,88 +1,453 @@
-import type { Express } from "express";
+import express, { type Express, NextFunction, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
-import { insertUserSchema, insertScholarshipSchema, insertJobSchema, insertApplicationSchema, insertPartnerSchema, insertTestimonialSchema, insertBlogPostSchema, insertBlogCommentSchema, insertTeamMemberSchema, insertReferralSchema, insertAnalyticsSchema } from "@shared/schema";
+import {
+  insertUserSchema,
+  insertScholarshipSchema,
+  insertJobSchema,
+  insertApplicationSchema,
+  insertPartnerSchema,
+  insertTestimonialSchema,
+  insertBlogPostSchema,
+  insertBlogCommentSchema,
+  insertTeamMemberSchema,
+  insertReferralSchema,
+} from "@shared/schema";
 import bcrypt from "bcryptjs";
+import fs from "fs";
 import jwt from "jsonwebtoken";
+import multer from "multer";
+import path from "path";
 import { z } from "zod";
+import { env } from "./env";
 import { getChatResponse } from "./ai";
+import {
+  deleteBlogMeta,
+  deleteJobMeta,
+  deletePartnerMeta,
+  deleteScholarshipMeta,
+  deleteTeamMeta,
+  deleteUserMeta,
+  getAdminRoles,
+  getAdminSettings,
+  getBlogMeta,
+  getJobMeta,
+  getPartnerMeta,
+  getScholarshipMeta,
+  getTeamMeta,
+  getUserMeta,
+  isNotificationRead,
+  markNotificationRead,
+  markNotificationsRead,
+  setBlogMeta,
+  setJobMeta,
+  setPartnerMeta,
+  setScholarshipMeta,
+  setTeamMeta,
+  setUserMeta,
+  updateAdminSettings,
+  upsertAdminRole,
+  deleteAdminRole,
+} from "./admin-state";
 
-const JWT_SECRET = process.env.JWT_SECRET!;
+const JWT_SECRET = env.JWT_SECRET;
 
-  // Authentication middleware
-  const authenticateToken = (req: any, res: any, next: any) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+type JwtUser = {
+  id: number;
+  email: string;
+  role: string;
+};
 
-    if (!token) {
-      return res.status(401).json({ message: 'Access token required' });
-    }
+type AuthenticatedRequest = Request & {
+  user: JwtUser;
+};
 
-    jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
-      if (err) {
-        return res.status(403).json({ message: 'Invalid or expired token' });
-      }
-      req.user = user;
-      next();
-    });
+type MulterRequest = Request & {
+  file?: Express.Multer.File;
+  files?: Express.Multer.File[] | { [fieldname: string]: Express.Multer.File[] };
+};
+
+type SocketWithSubscriptions = WebSocket & {
+  subscriptions?: string[];
+};
+
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof z.ZodError) {
+    return error.flatten();
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Unknown error";
+};
+
+const buildPublicUser = (user: {
+  id: number;
+  username: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  profilePicture?: string | null;
+  phone?: string | null;
+  dateOfBirth?: Date | null;
+}) => ({
+  id: user.id,
+  username: user.username,
+  email: user.email,
+  firstName: user.firstName,
+  lastName: user.lastName,
+  role: user.role,
+  profilePicture: user.profilePicture,
+  phone: user.phone,
+  dateOfBirth: user.dateOfBirth,
+});
+
+const toAdminUser = (user: {
+  id: number;
+  username: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  profilePicture?: string | null;
+  isActive?: boolean | null;
+  createdAt?: Date | null;
+  updatedAt?: Date | null;
+}) => {
+  const meta = getUserMeta(user.id);
+
+  return {
+    id: String(user.id),
+    username: user.username,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    role: user.role,
+    profileImage: user.profilePicture ?? null,
+    region: meta.region ?? null,
+    isActive: user.isActive ?? true,
+    lastLogin: null,
+    createdAt: user.createdAt ?? null,
+    updatedAt: user.updatedAt ?? null,
   };
+};
 
-  // Admin middleware
-  const requireAdmin = (req: any, res: any, next: any) => {
-    const user = req.user;
-    if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
-      return res.status(403).json({ message: 'Admin access required' });
+const normalizeAdminStatus = (
+  status?: string | null,
+  fallbackIsActive?: boolean | null,
+) => {
+  if (status === "published" || status === "draft" || status === "archived") {
+    return status;
+  }
+
+  if (typeof fallbackIsActive === "boolean") {
+    return fallbackIsActive ? "published" : "draft";
+  }
+
+  return "draft";
+};
+
+const parseNumber = (value: unknown) => {
+  if (typeof value === "number") return value;
+  if (typeof value === "string" && value.trim()) {
+    const numeric = Number(value.replace(/[^\d.-]/g, ""));
+    if (!Number.isNaN(numeric)) return numeric;
+  }
+  return undefined;
+};
+
+const parseStringArray = (value: unknown) => {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return undefined;
+};
+
+const parseOptionalBoolean = (value: unknown): boolean | undefined => {
+  if (value === undefined || value === null) return undefined;
+  return Boolean(value);
+};
+
+const parseAnalyticsMeta = (metadata: unknown) => {
+  if (!metadata || typeof metadata !== "object") {
+    return {};
+  }
+
+  const record = metadata as Record<string, unknown>;
+  const type = typeof record.type === "string" ? record.type : undefined;
+  const referenceId =
+    typeof record.referenceId === "string" || typeof record.referenceId === "number"
+      ? record.referenceId
+      : undefined;
+
+  return { type, referenceId };
+};
+
+const toAdminScholarship = (scholarship: any) => {
+  const meta = getScholarshipMeta(scholarship.id);
+  return {
+    id: String(scholarship.id),
+    title: scholarship.title,
+    description: scholarship.description,
+    eligibility: meta.eligibility ?? "",
+    amount: scholarship.amount ? String(scholarship.amount) : "",
+    deadline: scholarship.deadline,
+    requirements: scholarship.requirements ?? [],
+    category: scholarship.category,
+    institution: scholarship.institution,
+    region: meta.region ?? "Global",
+    isPremium: meta.isPremium ?? false,
+    paymentStatus: meta.paymentStatus ?? "unpaid",
+    status: normalizeAdminStatus(meta.status, scholarship.isActive),
+    featuredImage: meta.featuredImage ?? scholarship.imageUrl ?? "",
+    createdBy: scholarship.createdBy ? String(scholarship.createdBy) : null,
+    createdAt: scholarship.createdAt ?? null,
+    updatedAt: scholarship.updatedAt ?? null,
+  };
+};
+
+const toAdminJob = (job: any) => {
+  const meta = getJobMeta(job.id);
+  return {
+    id: String(job.id),
+    title: job.title,
+    description: job.description,
+    company: job.company,
+    location: job.location,
+    region: meta.region ?? "Global",
+    salaryRange: meta.salaryRange ?? "",
+    jobType: job.jobType,
+    requirements: job.requirements ?? [],
+    benefits: meta.benefits ?? "",
+    applicationUrl: meta.applicationUrl ?? "",
+    deadline: job.deadline ?? null,
+    isPremium: meta.isPremium ?? false,
+    price: meta.price ?? "",
+    paymentStatus: meta.paymentStatus ?? "unpaid",
+    status: normalizeAdminStatus(meta.status, job.isActive),
+    featuredImage: meta.featuredImage ?? job.imageUrl ?? "",
+    createdBy: job.createdBy ? String(job.createdBy) : null,
+    createdAt: job.createdAt ?? null,
+    updatedAt: job.updatedAt ?? null,
+  };
+};
+
+const toAdminPartner = (partner: any) => {
+  const meta = getPartnerMeta(partner.id);
+  return {
+    id: String(partner.id),
+    name: partner.name,
+    description: partner.description,
+    logo: meta.logo ?? partner.logoUrl ?? "",
+    website: partner.website ?? "",
+    contactEmail: meta.contactEmail ?? "",
+    contactPhone: meta.contactPhone ?? "",
+    address: meta.address ?? "",
+    region: meta.region ?? partner.country ?? "Global",
+    partnershipType: meta.partnershipType ?? "partner",
+    isPremium: meta.isPremium ?? false,
+    paymentStatus: meta.paymentStatus ?? "unpaid",
+    isActive: partner.isActive ?? true,
+    createdBy: null,
+    createdAt: partner.createdAt ?? null,
+    updatedAt: partner.updatedAt ?? null,
+  };
+};
+
+const toAdminBlogPost = (post: any) => {
+  const meta = getBlogMeta(post.id);
+  return {
+    id: String(post.id),
+    title: post.title,
+    content: post.content,
+    excerpt: post.excerpt ?? "",
+    slug: meta.slug ?? `post-${post.id}`,
+    featuredImage: meta.featuredImage ?? post.imageUrl ?? "",
+    category: post.category,
+    status: normalizeAdminStatus(meta.status, post.isPublished),
+    tags: Array.isArray(post.tags) ? post.tags : [],
+    createdBy: post.authorId ? String(post.authorId) : null,
+    createdAt: post.createdAt ?? null,
+    updatedAt: post.updatedAt ?? null,
+  };
+};
+
+const toAdminTeamMember = (member: any) => {
+  const meta = getTeamMeta(member.id);
+  return {
+    id: String(member.id),
+    name: member.name,
+    position: member.position,
+    bio: member.bio ?? "",
+    profileImage: meta.profileImage ?? member.imageUrl ?? "",
+    email: member.email ?? "",
+    linkedIn: member.linkedin ?? "",
+    twitter: member.twitter ?? "",
+    department: meta.department ?? "",
+    isActive: member.isActive ?? true,
+    order: member.order ?? 0,
+    createdBy: null,
+    createdAt: member.createdAt ?? null,
+    updatedAt: member.updatedAt ?? null,
+  };
+};
+
+const signToken = (user: { id: number; email: string; role: string }) =>
+  jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, {
+    expiresIn: "24h",
+  });
+
+const getAuthenticatedUser = (req: Request) => (req as AuthenticatedRequest).user;
+
+const getOptionalAuthenticatedUser = (req: Request): JwtUser | null => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice("Bearer ".length)
+    : null;
+
+  if (!token) {
+    return null;
+  }
+
+  try {
+    return jwt.verify(token, JWT_SECRET) as JwtUser;
+  } catch {
+    return null;
+  }
+};
+
+const isAdmin = (user: JwtUser | null) =>
+  user?.role === "admin" || user?.role === "super_admin";
+
+const authenticateToken = (req: Request, res: Response, next: NextFunction) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice("Bearer ".length)
+    : null;
+
+  if (!token) {
+    return res.status(401).json({ message: "Access token required" });
+  }
+
+  jwt.verify(token, JWT_SECRET, (error: unknown, user: unknown) => {
+    if (error || !user) {
+      return res.status(403).json({ message: "Invalid or expired token" });
     }
+
+    (req as AuthenticatedRequest).user = user as JwtUser;
     next();
-  };
+  });
+};
+
+const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
+  if (!isAdmin(getAuthenticatedUser(req))) {
+    return res.status(403).json({ message: "Admin access required" });
+  }
+
+  next();
+};
+
+const isEditor = (user: JwtUser | null) =>
+  user?.role === "editor" || user?.role === "admin" || user?.role === "super_admin";
+
+const requireEditor = (req: Request, res: Response, next: NextFunction) => {
+  if (!isEditor(getAuthenticatedUser(req))) {
+    return res.status(403).json({ message: "Editor access required" });
+  }
+
+  next();
+};
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
   // WebSocket setup for real-time updates
-  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
-  
-  wss.on('connection', (ws: WebSocket) => {
-    console.log('WebSocket client connected');
-    
-    ws.on('message', (message: string) => {
+  const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+
+  wss.on("connection", (ws: SocketWithSubscriptions) => {
+    ws.subscriptions = [];
+
+    ws.on("message", (rawMessage: Buffer) => {
       try {
-        const data = JSON.parse(message);
-        if (data.type === 'subscribe') {
-          (ws as any).subscriptions = data.channels || [];
+        const payload = JSON.parse(rawMessage.toString()) as {
+          type?: string;
+          channels?: string[];
+          data?: { channels?: string[] };
+        };
+        const channels = Array.isArray(payload.channels)
+          ? payload.channels
+          : Array.isArray(payload.data?.channels)
+            ? payload.data.channels
+            : [];
+
+        if (payload.type === "subscribe") {
+          ws.subscriptions = Array.from(new Set([...(ws.subscriptions ?? []), ...channels]));
+        }
+
+        if (payload.type === "unsubscribe") {
+          ws.subscriptions = (ws.subscriptions ?? []).filter(
+            (channel) => !channels.includes(channel),
+          );
         }
       } catch (error) {
-        console.error('WebSocket message error:', error);
+        console.error("WebSocket message error:", error);
       }
-    });
-
-    ws.on('close', () => {
-      console.log('WebSocket client disconnected');
     });
   });
 
   // Broadcast function for real-time updates
   const broadcast = (channel: string, data: any) => {
     wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        const subscriptions = (client as any).subscriptions || [];
+      const socket = client as SocketWithSubscriptions;
+
+      if (socket.readyState === WebSocket.OPEN) {
+        const subscriptions = socket.subscriptions || [];
         if (subscriptions.includes(channel)) {
-          client.send(JSON.stringify({ channel, data }));
+          socket.send(JSON.stringify({ channel, data }));
         }
       }
     });
   };
 
+  const uploadsDir = path.resolve(import.meta.dirname, "..", "uploads");
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  app.use("/uploads", express.static(uploadsDir));
+
+  const upload = multer({
+    storage: multer.diskStorage({
+      destination: uploadsDir,
+      filename: (_req: Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
+        const ext = path.extname(file.originalname);
+        const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, "");
+        cb(null, `${base}-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`);
+      },
+    }),
+    limits: { fileSize: 10 * 1024 * 1024 },
+  });
+
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok" });
+  });
+
   // Authentication routes
-  app.post('/api/auth/register', async (req, res) => {
+  const registerHandler = async (req: Request, res: Response) => {
     try {
       const userData = insertUserSchema.parse(req.body);
       
       // Check if user already exists
-      const existingUser = await storage.getUserByEmail(userData.email);
+      const existingUser =
+        (await storage.getUserByEmail(userData.email)) ||
+        (await storage.getUserByUsername(userData.username));
       if (existingUser) {
-        return res.status(400).json({ message: 'User already exists' });
+        return res.status(400).json({ message: 'A user with that email or username already exists' });
       }
 
       // Hash password
@@ -95,48 +460,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Generate JWT token
-      const token = jwt.sign(
-        { id: user.id, email: user.email, role: user.role },
-        JWT_SECRET,
-        { expiresIn: '24h' }
-      );
-
       // Log analytics
       await storage.logAnalytics({
         event: 'user_registered',
         userId: user.id,
-        metadata: { email: user.email, role: user.role }
+        metadata: { email: user.email, role: user.role },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
       });
 
-      broadcast('user_activity', { type: 'user_registered', user: { id: user.id, email: user.email } });
+      broadcast('user_activity', { type: 'user_registered', user: buildPublicUser(user) });
 
       res.status(201).json({
         message: 'User created successfully',
-        token,
-        user: {
-          id: user.id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: user.role,
-        },
+        token: signToken(user),
+        user: buildPublicUser(user),
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Registration error:', error);
-      res.status(400).json({ message: 'Registration failed', error: error.message });
+      res.status(400).json({ message: 'Registration failed', error: getErrorMessage(error) });
     }
-  });
+  };
 
-  app.post('/api/auth/login', async (req, res) => {
+  const loginHandler = async (req: Request, res: Response) => {
     try {
-      const { email, password } = req.body;
+      const identifier = req.body.email ?? req.body.username ?? req.body.identifier;
+      const { password } = req.body;
       
-      if (!email || !password) {
-        return res.status(400).json({ message: 'Email and password are required' });
+      if (!identifier || !password) {
+        return res.status(400).json({ message: 'Email or username and password are required' });
       }
 
       // Find user
-      const user = await storage.getUserByEmail(email);
+      const user =
+        (await storage.getUserByEmail(identifier)) ||
+        (await storage.getUserByUsername(identifier));
       if (!user) {
         return res.status(401).json({ message: 'Invalid credentials' });
       }
@@ -148,66 +506,139 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Generate JWT token
-      const token = jwt.sign(
-        { id: user.id, email: user.email, role: user.role },
-        JWT_SECRET,
-        { expiresIn: '24h' }
-      );
-
       // Log analytics
       await storage.logAnalytics({
         event: 'user_logged_in',
         userId: user.id,
-        metadata: { email: user.email }
+        metadata: { email: user.email },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
       });
 
-      broadcast('user_activity', { type: 'user_logged_in', user: { id: user.id, email: user.email } });
+      broadcast('user_activity', { type: 'user_logged_in', user: buildPublicUser(user) });
 
       res.json({
         message: 'Login successful',
-        token,
-        user: {
-          id: user.id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: user.role,
-        },
+        token: signToken(user),
+        user: buildPublicUser(user),
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Login error:', error);
-      res.status(500).json({ message: 'Login failed', error: error.message });
+      res.status(500).json({ message: 'Login failed', error: getErrorMessage(error) });
     }
+  };
+
+  app.post('/api/auth/register', registerHandler);
+  app.post('/api/auth/login', loginHandler);
+
+  // Admin client aliases
+  app.post('/auth/register', registerHandler);
+  app.post('/auth/login', loginHandler);
+  app.post('/auth/logout', (_req, res) => {
+    res.json({ message: 'Logged out successfully' });
+  });
+  app.post('/auth/refresh', (_req, res) => {
+    res.status(401).json({ message: 'Refresh token not available' });
   });
 
   // User profile route
-  app.get('/api/user/profile', authenticateToken, async (req, res) => {
+  const sendUserProfile = async (req: Request, res: Response) => {
     try {
-      const user = await storage.getUser((req as any).user.id);
+      const user = await storage.getUser(getAuthenticatedUser(req).id);
       if (!user) {
         return res.status(404).json({ message: 'User not found' });
       }
 
-      res.json({
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role,
-        profilePicture: user.profilePicture,
-        phone: user.phone,
-        dateOfBirth: user.dateOfBirth,
-      });
-    } catch (error: any) {
+      res.json(buildPublicUser(user));
+    } catch (error) {
       console.error('Profile fetch error:', error);
       res.status(500).json({ message: 'Failed to fetch profile' });
+    }
+  };
+
+  app.get('/api/user', authenticateToken, sendUserProfile);
+  app.get('/api/user/profile', authenticateToken, sendUserProfile);
+
+  app.get('/api/users', authenticateToken, requireAdmin, async (_req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      res.json(users.map(buildPublicUser));
+    } catch (error) {
+      console.error('Users fetch error:', error);
+      res.status(500).json({ message: 'Failed to fetch users' });
+    }
+  });
+
+  app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const userData = insertUserSchema.parse(req.body);
+      const existingUser =
+        (await storage.getUserByEmail(userData.email)) ||
+        (await storage.getUserByUsername(userData.username));
+
+      if (existingUser) {
+        return res.status(400).json({ message: 'A user with that email or username already exists' });
+      }
+
+      const user = await storage.createUser({
+        ...userData,
+        password: await bcrypt.hash(userData.password, 10),
+      });
+
+      res.status(201).json(buildPublicUser(user));
+    } catch (error) {
+      console.error('User creation error:', error);
+      res.status(400).json({ message: 'Failed to create user', error: getErrorMessage(error) });
+    }
+  });
+
+  app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
+
+      const updateData = insertUserSchema.partial().parse(req.body);
+      const nextUser = updateData.password
+        ? { ...updateData, password: await bcrypt.hash(updateData.password, 10) }
+        : updateData;
+
+      const user = await storage.updateUser(id, nextUser);
+      if (!user) return res.status(404).json({ message: 'User not found' });
+
+      res.json(buildPublicUser(user));
+    } catch (error) {
+      console.error('User update error:', error);
+      res.status(400).json({ message: 'Failed to update user', error: getErrorMessage(error) });
+    }
+  });
+
+  app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
+
+      const authUser = getAuthenticatedUser(req);
+      if (authUser.id === id) {
+        return res.status(400).json({ message: 'You cannot delete your own account' });
+      }
+
+      const success = await storage.deleteUser(id);
+      if (!success) return res.status(404).json({ message: 'User not found' });
+
+      res.json({ message: 'User deleted successfully' });
+    } catch (error) {
+      console.error('User deletion error:', error);
+      res.status(500).json({ message: 'Failed to delete user' });
     }
   });
 
   // Scholarships routes
   app.get('/api/scholarships', async (req, res) => {
     try {
-      const scholarships = await storage.getActiveScholarships();
+      const requester = getOptionalAuthenticatedUser(req);
+      const scholarships = isAdmin(requester)
+        ? await storage.getAllScholarships()
+        : await storage.getActiveScholarships();
       res.json(scholarships);
     } catch (error) {
       console.error('Scholarships fetch error:', error);
@@ -234,16 +665,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const scholarshipData = insertScholarshipSchema.parse({
         ...req.body,
-        createdBy: (req as any).user.id,
+        createdBy: getAuthenticatedUser(req).id,
       });
       
       const scholarship = await storage.createScholarship(scholarshipData);
       broadcast('scholarships', { type: 'scholarship_created', scholarship });
       
       res.status(201).json(scholarship);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Scholarship creation error:', error);
-      res.status(400).json({ message: 'Failed to create scholarship', error: error.message });
+      res.status(400).json({ message: 'Failed to create scholarship', error: getErrorMessage(error) });
     }
   });
 
@@ -258,9 +689,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       broadcast('scholarships', { type: 'scholarship_updated', scholarship });
       
       res.json(scholarship);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Scholarship update error:', error);
-      res.status(400).json({ message: 'Failed to update scholarship', error: error.message });
+      res.status(400).json({ message: 'Failed to update scholarship', error: getErrorMessage(error) });
     }
   });
 
@@ -284,7 +715,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Jobs routes
   app.get('/api/jobs', async (req, res) => {
     try {
-      const jobs = await storage.getActiveJobs();
+      const requester = getOptionalAuthenticatedUser(req);
+      const jobs = isAdmin(requester)
+        ? await storage.getAllJobs()
+        : await storage.getActiveJobs();
       res.json(jobs);
     } catch (error) {
       console.error('Jobs fetch error:', error);
@@ -311,16 +745,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const jobData = insertJobSchema.parse({
         ...req.body,
-        createdBy: (req as any).user.id,
+        createdBy: getAuthenticatedUser(req).id,
       });
       
       const job = await storage.createJob(jobData);
       broadcast('jobs', { type: 'job_created', job });
       
       res.status(201).json(job);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Job creation error:', error);
-      res.status(400).json({ message: 'Failed to create job', error: error.message });
+      res.status(400).json({ message: 'Failed to create job', error: getErrorMessage(error) });
     }
   });
 
@@ -335,9 +769,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       broadcast('jobs', { type: 'job_updated', job });
       
       res.json(job);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Job update error:', error);
-      res.status(400).json({ message: 'Failed to update job', error: error.message });
+      res.status(400).json({ message: 'Failed to update job', error: getErrorMessage(error) });
     }
   });
 
@@ -361,9 +795,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Applications routes
   app.get('/api/applications', authenticateToken, async (req, res) => {
     try {
-      const applications = req.user.role === 'admin' || req.user.role === 'super_admin' 
+      const authUser = getAuthenticatedUser(req);
+      const applications = isAdmin(authUser)
         ? await storage.getAllApplications()
-        : await storage.getUserApplications(req.user.id);
+        : await storage.getUserApplications(authUser.id);
       
       res.json(applications);
     } catch (error) {
@@ -374,9 +809,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/applications', authenticateToken, async (req, res) => {
     try {
+      const authUser = getAuthenticatedUser(req);
       const applicationData = insertApplicationSchema.parse({
         ...req.body,
-        userId: (req as any).user.id,
+        userId: authUser.id,
       });
       
       const application = await storage.createApplication(applicationData);
@@ -385,17 +821,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Log analytics
       await storage.logAnalytics({
         event: 'application_submitted',
-        userId: (req as any).user.id,
+        userId: authUser.id,
         metadata: { 
           type: applicationData.type,
           referenceId: applicationData.referenceId 
-        }
+        },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
       });
       
       res.status(201).json(application);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Application creation error:', error);
-      res.status(400).json({ message: 'Failed to create application', error: error.message });
+      res.status(400).json({ message: 'Failed to create application', error: getErrorMessage(error) });
     }
   });
 
@@ -411,7 +849,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: 'Application not found' });
       }
       
-      const user = (req as any).user;
+      const user = getAuthenticatedUser(req);
       if (existingApplication.userId !== user.id && user.role !== 'admin' && user.role !== 'super_admin') {
         return res.status(403).json({ message: 'Not authorized to update this application' });
       }
@@ -420,16 +858,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       broadcast('applications', { type: 'application_updated', application });
       
       res.json(application);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Application update error:', error);
-      res.status(400).json({ message: 'Failed to update application', error: error.message });
+      res.status(400).json({ message: 'Failed to update application', error: getErrorMessage(error) });
     }
   });
 
   // Partners routes
   app.get('/api/partners', async (req, res) => {
     try {
-      const partners = await storage.getActivePartners();
+      const requester = getOptionalAuthenticatedUser(req);
+      const partners = isAdmin(requester)
+        ? await storage.getAllPartners()
+        : await storage.getActivePartners();
       res.json(partners);
     } catch (error) {
       console.error('Partners fetch error:', error);
@@ -446,14 +887,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(partner);
     } catch (error) {
       console.error('Partner creation error:', error);
-      res.status(400).json({ message: 'Failed to create partner', error: error.message });
+      res.status(400).json({ message: 'Failed to create partner', error: getErrorMessage(error) });
     }
   });
 
   // Testimonials routes
   app.get('/api/testimonials', async (req, res) => {
     try {
-      const testimonials = await storage.getApprovedTestimonials();
+      const requester = getOptionalAuthenticatedUser(req);
+      const testimonials = isAdmin(requester)
+        ? await storage.getAllTestimonials()
+        : await storage.getApprovedTestimonials();
       res.json(testimonials);
     } catch (error) {
       console.error('Testimonials fetch error:', error);
@@ -465,27 +909,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const testimonialData = insertTestimonialSchema.parse({
         ...req.body,
-        userId: (req as any).user.id,
+        userId: getAuthenticatedUser(req).id,
       });
       
       const testimonial = await storage.createTestimonial(testimonialData);
       broadcast('testimonials', { type: 'testimonial_created', testimonial });
       
       res.status(201).json(testimonial);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Testimonial creation error:', error);
-      res.status(400).json({ message: 'Failed to create testimonial', error: error.message });
+      res.status(400).json({ message: 'Failed to create testimonial', error: getErrorMessage(error) });
     }
   });
 
   // Blog posts routes
   app.get('/api/blog-posts', async (req, res) => {
     try {
-      const blogPosts = await storage.getPublishedBlogPosts();
+      const requester = getOptionalAuthenticatedUser(req);
+      const blogPosts = isAdmin(requester)
+        ? await storage.getAllBlogPosts()
+        : await storage.getPublishedBlogPosts();
       res.json(blogPosts);
     } catch (error) {
       console.error('Blog posts fetch error:', error);
       res.status(500).json({ message: 'Failed to fetch blog posts' });
+    }
+  });
+
+  app.get('/api/blog-posts/search', async (req, res) => {
+    try {
+      const { q } = req.query;
+      if (!q || typeof q !== 'string') {
+        return res.status(400).json({ message: 'Search query is required' });
+      }
+      
+      const blogPosts = await storage.searchBlogPosts(q);
+      res.json(blogPosts);
+    } catch (error) {
+      console.error('Blog search error:', error);
+      res.status(500).json({ message: 'Failed to search blog posts' });
+    }
+  });
+
+  app.get('/api/blog-posts/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const post = await storage.getBlogPost(id);
+      if (!post) {
+        return res.status(404).json({ message: 'Blog post not found' });
+      }
+      res.json(post);
+    } catch (error) {
+      console.error('Blog post fetch error:', error);
+      res.status(500).json({ message: 'Failed to fetch blog post' });
+    }
+  });
+
+  app.post('/api/blog-posts/:id/like', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
+      const post = await storage.incrementBlogLikes(id);
+      broadcast('blog-posts', { type: 'blog_post_liked', blogPost: post });
+      res.json(post);
+    } catch (error) {
+      console.error('Blog like error:', error);
+      res.status(500).json({ message: 'Failed to like blog post' });
     }
   });
 
@@ -508,66 +997,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const commentData = insertBlogCommentSchema.parse({
         ...req.body,
         blogPostId: id,
-        userId: (req as any).user.id,
+        userId: getAuthenticatedUser(req).id,
       });
       const comment = await storage.createBlogComment(commentData);
       broadcast('blog-posts', { type: 'comment_created', comment });
       res.status(201).json(comment);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Comment creation error:', error);
       res.status(400).json({ 
         message: 'Failed to create comment', 
-        error: error instanceof z.ZodError ? error.errors : error.message 
+        error: getErrorMessage(error),
       });
-    }
-  });
-
-  app.get('/api/blog-posts/:id', async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const post = await storage.getBlogPost(id);
-      if (!post) {
-        return res.status(404).json({ message: 'Blog post not found' });
-      }
-      res.json(post);
-    } catch (error) {
-      console.error('Blog post fetch error:', error);
-      res.status(500).json({ message: 'Failed to fetch blog post' });
-    }
-  });
-
-  app.get('/api/blog-posts/search', async (req, res) => {
-    try {
-      const { q } = req.query;
-      if (!q || typeof q !== 'string') {
-        return res.status(400).json({ message: 'Search query is required' });
-      }
-      
-      const blogPosts = await storage.searchBlogPosts(q);
-      res.json(blogPosts);
-    } catch (error) {
-      console.error('Blog search error:', error);
-      res.status(500).json({ message: 'Failed to search blog posts' });
     }
   });
 
   app.post('/api/blog-posts', authenticateToken, requireAdmin, async (req, res) => {
     try {
-      // Validate with schema and ensure authorId is set from authenticated user
       const blogPostData = insertBlogPostSchema.parse({
         ...req.body,
-        authorId: (req as any).user.id,
+        authorId: getAuthenticatedUser(req).id,
       });
       
       const blogPost = await storage.createBlogPost(blogPostData);
       broadcast('blog-posts', { type: 'blog_post_created', blogPost });
       
       res.status(201).json(blogPost);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Blog post creation error:', error);
       res.status(400).json({ 
         message: 'Failed to create blog post', 
-        error: error instanceof z.ZodError ? error.errors : error.message 
+        error: getErrorMessage(error),
       });
     }
   });
@@ -577,7 +1036,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
 
-      // Partial validation for updates
       const updateData = insertBlogPostSchema.partial().parse(req.body);
       
       const blogPost = await storage.updateBlogPost(id, updateData);
@@ -589,7 +1047,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Blog post update error:', error);
       res.status(400).json({ 
         message: 'Failed to update blog post', 
-        error: error instanceof z.ZodError ? error.errors : error.message 
+        error: getErrorMessage(error),
       });
     }
   });
@@ -615,7 +1073,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Team members routes
   app.get('/api/team-members', async (req, res) => {
     try {
-      const teamMembers = await storage.getActiveTeamMembers();
+      const requester = getOptionalAuthenticatedUser(req);
+      const teamMembers = isAdmin(requester)
+        ? await storage.getAllTeamMembers()
+        : await storage.getActiveTeamMembers();
       res.json(teamMembers);
     } catch (error) {
       console.error('Team members fetch error:', error);
@@ -634,7 +1095,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Team member creation error:', error);
       res.status(400).json({ 
         message: 'Failed to create team member', 
-        error: error instanceof z.ZodError ? error.errors : error.message 
+        error: getErrorMessage(error),
       });
     }
   });
@@ -656,7 +1117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Team member update error:', error);
       res.status(400).json({ 
         message: 'Failed to update team member', 
-        error: error instanceof z.ZodError ? error.errors : error.message 
+        error: getErrorMessage(error),
       });
     }
   });
@@ -682,7 +1143,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Referrals routes
   app.get('/api/referrals', authenticateToken, async (req, res) => {
     try {
-      const referrals = await storage.getUserReferrals((req as any).user.id);
+      const referrals = await storage.getUserReferrals(getAuthenticatedUser(req).id);
       res.json(referrals);
     } catch (error) {
       console.error('Referrals fetch error:', error);
@@ -694,20 +1155,955 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const referralData = insertReferralSchema.parse({
         ...req.body,
-        referrerId: (req as any).user.id,
+        referrerId: getAuthenticatedUser(req).id,
       });
       
       const referral = await storage.createReferral(referralData);
       broadcast('referrals', { type: 'referral_created', referral });
       
       res.status(201).json(referral);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Referral creation error:', error);
       res.status(400).json({ 
         message: 'Failed to create referral', 
-        error: error instanceof z.ZodError ? error.errors : error.message 
+        error: getErrorMessage(error),
       });
     }
+  });
+
+  // Admin routes (shared backend)
+  const paginate = <T,>(items: T[], page: number, limit: number) => {
+    const total = items.length;
+    const start = (page - 1) * limit;
+    return { items: items.slice(start, start + limit), total };
+  };
+
+  app.get('/api/admin/dashboard/stats', authenticateToken, requireEditor, async (_req, res) => {
+    try {
+      const [
+        users,
+        scholarships,
+        jobs,
+        partners,
+        blogPosts,
+        applications,
+        publishedBlogPosts,
+        activeScholarships,
+        activeJobs,
+      ] = await Promise.all([
+        storage.getAllUsers(),
+        storage.getAllScholarships(),
+        storage.getAllJobs(),
+        storage.getAllPartners(),
+        storage.getAllBlogPosts(),
+        storage.getAllApplications(),
+        storage.getPublishedBlogPosts(),
+        storage.getActiveScholarships(),
+        storage.getActiveJobs(),
+      ]);
+
+      const pendingApplications = applications.filter((app) => app.status === "pending").length;
+      const applicationStats = applications.reduce<Record<string, number>>((acc, app) => {
+        acc[app.status] = (acc[app.status] ?? 0) + 1;
+        return acc;
+      }, {});
+
+      const recentActivity = (await storage.getAnalytics())
+        .slice(0, 10)
+        .map((item) => {
+          const meta = parseAnalyticsMeta(item.metadata);
+          return {
+            id: String(item.id),
+            action: item.event,
+            entityType: meta.type ?? "activity",
+            details:
+              meta.referenceId !== undefined && meta.referenceId !== null
+                ? String(meta.referenceId)
+                : "",
+            createdAt: item.timestamp,
+          };
+        });
+
+      res.json({
+        totalUsers: users.length,
+        totalScholarships: scholarships.length,
+        totalJobs: jobs.length,
+        totalPartners: partners.length,
+        totalBlogPosts: blogPosts.length,
+        totalApplications: applications.length,
+        totalActiveChats: 0,
+        activeScholarships: activeScholarships.length,
+        activeJobs: activeJobs.length,
+        pendingApplications,
+        publishedPosts: publishedBlogPosts.length,
+        applicationStats,
+        applicationStatusStats: applicationStats,
+        contentModerationStats: { flaggedCount: 0, approvedCount: scholarships.length + jobs.length },
+        userGrowth: [],
+        regionalStats: [],
+        recentActivity,
+      });
+    } catch (error) {
+      console.error("Admin stats error:", error);
+      res.status(500).json({ message: "Failed to fetch dashboard statistics" });
+    }
+  });
+
+  app.get('/api/admin/dashboard/recent-activity', authenticateToken, requireEditor, async (_req, res) => {
+    try {
+      const recentActivity = (await storage.getAnalytics())
+        .slice(0, 20)
+        .map((item) => {
+          const meta = parseAnalyticsMeta(item.metadata);
+          return {
+            id: String(item.id),
+            action: item.event,
+            entityType: meta.type ?? "activity",
+            details:
+              meta.referenceId !== undefined && meta.referenceId !== null
+                ? String(meta.referenceId)
+                : "",
+            createdAt: item.timestamp,
+          };
+        });
+      res.json({ activity: recentActivity, total: recentActivity.length });
+    } catch (error) {
+      console.error("Admin activity error:", error);
+      res.status(500).json({ message: "Failed to fetch recent activity" });
+    }
+  });
+
+  app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const page = Number(req.query.page ?? 1);
+      const limit = Number(req.query.limit ?? 50);
+      const search = String(req.query.search ?? "").toLowerCase();
+
+      const allUsers = await storage.getAllUsers();
+      const filtered = search
+        ? allUsers.filter((user) =>
+            user.username.toLowerCase().includes(search) ||
+            user.email.toLowerCase().includes(search),
+          )
+        : allUsers;
+
+      const { items, total } = paginate(filtered, page, limit);
+      res.json({ users: items.map(toAdminUser), total });
+    } catch (error) {
+      console.error("Admin users error:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.get('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const user = await storage.getUser(id);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      res.json(toAdminUser(user));
+    } catch (error) {
+      console.error("Admin user error:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const userData = insertUserSchema.parse(req.body);
+      const existing =
+        (await storage.getUserByEmail(userData.email)) ||
+        (await storage.getUserByUsername(userData.username));
+      if (existing) {
+        return res.status(400).json({ message: "User already exists" });
+      }
+
+      const user = await storage.createUser({
+        ...userData,
+        password: await bcrypt.hash(userData.password, 10),
+      });
+      if (req.body.region) {
+        setUserMeta(user.id, { region: String(req.body.region) });
+      }
+      res.status(201).json(toAdminUser(user));
+    } catch (error) {
+      console.error("Admin user create error:", error);
+      res.status(400).json({ message: "Failed to create user", error: getErrorMessage(error) });
+    }
+  });
+
+  app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+
+      const updateData = insertUserSchema.partial().parse(req.body);
+      const nextUser = updateData.password
+        ? { ...updateData, password: await bcrypt.hash(updateData.password, 10) }
+        : updateData;
+
+      const user = await storage.updateUser(id, nextUser);
+      if (req.body.region !== undefined) {
+        setUserMeta(id, { region: String(req.body.region) });
+      }
+      res.json(toAdminUser(user));
+    } catch (error) {
+      console.error("Admin user update error:", error);
+      res.status(400).json({ message: "Failed to update user", error: getErrorMessage(error) });
+    }
+  });
+
+  app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const success = await storage.deleteUser(id);
+      deleteUserMeta(id);
+      if (!success) return res.status(404).json({ message: "User not found" });
+      res.status(204).send();
+    } catch (error) {
+      console.error("Admin user delete error:", error);
+      res.status(500).json({ message: "Failed to delete user" });
+    }
+  });
+
+  app.get('/api/admin/scholarships', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const page = Number(req.query.page ?? 1);
+      const limit = Number(req.query.limit ?? 50);
+      const search = String(req.query.search ?? "").toLowerCase();
+      const statusFilter = String(req.query.status ?? "").toLowerCase();
+
+      const allScholarships = await storage.getAllScholarships();
+      const mapped = allScholarships.map(toAdminScholarship);
+      const filtered = mapped.filter((item) => {
+        const matchesSearch =
+          !search ||
+          item.title.toLowerCase().includes(search) ||
+          item.description.toLowerCase().includes(search) ||
+          item.institution.toLowerCase().includes(search);
+        const matchesStatus = !statusFilter || item.status === statusFilter;
+        return matchesSearch && matchesStatus;
+      });
+
+      const { items, total } = paginate(filtered, page, limit);
+      res.json({ data: items, total });
+    } catch (error) {
+      console.error("Admin scholarships error:", error);
+      res.status(500).json({ message: "Failed to fetch scholarships" });
+    }
+  });
+
+  app.post('/api/admin/scholarships', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const createdBy = getAuthenticatedUser(req).id;
+      const amount = parseNumber(req.body.amount);
+      const deadline = req.body.deadline ? new Date(req.body.deadline) : new Date();
+      const scholarshipData = insertScholarshipSchema.parse({
+        title: req.body.title ?? "",
+        description: req.body.description ?? "",
+        institution: req.body.institution ?? "",
+        country: req.body.region ?? "Global",
+        amount,
+        currency: req.body.currency ?? "USD",
+        deadline,
+        requirements: req.body.requirements ?? null,
+        category: req.body.category ?? "General",
+        imageUrl: req.body.featuredImage ?? null,
+        isActive: req.body.status === "published",
+        createdBy,
+      });
+
+      const scholarship = await storage.createScholarship(scholarshipData);
+      setScholarshipMeta(scholarship.id, {
+        eligibility: req.body.eligibility ?? "",
+        status: normalizeAdminStatus(req.body.status, scholarship.isActive),
+        isPremium: Boolean(req.body.isPremium),
+        paymentStatus: req.body.paymentStatus ?? "unpaid",
+        featuredImage: req.body.featuredImage ?? "",
+        region: req.body.region ?? "Global",
+      });
+
+      res.status(201).json(toAdminScholarship(scholarship));
+    } catch (error) {
+      console.error("Admin scholarship create error:", error);
+      res.status(400).json({ message: "Failed to create scholarship", error: getErrorMessage(error) });
+    }
+  });
+
+  app.put('/api/admin/scholarships/:id', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+
+      const payload: Record<string, unknown> = {};
+      if (req.body.title !== undefined) payload.title = req.body.title;
+      if (req.body.description !== undefined) payload.description = req.body.description;
+      if (req.body.institution !== undefined) payload.institution = req.body.institution;
+      if (req.body.region !== undefined) payload.country = req.body.region;
+      if (req.body.amount !== undefined) payload.amount = parseNumber(req.body.amount);
+      if (req.body.currency !== undefined) payload.currency = req.body.currency;
+      if (req.body.deadline !== undefined) payload.deadline = new Date(req.body.deadline);
+      if (req.body.requirements !== undefined) payload.requirements = req.body.requirements;
+      if (req.body.category !== undefined) payload.category = req.body.category;
+      if (req.body.featuredImage !== undefined) payload.imageUrl = req.body.featuredImage;
+      if (req.body.status !== undefined) payload.isActive = req.body.status === "published";
+
+      const updateData = insertScholarshipSchema.partial().parse(payload);
+      const scholarship = await storage.updateScholarship(id, updateData);
+      if (!scholarship) return res.status(404).json({ message: "Scholarship not found" });
+
+      setScholarshipMeta(id, {
+        eligibility: req.body.eligibility,
+        status: req.body.status,
+        isPremium: parseOptionalBoolean(req.body.isPremium),
+        paymentStatus: req.body.paymentStatus,
+        featuredImage: req.body.featuredImage,
+        region: req.body.region,
+      });
+
+      res.json(toAdminScholarship(scholarship));
+    } catch (error) {
+      console.error("Admin scholarship update error:", error);
+      res.status(400).json({ message: "Failed to update scholarship", error: getErrorMessage(error) });
+    }
+  });
+
+  app.delete('/api/admin/scholarships/:id', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const success = await storage.deleteScholarship(id);
+      deleteScholarshipMeta(id);
+      if (!success) return res.status(404).json({ message: "Scholarship not found" });
+      res.status(204).send();
+    } catch (error) {
+      console.error("Admin scholarship delete error:", error);
+      res.status(500).json({ message: "Failed to delete scholarship" });
+    }
+  });
+
+  app.get('/api/admin/jobs', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const page = Number(req.query.page ?? 1);
+      const limit = Number(req.query.limit ?? 50);
+      const search = String(req.query.search ?? "").toLowerCase();
+      const statusFilter = String(req.query.status ?? "").toLowerCase();
+
+      const allJobs = await storage.getAllJobs();
+      const mapped = allJobs.map(toAdminJob);
+      const filtered = mapped.filter((item) => {
+        const matchesSearch =
+          !search ||
+          item.title.toLowerCase().includes(search) ||
+          item.company.toLowerCase().includes(search);
+        const matchesStatus = !statusFilter || item.status === statusFilter;
+        return matchesSearch && matchesStatus;
+      });
+
+      const { items, total } = paginate(filtered, page, limit);
+      res.json({ data: items, total });
+    } catch (error) {
+      console.error("Admin jobs error:", error);
+      res.status(500).json({ message: "Failed to fetch jobs" });
+    }
+  });
+
+  app.post('/api/admin/jobs', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const createdBy = getAuthenticatedUser(req).id;
+      const jobData = insertJobSchema.parse({
+        title: req.body.title ?? "",
+        description: req.body.description ?? "",
+        company: req.body.company ?? "",
+        location: req.body.location ?? "",
+        salary: parseNumber(req.body.salary),
+        currency: req.body.currency ?? "USD",
+        jobType: req.body.jobType ?? "full-time",
+        requirements: req.body.requirements ?? null,
+        benefits: req.body.benefits ?? null,
+        isRemote: Boolean(req.body.isRemote),
+        deadline: req.body.deadline ? new Date(req.body.deadline) : null,
+        imageUrl: req.body.featuredImage ?? null,
+        isActive: req.body.status === "published",
+        createdBy,
+      });
+
+      const job = await storage.createJob(jobData);
+      setJobMeta(job.id, {
+        salaryRange: req.body.salaryRange ?? "",
+        applicationUrl: req.body.applicationUrl ?? "",
+        status: normalizeAdminStatus(req.body.status, job.isActive),
+        region: req.body.region ?? "Global",
+        isPremium: Boolean(req.body.isPremium),
+        price: req.body.price ?? "",
+        paymentStatus: req.body.paymentStatus ?? "unpaid",
+        featuredImage: req.body.featuredImage ?? "",
+        benefits: req.body.benefits ?? "",
+      });
+
+      res.status(201).json(toAdminJob(job));
+    } catch (error) {
+      console.error("Admin job create error:", error);
+      res.status(400).json({ message: "Failed to create job", error: getErrorMessage(error) });
+    }
+  });
+
+  app.put('/api/admin/jobs/:id', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+
+      const payload: Record<string, unknown> = {};
+      if (req.body.title !== undefined) payload.title = req.body.title;
+      if (req.body.description !== undefined) payload.description = req.body.description;
+      if (req.body.company !== undefined) payload.company = req.body.company;
+      if (req.body.location !== undefined) payload.location = req.body.location;
+      if (req.body.jobType !== undefined) payload.jobType = req.body.jobType;
+      if (req.body.deadline !== undefined) payload.deadline = req.body.deadline ? new Date(req.body.deadline) : null;
+      if (req.body.featuredImage !== undefined) payload.imageUrl = req.body.featuredImage;
+      if (req.body.status !== undefined) payload.isActive = req.body.status === "published";
+
+      const updateData = insertJobSchema.partial().parse(payload);
+      const job = await storage.updateJob(id, updateData);
+      if (!job) return res.status(404).json({ message: "Job not found" });
+
+      setJobMeta(id, {
+        salaryRange: req.body.salaryRange,
+        applicationUrl: req.body.applicationUrl,
+        status: req.body.status,
+        region: req.body.region,
+        isPremium: parseOptionalBoolean(req.body.isPremium),
+        price: req.body.price,
+        paymentStatus: req.body.paymentStatus,
+        featuredImage: req.body.featuredImage,
+        benefits: req.body.benefits,
+      });
+
+      res.json(toAdminJob(job));
+    } catch (error) {
+      console.error("Admin job update error:", error);
+      res.status(400).json({ message: "Failed to update job", error: getErrorMessage(error) });
+    }
+  });
+
+  app.delete('/api/admin/jobs/:id', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const success = await storage.deleteJob(id);
+      deleteJobMeta(id);
+      if (!success) return res.status(404).json({ message: "Job not found" });
+      res.status(204).send();
+    } catch (error) {
+      console.error("Admin job delete error:", error);
+      res.status(500).json({ message: "Failed to delete job" });
+    }
+  });
+
+  app.get('/api/admin/partners', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const page = Number(req.query.page ?? 1);
+      const limit = Number(req.query.limit ?? 50);
+      const search = String(req.query.search ?? "").toLowerCase();
+
+      const allPartners = await storage.getAllPartners();
+      const mapped = allPartners.map(toAdminPartner);
+      const filtered = mapped.filter((item) => {
+        if (!search) return true;
+        return item.name.toLowerCase().includes(search);
+      });
+
+      const { items, total } = paginate(filtered, page, limit);
+      res.json({ partners: items, total });
+    } catch (error) {
+      console.error("Admin partners error:", error);
+      res.status(500).json({ message: "Failed to fetch partners" });
+    }
+  });
+
+  app.post('/api/admin/partners', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const partnerData = insertPartnerSchema.parse({
+        name: req.body.name ?? "",
+        description: req.body.description ?? "",
+        logoUrl: req.body.logo ?? null,
+        website: req.body.website ?? null,
+        country: req.body.region ?? "Global",
+        studentCount: req.body.studentCount ?? null,
+        ranking: req.body.ranking ?? null,
+        isActive: req.body.isActive ?? true,
+      });
+
+      const partner = await storage.createPartner(partnerData);
+      setPartnerMeta(partner.id, {
+        partnershipType: req.body.partnershipType ?? "partner",
+        logo: req.body.logo ?? "",
+        contactEmail: req.body.contactEmail ?? "",
+        contactPhone: req.body.contactPhone ?? "",
+        address: req.body.address ?? "",
+        region: req.body.region ?? "Global",
+        isPremium: Boolean(req.body.isPremium),
+        paymentStatus: req.body.paymentStatus ?? "unpaid",
+      });
+
+      res.status(201).json(toAdminPartner(partner));
+    } catch (error) {
+      console.error("Admin partner create error:", error);
+      res.status(400).json({ message: "Failed to create partner", error: getErrorMessage(error) });
+    }
+  });
+
+  app.put('/api/admin/partners/:id', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+
+      const payload: Record<string, unknown> = {};
+      if (req.body.name !== undefined) payload.name = req.body.name;
+      if (req.body.description !== undefined) payload.description = req.body.description;
+      if (req.body.logo !== undefined) payload.logoUrl = req.body.logo;
+      if (req.body.website !== undefined) payload.website = req.body.website;
+      if (req.body.region !== undefined) payload.country = req.body.region;
+      if (req.body.studentCount !== undefined) payload.studentCount = req.body.studentCount;
+      if (req.body.ranking !== undefined) payload.ranking = req.body.ranking;
+      if (req.body.isActive !== undefined) payload.isActive = req.body.isActive;
+
+      const updateData = insertPartnerSchema.partial().parse(payload);
+      const partner = await storage.updatePartner(id, updateData);
+      if (!partner) return res.status(404).json({ message: "Partner not found" });
+
+      setPartnerMeta(id, {
+        partnershipType: req.body.partnershipType,
+        logo: req.body.logo,
+        contactEmail: req.body.contactEmail,
+        contactPhone: req.body.contactPhone,
+        address: req.body.address,
+        region: req.body.region,
+        isPremium: parseOptionalBoolean(req.body.isPremium),
+        paymentStatus: req.body.paymentStatus,
+      });
+
+      res.json(toAdminPartner(partner));
+    } catch (error) {
+      console.error("Admin partner update error:", error);
+      res.status(400).json({ message: "Failed to update partner", error: getErrorMessage(error) });
+    }
+  });
+
+  app.delete('/api/admin/partners/:id', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const success = await storage.deletePartner(id);
+      deletePartnerMeta(id);
+      if (!success) return res.status(404).json({ message: "Partner not found" });
+      res.status(204).send();
+    } catch (error) {
+      console.error("Admin partner delete error:", error);
+      res.status(500).json({ message: "Failed to delete partner" });
+    }
+  });
+
+  app.get('/api/admin/blog', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const page = Number(req.query.page ?? 1);
+      const limit = Number(req.query.limit ?? 50);
+      const search = String(req.query.search ?? "").toLowerCase();
+      const statusFilter = String(req.query.status ?? "").toLowerCase();
+
+      const allPosts = await storage.getAllBlogPosts();
+      const mapped = allPosts.map(toAdminBlogPost);
+      const filtered = mapped.filter((item) => {
+        const matchesSearch =
+          !search ||
+          item.title.toLowerCase().includes(search) ||
+          item.content.toLowerCase().includes(search);
+        const matchesStatus = !statusFilter || item.status === statusFilter;
+        return matchesSearch && matchesStatus;
+      });
+
+      const { items, total } = paginate(filtered, page, limit);
+      res.json({ posts: items, total });
+    } catch (error) {
+      console.error("Admin blog error:", error);
+      res.status(500).json({ message: "Failed to fetch blog posts" });
+    }
+  });
+
+  app.post('/api/admin/blog', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const authorId = getAuthenticatedUser(req).id;
+      const postData = insertBlogPostSchema.parse({
+        title: req.body.title ?? "",
+        content: req.body.content ?? "",
+        excerpt: req.body.excerpt ?? null,
+        imageUrl: req.body.featuredImage ?? null,
+        category: req.body.category ?? "General",
+        tags: parseStringArray(req.body.tags) ?? [],
+        isPublished: req.body.status === "published",
+        authorId,
+      });
+
+      const post = await storage.createBlogPost(postData);
+      setBlogMeta(post.id, {
+        slug: req.body.slug ?? `post-${post.id}`,
+        status: normalizeAdminStatus(req.body.status, post.isPublished),
+        featuredImage: req.body.featuredImage ?? "",
+      });
+
+      res.status(201).json(toAdminBlogPost(post));
+    } catch (error) {
+      console.error("Admin blog create error:", error);
+      res.status(400).json({ message: "Failed to create blog post", error: getErrorMessage(error) });
+    }
+  });
+
+  app.put('/api/admin/blog/:id', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+
+      const payload: Record<string, unknown> = {};
+      if (req.body.title !== undefined) payload.title = req.body.title;
+      if (req.body.content !== undefined) payload.content = req.body.content;
+      if (req.body.excerpt !== undefined) payload.excerpt = req.body.excerpt;
+      if (req.body.featuredImage !== undefined) payload.imageUrl = req.body.featuredImage;
+      if (req.body.category !== undefined) payload.category = req.body.category;
+      if (req.body.tags !== undefined) payload.tags = parseStringArray(req.body.tags) ?? [];
+      if (req.body.status !== undefined) payload.isPublished = req.body.status === "published";
+
+      const updateData = insertBlogPostSchema.partial().parse(payload);
+      const post = await storage.updateBlogPost(id, updateData);
+      if (!post) return res.status(404).json({ message: "Blog post not found" });
+
+      setBlogMeta(id, {
+        slug: req.body.slug,
+        status: req.body.status,
+        featuredImage: req.body.featuredImage,
+      });
+
+      res.json(toAdminBlogPost(post));
+    } catch (error) {
+      console.error("Admin blog update error:", error);
+      res.status(400).json({ message: "Failed to update blog post", error: getErrorMessage(error) });
+    }
+  });
+
+  app.delete('/api/admin/blog/:id', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const success = await storage.deleteBlogPost(id);
+      deleteBlogMeta(id);
+      if (!success) return res.status(404).json({ message: "Blog post not found" });
+      res.status(204).send();
+    } catch (error) {
+      console.error("Admin blog delete error:", error);
+      res.status(500).json({ message: "Failed to delete blog post" });
+    }
+  });
+
+  app.get('/api/admin/team', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const page = Number(req.query.page ?? 1);
+      const limit = Number(req.query.limit ?? 50);
+      const search = String(req.query.search ?? "").toLowerCase();
+
+      const allMembers = await storage.getAllTeamMembers();
+      const mapped = allMembers.map(toAdminTeamMember);
+      const filtered = mapped.filter((item) => !search || item.name.toLowerCase().includes(search));
+
+      const { items, total } = paginate(filtered, page, limit);
+      res.json({ members: items, total });
+    } catch (error) {
+      console.error("Admin team error:", error);
+      res.status(500).json({ message: "Failed to fetch team members" });
+    }
+  });
+
+  app.post('/api/admin/team', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const memberData = insertTeamMemberSchema.parse({
+        name: req.body.name ?? "",
+        position: req.body.position ?? "",
+        bio: req.body.bio ?? null,
+        imageUrl: req.body.profileImage ?? null,
+        email: req.body.email ?? null,
+        linkedin: req.body.linkedIn ?? null,
+        twitter: req.body.twitter ?? null,
+        order: req.body.order ?? 0,
+        isActive: req.body.isActive ?? true,
+      });
+
+      const member = await storage.createTeamMember(memberData);
+      setTeamMeta(member.id, {
+        department: req.body.department ?? "",
+        profileImage: req.body.profileImage ?? "",
+      });
+      res.status(201).json(toAdminTeamMember(member));
+    } catch (error) {
+      console.error("Admin team create error:", error);
+      res.status(400).json({ message: "Failed to create team member", error: getErrorMessage(error) });
+    }
+  });
+
+  app.put('/api/admin/team/:id', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+
+      const payload: Record<string, unknown> = {};
+      if (req.body.name !== undefined) payload.name = req.body.name;
+      if (req.body.position !== undefined) payload.position = req.body.position;
+      if (req.body.bio !== undefined) payload.bio = req.body.bio;
+      if (req.body.profileImage !== undefined) payload.imageUrl = req.body.profileImage;
+      if (req.body.email !== undefined) payload.email = req.body.email;
+      if (req.body.linkedIn !== undefined) payload.linkedin = req.body.linkedIn;
+      if (req.body.twitter !== undefined) payload.twitter = req.body.twitter;
+      if (req.body.order !== undefined) payload.order = req.body.order;
+      if (req.body.isActive !== undefined) payload.isActive = req.body.isActive;
+
+      const updateData = insertTeamMemberSchema.partial().parse(payload);
+      const member = await storage.updateTeamMember(id, updateData);
+      if (!member) return res.status(404).json({ message: "Team member not found" });
+
+      setTeamMeta(id, {
+        department: req.body.department,
+        profileImage: req.body.profileImage,
+      });
+
+      res.json(toAdminTeamMember(member));
+    } catch (error) {
+      console.error("Admin team update error:", error);
+      res.status(400).json({ message: "Failed to update team member", error: getErrorMessage(error) });
+    }
+  });
+
+  app.delete('/api/admin/team/:id', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const success = await storage.deleteTeamMember(id);
+      deleteTeamMeta(id);
+      if (!success) return res.status(404).json({ message: "Team member not found" });
+      res.status(204).send();
+    } catch (error) {
+      console.error("Admin team delete error:", error);
+      res.status(500).json({ message: "Failed to delete team member" });
+    }
+  });
+
+  app.get('/api/admin/applications', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const page = Number(req.query.page ?? 1);
+      const limit = Number(req.query.limit ?? 50);
+      const statusFilter = String(req.query.status ?? "").toLowerCase();
+
+      const allApplications = await storage.getAllApplications();
+      const filtered = statusFilter
+        ? allApplications.filter((app) => app.status === statusFilter)
+        : allApplications;
+
+      const enriched = await Promise.all(
+        filtered.map(async (app) => {
+          const user = await storage.getUser(app.userId);
+          const scholarship = app.type === "scholarship" ? await storage.getScholarship(app.referenceId) : null;
+          const job = app.type === "job" ? await storage.getJob(app.referenceId) : null;
+
+          return {
+            ...app,
+            id: String(app.id),
+            applicantName: user ? `${user.firstName} ${user.lastName}`.trim() : "Applicant",
+            applicantEmail: user?.email ?? "",
+            opportunityTitle: scholarship?.title ?? job?.title ?? "Opportunity",
+            opportunityType: app.type ?? "application",
+            coverLetter: app.notes ?? "",
+          };
+        }),
+      );
+
+      const { items, total } = paginate(enriched, page, limit);
+      res.json({ applications: items, total });
+    } catch (error) {
+      console.error("Admin applications error:", error);
+      res.status(500).json({ message: "Failed to fetch applications" });
+    }
+  });
+
+  app.put('/api/admin/applications/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+
+      const updateData = insertApplicationSchema.partial().parse({
+        status: req.body.status,
+        notes: req.body.reviewNotes,
+      });
+
+      const application = await storage.updateApplication(id, updateData);
+      res.json(application);
+    } catch (error) {
+      console.error("Admin applications update error:", error);
+      res.status(400).json({ message: "Failed to update application", error: getErrorMessage(error) });
+    }
+  });
+
+  app.get('/api/admin/ai-chat/conversations', authenticateToken, requireAdmin, (_req, res) => {
+    res.json({ conversations: [], total: 0 });
+  });
+
+  app.get('/api/admin/ai-chat/conversations/:id', authenticateToken, requireAdmin, (_req, res) => {
+    res.status(404).json({ message: "Conversation not found" });
+  });
+
+  app.get('/api/admin/ai/conversations', authenticateToken, requireAdmin, (req, res) => {
+    res.redirect(307, "/api/admin/ai-chat/conversations");
+  });
+
+  app.post('/api/admin/ai/chat', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { message } = req.body;
+      if (!message) return res.status(400).json({ message: "Message is required" });
+      const response = await getChatResponse(String(message));
+      res.json({ response });
+    } catch (error) {
+      console.error("Admin AI chat error:", error);
+      res.status(500).json({ message: "Failed to get chat response", error: getErrorMessage(error) });
+    }
+  });
+
+  app.get('/api/admin/roles', authenticateToken, requireAdmin, (_req, res) => {
+    const roles = getAdminRoles();
+    res.json({ roles, total: roles.length });
+  });
+
+  app.post('/api/admin/roles', authenticateToken, requireAdmin, (req, res) => {
+    const role = upsertAdminRole({
+      id: req.body.name?.toLowerCase().replace(/\s+/g, "-") || String(Date.now()),
+      name: req.body.name ?? "Role",
+      description: req.body.description ?? "",
+      permissions: Array.isArray(req.body.permissions) ? req.body.permissions : [],
+      isActive: true,
+    });
+    res.status(201).json(role);
+  });
+
+  app.put('/api/admin/roles/:id', authenticateToken, requireAdmin, (req, res) => {
+    const role = upsertAdminRole({
+      id: req.params.id,
+      name: req.body.name ?? req.params.id,
+      description: req.body.description ?? "",
+      permissions: Array.isArray(req.body.permissions) ? req.body.permissions : [],
+      isActive: req.body.isActive ?? true,
+    });
+    res.json(role);
+  });
+
+  app.delete('/api/admin/roles/:id', authenticateToken, requireAdmin, (req, res) => {
+    deleteAdminRole(req.params.id);
+    res.status(204).send();
+  });
+
+  app.get('/api/admin/settings', authenticateToken, requireAdmin, (_req, res) => {
+    res.json(getAdminSettings());
+  });
+
+  app.put('/api/admin/settings', authenticateToken, requireAdmin, (req, res) => {
+    const settings = updateAdminSettings({
+      platformName: req.body.platformName,
+      supportEmail: req.body.supportEmail,
+      sessionTimeout: req.body.sessionTimeout,
+      maxLoginAttempts: req.body.maxLoginAttempts,
+    });
+    res.json(settings);
+  });
+
+  app.get('/api/admin/notifications', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const page = Number(req.query.page ?? 1);
+      const limit = Number(req.query.limit ?? 20);
+      const items = (await storage.getAnalytics()).map((item) => ({
+        id: `analytics-${item.id}`,
+        title: item.event,
+        message: item.metadata ? JSON.stringify(item.metadata) : "",
+        type: "info",
+        isRead: isNotificationRead(`analytics-${item.id}`),
+        createdAt: item.timestamp,
+      }));
+      const { items: paged, total } = paginate(items, page, limit);
+      res.json({ notifications: paged, total });
+    } catch (error) {
+      console.error("Admin notifications error:", error);
+      res.status(500).json({ message: "Failed to fetch notifications" });
+    }
+  });
+
+  app.put('/api/admin/notifications/:id/read', authenticateToken, requireEditor, (req, res) => {
+    markNotificationRead(req.params.id);
+    res.status(204).send();
+  });
+
+  app.put('/api/admin/notifications/read-all', authenticateToken, requireEditor, async (_req, res) => {
+    const ids = (await storage.getAnalytics()).map((item) => `analytics-${item.id}`);
+    markNotificationsRead(ids);
+    res.status(204).send();
+  });
+
+  app.get('/api/admin/audit-logs', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const page = Number(req.query.page ?? 1);
+      const limit = Number(req.query.limit ?? 50);
+
+      const logs = (await storage.getAnalytics()).map((item) => {
+        const meta = parseAnalyticsMeta(item.metadata);
+        return {
+          id: String(item.id),
+          userId: item.userId ? String(item.userId) : null,
+          action: item.event,
+          entityType: meta.type ?? "activity",
+          entityId:
+            meta.referenceId !== undefined && meta.referenceId !== null
+              ? String(meta.referenceId)
+              : null,
+          oldData: null,
+          newData: item.metadata ?? null,
+          ipAddress: item.ipAddress ?? null,
+          userAgent: item.userAgent ?? null,
+          createdAt: item.timestamp,
+        };
+      });
+
+      const { items, total } = paginate(logs, page, limit);
+      res.json({ logs: items, total });
+    } catch (error) {
+      console.error("Admin audit logs error:", error);
+      res.status(500).json({ message: "Failed to fetch audit logs" });
+    }
+  });
+
+  app.post('/api/admin/upload', authenticateToken, requireEditor, upload.single("file"), (req, res) => {
+    const file = (req as MulterRequest).file;
+    if (!file) return res.status(400).json({ message: "No file uploaded" });
+    res.json({
+      url: `/uploads/${file.filename}`,
+      originalName: file.originalname,
+      size: file.size,
+      type: file.mimetype,
+    });
+  });
+
+  app.post('/api/admin/upload/multiple', authenticateToken, requireEditor, upload.array("files", 10), (req, res) => {
+    const filesPayload = (req as MulterRequest).files;
+    const files = Array.isArray(filesPayload) ? filesPayload : [];
+    res.json({
+      files: files.map((file) => ({
+        url: `/uploads/${file.filename}`,
+        originalName: file.originalname,
+        size: file.size,
+        type: file.mimetype,
+      })),
+    });
   });
 
   // Analytics routes
@@ -747,7 +2143,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ response });
     } catch (error) {
       console.error('Chat error:', error);
-      res.status(500).json({ message: 'Failed to get chat response', error: error.message });
+      res.status(500).json({ message: 'Failed to get chat response', error: getErrorMessage(error) });
     }
   });
 

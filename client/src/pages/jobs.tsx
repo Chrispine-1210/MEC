@@ -10,6 +10,7 @@ import Footer from "@/components/footer";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import type { ApiJob } from "@/lib/api-types";
 import { 
   Search, 
   Filter, 
@@ -48,11 +49,11 @@ export default function Jobs() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: jobs, isLoading } = useQuery({
+  const { data: jobs, isLoading } = useQuery<ApiJob[]>({
     queryKey: ["/api/jobs"],
   });
 
-  const { data: searchResults, isLoading: isSearching } = useQuery({
+  const { data: searchResults, isLoading: isSearching } = useQuery<ApiJob[]>({
     queryKey: ["/api/jobs/search", searchQuery],
     enabled: searchQuery.length > 2,
   });
@@ -315,7 +316,7 @@ export default function Jobs() {
                         Salary
                       </span>
                       <span className="font-semibold text-mtendere-green">
-                        {job.salary ? formatCurrency(job.salary, job.currency) : 'Competitive'}
+                        {job.salary ? formatCurrency(job.salary, job.currency || 'USD') : 'Competitive'}
                       </span>
                     </div>
                     

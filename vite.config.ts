@@ -8,14 +8,13 @@ const __dirname = path.dirname(__filename);
 
 export default defineConfig({
   root: path.resolve(__dirname, "client"),
-  root: path.resolve(__dirname, "Admin/client"),
 
   plugins: [react()],
 
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "client/src"),
-      "@Admin": path.resolve(__dirname, "Admin/client/src"),
+      "@assets": path.resolve(__dirname, "client/src/assets"),
       "@shared": path.resolve(__dirname, "shared"),
     },
   },

@@ -6,7 +6,7 @@ import {
   type Analytics, type InsertAnalytics, type BlogComment, type InsertBlogComment
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, or, like, count, sql } from "drizzle-orm";
+import { eq, desc, asc, and, or, like, count, sql } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -435,7 +435,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllTeamMembers(): Promise<TeamMember[]> {
-    return await db.select().from(teamMembers).orderBy(desc(teamMembers.createdAt));
+    return await db
+      .select()
+      .from(teamMembers)
+      .orderBy(asc(teamMembers.order), desc(teamMembers.createdAt));
   }
 
   async getActiveTeamMembers(): Promise<TeamMember[]> {
@@ -443,7 +446,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(teamMembers)
       .where(eq(teamMembers.isActive, true))
-      .orderBy(desc(teamMembers.createdAt));
+      .orderBy(asc(teamMembers.order), desc(teamMembers.createdAt));
   }
 
   async createTeamMember(insertTeamMember: InsertTeamMember): Promise<TeamMember> {
@@ -504,21 +507,36 @@ export class DatabaseStorage implements IStorage {
 
   // Analytics
   async logAnalytics(insertAnalytics: InsertAnalytics): Promise<Analytics> {
-    const [log] = await db.insert(analytics).values(insertAnalytics).returning();
+    const metadata = insertAnalytics.metadata;
+    const safeMetadata =
+      metadata === undefined
+        ? undefined
+        : metadata === null
+          ? null
+          : typeof metadata === "object" && !Array.isArray(metadata)
+            ? (metadata as Record<string, unknown>)
+            : null;
+
+    const [log] = await db
+      .insert(analytics)
+      .values({ ...insertAnalytics, metadata: safeMetadata })
+      .returning();
     return log;
   }
 
   async getAnalytics(startDate?: Date, endDate?: Date): Promise<Analytics[]> {
-    let query = db.select().from(analytics);
-    
     if (startDate && endDate) {
-      query = query.where(and(
-        sql`${analytics.timestamp} >= ${startDate}`,
-        sql`${analytics.timestamp} <= ${endDate}`
-      ));
+      return await db
+        .select()
+        .from(analytics)
+        .where(and(
+          sql`${analytics.timestamp} >= ${startDate}`,
+          sql`${analytics.timestamp} <= ${endDate}`
+        ))
+        .orderBy(desc(analytics.timestamp));
     }
-    
-    return await query.orderBy(desc(analytics.timestamp));
+
+    return await db.select().from(analytics).orderBy(desc(analytics.timestamp));
   }
 
   async getAnalyticsSummary(): Promise<any> {

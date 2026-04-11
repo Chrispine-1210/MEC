@@ -1,95 +1,110 @@
+import fs from "fs";
 import path from "path";
-import "dotenv/config"; // must load first
+import { randomUUID } from "crypto";
+import { env } from "./env";
 
-import session from "express-session";
-import cookieParser from "cookie-parser";
 import helmet from "helmet";
-
-import express, { Request, Response, NextFunction } from "express";
+import express, { type NextFunction, type Request, type Response } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { log, setupVite } from "./vite";
 
 const app = express();
+const isProduction = env.NODE_ENV === "production";
+const port = env.PORT;
 
 app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: [
-          "'self'",
-          "'unsafe-inline'",
-          "https://cdnjs.cloudflare.com",
-        ],
-        styleSrc: [
-          "'self'",
-          "'unsafe-inline'",
-          "https://fonts.googleapis.com",
-        ],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         imgSrc: ["'self'", "data:", "https:"],
-        connectSrc: ["'self'", "https:"],
+        connectSrc: ["'self'", "https:", "ws:", "wss:"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        mediaSrc: ["'self'", "https:"],
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"],
       },
     },
-  })
+  }),
 );
 
-// ✅ REQUIRED behind Cloudflare / reverse proxy
 app.set("trust proxy", true);
-
-app.use(cookieParser());
-
-app.use(
-  session({
-    name: "__Host-session",
-    secret: process.env.SESSION_SECRET || "change-this-now",
-    resave: false,
-    saveUninitialized: false,
-    proxy: true,
-    cookie: {
-      secure: true,        // HTTPS only
-      httpOnly: true,      // JS cannot read
-      sameSite: "lax",     // safe default
-      maxAge: 1000 * 60 * 60 * 24, // 1 day
-    },
-  })
-);
-
-/* -----------------------------------------------------
-   Core middleware
------------------------------------------------------ */
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false }));
 
-/* -----------------------------------------------------
-   API request logger (only logs /api routes)
------------------------------------------------------ */
+const rateLimitWindowMs = env.RATE_LIMIT_WINDOW_MS;
+const rateLimitMax = env.RATE_LIMIT_MAX;
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+
+const pruneRateLimitStore = () => {
+  const now = Date.now();
+  if (rateLimitStore.size < 1000) return;
+  for (const [key, value] of rateLimitStore.entries()) {
+    if (value.resetAt <= now) {
+      rateLimitStore.delete(key);
+    }
+  }
+};
+
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (!req.path.startsWith("/api") && !req.path.startsWith("/auth")) {
+    return next();
+  }
+
+  pruneRateLimitStore();
+
+  const now = Date.now();
+  const ip = req.ip || req.socket.remoteAddress || "unknown";
+  const scope = req.path.startsWith("/auth") ? "auth" : "api";
+  const key = `${ip}:${scope}`;
+  const entry = rateLimitStore.get(key);
+
+  if (!entry || entry.resetAt <= now) {
+    rateLimitStore.set(key, { count: 1, resetAt: now + rateLimitWindowMs });
+    return next();
+  }
+
+  entry.count += 1;
+  if (entry.count > rateLimitMax) {
+    const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
+    res.setHeader("Retry-After", retryAfter.toString());
+    return res.status(429).json({ message: "Too many requests. Please try again shortly." });
+  }
+
+  return next();
+});
+
 app.use((req: Request, res: Response, next: NextFunction) => {
   const startTime = Date.now();
   const requestPath = req.path;
+  const requestId = randomUUID();
 
-  let responseBody: any;
+  res.setHeader("X-Request-Id", requestId);
+
+  let responseBody: unknown;
 
   const originalJson = res.json.bind(res);
-  res.json = (body: any) => {
+  res.json = (body: unknown) => {
     responseBody = body;
     return originalJson(body);
   };
 
   res.on("finish", () => {
-    if (!requestPath.startsWith("/api")) return;
+    if (!requestPath.startsWith("/api")) {
+      return;
+    }
 
     const duration = Date.now() - startTime;
-    let line = `${req.method} ${requestPath} ${res.statusCode} in ${duration}ms`;
+    let line = `[${requestId}] ${req.method} ${requestPath} ${res.statusCode} in ${duration}ms`;
 
-    if (responseBody) {
+    if (responseBody !== undefined) {
       line += ` :: ${JSON.stringify(responseBody)}`;
     }
 
-    if (line.length > 80) {
-      line = line.slice(0, 79) + "…";
+    if (line.length > 180) {
+      line = `${line.slice(0, 177)}...`;
     }
 
     log(line);
@@ -98,54 +113,57 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-/* -----------------------------------------------------
-   Bootstrap server
------------------------------------------------------ */
 (async () => {
   const server = await registerRoutes(app);
 
-  /* ---------------------------------------------------
-     Global error handler (must be after routes)
-  --------------------------------------------------- */
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    const status =
+      typeof err === "object" && err !== null && "status" in err
+        ? Number((err as { status?: number }).status) || 500
+        : typeof err === "object" && err !== null && "statusCode" in err
+          ? Number((err as { statusCode?: number }).statusCode) || 500
+          : 500;
 
-    res.status(status).json({ message });
+    const message =
+      typeof err === "object" && err !== null && "message" in err
+        ? String((err as { message?: string }).message || "Internal Server Error")
+        : "Internal Server Error";
 
-    // Crash loudly in development
-    if (app.get("env") === "development") {
+    if (!isProduction) {
       console.error(err);
     }
+
+    res.status(status).json({ message });
   });
 
-  /* ---------------------------------------------------
-     Frontend handling
-  --------------------------------------------------- */
   if (app.get("env") === "development") {
-    // Vite dev server (HMR, fast refresh)
     await setupVite(app, server);
   } else {
-    // Static production builds
-    app.use(express.static("dist/client"));
-    app.use("/admin", express.static("dist/admin"));
+    const clientDistPath = path.resolve(import.meta.dirname, "..", "dist", "client");
+    const adminDistPath = path.resolve(import.meta.dirname, "..", "dist", "admin");
 
-    app.get("/admin/*", (_req, res) => {
-      res.sendFile(path.resolve("dist/admin/index.html"));
-    });
+    if (fs.existsSync(adminDistPath)) {
+      app.use("/admin", express.static(adminDistPath));
+      app.get("/admin/*", (_req, res) => {
+        res.sendFile(path.join(adminDistPath, "index.html"));
+      });
+    }
 
+    app.use(express.static(clientDistPath));
     app.get("*", (_req, res) => {
-      res.sendFile(path.resolve("dist/client/index.html"));
+      res.sendFile(path.join(clientDistPath, "index.html"));
     });
   }
 
-  /* ---------------------------------------------------
-     Server listen
-  --------------------------------------------------- */
-  const PORT = Number(process.env.PORT);
+  server.on("error", (error: NodeJS.ErrnoException) => {
+    if (error.code === "EADDRINUSE") {
+      log(`Port ${port} is already in use. Stop the other process or set PORT to a free value.`);
+      process.exit(1);
+    }
+    throw error;
+  });
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+  server.listen(port, "0.0.0.0", () => {
+    log(`Server listening on port ${port}`);
   });
 })();
-

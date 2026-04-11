@@ -9,6 +9,7 @@ import { Link, useLocation } from "wouter";
 import ApplicationTracker from "@/components/user/application-tracker";
 import ReferralSystem from "@/components/user/referral-system";
 import ExpandingNav from "@/components/expanding-nav";
+import type { ApiApplication, ApiReferral } from "@/lib/api-types";
 import { 
   User, 
   FileText, 
@@ -26,12 +27,12 @@ export default function Dashboard() {
   const { user, isLoading } = useAuth();
   const [, setLocation] = useLocation();
 
-  const { data: applications } = useQuery({
+  const { data: applications } = useQuery<ApiApplication[]>({
     queryKey: ["/api/applications"],
     enabled: !!user,
   });
 
-  const { data: referrals } = useQuery({
+  const { data: referrals } = useQuery<ApiReferral[]>({
     queryKey: ["/api/referrals"],
     enabled: !!user,
   });

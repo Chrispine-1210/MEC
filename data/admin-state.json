@@ -1,0 +1,85 @@
+{
+  "users": {},
+  "scholarships": {},
+  "jobs": {},
+  "partners": {},
+  "blogPosts": {},
+  "teamMembers": {},
+  "roles": [
+    {
+      "id": "viewer",
+      "name": "Viewer",
+      "description": "Read-only access to platform content.",
+      "permissions": [
+        "view_dashboard"
+      ],
+      "isActive": true,
+      "createdAt": "2026-04-02T12:07:01.826Z",
+      "updatedAt": "2026-04-02T12:07:01.829Z"
+    },
+    {
+      "id": "editor",
+      "name": "Editor",
+      "description": "Can create and update platform content.",
+      "permissions": [
+        "view_dashboard",
+        "manage_scholarships",
+        "manage_jobs",
+        "manage_partners",
+        "manage_blog",
+        "manage_team"
+      ],
+      "isActive": true,
+      "createdAt": "2026-04-02T12:07:01.829Z",
+      "updatedAt": "2026-04-02T12:07:01.829Z"
+    },
+    {
+      "id": "admin",
+      "name": "Administrator",
+      "description": "Can manage content, users, and applications.",
+      "permissions": [
+        "view_dashboard",
+        "manage_scholarships",
+        "manage_jobs",
+        "manage_partners",
+        "manage_blog",
+        "manage_team",
+        "manage_users",
+        "review_applications",
+        "view_analytics"
+      ],
+      "isActive": true,
+      "createdAt": "2026-04-02T12:07:01.829Z",
+      "updatedAt": "2026-04-02T12:07:01.829Z"
+    },
+    {
+      "id": "super_admin",
+      "name": "Super Administrator",
+      "description": "Full system access including settings and roles.",
+      "permissions": [
+        "view_dashboard",
+        "manage_scholarships",
+        "manage_jobs",
+        "manage_partners",
+        "manage_blog",
+        "manage_team",
+        "manage_users",
+        "review_applications",
+        "view_analytics",
+        "manage_roles",
+        "manage_settings"
+      ],
+      "isActive": true,
+      "createdAt": "2026-04-02T12:07:01.829Z",
+      "updatedAt": "2026-04-02T12:07:01.829Z"
+    }
+  ],
+  "settings": {
+    "platformName": "Mtendere Education Platform",
+    "supportEmail": "support@mtendere.com",
+    "sessionTimeout": 30,
+    "maxLoginAttempts": 5,
+    "updatedAt": "2026-04-02T12:07:01.831Z"
+  },
+  "readNotificationIds": []
+}

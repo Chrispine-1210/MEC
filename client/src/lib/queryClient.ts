@@ -12,9 +12,14 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  const token = localStorage.getItem("token");
+  const headers: Record<string, string> = {};
+  if (data) headers["Content-Type"] = "application/json";
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers,
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
@@ -29,7 +34,31 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey[0] as string, {
+    const [url, ...params] = queryKey as unknown[];
+    const token = localStorage.getItem("token");
+    let finalUrl = String(url);
+
+    if (params.length > 0) {
+      const searchParams = new URLSearchParams();
+      params.forEach((param, index) => {
+        if (param === undefined || param === null) return;
+        if (typeof param === "object") {
+          Object.entries(param as Record<string, unknown>).forEach(([key, value]) => {
+            if (value === undefined || value === null) return;
+            searchParams.set(key, String(value));
+          });
+        } else {
+          searchParams.set(`p${index}`, String(param));
+        }
+      });
+      const queryString = searchParams.toString();
+      if (queryString) {
+        finalUrl = `${finalUrl}?${queryString}`;
+      }
+    }
+
+    const res = await fetch(finalUrl, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
       credentials: "include",
     });
 

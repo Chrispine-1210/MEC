@@ -10,6 +10,7 @@ import Footer from "@/components/footer";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import type { ApiScholarship } from "@/lib/api-types";
 import { 
   Search, 
   Filter, 
@@ -23,20 +24,7 @@ import {
   Clock
 } from "lucide-react";
 
-interface Scholarship {
-  id: number;
-  title: string;
-  description: string;
-  institution: string;
-  country: string;
-  amount: number;
-  currency: string;
-  deadline: string;
-  requirements: any;
-  category: string;
-  imageUrl?: string;
-  isActive: boolean;
-}
+type Scholarship = ApiScholarship;
 
 const videoSources = [
   {
@@ -65,11 +53,11 @@ export default function Scholarships() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: scholarships, isLoading } = useQuery({
+  const { data: scholarships, isLoading } = useQuery<Scholarship[]>({
     queryKey: ["/api/scholarships"],
   });
 
-  const { data: searchResults, isLoading: isSearching } = useQuery({
+  const { data: searchResults, isLoading: isSearching } = useQuery<Scholarship[]>({
     queryKey: ["/api/scholarships/search", searchQuery],
     enabled: searchQuery.length > 2,
   });
@@ -345,7 +333,7 @@ export default function Scholarships() {
                         Award Amount
                       </span>
                       <span className="font-semibold text-mtendere-green">
-                        {scholarship.amount ? formatCurrency(scholarship.amount, scholarship.currency) : 'Full Coverage'}
+                        {scholarship.amount ? formatCurrency(scholarship.amount, scholarship.currency || 'USD') : 'Full Coverage'}
                       </span>
                     </div>
                     

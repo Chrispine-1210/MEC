@@ -10,7 +10,7 @@ import { Link } from "wouter";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
-import { 
+import {
   GraduationCap, 
   Briefcase, 
   Globe, 
@@ -31,33 +31,41 @@ import {
   Heart,
   Star
 } from "lucide-react";
+import type {
+  ApiScholarship,
+  ApiJob,
+  ApiPartner,
+  ApiTestimonial,
+  ApiTeamMember,
+  ApiBlogPost,
+} from "@/lib/api-types";
 
-import logoImg from "@assets/Mtendere_Logo-removebg-preview_1768626463705.jpg";
+import logoImg from "@assets/mtendere-logo.svg";
 
 export default function Home() {
-  const { data: scholarships } = useQuery({
+  const { data: scholarships } = useQuery<ApiScholarship[]>({
     queryKey: ["/api/scholarships"],
   });
 
-  const { data: jobs } = useQuery({
+  const { data: jobs } = useQuery<ApiJob[]>({
     queryKey: ["/api/jobs"],
   });
 
-  const { data: partners } = useQuery({
+  const { data: partners } = useQuery<ApiPartner[]>({
     queryKey: ["/api/partners"],
   });
 
-  const { data: testimonials } = useQuery<any[]>({
+  const { data: testimonials } = useQuery<ApiTestimonial[]>({
     queryKey: ["/api/testimonials"],
     initialData: [],
   });
 
-  const { data: teamMembers } = useQuery<any[]>({
+  const { data: teamMembers } = useQuery<ApiTeamMember[]>({
     queryKey: ["/api/team-members"],
     initialData: [],
   });
 
-  const { data: blogPosts } = useQuery<any[]>({
+  const { data: blogPosts } = useQuery<ApiBlogPost[]>({
     queryKey: ["/api/blog-posts"],
     initialData: [],
   });

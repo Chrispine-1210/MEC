@@ -248,7 +248,7 @@ export default function Admin() {
       {/* Sidebar */}
       <AdminSidebar 
         activeView={activeView}
-        onViewChange={setActiveView}
+        onViewChange={(view) => setActiveView(view as AdminView)}
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
       />

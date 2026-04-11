@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
+import type { ApiPartner } from "@/lib/api-types";
 import { 
   Users, 
   Trophy, 
@@ -19,20 +20,10 @@ import {
   BookOpen
 } from "lucide-react";
 
-interface Partner {
-  id: number;
-  name: string;
-  description: string;
-  logoUrl?: string;
-  website?: string;
-  country: string;
-  studentCount?: number;
-  ranking?: string;
-  isActive: boolean;
-}
+type Partner = ApiPartner;
 
 export default function Partners() {
-  const { data: partners, isLoading } = useQuery({
+  const { data: partners, isLoading } = useQuery<Partner[]>({
     queryKey: ["/api/partners"],
   });
 

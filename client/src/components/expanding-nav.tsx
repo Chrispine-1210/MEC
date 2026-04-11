@@ -19,7 +19,7 @@ import {
   LogOut
 } from "lucide-react";
 
-import logoImg from "@assets/Mtendere_Logo-removebg-preview_1768626463705.jpg";
+import logoImg from "@assets/mtendere-logo.svg";
 
 export default function ExpandingNav() {
   const [isOpen, setIsOpen] = useState(false);

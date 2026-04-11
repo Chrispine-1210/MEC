@@ -27,13 +27,13 @@ interface ContentManagerProps {
 
 export default function ContentManager({ contentType }: ContentManagerProps) {
   const [isCreating, setIsCreating] = useState(false);
-  const [editingItem, setEditingItem] = useState<any>(null);
+  const [editingItem, setEditingItem] = useState<Record<string, any> | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [formData, setFormData] = useState<any>({});
+  const [formData, setFormData] = useState<Record<string, any>>({});
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: items, isLoading } = useQuery({
+  const { data: items = [], isLoading } = useQuery<any[]>({
     queryKey: [`/api/${contentType}`],
   });
 
@@ -132,7 +132,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
   };
 
   const handleChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const getDefaultFormData = () => {
