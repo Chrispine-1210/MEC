@@ -26,7 +26,7 @@ export async function setupVite(app: Express, server: Server) {
     allowedHosts: true as const,
   };
 
-  const vite = await createViteServer({
+  const clientVite = await createViteServer({
     ...viteConfig,
     configFile: false,
     customLogger: {
@@ -40,28 +40,70 @@ export async function setupVite(app: Express, server: Server) {
     appType: "custom",
   });
 
-  app.use(vite.middlewares);
+  // Try to load Admin vite config dynamically. If present, create second Vite server.
+  let adminVite: any | undefined;
+  try {
+    // dynamic import to avoid crash when Admin isn't present
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // use import() to support ESM resolution
+    // @ts-ignore
+    const adminViteConfigModule = await import("../Admin/vite.config");
+    const adminViteConfig = adminViteConfigModule?.default;
+    if (adminViteConfig) {
+      adminVite = await createViteServer({
+        ...adminViteConfig,
+        configFile: false,
+        customLogger: {
+          ...viteLogger,
+          error: (msg, options) => {
+            viteLogger.error(msg, options);
+            process.exit(1);
+          },
+        },
+        server: serverOptions,
+        appType: "custom",
+      });
+      log("Admin Vite middleware enabled", "vite");
+    }
+  } catch (err) {
+    // Admin app not present or failed to load — ignore for dev
+  }
+
+  // Route static/dev asset requests to the correct Vite middleware
+  app.use((req, res, next) => {
+    if (req.originalUrl.startsWith("/api")) return next();
+    if (adminVite && req.originalUrl.startsWith("/admin")) {
+      return adminVite.middlewares(req, res, next);
+    }
+    return clientVite.middlewares(req, res, next);
+  });
+
+  // SPA fallback: serve Admin index for /admin/*, otherwise client index
   app.use("*", async (req, res, next) => {
-    const url = req.originalUrl;
+    if (req.originalUrl.startsWith("/api")) {
+      return next();
+    }
 
     try {
-      const clientTemplate = path.resolve(
-        import.meta.dirname,
-        "..",
-        "client",
-        "index.html",
-      );
+      if (adminVite && req.originalUrl.startsWith("/admin")) {
+        const adminIndex = path.resolve(import.meta.dirname, "..", "Admin", "client", "index.html");
+        let template = await fs.promises.readFile(adminIndex, "utf-8");
+        template = template.replace(`src="/src/main.tsx"`, `src="/src/main.tsx?v=${nanoid()}"`);
+        const html = await adminVite.transformIndexHtml(req.originalUrl, template);
+        return res.status(200).set({ "Content-Type": "text/html" }).end(html);
+      }
 
-      // always reload the index.html file from disk incase it changes
-      let template = await fs.promises.readFile(clientTemplate, "utf-8");
-      template = template.replace(
-        `src="/src/main.tsx"`,
-        `src="/src/main.tsx?v=${nanoid()}"`,
-      );
-      const page = await vite.transformIndexHtml(url, template);
-      res.status(200).set({ "Content-Type": "text/html" }).end(page);
+      const clientIndex = path.resolve(import.meta.dirname, "..", "client", "index.html");
+      let template = await fs.promises.readFile(clientIndex, "utf-8");
+      template = template.replace(`src="/src/main.tsx"`, `src="/src/main.tsx?v=${nanoid()}"`);
+      const html = await clientVite.transformIndexHtml(req.originalUrl, template);
+      return res.status(200).set({ "Content-Type": "text/html" }).end(html);
     } catch (e) {
-      vite.ssrFixStacktrace(e as Error);
+      if (adminVite && req.originalUrl.startsWith("/admin")) {
+        adminVite.ssrFixStacktrace(e as Error);
+      } else {
+        clientVite.ssrFixStacktrace(e as Error);
+      }
       next(e);
     }
   });

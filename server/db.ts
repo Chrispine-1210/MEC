@@ -5,16 +5,19 @@ import ws from "ws";
 import * as schema from "@shared/schema";
 
 neonConfig.webSocketConstructor = ws;
-if (process.env.NODE_ENV !== "production") {
-  // In local dev, avoid flaky WebSocket connections by sending Pool queries over HTTP.
-  neonConfig.poolQueryViaFetch = true;
-}
-
-const connectionString = process.env.DATABASE_URL;
+const isDevelopment = process.env.NODE_ENV !== "production";
+const connectionString =
+  (isDevelopment ? process.env.DATABASE_URL_UNPOOLED : undefined) ||
+  process.env.DATABASE_URL;
 
 if (!connectionString) {
   throw new Error("DATABASE_URL is required to start the server.");
 }
 
-export const pool = new Pool({ connectionString });
+export const pool = new Pool({
+  connectionString,
+  connectionTimeoutMillis: 10_000,
+  idleTimeoutMillis: 30_000,
+  max: isDevelopment ? 5 : 10,
+});
 export const db = drizzle({ client: pool, schema });

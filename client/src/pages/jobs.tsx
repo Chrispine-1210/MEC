@@ -154,13 +154,13 @@ export default function Jobs() {
             
             {/* Search Bar */}
             <div className="relative max-w-2xl mx-auto drop-shadow-2xl">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground/70 w-5 h-5" />
               <Input
                 type="text"
                 placeholder="Search jobs by title, company, or location..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-12 pr-4 py-6 text-lg bg-white text-gray-900 border-0 rounded-xl shadow-2xl focus-visible:ring-primary"
+                className="pl-12 pr-4 py-6 text-lg bg-card text-foreground border-0 rounded-xl shadow-2xl focus-visible:ring-primary"
               />
               {isSearching && (
                 <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
@@ -177,8 +177,8 @@ export default function Jobs() {
         <div className="mb-8">
           <div className="flex flex-wrap items-center gap-4 mb-4">
             <div className="flex items-center space-x-2">
-              <Filter className="w-5 h-5 text-gray-600" />
-              <span className="font-medium text-gray-700">Filter by type:</span>
+              <Filter className="w-5 h-5 text-muted-foreground" />
+              <span className="font-medium text-foreground/80">Filter by type:</span>
             </div>
             <Button
               variant={selectedType === "" ? "default" : "outline"}
@@ -203,8 +203,8 @@ export default function Jobs() {
 
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center space-x-2">
-              <MapPin className="w-5 h-5 text-gray-600" />
-              <span className="font-medium text-gray-700">Filter by location:</span>
+              <MapPin className="w-5 h-5 text-muted-foreground" />
+              <span className="font-medium text-foreground/80">Filter by location:</span>
             </div>
             <Button
               variant={selectedLocation === "" ? "default" : "outline"}
@@ -230,7 +230,7 @@ export default function Jobs() {
 
         {/* Results Count */}
         <div className="mb-6">
-          <p className="text-gray-600">
+          <p className="text-muted-foreground">
             Showing {filteredJobs?.length || 0} job{filteredJobs?.length !== 1 ? 's' : ''}
             {searchQuery && ` for "${searchQuery}"`}
             {selectedType && ` in ${selectedType}`}
@@ -267,7 +267,7 @@ export default function Jobs() {
               ];
               const coverImg = job.imageUrl || jobImages[idx % jobImages.length];
               return (
-              <Card key={job.id} className="hover:shadow-2xl transition-all duration-500 overflow-hidden group border-none bg-white shadow-md flex flex-col">
+              <Card key={job.id} className="hover:shadow-2xl transition-all duration-500 overflow-hidden group border-none bg-card shadow-md flex flex-col">
                 <div className="relative h-44 overflow-hidden">
                   <img
                     src={coverImg}
@@ -305,13 +305,13 @@ export default function Jobs() {
                 </CardHeader>
                 
                 <CardContent>
-                  <p className="text-gray-600 mb-4 line-clamp-3">
+                  <p className="text-muted-foreground mb-4 line-clamp-3">
                     {job.description}
                   </p>
                   
                   <div className="space-y-3 mb-6">
                     <div className="flex items-center justify-between">
-                      <span className="flex items-center text-sm text-gray-600">
+                      <span className="flex items-center text-sm text-muted-foreground">
                         <DollarSign className="w-4 h-4 mr-1" />
                         Salary
                       </span>
@@ -322,11 +322,11 @@ export default function Jobs() {
                     
                     {job.deadline && (
                       <div className="flex items-center justify-between">
-                        <span className="flex items-center text-sm text-gray-600">
+                        <span className="flex items-center text-sm text-muted-foreground">
                           <Calendar className="w-4 h-4 mr-1" />
                           Application Deadline
                         </span>
-                        <span className={`font-semibold ${isDeadlineApproaching(job.deadline) ? 'text-red-600' : 'text-gray-700'}`}>
+                        <span className={`font-semibold ${isDeadlineApproaching(job.deadline) ? 'text-destructive' : 'text-foreground/80'}`}>
                           {formatDate(job.deadline)}
                         </span>
                       </div>
@@ -336,7 +336,7 @@ export default function Jobs() {
                   {/* Requirements Preview */}
                   {job.requirements && (
                     <div className="mb-4">
-                      <h4 className="text-sm font-semibold text-gray-700 mb-2">Key Requirements:</h4>
+                      <h4 className="text-sm font-semibold text-foreground/80 mb-2">Key Requirements:</h4>
                       <div className="flex flex-wrap gap-1">
                         {(Array.isArray(job.requirements) ? job.requirements : []).slice(0, 3).map((req, index) => (
                           <Badge key={index} variant="outline" className="text-xs">
@@ -354,7 +354,7 @@ export default function Jobs() {
 
                   <div className="flex space-x-2">
                     <Button
-                      className="flex-1 bg-mtendere-green hover:bg-green-700"
+                      className="flex-1 bg-mtendere-green hover:bg-mtendere-green/90"
                       onClick={() => handleApply(job.id)}
                       disabled={applyMutation.isPending}
                     >
@@ -384,11 +384,11 @@ export default function Jobs() {
 
         {filteredJobs?.length === 0 && !isLoading && (
           <div className="text-center py-12">
-            <Briefcase className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-600 mb-2">
+            <Briefcase className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-muted-foreground mb-2">
               No jobs found
             </h3>
-            <p className="text-gray-500 mb-6">
+            <p className="text-muted-foreground mb-6">
               Try adjusting your search criteria or check back later for new opportunities.
             </p>
             <Button 
@@ -408,3 +408,7 @@ export default function Jobs() {
     </div>
   );
 }
+
+
+
+

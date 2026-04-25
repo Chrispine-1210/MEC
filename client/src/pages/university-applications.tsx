@@ -25,42 +25,42 @@ const SERVICES = [
     title: "University Research & Shortlisting",
     desc: "We analyze your academic profile, budget, program interest, and career goals to create a personalized shortlist of universities with the best fit and success probability.",
     color: "text-mtendere-blue",
-    bg: "bg-blue-50",
+    bg: "bg-mtendere-blue/10",
   },
   {
     icon: Edit3,
     title: "Statement of Purpose Writing",
     desc: "Our expert writers craft compelling, authentic Statements of Purpose that clearly communicate your academic journey, research interests, and professional ambitions.",
     color: "text-mtendere-green",
-    bg: "bg-green-50",
+    bg: "bg-mtendere-green/10",
   },
   {
     icon: FileText,
     title: "Application Document Review",
     desc: "Comprehensive review of every document in your application: transcripts, test scores, recommendation letters, CV, and supporting essays.",
     color: "text-mtendere-orange",
-    bg: "bg-orange-50",
+    bg: "bg-mtendere-orange/10",
   },
   {
     icon: Award,
     title: "Scholarship Integration",
     desc: "We identify scholarship opportunities at your target universities and help you craft scholarship-specific essays and financial aid applications.",
     color: "text-mtendere-blue",
-    bg: "bg-blue-50",
+    bg: "bg-mtendere-blue/10",
   },
   {
     icon: Calendar,
     title: "Deadline & Timeline Management",
     desc: "Never miss a deadline. We create a comprehensive application calendar and send reminders to keep you on track throughout the application season.",
     color: "text-mtendere-green",
-    bg: "bg-green-50",
+    bg: "bg-mtendere-green/10",
   },
   {
     icon: Star,
     title: "Interview Preparation",
     desc: "Many top universities require admissions interviews. We run mock interviews, teach you to anticipate questions, and help you present your best self.",
     color: "text-mtendere-orange",
-    bg: "bg-orange-50",
+    bg: "bg-mtendere-orange/10",
   },
 ];
 
@@ -104,7 +104,7 @@ export default function UniversityApplications() {
       >
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-green/93 to-mtendere-blue/85" />
         <div className="container relative z-10 mx-auto px-4 text-center max-w-4xl">
-          <Badge className="mb-6 bg-white/20 text-white border-white/30 px-5 py-1.5 text-xs font-bold uppercase tracking-widest">
+          <Badge className="mb-6 bg-card/20 text-white border-white/30 px-5 py-1.5 text-xs font-bold uppercase tracking-widest">
             Admissions Excellence
           </Badge>
           <h1 className="text-5xl md:text-7xl font-extrabold mb-6 leading-tight drop-shadow-2xl">
@@ -116,12 +116,12 @@ export default function UniversityApplications() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/contact">
-              <Button size="lg" className="bg-mtendere-orange hover:bg-orange-600 text-white font-bold px-10 py-6 text-lg rounded-xl shadow-2xl hover:scale-105 transition-transform">
+              <Button size="lg" className="bg-mtendere-orange hover:bg-mtendere-orange/90 text-white font-bold px-10 py-6 text-lg rounded-xl shadow-2xl hover:scale-105 transition-transform">
                 Start Application <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Link>
             <Link href="/scholarships">
-              <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/20 font-bold px-10 py-6 text-lg rounded-xl">
+              <Button size="lg" variant="outline" className="border-white text-white hover:bg-card/20 font-bold px-10 py-6 text-lg rounded-xl">
                 View Scholarships
               </Button>
             </Link>
@@ -129,7 +129,7 @@ export default function UniversityApplications() {
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-16">
             {STATS.map((s) => (
-              <div key={s.label} className="bg-white/15 backdrop-blur-sm rounded-2xl p-4 text-center border border-white/20">
+              <div key={s.label} className="bg-card/15 backdrop-blur-sm rounded-2xl p-4 text-center border border-white/20">
                 <div className="text-3xl font-extrabold text-mtendere-orange mb-1">{s.value}</div>
                 <div className="text-xs font-semibold opacity-90">{s.label}</div>
               </div>
@@ -139,19 +139,19 @@ export default function UniversityApplications() {
       </section>
 
       {/* Services */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-card">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <Badge variant="outline" className="mb-3 text-mtendere-green border-mtendere-green px-4 py-1 uppercase tracking-wider text-xs font-bold">
               Our Services
             </Badge>
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">End-to-End Application Support</h2>
-            <p className="text-gray-600 max-w-xl mx-auto">From the first step to the final acceptance letter, we handle every aspect of your university application</p>
+            <p className="text-muted-foreground max-w-xl mx-auto">From the first step to the final acceptance letter, we handle every aspect of your university application</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {SERVICES.map((s) => (
-              <Card key={s.title} className="hover:shadow-xl transition-all group border-none bg-gray-50">
+              <Card key={s.title} className="hover:shadow-xl transition-all group border-none bg-muted/40">
                 <CardHeader>
                   <div className={`w-14 h-14 ${s.bg} rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
                     <s.icon className={`w-7 h-7 ${s.color}`} />
@@ -159,7 +159,7 @@ export default function UniversityApplications() {
                   <CardTitle className="text-xl font-bold text-mtendere-blue">{s.title}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-gray-600 leading-relaxed">{s.desc}</p>
+                  <p className="text-muted-foreground leading-relaxed">{s.desc}</p>
                 </CardContent>
               </Card>
             ))}
@@ -168,11 +168,11 @@ export default function UniversityApplications() {
       </section>
 
       {/* Universities We Work With */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-20 bg-muted/40">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Universities We've Helped You Enter</h2>
-            <p className="text-gray-600 max-w-xl mx-auto">A sample of institutions where our students have been admitted</p>
+            <p className="text-muted-foreground max-w-xl mx-auto">A sample of institutions where our students have been admitted</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {TOP_UNIVERSITIES.map((u) => (
@@ -184,7 +184,7 @@ export default function UniversityApplications() {
                 </div>
                 <CardContent className="pt-4">
                   <h3 className="font-bold text-mtendere-blue text-lg">{u.name}</h3>
-                  <p className="text-sm text-gray-500">{u.country}</p>
+                  <p className="text-sm text-muted-foreground">{u.country}</p>
                   <p className="text-xs text-mtendere-green font-semibold mt-1">{u.field}</p>
                 </CardContent>
               </Card>
@@ -201,21 +201,21 @@ export default function UniversityApplications() {
       </section>
 
       {/* Process */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-card">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Our Application Process</h2>
-            <p className="text-gray-600 max-w-xl mx-auto">A structured, proven approach that maximizes your acceptance chances</p>
+            <p className="text-muted-foreground max-w-xl mx-auto">A structured, proven approach that maximizes your acceptance chances</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
             {PROCESS.map((p) => (
-              <div key={p.step} className="flex gap-4 p-6 bg-gray-50 rounded-2xl hover:shadow-lg transition-all">
+              <div key={p.step} className="flex gap-4 p-6 bg-muted/40 rounded-2xl hover:shadow-lg transition-all">
                 <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-mtendere-blue to-mtendere-green rounded-full flex items-center justify-center text-white font-black text-sm shadow">
                   {p.step}
                 </div>
                 <div>
                   <h3 className="font-bold text-mtendere-blue mb-1">{p.title}</h3>
-                  <p className="text-sm text-gray-600 leading-relaxed">{p.desc}</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{p.desc}</p>
                 </div>
               </div>
             ))}
@@ -224,16 +224,16 @@ export default function UniversityApplications() {
       </section>
 
       {/* FAQ */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-20 bg-muted/40">
         <div className="container mx-auto px-4 max-w-3xl">
           <div className="text-center mb-14">
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Common Questions</h2>
           </div>
           <Accordion type="single" collapsible className="space-y-3">
             {FAQS.map((faq, i) => (
-              <AccordionItem key={i} value={`faq-${i}`} className="border rounded-xl px-6 shadow-sm bg-white">
+              <AccordionItem key={i} value={`faq-${i}`} className="border rounded-xl px-6 shadow-sm bg-card">
                 <AccordionTrigger className="text-left font-bold text-mtendere-blue hover:text-mtendere-green py-5">{faq.q}</AccordionTrigger>
-                <AccordionContent className="text-gray-600 pb-5 leading-relaxed">{faq.a}</AccordionContent>
+                <AccordionContent className="text-muted-foreground pb-5 leading-relaxed">{faq.a}</AccordionContent>
               </AccordionItem>
             ))}
           </Accordion>
@@ -254,7 +254,7 @@ export default function UniversityApplications() {
           <h2 className="text-4xl md:text-5xl font-extrabold mb-4 drop-shadow-lg">Ready to Apply?</h2>
           <p className="text-xl opacity-95 mb-8 font-semibold drop-shadow">Book your free consultation and let's map your path to your dream university.</p>
           <Link href="/contact">
-            <Button size="lg" className="bg-mtendere-orange hover:bg-orange-600 text-white font-bold px-12 py-6 text-lg rounded-xl shadow-2xl hover:scale-105 transition-transform">
+            <Button size="lg" className="bg-mtendere-orange hover:bg-mtendere-orange/90 text-white font-bold px-12 py-6 text-lg rounded-xl shadow-2xl hover:scale-105 transition-transform">
               Book Free Consultation <ArrowRight className="ml-2 w-5 h-5" />
             </Button>
           </Link>
@@ -264,3 +264,7 @@ export default function UniversityApplications() {
     </div>
   );
 }
+
+
+
+

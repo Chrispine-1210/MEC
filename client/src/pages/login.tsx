@@ -63,7 +63,7 @@ export default function Login() {
               { icon: Globe, value: "50+", label: "Countries" },
               { icon: Award, value: "95%", label: "Success Rate" },
             ].map((stat) => (
-              <div key={stat.label} className="bg-white/15 backdrop-blur-sm rounded-xl p-4 text-center">
+              <div key={stat.label} className="bg-card/15 backdrop-blur-sm rounded-xl p-4 text-center">
                 <stat.icon className="w-5 h-5 mx-auto mb-2 text-mtendere-orange" />
                 <div className="text-xl font-black">{stat.value}</div>
                 <div className="text-xs text-white/80">{stat.label}</div>
@@ -74,7 +74,7 @@ export default function Login() {
       </div>
 
       {/* Right Panel — Form */}
-      <div className="flex-1 flex flex-col justify-center p-8 lg:p-16 bg-white">
+      <div className="flex-1 flex flex-col justify-center p-8 lg:p-16 bg-card">
         <div className="max-w-md w-full mx-auto">
           {/* Mobile logo */}
           <div className="lg:hidden mb-8">
@@ -82,13 +82,13 @@ export default function Login() {
           </div>
 
           <div className="mb-8">
-            <h1 className="text-3xl font-black text-gray-900 mb-2">Welcome back</h1>
-            <p className="text-gray-500">Sign in to continue your educational journey</p>
+            <h1 className="text-3xl font-black text-foreground mb-2">Welcome back</h1>
+            <p className="text-muted-foreground">Sign in to continue your educational journey</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <Label htmlFor="email" className="text-sm font-semibold text-gray-700">Email address</Label>
+              <Label htmlFor="email" className="text-sm font-semibold text-foreground/80">Email address</Label>
               <Input
                 id="email"
                 type="email"
@@ -97,13 +97,13 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={isLoading}
-                className="mt-1.5 h-12 border-gray-200 focus-visible:ring-mtendere-blue"
+                className="mt-1.5 h-12 border-border/60 focus-visible:ring-mtendere-blue"
               />
             </div>
 
             <div>
               <div className="flex justify-between items-center mb-1.5">
-                <Label htmlFor="password" className="text-sm font-semibold text-gray-700">Password</Label>
+                <Label htmlFor="password" className="text-sm font-semibold text-foreground/80">Password</Label>
               </div>
               <div className="relative">
                 <Input
@@ -114,11 +114,11 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   disabled={isLoading}
-                  className="h-12 pr-12 border-gray-200 focus-visible:ring-mtendere-blue"
+                  className="h-12 pr-12 border-border/60 focus-visible:ring-mtendere-blue"
                 />
                 <button
                   type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 hover:text-foreground/80"
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
@@ -128,7 +128,7 @@ export default function Login() {
 
             <Button
               type="submit"
-              className="w-full h-12 bg-mtendere-blue hover:bg-blue-700 text-white font-bold text-base"
+              className="w-full h-12 bg-mtendere-blue hover:bg-mtendere-blue/90 text-white font-bold text-base"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -145,15 +145,15 @@ export default function Login() {
             </Button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-gray-600">
+          <p className="mt-6 text-center text-sm text-muted-foreground">
             Don't have an account?{" "}
-            <Link href="/register" className="text-mtendere-blue hover:text-blue-700 font-bold">
+            <Link href="/register" className="text-mtendere-blue hover:text-mtendere-blue font-bold">
               Create one free
             </Link>
           </p>
 
-          <div className="mt-8 pt-6 border-t border-gray-100 text-center">
-            <Link href="/" className="text-sm text-gray-400 hover:text-mtendere-blue flex items-center justify-center gap-1">
+          <div className="mt-8 pt-6 border-t border-border/40 text-center">
+            <Link href="/" className="text-sm text-muted-foreground/70 hover:text-mtendere-blue flex items-center justify-center gap-1">
               ← Back to homepage
             </Link>
           </div>
@@ -162,3 +162,7 @@ export default function Login() {
     </div>
   );
 }
+
+
+
+

@@ -84,6 +84,17 @@ const getErrorMessage = (error: unknown) => {
   return "Unknown error";
 };
 
+const isTransientDbConnectivityError = (error: unknown) => {
+  const message = JSON.stringify(getErrorMessage(error)).toLowerCase();
+  return (
+    message.includes("fetch failed") ||
+    message.includes("connecttimeout") ||
+    message.includes("error connecting to database") ||
+    message.includes("connection terminated") ||
+    message.includes("network")
+  );
+};
+
 const buildPublicUser = (user: {
   id: number;
   username: string;
@@ -417,6 +428,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   };
 
+  const emitAdminRealtimeEvent = async (
+    req: Request,
+    {
+      event,
+      channel,
+      entityType,
+      referenceId,
+      payload,
+    }: {
+      event: string;
+      channel: string;
+      entityType: string;
+      referenceId?: number | string;
+      payload?: Record<string, unknown>;
+    },
+  ) => {
+    try {
+      const user = getAuthenticatedUser(req);
+
+      await storage.logAnalytics({
+        event,
+        userId: user.id,
+        metadata: {
+          type: entityType,
+          referenceId,
+          channel,
+          ...(payload ?? {}),
+        },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+
+      broadcast(channel, { type: event, ...(payload ?? {}) });
+      broadcast("admin-dashboard", { type: event, channel, entityType, referenceId });
+      broadcast("admin-notifications", { type: event, channel, entityType, referenceId });
+    } catch (error) {
+      console.error("Admin realtime event error:", error);
+    }
+  };
+
   const uploadsDir = path.resolve(import.meta.dirname, "..", "uploads");
   fs.mkdirSync(uploadsDir, { recursive: true });
   app.use("/uploads", express.static(uploadsDir));
@@ -491,10 +542,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Email or username and password are required' });
       }
 
-      // Find user
-      const user =
-        (await storage.getUserByEmail(identifier)) ||
-        (await storage.getUserByUsername(identifier));
+      const normalizedIdentifier = String(identifier).trim();
+      const looksLikeEmail = normalizedIdentifier.includes("@");
+
+      // Use a single targeted lookup to avoid unnecessary DB round-trips during login.
+      const user = looksLikeEmail
+        ? await storage.getUserByEmail(normalizedIdentifier)
+        : await storage.getUserByUsername(normalizedIdentifier);
       if (!user) {
         return res.status(401).json({ message: 'Invalid credentials' });
       }
@@ -524,6 +578,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error('Login error:', error);
+      if (isTransientDbConnectivityError(error)) {
+        return res.status(503).json({
+          message: 'Login temporarily unavailable',
+          error: 'Database connection timed out. Please try again in a moment.',
+        });
+      }
+
       res.status(500).json({ message: 'Login failed', error: getErrorMessage(error) });
     }
   };
@@ -1325,6 +1386,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (req.body.region) {
         setUserMeta(user.id, { region: String(req.body.region) });
       }
+      await emitAdminRealtimeEvent(req, {
+        event: "user_created",
+        channel: "user_activity",
+        entityType: "user",
+        referenceId: user.id,
+        payload: { user: toAdminUser(user) },
+      });
       res.status(201).json(toAdminUser(user));
     } catch (error) {
       console.error("Admin user create error:", error);
@@ -1346,6 +1414,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (req.body.region !== undefined) {
         setUserMeta(id, { region: String(req.body.region) });
       }
+      await emitAdminRealtimeEvent(req, {
+        event: "user_updated",
+        channel: "user_activity",
+        entityType: "user",
+        referenceId: id,
+        payload: { user: toAdminUser(user) },
+      });
       res.json(toAdminUser(user));
     } catch (error) {
       console.error("Admin user update error:", error);
@@ -1360,6 +1435,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const success = await storage.deleteUser(id);
       deleteUserMeta(id);
       if (!success) return res.status(404).json({ message: "User not found" });
+      await emitAdminRealtimeEvent(req, {
+        event: "user_deleted",
+        channel: "user_activity",
+        entityType: "user",
+        referenceId: id,
+        payload: { id: String(id) },
+      });
       res.status(204).send();
     } catch (error) {
       console.error("Admin user delete error:", error);
@@ -1424,6 +1506,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         region: req.body.region ?? "Global",
       });
 
+      await emitAdminRealtimeEvent(req, {
+        event: "scholarship_created",
+        channel: "scholarships",
+        entityType: "scholarship",
+        referenceId: scholarship.id,
+        payload: { scholarship: toAdminScholarship(scholarship) },
+      });
+
       res.status(201).json(toAdminScholarship(scholarship));
     } catch (error) {
       console.error("Admin scholarship create error:", error);
@@ -1462,6 +1552,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         region: req.body.region,
       });
 
+      await emitAdminRealtimeEvent(req, {
+        event: "scholarship_updated",
+        channel: "scholarships",
+        entityType: "scholarship",
+        referenceId: scholarship.id,
+        payload: { scholarship: toAdminScholarship(scholarship) },
+      });
+
       res.json(toAdminScholarship(scholarship));
     } catch (error) {
       console.error("Admin scholarship update error:", error);
@@ -1476,6 +1574,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const success = await storage.deleteScholarship(id);
       deleteScholarshipMeta(id);
       if (!success) return res.status(404).json({ message: "Scholarship not found" });
+      await emitAdminRealtimeEvent(req, {
+        event: "scholarship_deleted",
+        channel: "scholarships",
+        entityType: "scholarship",
+        referenceId: id,
+        payload: { id: String(id) },
+      });
       res.status(204).send();
     } catch (error) {
       console.error("Admin scholarship delete error:", error);
@@ -1542,6 +1647,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         benefits: req.body.benefits ?? "",
       });
 
+      await emitAdminRealtimeEvent(req, {
+        event: "job_created",
+        channel: "jobs",
+        entityType: "job",
+        referenceId: job.id,
+        payload: { job: toAdminJob(job) },
+      });
+
       res.status(201).json(toAdminJob(job));
     } catch (error) {
       console.error("Admin job create error:", error);
@@ -1580,6 +1693,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         benefits: req.body.benefits,
       });
 
+      await emitAdminRealtimeEvent(req, {
+        event: "job_updated",
+        channel: "jobs",
+        entityType: "job",
+        referenceId: job.id,
+        payload: { job: toAdminJob(job) },
+      });
+
       res.json(toAdminJob(job));
     } catch (error) {
       console.error("Admin job update error:", error);
@@ -1594,6 +1715,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const success = await storage.deleteJob(id);
       deleteJobMeta(id);
       if (!success) return res.status(404).json({ message: "Job not found" });
+      await emitAdminRealtimeEvent(req, {
+        event: "job_deleted",
+        channel: "jobs",
+        entityType: "job",
+        referenceId: id,
+        payload: { id: String(id) },
+      });
       res.status(204).send();
     } catch (error) {
       console.error("Admin job delete error:", error);
@@ -1647,6 +1775,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         paymentStatus: req.body.paymentStatus ?? "unpaid",
       });
 
+      await emitAdminRealtimeEvent(req, {
+        event: "partner_created",
+        channel: "partners",
+        entityType: "partner",
+        referenceId: partner.id,
+        payload: { partner: toAdminPartner(partner) },
+      });
+
       res.status(201).json(toAdminPartner(partner));
     } catch (error) {
       console.error("Admin partner create error:", error);
@@ -1684,6 +1820,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         paymentStatus: req.body.paymentStatus,
       });
 
+      await emitAdminRealtimeEvent(req, {
+        event: "partner_updated",
+        channel: "partners",
+        entityType: "partner",
+        referenceId: partner.id,
+        payload: { partner: toAdminPartner(partner) },
+      });
+
       res.json(toAdminPartner(partner));
     } catch (error) {
       console.error("Admin partner update error:", error);
@@ -1698,6 +1842,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const success = await storage.deletePartner(id);
       deletePartnerMeta(id);
       if (!success) return res.status(404).json({ message: "Partner not found" });
+      await emitAdminRealtimeEvent(req, {
+        event: "partner_deleted",
+        channel: "partners",
+        entityType: "partner",
+        referenceId: id,
+        payload: { id: String(id) },
+      });
       res.status(204).send();
     } catch (error) {
       console.error("Admin partner delete error:", error);
@@ -1752,6 +1903,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         featuredImage: req.body.featuredImage ?? "",
       });
 
+      await emitAdminRealtimeEvent(req, {
+        event: "blog_post_created",
+        channel: "blog-posts",
+        entityType: "blog",
+        referenceId: post.id,
+        payload: { blogPost: toAdminBlogPost(post) },
+      });
+
       res.status(201).json(toAdminBlogPost(post));
     } catch (error) {
       console.error("Admin blog create error:", error);
@@ -1783,6 +1942,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         featuredImage: req.body.featuredImage,
       });
 
+      await emitAdminRealtimeEvent(req, {
+        event: "blog_post_updated",
+        channel: "blog-posts",
+        entityType: "blog",
+        referenceId: post.id,
+        payload: { blogPost: toAdminBlogPost(post) },
+      });
+
       res.json(toAdminBlogPost(post));
     } catch (error) {
       console.error("Admin blog update error:", error);
@@ -1797,6 +1964,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const success = await storage.deleteBlogPost(id);
       deleteBlogMeta(id);
       if (!success) return res.status(404).json({ message: "Blog post not found" });
+      await emitAdminRealtimeEvent(req, {
+        event: "blog_post_deleted",
+        channel: "blog-posts",
+        entityType: "blog",
+        referenceId: id,
+        payload: { id: String(id) },
+      });
       res.status(204).send();
     } catch (error) {
       console.error("Admin blog delete error:", error);
@@ -1841,6 +2015,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         department: req.body.department ?? "",
         profileImage: req.body.profileImage ?? "",
       });
+      await emitAdminRealtimeEvent(req, {
+        event: "team_member_created",
+        channel: "team-members",
+        entityType: "team",
+        referenceId: member.id,
+        payload: { teamMember: toAdminTeamMember(member) },
+      });
       res.status(201).json(toAdminTeamMember(member));
     } catch (error) {
       console.error("Admin team create error:", error);
@@ -1873,6 +2054,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         profileImage: req.body.profileImage,
       });
 
+      await emitAdminRealtimeEvent(req, {
+        event: "team_member_updated",
+        channel: "team-members",
+        entityType: "team",
+        referenceId: member.id,
+        payload: { teamMember: toAdminTeamMember(member) },
+      });
+
       res.json(toAdminTeamMember(member));
     } catch (error) {
       console.error("Admin team update error:", error);
@@ -1887,6 +2076,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const success = await storage.deleteTeamMember(id);
       deleteTeamMeta(id);
       if (!success) return res.status(404).json({ message: "Team member not found" });
+      await emitAdminRealtimeEvent(req, {
+        event: "team_member_deleted",
+        channel: "team-members",
+        entityType: "team",
+        referenceId: id,
+        payload: { id: String(id) },
+      });
       res.status(204).send();
     } catch (error) {
       console.error("Admin team delete error:", error);
@@ -1898,6 +2094,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
+      const search = String(req.query.search ?? "").toLowerCase();
       const statusFilter = String(req.query.status ?? "").toLowerCase();
 
       const allApplications = await storage.getAllApplications();
@@ -1923,7 +2120,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }),
       );
 
-      const { items, total } = paginate(enriched, page, limit);
+      const searched = search
+        ? enriched.filter((app) =>
+            app.applicantName.toLowerCase().includes(search) ||
+            app.applicantEmail.toLowerCase().includes(search) ||
+            app.opportunityTitle.toLowerCase().includes(search) ||
+            app.opportunityType.toLowerCase().includes(search),
+          )
+        : enriched;
+
+      const { items, total } = paginate(searched, page, limit);
       res.json({ applications: items, total });
     } catch (error) {
       console.error("Admin applications error:", error);
@@ -1942,6 +2148,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const application = await storage.updateApplication(id, updateData);
+      await emitAdminRealtimeEvent(req, {
+        event: "application_updated",
+        channel: "applications",
+        entityType: "application",
+        referenceId: id,
+        payload: { application: { ...application, id: String(application.id) } },
+      });
       res.json(application);
     } catch (error) {
       console.error("Admin applications update error:", error);
@@ -1973,12 +2186,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/roles', authenticateToken, requireAdmin, (_req, res) => {
-    const roles = getAdminRoles();
+  app.get('/api/admin/roles', authenticateToken, requireAdmin, (req, res) => {
+    const search = String(req.query.search ?? "").toLowerCase();
+    const roles = getAdminRoles().filter((role) => {
+      if (!search) return true;
+      return (
+        role.name.toLowerCase().includes(search) ||
+        role.description.toLowerCase().includes(search)
+      );
+    });
     res.json({ roles, total: roles.length });
   });
 
-  app.post('/api/admin/roles', authenticateToken, requireAdmin, (req, res) => {
+  app.post('/api/admin/roles', authenticateToken, requireAdmin, async (req, res) => {
     const role = upsertAdminRole({
       id: req.body.name?.toLowerCase().replace(/\s+/g, "-") || String(Date.now()),
       name: req.body.name ?? "Role",
@@ -1986,10 +2206,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       permissions: Array.isArray(req.body.permissions) ? req.body.permissions : [],
       isActive: true,
     });
+    await emitAdminRealtimeEvent(req, {
+      event: "role_created",
+      channel: "admin-roles",
+      entityType: "role",
+      referenceId: role.id,
+      payload: { role },
+    });
     res.status(201).json(role);
   });
 
-  app.put('/api/admin/roles/:id', authenticateToken, requireAdmin, (req, res) => {
+  app.put('/api/admin/roles/:id', authenticateToken, requireAdmin, async (req, res) => {
     const role = upsertAdminRole({
       id: req.params.id,
       name: req.body.name ?? req.params.id,
@@ -1997,11 +2224,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       permissions: Array.isArray(req.body.permissions) ? req.body.permissions : [],
       isActive: req.body.isActive ?? true,
     });
+    await emitAdminRealtimeEvent(req, {
+      event: "role_updated",
+      channel: "admin-roles",
+      entityType: "role",
+      referenceId: role.id,
+      payload: { role },
+    });
     res.json(role);
   });
 
-  app.delete('/api/admin/roles/:id', authenticateToken, requireAdmin, (req, res) => {
+  app.delete('/api/admin/roles/:id', authenticateToken, requireAdmin, async (req, res) => {
     deleteAdminRole(req.params.id);
+    await emitAdminRealtimeEvent(req, {
+      event: "role_deleted",
+      channel: "admin-roles",
+      entityType: "role",
+      referenceId: req.params.id,
+      payload: { id: req.params.id },
+    });
     res.status(204).send();
   });
 
@@ -2009,12 +2250,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(getAdminSettings());
   });
 
-  app.put('/api/admin/settings', authenticateToken, requireAdmin, (req, res) => {
+  app.put('/api/admin/settings', authenticateToken, requireAdmin, async (req, res) => {
     const settings = updateAdminSettings({
       platformName: req.body.platformName,
       supportEmail: req.body.supportEmail,
       sessionTimeout: req.body.sessionTimeout,
       maxLoginAttempts: req.body.maxLoginAttempts,
+    });
+    await emitAdminRealtimeEvent(req, {
+      event: "settings_updated",
+      channel: "admin-settings",
+      entityType: "settings",
+      payload: { settings },
     });
     res.json(settings);
   });

@@ -88,7 +88,7 @@ export default function StudyAbroad() {
       >
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/93 to-mtendere-green/82" />
         <div className="container relative z-10 mx-auto px-4 text-center max-w-4xl">
-          <Badge className="mb-6 bg-white/20 text-white border-white/30 px-5 py-1.5 text-xs font-bold uppercase tracking-widest">
+          <Badge className="mb-6 bg-card/20 text-white border-white/30 px-5 py-1.5 text-xs font-bold uppercase tracking-widest">
             Global Education
           </Badge>
           <h1 className="text-5xl md:text-7xl font-extrabold mb-6 leading-tight drop-shadow-2xl">
@@ -100,12 +100,12 @@ export default function StudyAbroad() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/contact">
-              <Button size="lg" className="bg-mtendere-orange hover:bg-orange-600 text-white font-bold px-10 py-6 text-lg rounded-xl shadow-2xl hover:scale-105 transition-transform">
+              <Button size="lg" className="bg-mtendere-orange hover:bg-mtendere-orange/90 text-white font-bold px-10 py-6 text-lg rounded-xl shadow-2xl hover:scale-105 transition-transform">
                 Start Your Journey <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Link>
             <Link href="/scholarships">
-              <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/20 font-bold px-10 py-6 text-lg rounded-xl">
+              <Button size="lg" variant="outline" className="border-white text-white hover:bg-card/20 font-bold px-10 py-6 text-lg rounded-xl">
                 View Scholarships
               </Button>
             </Link>
@@ -117,7 +117,7 @@ export default function StudyAbroad() {
               { value: "200+", label: "Universities" },
               { value: "94%", label: "Visa Approval" },
             ].map((s) => (
-              <div key={s.label} className="bg-white/15 backdrop-blur-sm rounded-2xl p-4 text-center border border-white/20">
+              <div key={s.label} className="bg-card/15 backdrop-blur-sm rounded-2xl p-4 text-center border border-white/20">
                 <div className="text-3xl font-extrabold text-mtendere-orange mb-1">{s.value}</div>
                 <div className="text-sm font-semibold opacity-90">{s.label}</div>
               </div>
@@ -127,26 +127,26 @@ export default function StudyAbroad() {
       </section>
 
       {/* Why Study Abroad */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-card">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Why Study Abroad?</h2>
-            <p className="text-gray-600 max-w-2xl mx-auto">An international education does far more than teach — it transforms your perspective, builds your network, and accelerates your career</p>
+            <p className="text-muted-foreground max-w-2xl mx-auto">An international education does far more than teach — it transforms your perspective, builds your network, and accelerates your career</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              { icon: Award, title: "World-Class Education", desc: "Access universities ranked in the global top 100 with cutting-edge research and teaching.", color: "text-mtendere-blue", bg: "bg-blue-50" },
-              { icon: Globe, title: "Global Network", desc: "Build relationships with peers and mentors from 100+ countries that last a lifetime.", color: "text-mtendere-green", bg: "bg-green-50" },
-              { icon: Star, title: "Career Advantage", desc: "International graduates earn 40% more on average and are promoted faster in their careers.", color: "text-mtendere-orange", bg: "bg-orange-50" },
-              { icon: Users, title: "Cultural Growth", desc: "Immerse yourself in new cultures, languages, and worldviews that shape you as a global citizen.", color: "text-mtendere-blue", bg: "bg-blue-50" },
+              { icon: Award, title: "World-Class Education", desc: "Access universities ranked in the global top 100 with cutting-edge research and teaching.", color: "text-mtendere-blue", bg: "bg-mtendere-blue/10" },
+              { icon: Globe, title: "Global Network", desc: "Build relationships with peers and mentors from 100+ countries that last a lifetime.", color: "text-mtendere-green", bg: "bg-mtendere-green/10" },
+              { icon: Star, title: "Career Advantage", desc: "International graduates earn 40% more on average and are promoted faster in their careers.", color: "text-mtendere-orange", bg: "bg-mtendere-orange/10" },
+              { icon: Users, title: "Cultural Growth", desc: "Immerse yourself in new cultures, languages, and worldviews that shape you as a global citizen.", color: "text-mtendere-blue", bg: "bg-mtendere-blue/10" },
             ].map((w) => (
-              <Card key={w.title} className="text-center hover:shadow-xl transition-all group border-none bg-gray-50">
+              <Card key={w.title} className="text-center hover:shadow-xl transition-all group border-none bg-muted/40">
                 <CardContent className="pt-8">
                   <div className={`w-16 h-16 ${w.bg} rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform`}>
                     <w.icon className={`w-8 h-8 ${w.color}`} />
                   </div>
                   <h3 className="text-lg font-bold text-mtendere-blue mb-2">{w.title}</h3>
-                  <p className="text-sm text-gray-600 leading-relaxed">{w.desc}</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{w.desc}</p>
                 </CardContent>
               </Card>
             ))}
@@ -155,14 +155,14 @@ export default function StudyAbroad() {
       </section>
 
       {/* Study Destinations */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-20 bg-muted/40">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <Badge variant="outline" className="mb-3 text-mtendere-blue border-mtendere-blue px-4 py-1 uppercase tracking-wider text-xs font-bold">
               Top Destinations
             </Badge>
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Where Will You Study?</h2>
-            <p className="text-gray-600 max-w-xl mx-auto">We support applications to universities across 50+ countries. Here are our most popular destinations for Malawian students.</p>
+            <p className="text-muted-foreground max-w-xl mx-auto">We support applications to universities across 50+ countries. Here are our most popular destinations for Malawian students.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -178,9 +178,9 @@ export default function StudyAbroad() {
                 </div>
                 <CardContent className="pt-5">
                   <p className="text-xs font-bold text-mtendere-orange uppercase tracking-wider mb-2">{d.highlights}</p>
-                  <p className="text-sm text-gray-600 leading-relaxed">{d.desc}</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{d.desc}</p>
                   <Link href="/contact">
-                    <Button className="w-full mt-4 bg-mtendere-blue hover:bg-blue-700 text-white font-bold">
+                    <Button className="w-full mt-4 bg-mtendere-blue hover:bg-mtendere-blue/90 text-white font-bold">
                       Apply for {d.country} <ArrowRight className="ml-2 w-4 h-4" />
                     </Button>
                   </Link>
@@ -192,15 +192,15 @@ export default function StudyAbroad() {
       </section>
 
       {/* Process */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-card">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Our 6-Step Process</h2>
-            <p className="text-gray-600 max-w-xl mx-auto">From first conversation to arrival in your new country — we're with you every step of the way</p>
+            <p className="text-muted-foreground max-w-xl mx-auto">From first conversation to arrival in your new country — we're with you every step of the way</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {PROCESS.map((p) => (
-              <div key={p.step} className="flex gap-4 p-6 bg-gray-50 rounded-2xl hover:shadow-lg transition-all group">
+              <div key={p.step} className="flex gap-4 p-6 bg-muted/40 rounded-2xl hover:shadow-lg transition-all group">
                 <div className="flex-shrink-0">
                   <div className="w-14 h-14 bg-gradient-to-br from-mtendere-blue to-mtendere-green rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-md">
                     <p.icon className="w-7 h-7 text-white" />
@@ -209,7 +209,7 @@ export default function StudyAbroad() {
                 <div>
                   <div className="text-xs font-black text-mtendere-orange uppercase tracking-widest mb-1">Step {p.step}</div>
                   <h3 className="text-lg font-bold text-mtendere-blue mb-2">{p.title}</h3>
-                  <p className="text-sm text-gray-600 leading-relaxed">{p.desc}</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{p.desc}</p>
                 </div>
               </div>
             ))}
@@ -218,18 +218,18 @@ export default function StudyAbroad() {
       </section>
 
       {/* FAQ */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-20 bg-muted/40">
         <div className="container mx-auto px-4 max-w-3xl">
           <div className="text-center mb-14">
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Frequently Asked Questions</h2>
           </div>
           <Accordion type="single" collapsible className="space-y-3">
             {FAQS.map((faq, i) => (
-              <AccordionItem key={i} value={`faq-${i}`} className="border rounded-xl px-6 shadow-sm bg-white">
+              <AccordionItem key={i} value={`faq-${i}`} className="border rounded-xl px-6 shadow-sm bg-card">
                 <AccordionTrigger className="text-left font-bold text-mtendere-blue hover:text-mtendere-green py-5">
                   {faq.q}
                 </AccordionTrigger>
-                <AccordionContent className="text-gray-600 pb-5 leading-relaxed">{faq.a}</AccordionContent>
+                <AccordionContent className="text-muted-foreground pb-5 leading-relaxed">{faq.a}</AccordionContent>
               </AccordionItem>
             ))}
           </Accordion>
@@ -253,12 +253,12 @@ export default function StudyAbroad() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/contact">
-              <Button size="lg" className="bg-mtendere-orange hover:bg-orange-600 text-white font-bold px-10 py-6 text-lg rounded-xl shadow-2xl hover:scale-105 transition-transform">
+              <Button size="lg" className="bg-mtendere-orange hover:bg-mtendere-orange/90 text-white font-bold px-10 py-6 text-lg rounded-xl shadow-2xl hover:scale-105 transition-transform">
                 Book Free Consultation <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Link>
             <Link href="/scholarships">
-              <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/20 font-bold px-10 py-6 text-lg rounded-xl">
+              <Button size="lg" variant="outline" className="border-white text-white hover:bg-card/20 font-bold px-10 py-6 text-lg rounded-xl">
                 Browse Scholarships
               </Button>
             </Link>
@@ -269,3 +269,7 @@ export default function StudyAbroad() {
     </div>
   );
 }
+
+
+
+

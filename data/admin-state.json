@@ -2,7 +2,18 @@
   "users": {},
   "scholarships": {},
   "jobs": {},
-  "partners": {},
+  "partners": {
+    "1": {
+      "partnershipType": "corporation",
+      "logo": "/uploads/DigitalArchitectAp-1776353461146-123658.png",
+      "contactEmail": "peterschrispine@gmail.com",
+      "contactPhone": "",
+      "address": "Railways street 1 house #D27",
+      "region": "Global",
+      "isPremium": true,
+      "paymentStatus": "paid"
+    }
+  },
   "blogPosts": {},
   "teamMembers": {},
   "roles": [
@@ -77,9 +88,11 @@
   "settings": {
     "platformName": "Mtendere Education Platform",
     "supportEmail": "support@mtendere.com",
-    "sessionTimeout": 30,
+    "sessionTimeout": 60,
     "maxLoginAttempts": 5,
-    "updatedAt": "2026-04-02T12:07:01.831Z"
+    "updatedAt": "2026-04-09T12:03:59.310Z"
   },
-  "readNotificationIds": []
+  "readNotificationIds": [
+    "analytics-10"
+  ]
 }

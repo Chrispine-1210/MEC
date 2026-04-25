@@ -159,13 +159,13 @@ export default function Scholarships() {
             
             {/* Search Bar */}
             <div className="relative max-w-2xl mx-auto drop-shadow-2xl">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground/70 w-5 h-5" />
               <Input
                 type="text"
                 placeholder="Search scholarships by title, institution, or country..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-12 pr-4 py-6 text-lg bg-white text-gray-900 border-0 rounded-xl shadow-2xl focus-visible:ring-primary"
+                className="pl-12 pr-4 py-6 text-lg bg-card text-foreground border-0 rounded-xl shadow-2xl focus-visible:ring-primary"
               />
               {isSearching && (
                 <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
@@ -181,7 +181,7 @@ export default function Scholarships() {
       <section className="py-20 bg-mtendere-gray">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto">
-            <div className="bg-black rounded-2xl overflow-hidden shadow-2xl mb-8">
+            <div className="mb-8 overflow-hidden rounded-2xl border border-border/60 bg-card shadow-2xl">
               <video
                 src={videoSources[currentVideo].url}
                 className="w-full h-96 object-cover"
@@ -191,20 +191,20 @@ export default function Scholarships() {
                 key={currentVideo}
               />
             </div>
-            <div className="bg-white rounded-xl shadow-lg p-8">
+            <div className="bg-card rounded-xl shadow-lg p-8">
               <h3 className="text-2xl font-bold text-mtendere-blue mb-2">
                 {videoSources[currentVideo].title}
               </h3>
-              <p className="text-gray-600 mb-6">
+              <p className="text-muted-foreground mb-6">
                 {videoSources[currentVideo].description}
               </p>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500 font-medium">
+                <span className="text-sm text-muted-foreground font-medium">
                   Video {currentVideo + 1} of {videoSources.length}
                 </span>
                 <Button 
                   onClick={handleNextVideo}
-                  className="bg-mtendere-blue hover:bg-blue-700 text-white font-bold"
+                  className="bg-mtendere-blue hover:bg-mtendere-blue/90 text-white font-bold"
                 >
                   Next Video
                 </Button>
@@ -226,7 +226,7 @@ export default function Scholarships() {
               variant={selectedCategory === "" ? "default" : "outline"}
               size="sm"
               onClick={() => setSelectedCategory("")}
-              className={selectedCategory === "" ? "bg-mtendere-blue text-white font-bold hover:bg-blue-700" : "border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white"}
+              className={selectedCategory === "" ? "bg-mtendere-blue text-white font-bold hover:bg-mtendere-blue/90" : "border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white"}
             >
               All Categories
             </Button>
@@ -236,7 +236,7 @@ export default function Scholarships() {
                 variant={selectedCategory === category ? "default" : "outline"}
                 size="sm"
                 onClick={() => setSelectedCategory(category)}
-                className={selectedCategory === category ? "bg-mtendere-blue text-white font-bold hover:bg-blue-700" : "border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white"}
+                className={selectedCategory === category ? "bg-mtendere-blue text-white font-bold hover:bg-mtendere-blue/90" : "border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white"}
               >
                 {category}
               </Button>
@@ -246,7 +246,7 @@ export default function Scholarships() {
 
         {/* Results Count */}
         <div className="mb-6">
-          <p className="text-gray-600">
+          <p className="text-muted-foreground">
             Showing {filteredScholarships?.length || 0} scholarship{filteredScholarships?.length !== 1 ? 's' : ''}
             {searchQuery && ` for "${searchQuery}"`}
             {selectedCategory && ` in ${selectedCategory}`}
@@ -273,7 +273,7 @@ export default function Scholarships() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredScholarships?.map((scholarship) => (
-              <Card key={scholarship.id} className="hover:shadow-2xl transition-all duration-500 overflow-hidden group border-none bg-white shadow-md flex flex-col">
+              <Card key={scholarship.id} className="hover:shadow-2xl transition-all duration-500 overflow-hidden group border-none bg-card shadow-md flex flex-col">
                 {scholarship.imageUrl && (
                   <div className="relative h-48 overflow-hidden">
                     <img
@@ -322,13 +322,13 @@ export default function Scholarships() {
                 </CardHeader>
                 
                 <CardContent>
-                  <p className="text-gray-600 mb-4 line-clamp-3">
+                  <p className="text-muted-foreground mb-4 line-clamp-3">
                     {scholarship.description}
                   </p>
                   
                   <div className="space-y-3 mb-6">
                     <div className="flex items-center justify-between">
-                      <span className="flex items-center text-sm text-gray-600">
+                      <span className="flex items-center text-sm text-muted-foreground">
                         <DollarSign className="w-4 h-4 mr-1" />
                         Award Amount
                       </span>
@@ -338,11 +338,11 @@ export default function Scholarships() {
                     </div>
                     
                     <div className="flex items-center justify-between">
-                      <span className="flex items-center text-sm text-gray-600">
+                      <span className="flex items-center text-sm text-muted-foreground">
                         <Calendar className="w-4 h-4 mr-1" />
                         Deadline
                       </span>
-                      <span className={`font-semibold ${isDeadlineApproaching(scholarship.deadline) ? 'text-red-600' : 'text-gray-700'}`}>
+                      <span className={`font-semibold ${isDeadlineApproaching(scholarship.deadline) ? 'text-destructive' : 'text-foreground/80'}`}>
                         {formatDate(scholarship.deadline)}
                       </span>
                     </div>
@@ -350,7 +350,7 @@ export default function Scholarships() {
 
                   <div className="flex space-x-2">
                     <Button
-                      className="flex-1 bg-mtendere-blue hover:bg-blue-700 text-white font-bold shadow-md"
+                      className="flex-1 bg-mtendere-blue hover:bg-mtendere-blue/90 text-white font-bold shadow-md"
                       onClick={() => handleApply(scholarship.id)}
                       disabled={applyMutation.isPending}
                     >
@@ -379,11 +379,11 @@ export default function Scholarships() {
 
         {filteredScholarships?.length === 0 && !isLoading && (
           <div className="text-center py-12">
-            <GraduationCap className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-600 mb-2">
+            <GraduationCap className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-muted-foreground mb-2">
               No scholarships found
             </h3>
-            <p className="text-gray-500 mb-6">
+            <p className="text-muted-foreground mb-6">
               Try adjusting your search criteria or check back later for new opportunities.
             </p>
             <Button 
@@ -402,3 +402,7 @@ export default function Scholarships() {
     </div>
   );
 }
+
+
+
+
