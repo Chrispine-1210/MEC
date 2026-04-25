@@ -59,7 +59,7 @@ export default function Blog() {
       >
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/92 to-mtendere-green/85 z-0" />
         <div className="container relative z-10 mx-auto px-4 text-center">
-          <Badge className="mb-4 bg-white/20 text-white border-white/30 px-4 py-1 text-sm font-bold uppercase tracking-widest">
+          <Badge className="mb-4 bg-card/20 text-white border-white/30 px-4 py-1 text-sm font-bold uppercase tracking-widest">
             Insights & Updates
           </Badge>
           <h1 className="text-5xl md:text-6xl font-extrabold mb-6 drop-shadow-2xl">
@@ -71,20 +71,20 @@ export default function Blog() {
 
           {/* Search */}
           <div className="relative max-w-xl mx-auto">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground/70 w-5 h-5" />
             <Input
               type="text"
               placeholder="Search articles..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-12 pr-4 py-6 text-lg bg-white text-gray-900 border-0 rounded-xl shadow-2xl"
+              className="pl-12 pr-4 py-6 text-lg bg-card text-foreground border-0 rounded-xl shadow-2xl"
             />
           </div>
         </div>
       </section>
 
       {/* Category Tabs */}
-      <section className="bg-white border-b sticky top-16 z-30 shadow-sm">
+      <section className="bg-card border-b sticky top-16 z-30 shadow-sm">
         <div className="container mx-auto px-4">
           <div className="flex space-x-1 overflow-x-auto py-3">
             {CATEGORIES.map((cat) => (
@@ -94,7 +94,7 @@ export default function Blog() {
                 className={`flex-shrink-0 px-5 py-2 rounded-full text-sm font-bold transition-all ${
                   selectedCategory === cat
                     ? "bg-mtendere-blue text-white shadow-md"
-                    : "text-gray-600 hover:bg-gray-100"
+                    : "text-muted-foreground hover:bg-muted"
                 }`}
               >
                 {cat}
@@ -123,11 +123,11 @@ export default function Blog() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-20">
-            <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-600 mb-2">No articles found</h3>
-            <p className="text-gray-500 mb-6">Try a different search term or category.</p>
+            <BookOpen className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-muted-foreground mb-2">No articles found</h3>
+            <p className="text-muted-foreground mb-6">Try a different search term or category.</p>
             <Button onClick={() => { setSearchQuery(""); setSelectedCategory("All"); }}
-              className="bg-mtendere-blue text-white font-bold hover:bg-blue-700">
+              className="bg-mtendere-blue text-white font-bold hover:bg-mtendere-blue/90">
               Clear Filters
             </Button>
           </div>
@@ -136,7 +136,7 @@ export default function Blog() {
             {/* Featured Article */}
             {featured && (
               <Link href={`/blog/${featured.id}`}>
-                <div className="mb-14 group cursor-pointer rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 bg-white border">
+                <div className="mb-14 group cursor-pointer rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 bg-card border">
                   <div className="md:flex">
                     <div className="md:w-1/2 h-72 md:h-auto overflow-hidden">
                       <img
@@ -148,7 +148,7 @@ export default function Blog() {
                     <div className="md:w-1/2 p-8 md:p-12 flex flex-col justify-center">
                       <div className="flex items-center gap-3 mb-4">
                         <Badge className="bg-mtendere-blue text-white font-bold">{featured.category}</Badge>
-                        <span className="text-xs text-gray-400 flex items-center gap-1">
+                        <span className="text-xs text-muted-foreground/70 flex items-center gap-1">
                           <Calendar className="w-3.5 h-3.5" />
                           {new Date(featured.createdAt!).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
                         </span>
@@ -156,15 +156,15 @@ export default function Blog() {
                       <h2 className="text-2xl md:text-3xl font-extrabold text-mtendere-blue mb-4 group-hover:text-mtendere-green transition-colors">
                         {featured.title}
                       </h2>
-                      <p className="text-gray-600 leading-relaxed mb-6 line-clamp-3">
+                      <p className="text-muted-foreground leading-relaxed mb-6 line-clamp-3">
                         {featured.excerpt || featured.content.substring(0, 200) + "..."}
                       </p>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-sm font-semibold text-mtendere-blue group-hover:text-mtendere-green transition-colors">
                           Read Full Story <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                         </div>
-                        <div className="flex items-center gap-1 text-sm text-gray-400">
-                          <Heart className="w-4 h-4 text-red-500 fill-red-500" />
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground/70">
+                          <Heart className="w-4 h-4 text-destructive fill-destructive" />
                           {featured.likes || 0}
                         </div>
                       </div>
@@ -179,7 +179,7 @@ export default function Blog() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {rest.map((post, i) => (
                   <Link key={post.id} href={`/blog/${post.id}`}>
-                    <Card className="group h-full flex flex-col cursor-pointer hover:shadow-2xl transition-all duration-500 overflow-hidden border-none bg-gray-50">
+                    <Card className="group h-full flex flex-col cursor-pointer hover:shadow-2xl transition-all duration-500 overflow-hidden border-none bg-muted/40">
                       <div className="relative h-52 overflow-hidden">
                         <img
                           src={post.imageUrl || PLACEHOLDER_IMAGES[i % PLACEHOLDER_IMAGES.length]}
@@ -192,7 +192,7 @@ export default function Blog() {
                         </Badge>
                       </div>
                       <CardHeader className="pb-2">
-                        <div className="flex items-center gap-2 text-xs text-gray-400 mb-2">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground/70 mb-2">
                           <Calendar className="w-3.5 h-3.5" />
                           {new Date(post.createdAt!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                         </div>
@@ -201,15 +201,15 @@ export default function Blog() {
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="flex-1 flex flex-col">
-                        <CardDescription className="text-gray-600 line-clamp-3 leading-relaxed mb-4">
+                        <CardDescription className="text-muted-foreground line-clamp-3 leading-relaxed mb-4">
                           {post.excerpt || post.content.substring(0, 130) + "..."}
                         </CardDescription>
-                        <div className="mt-auto flex items-center justify-between pt-3 border-t border-gray-100">
+                        <div className="mt-auto flex items-center justify-between pt-3 border-t border-border/40">
                           <span className="text-sm font-bold text-mtendere-blue flex items-center gap-1 group-hover:text-mtendere-green transition-colors">
                             Read More <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                           </span>
-                          <div className="flex items-center gap-1 text-xs text-gray-400">
-                            <Heart className="w-3.5 h-3.5 text-red-500 fill-red-500" />
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground/70">
+                            <Heart className="w-3.5 h-3.5 text-destructive fill-destructive" />
                             {post.likes || 0}
                           </div>
                         </div>
@@ -242,9 +242,9 @@ export default function Blog() {
             <Input
               type="email"
               placeholder="Enter your email address"
-              className="bg-white text-gray-900 border-0 rounded-xl py-6 text-base"
+              className="bg-card text-foreground border-0 rounded-xl py-6 text-base"
             />
-            <Button className="bg-mtendere-orange hover:bg-orange-600 text-white font-bold px-8 py-6 rounded-xl whitespace-nowrap shadow-xl">
+            <Button className="bg-mtendere-orange hover:bg-mtendere-orange/90 text-white font-bold px-8 py-6 rounded-xl whitespace-nowrap shadow-xl">
               Subscribe
             </Button>
           </div>
@@ -254,3 +254,7 @@ export default function Blog() {
     </div>
   );
 }
+
+
+
+

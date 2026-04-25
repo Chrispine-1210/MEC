@@ -36,12 +36,12 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
         <div className="max-w-md w-full text-center space-y-6">
           <div>
             <div className="text-5xl font-black text-mtendere-blue mb-3">Something went wrong</div>
-            <p className="text-gray-600">
+            <p className="text-muted-foreground">
               An unexpected error occurred. You can reload the page or return home.
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Button onClick={this.handleReload} className="bg-mtendere-blue hover:bg-blue-700">
+            <Button onClick={this.handleReload} className="bg-mtendere-blue hover:bg-mtendere-blue/90">
               Reload Page
             </Button>
             <Button asChild variant="outline" className="border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white">
@@ -53,3 +53,5 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
     );
   }
 }
+
+

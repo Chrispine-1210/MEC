@@ -16,6 +16,15 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const [subscriptions, setSubscriptions] = useState<string[]>([]);
   const { user } = useAuth();
 
+  const invalidateByPrefix = (prefixes: string[]) => {
+    queryClient.invalidateQueries({
+      predicate: (query) => {
+        const key = query.queryKey[0];
+        return typeof key === "string" && prefixes.some((prefix) => key.startsWith(prefix));
+      },
+    });
+  };
+
   useEffect(() => {
     if (user) {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -28,7 +37,16 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         setIsConnected(true);
         
         // Subscribe to default channels
-        const defaultChannels = ["scholarships", "jobs", "applications", "announcements"];
+        const defaultChannels = [
+          "scholarships",
+          "jobs",
+          "applications",
+          "partners",
+          "blog-posts",
+          "team-members",
+          "user_activity",
+          "announcements",
+        ];
         ws.send(JSON.stringify({ type: "subscribe", channels: defaultChannels }));
         setSubscriptions(defaultChannels);
       };
@@ -40,17 +58,31 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
           // Handle real-time updates
           switch (channel) {
             case "scholarships":
-              queryClient.invalidateQueries({ queryKey: ["/api/scholarships"] });
+              invalidateByPrefix(["/api/scholarships"]);
               break;
             case "jobs":
-              queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+              invalidateByPrefix(["/api/jobs"]);
               break;
             case "applications":
-              queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
+              invalidateByPrefix(["/api/applications"]);
+              break;
+            case "partners":
+              invalidateByPrefix(["/api/partners"]);
+              break;
+            case "blog-posts":
+              invalidateByPrefix(["/api/blog-posts"]);
+              break;
+            case "team-members":
+              invalidateByPrefix(["/api/team-members"]);
               break;
             case "user_activity":
               if (user.role === "admin" || user.role === "super_admin") {
-                queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
+                invalidateByPrefix([
+                  "/api/analytics",
+                  "/api/admin/dashboard",
+                  "/api/admin/notifications",
+                  "/api/admin/users",
+                ]);
               }
               break;
           }

@@ -94,26 +94,26 @@ export default function AdminSidebar({ activeView, onViewChange, isOpen, onToggl
       {/* Mobile overlay */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden"
           onClick={onToggle}
         />
       )}
 
       {/* Sidebar */}
-      <div className={`fixed left-0 top-0 h-full w-64 bg-mtendere-dark text-white transform transition-transform duration-300 z-50 ${
+      <div className={`fixed left-0 top-0 h-full w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border/60 transform transition-transform duration-300 z-50 ${
         isOpen ? 'translate-x-0' : '-translate-x-full'
       } lg:translate-x-0`}>
         
         {/* Header */}
-        <div className="p-6 border-b border-gray-700">
+        <div className="p-6 border-b border-sidebar-border/60">
           <div className="flex items-center justify-between">
             <div>
               <div className="font-bold text-xl mb-1">
                 Mtendere <span className="text-mtendere-orange">Admin</span>
               </div>
               <div className="flex items-center space-x-2">
-                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400'}`}></div>
-                <Badge variant="secondary" className={`text-xs ${isConnected ? 'bg-green-900 text-green-100' : 'bg-red-900 text-red-100'}`}>
+                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-mtendere-green' : 'bg-destructive/80'}`}></div>
+                <Badge variant="secondary" className={`text-xs ${isConnected ? 'bg-mtendere-green/20 text-mtendere-green' : 'bg-destructive/20 text-destructive'}`}>
                   {isConnected ? 'LIVE' : 'OFFLINE'}
                 </Badge>
               </div>
@@ -122,7 +122,7 @@ export default function AdminSidebar({ activeView, onViewChange, isOpen, onToggl
               variant="ghost"
               size="icon"
               onClick={onToggle}
-              className="lg:hidden text-white hover:bg-gray-700"
+              className="lg:hidden text-sidebar-foreground hover:bg-sidebar-accent/60"
             >
               <X className="w-5 h-5" />
             </Button>
@@ -130,14 +130,14 @@ export default function AdminSidebar({ activeView, onViewChange, isOpen, onToggl
         </div>
 
         {/* User Info */}
-        <div className="p-4 border-b border-gray-700">
+        <div className="p-4 border-b border-sidebar-border/60">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-gradient-to-br from-mtendere-blue to-mtendere-green rounded-full flex items-center justify-center">
               <UserCheck className="w-5 h-5 text-white" />
             </div>
             <div>
               <div className="font-medium">{user?.firstName} {user?.lastName}</div>
-              <div className="text-sm text-gray-400 capitalize">{user?.role}</div>
+              <div className="text-sm text-sidebar-foreground/70 capitalize">{user?.role}</div>
             </div>
           </div>
         </div>
@@ -154,8 +154,8 @@ export default function AdminSidebar({ activeView, onViewChange, isOpen, onToggl
                 }}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
                   activeView === item.id
-                    ? 'bg-mtendere-blue text-white'
-                    : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    ? 'bg-sidebar-primary text-sidebar-primary-foreground'
+                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'
                 }`}
               >
                 <item.icon className={`w-5 h-5 ${activeView === item.id ? 'text-white' : item.color}`} />
@@ -166,8 +166,8 @@ export default function AdminSidebar({ activeView, onViewChange, isOpen, onToggl
         </nav>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t border-gray-700 space-y-2">
-          <Button asChild variant="ghost" className="w-full justify-start text-gray-300 hover:bg-gray-700 hover:text-white">
+        <div className="p-4 border-t border-sidebar-border/60 space-y-2">
+          <Button asChild variant="ghost" className="w-full justify-start text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground">
             <Link href="/">
               <Home className="w-5 h-5 mr-3" />
               Back to Website
@@ -177,7 +177,7 @@ export default function AdminSidebar({ activeView, onViewChange, isOpen, onToggl
           <Button
             variant="ghost"
             onClick={logout}
-            className="w-full justify-start text-gray-300 hover:bg-gray-700 hover:text-white"
+            className="w-full justify-start text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
           >
             <LogOut className="w-5 h-5 mr-3" />
             Logout
@@ -185,11 +185,11 @@ export default function AdminSidebar({ activeView, onViewChange, isOpen, onToggl
         </div>
 
         {/* Connection Status */}
-        <div className="p-4 bg-gray-800">
-          <div className="flex items-center justify-between text-xs text-gray-400">
+        <div className="p-4 bg-sidebar-accent/80 border-t border-sidebar-border/60">
+          <div className="flex items-center justify-between text-xs text-sidebar-foreground/60">
             <span>Real-time Status</span>
             <div className="flex items-center space-x-1">
-              <Activity className={`w-3 h-3 ${isConnected ? 'text-green-400' : 'text-red-400'}`} />
+              <Activity className={`w-3 h-3 ${isConnected ? 'text-mtendere-green/80' : 'text-destructive/80'}`} />
               <span>{isConnected ? 'Connected' : 'Disconnected'}</span>
             </div>
           </div>
@@ -198,3 +198,4 @@ export default function AdminSidebar({ activeView, onViewChange, isOpen, onToggl
     </>
   );
 }
+

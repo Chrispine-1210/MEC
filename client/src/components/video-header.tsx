@@ -22,8 +22,8 @@ const videoSources = [
     url: "https://assets.mixkit.co/videos/preview/mixkit-young-woman-working-on-a-laptop-in-a-library-40041-large.mp4",
     headline: "Scholarships,",
     highlight: "Careers & Beyond",
-    caption: "Study abroad, secure scholarships, build a winning CV, and launch your career — all with personalised guidance from our Malawi-based team.",
-    badge: "50+ Countries • 10K+ Students Helped",
+    caption: "Study abroad, secure scholarships, build a winning CV, and launch your career - all with personalised guidance from our Malawi-based team.",
+    badge: "50+ Countries - 10K+ Students Helped",
   },
 ];
 
@@ -128,16 +128,16 @@ export default function VideoHeader() {
           />
         </video>
 
-        {/* Gradient overlay — darker at bottom for text legibility */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70" />
-      </div>
+      {/* Gradient overlay - darker at bottom for text legibility */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70" />
+    </div>
 
-      {/* Video Controls — bottom left */}
+      {/* Video Controls - bottom left */}
       <div className="absolute bottom-6 left-6 flex items-center space-x-3 z-20">
         <Button
           variant="ghost"
           size="icon"
-          className="text-white hover:text-mtendere-orange hover:bg-white/20 h-8 w-8"
+          className="text-white hover:text-mtendere-orange hover:bg-card/20 h-8 w-8"
           onClick={handlePlayPause}
         >
           {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
@@ -146,7 +146,7 @@ export default function VideoHeader() {
         <Button
           variant="ghost"
           size="icon"
-          className="text-white hover:text-mtendere-orange hover:bg-white/20 h-8 w-8"
+          className="text-white hover:text-mtendere-orange hover:bg-card/20 h-8 w-8"
           onClick={handleMuteToggle}
         >
           {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
@@ -156,7 +156,7 @@ export default function VideoHeader() {
           {formatTime(currentTime)} / {formatTime(duration)}
         </div>
 
-        <div className="w-24 h-1 bg-white/30 rounded-full overflow-hidden">
+        <div className="w-24 h-1 bg-card/30 rounded-full overflow-hidden">
           <div
             className="h-full bg-mtendere-orange transition-all duration-300"
             style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }}
@@ -164,7 +164,7 @@ export default function VideoHeader() {
         </div>
       </div>
 
-      {/* Slide Dots — bottom right */}
+      {/* Slide Dots - bottom right */}
       <div className="absolute bottom-6 right-6 flex space-x-2 z-20">
         {videoSources.map((_, index) => (
           <button
@@ -173,7 +173,7 @@ export default function VideoHeader() {
             className={`transition-all duration-300 rounded-full ${
               index === currentVideo
                 ? 'bg-mtendere-orange w-8 h-3'
-                : 'bg-white/50 hover:bg-white/80 w-3 h-3'
+                : 'bg-card/50 hover:bg-card/80 w-3 h-3'
             }`}
             onClick={() => handleVideoSelect(index)}
           />
@@ -188,7 +188,7 @@ export default function VideoHeader() {
           }`}
         >
           {/* Top badge */}
-          <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm border border-white/30 text-white text-sm font-semibold px-4 py-1.5 rounded-full mb-6">
+          <div className="inline-flex items-center gap-2 bg-card/15 backdrop-blur-sm border border-white/30 text-white text-sm font-semibold px-4 py-1.5 rounded-full mb-6">
             <span className="w-2 h-2 rounded-full bg-mtendere-orange animate-pulse" />
             {current.badge}
           </div>
@@ -214,7 +214,7 @@ export default function VideoHeader() {
             <Button
               asChild
               size="lg"
-              className="bg-mtendere-orange hover:bg-orange-500 text-white font-bold px-8 py-4 text-base shadow-xl hover:shadow-orange-500/30 transition-all"
+              className="bg-mtendere-orange hover:bg-mtendere-orange/90 text-white font-bold px-8 py-4 text-base shadow-xl hover:shadow-mtendere-orange/30 transition-all"
             >
               <Link href="/scholarships">
                 Explore Scholarships
@@ -224,7 +224,7 @@ export default function VideoHeader() {
             <Button
               asChild
               size="lg"
-              className="bg-white/15 backdrop-blur-sm border-2 border-white text-white hover:bg-white hover:text-mtendere-blue font-bold px-8 py-4 text-base transition-all"
+              className="bg-card/15 backdrop-blur-sm border-2 border-white text-white hover:bg-card hover:text-mtendere-blue font-bold px-8 py-4 text-base transition-all"
             >
               <Link href="/contact">
                 Book a Free Consultation
@@ -255,3 +255,5 @@ export default function VideoHeader() {
     </section>
   );
 }
+
+

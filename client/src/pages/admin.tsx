@@ -46,10 +46,10 @@ export default function Admin() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-mtendere-gray flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <div className="loading-spinner mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading admin panel...</p>
+          <p className="text-muted-foreground">Loading admin panel...</p>
         </div>
       </div>
     );
@@ -75,13 +75,13 @@ export default function Admin() {
         return (
           <div className="space-y-8">
             {/* Admin Header */}
-            <div className="bg-white rounded-lg shadow-soft p-6">
+            <div className="bg-card rounded-lg border border-border/60 shadow-soft p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <h1 className="text-2xl font-bold text-mtendere-blue">
                     Admin Dashboard
                   </h1>
-                  <p className="text-gray-600">
+                  <p className="text-muted-foreground">
                     Welcome back, {user.firstName}. Here's what's happening.
                   </p>
                 </div>
@@ -104,7 +104,7 @@ export default function Admin() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-gray-600">Total Users</p>
+                      <p className="text-sm text-muted-foreground">Total Users</p>
                       <p className="text-2xl font-bold text-mtendere-blue">
                         {analytics?.totalUsers || 0}
                       </p>
@@ -118,7 +118,7 @@ export default function Admin() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-gray-600">Applications</p>
+                      <p className="text-sm text-muted-foreground">Applications</p>
                       <p className="text-2xl font-bold text-mtendere-green">
                         {analytics?.totalApplications || 0}
                       </p>
@@ -132,7 +132,7 @@ export default function Admin() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-gray-600">Scholarships</p>
+                      <p className="text-sm text-muted-foreground">Scholarships</p>
                       <p className="text-2xl font-bold text-mtendere-orange">
                         {analytics?.totalScholarships || 0}
                       </p>
@@ -146,7 +146,7 @@ export default function Admin() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-gray-600">Job Openings</p>
+                      <p className="text-sm text-muted-foreground">Job Openings</p>
                       <p className="text-2xl font-bold text-mtendere-blue">
                         {analytics?.totalJobs || 0}
                       </p>
@@ -177,7 +177,7 @@ export default function Admin() {
                           <p className="text-sm font-medium truncate">
                             {activity.event?.replace(/_/g, ' ').toUpperCase()}
                           </p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-muted-foreground">
                             {activity.timestamp ? new Date(activity.timestamp).toLocaleString() : 'Just now'}
                           </p>
                         </div>
@@ -185,7 +185,7 @@ export default function Admin() {
                     ))}
                     
                     {(!recentActivity || recentActivity.length === 0) && (
-                      <p className="text-sm text-gray-500 text-center py-8">
+                      <p className="text-sm text-muted-foreground text-center py-8">
                         No recent activity
                       </p>
                     )}
@@ -204,7 +204,7 @@ export default function Admin() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <Button 
-                    className="w-full bg-mtendere-blue hover:bg-blue-700" 
+                    className="w-full bg-mtendere-blue hover:bg-mtendere-blue/90" 
                     onClick={() => setActiveView('scholarships')}
                   >
                     <GraduationCap className="w-4 h-4 mr-2" />
@@ -212,7 +212,7 @@ export default function Admin() {
                   </Button>
                   
                   <Button 
-                    className="w-full bg-mtendere-green hover:bg-green-700" 
+                    className="w-full bg-mtendere-green hover:bg-mtendere-green/90" 
                     onClick={() => setActiveView('jobs')}
                   >
                     <Briefcase className="w-4 h-4 mr-2" />
@@ -220,7 +220,7 @@ export default function Admin() {
                   </Button>
                   
                   <Button 
-                    className="w-full bg-mtendere-orange hover:bg-orange-600" 
+                    className="w-full bg-mtendere-orange hover:bg-mtendere-orange/90" 
                     onClick={() => setActiveView('users')}
                   >
                     <Users className="w-4 h-4 mr-2" />
@@ -244,7 +244,7 @@ export default function Admin() {
   };
 
   return (
-    <div className="min-h-screen bg-mtendere-gray flex">
+    <div className="min-h-screen bg-background flex">
       {/* Sidebar */}
       <AdminSidebar 
         activeView={activeView}
@@ -256,7 +256,7 @@ export default function Admin() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-screen lg:ml-64">
         {/* Mobile Header */}
-        <div className="lg:hidden bg-white shadow-sm border-b p-4">
+        <div className="lg:hidden bg-card/90 backdrop-blur shadow-sm border-b border-border/60 p-4">
           <Button 
             variant="ghost" 
             size="sm" 
@@ -274,3 +274,4 @@ export default function Admin() {
     </div>
   );
 }
+

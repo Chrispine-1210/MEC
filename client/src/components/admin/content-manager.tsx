@@ -431,7 +431,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
         );
 
       default:
-        return <p className="text-gray-500">Form fields for {contentType} not implemented yet.</p>;
+        return <p className="text-muted-foreground">Form fields for {contentType} not implemented yet.</p>;
     }
   };
 
@@ -449,7 +449,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
                 variant="ghost" 
                 size="icon" 
                 onClick={() => handleDelete(item.id)}
-                className="text-red-600 hover:text-red-700"
+                className="text-destructive hover:text-destructive"
               >
                 <Trash2 className="w-4 h-4" />
               </Button>
@@ -481,7 +481,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
                 </Badge>
               )}
             </div>
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-muted-foreground">
               {item.createdAt && new Date(item.createdAt).toLocaleDateString()}
             </div>
           </div>
@@ -506,10 +506,10 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
     return (
       <div className="space-y-6">
         <div className="animate-pulse">
-          <div className="bg-gray-200 h-8 w-48 rounded mb-4"></div>
+          <div className="bg-muted h-8 w-48 rounded mb-4"></div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="bg-gray-200 h-48 rounded"></div>
+              <div key={i} className="bg-muted h-48 rounded"></div>
             ))}
           </div>
         </div>
@@ -523,9 +523,9 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-mtendere-blue">{getTitle()}</h1>
-          <p className="text-gray-600">Manage {contentType} content</p>
+          <p className="text-muted-foreground">Manage {contentType} content</p>
         </div>
-        <Button onClick={handleCreate} className="bg-mtendere-blue hover:bg-blue-700">
+        <Button onClick={handleCreate} className="bg-mtendere-blue hover:bg-mtendere-blue/90">
           <Plus className="w-4 h-4 mr-2" />
           Add New
         </Button>
@@ -534,7 +534,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
       {/* Search and Filters */}
       <div className="flex items-center space-x-4">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
           <Input
             placeholder={`Search ${contentType}...`}
             value={searchQuery}
@@ -566,7 +566,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
               <Button 
                 onClick={handleSave}
                 disabled={createMutation.isPending || updateMutation.isPending}
-                className="bg-mtendere-green hover:bg-green-700"
+                className="bg-mtendere-green hover:bg-mtendere-green/90"
               >
                 <Save className="w-4 h-4 mr-2" />
                 {createMutation.isPending || updateMutation.isPending ? 'Saving...' : 'Save'}
@@ -583,7 +583,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
 
       {(!filteredItems || filteredItems.length === 0) && (
         <div className="text-center py-12">
-          <p className="text-gray-500">
+          <p className="text-muted-foreground">
             {searchQuery ? `No ${contentType} found matching "${searchQuery}"` : `No ${contentType} found`}
           </p>
         </div>

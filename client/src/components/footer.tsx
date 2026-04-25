@@ -18,26 +18,26 @@ import {
   ArrowRight,
   FileText,
 } from "lucide-react";
-import logoImg from "@assets/Mtendere_Logo-removebg-preview_1768626463705.jpg";
+import logoImg from "@assets/mtendere-logo.svg";
 
 export default function Footer() {
   return (
-    <footer className="bg-gray-900 text-white">
+    <footer className="border-t border-border/60 bg-card text-foreground">
       {/* Newsletter Strip */}
-      <div className="bg-mtendere-blue">
+      <div className="bg-gradient-to-r from-mtendere-blue to-mtendere-green text-white">
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div>
               <h3 className="text-xl font-bold mb-1">Stay Updated with Opportunities</h3>
-              <p className="text-blue-100 text-sm">Get the latest scholarships, jobs, and tips delivered to your inbox.</p>
+              <p className="text-white/80 text-sm">Get the latest scholarships, jobs, and tips delivered to your inbox.</p>
             </div>
             <div className="flex w-full md:w-auto gap-2 max-w-md">
               <Input
                 type="email"
                 placeholder="Enter your email address"
-                className="bg-white/20 border-white/30 text-white placeholder:text-white/60 focus-visible:ring-white flex-1"
+                className="flex-1 border-white/30 bg-white/10 text-white placeholder:text-white/60 focus-visible:ring-white"
               />
-              <Button className="bg-mtendere-orange hover:bg-orange-500 text-white font-bold shrink-0">
+              <Button className="bg-mtendere-orange hover:bg-mtendere-orange/90 text-white font-bold shrink-0">
                 Subscribe
                 <ArrowRight className="ml-2 w-4 h-4" />
               </Button>
@@ -55,27 +55,27 @@ export default function Footer() {
               <img
                 src={logoImg}
                 alt="Mtendere Education Consult"
-                className="h-14 w-auto object-contain brightness-0 invert"
+                className="h-14 w-auto object-contain"
               />
             </div>
-            <p className="text-gray-400 mb-6 leading-relaxed text-sm">
+            <p className="mb-6 text-sm leading-relaxed text-muted-foreground">
               A registered educational consulting company based in Lilongwe, Malawi. We connect ambitious students with world-class universities, scholarships, and career opportunities across 50+ countries.
             </p>
-            <div className="space-y-3 text-sm text-gray-400 mb-6">
+            <div className="mb-6 space-y-3 text-sm text-muted-foreground">
               <div className="flex items-start gap-3">
                 <MapPin className="w-4 h-4 text-mtendere-orange mt-0.5 shrink-0" />
                 <span>Off Mandala Road, Area 3, Behind NBS Bank, Lilongwe, Malawi</span>
               </div>
               <div className="flex items-center gap-3">
                 <Phone className="w-4 h-4 text-mtendere-orange shrink-0" />
-                <a href="tel:+265998882786" className="hover:text-white transition-colors">+265 998 882 786</a>
+                <a href="tel:+265998882786" className="hover:text-mtendere-blue transition-colors">+265 998 882 786</a>
               </div>
               <div className="flex items-center gap-3">
                 <Mail className="w-4 h-4 text-mtendere-orange shrink-0" />
-                <a href="mailto:mtendereeducationconsult@gmail.com" className="hover:text-white transition-colors">mtendereeducationconsult@gmail.com</a>
+                <a href="mailto:mtendereeducationconsult@gmail.com" className="hover:text-mtendere-blue transition-colors">mtendereeducationconsult@gmail.com</a>
               </div>
             </div>
-            <Button asChild className="bg-mtendere-orange hover:bg-orange-500 text-white font-bold text-sm">
+            <Button asChild className="bg-mtendere-orange hover:bg-mtendere-orange/90 text-white font-bold text-sm">
               <Link href="/contact">
                 <MessageCircle className="w-4 h-4 mr-2" />
                 Book Free Consultation
@@ -85,8 +85,8 @@ export default function Footer() {
 
           {/* Quick Links */}
           <div>
-            <h4 className="font-bold text-white mb-5 text-sm uppercase tracking-wider">Company</h4>
-            <ul className="space-y-3 text-sm text-gray-400">
+            <h4 className="mb-5 text-sm font-bold uppercase tracking-wider text-mtendere-blue">Company</h4>
+            <ul className="space-y-3 text-sm text-muted-foreground">
               {[
                 { href: "/about", label: "About Us" },
                 { href: "/about#team", label: "Our Team" },
@@ -96,7 +96,7 @@ export default function Footer() {
                 { href: "/register", label: "Create Account" },
               ].map((link) => (
                 <li key={link.href}>
-                  <Link href={link.href} className="hover:text-mtendere-orange transition-colors flex items-center gap-2 group">
+                  <Link href={link.href} className="group flex items-center gap-2 transition-colors hover:text-mtendere-orange">
                     <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                     {link.label}
                   </Link>
@@ -107,8 +107,8 @@ export default function Footer() {
 
           {/* Services */}
           <div>
-            <h4 className="font-bold text-white mb-5 text-sm uppercase tracking-wider">Services</h4>
-            <ul className="space-y-3 text-sm text-gray-400">
+            <h4 className="mb-5 text-sm font-bold uppercase tracking-wider text-mtendere-blue">Services</h4>
+            <ul className="space-y-3 text-sm text-muted-foreground">
               {[
                 { href: "/scholarships", label: "Scholarships", icon: GraduationCap },
                 { href: "/jobs", label: "Job Portal", icon: Briefcase },
@@ -118,7 +118,7 @@ export default function Footer() {
                 { href: "/resume-building", label: "Resume Building", icon: FileText },
               ].map((service) => (
                 <li key={service.href}>
-                  <Link href={service.href} className="hover:text-mtendere-orange transition-colors flex items-center gap-2 group">
+                  <Link href={service.href} className="group flex items-center gap-2 transition-colors hover:text-mtendere-orange">
                     <service.icon className="w-3.5 h-3.5 text-mtendere-blue group-hover:text-mtendere-orange transition-colors" />
                     {service.label}
                   </Link>
@@ -129,7 +129,7 @@ export default function Footer() {
 
           {/* Stats */}
           <div>
-            <h4 className="font-bold text-white mb-5 text-sm uppercase tracking-wider">Our Impact</h4>
+            <h4 className="mb-5 text-sm font-bold uppercase tracking-wider text-mtendere-blue">Our Impact</h4>
             <div className="space-y-4">
               {[
                 { value: "10,000+", label: "Students Helped" },
@@ -140,7 +140,7 @@ export default function Footer() {
               ].map((stat) => (
                 <div key={stat.label}>
                   <div className="text-mtendere-orange font-black text-xl">{stat.value}</div>
-                  <div className="text-gray-500 text-xs">{stat.label}</div>
+                  <div className="text-muted-foreground text-xs">{stat.label}</div>
                 </div>
               ))}
             </div>
@@ -148,8 +148,8 @@ export default function Footer() {
         </div>
 
         {/* Bottom Bar */}
-        <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-gray-500 text-sm">
+        <div className="flex flex-col items-center justify-between gap-4 border-t border-border/60 pt-8 md:flex-row">
+          <p className="text-sm text-muted-foreground">
             &copy; {new Date().getFullYear()} Mtendere Education Consult. Registered in Malawi. All rights reserved.
           </p>
 
@@ -166,7 +166,7 @@ export default function Footer() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={social.label}
-                className="w-9 h-9 bg-gray-800 rounded-full flex items-center justify-center hover:bg-mtendere-blue transition-colors text-gray-400 hover:text-white"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-mtendere-blue hover:text-white"
               >
                 <social.icon className="w-4 h-4" />
               </a>
@@ -177,3 +177,5 @@ export default function Footer() {
     </footer>
   );
 }
+
+

@@ -57,15 +57,15 @@ export default function Partners() {
               We've partnered with leading educational institutions worldwide to provide you with the best opportunities for your academic and career advancement
             </p>
             <div className="flex justify-center space-x-8 text-sm opacity-95 drop-shadow-lg">
-              <div className="bg-white/10 backdrop-blur rounded-xl p-6">
+              <div className="bg-card/10 backdrop-blur rounded-xl p-6">
                 <div className="text-3xl font-bold">200+</div>
                 <div className="font-semibold">Universities</div>
               </div>
-              <div className="bg-white/10 backdrop-blur rounded-xl p-6">
+              <div className="bg-card/10 backdrop-blur rounded-xl p-6">
                 <div className="text-3xl font-bold">50+</div>
                 <div className="font-semibold">Countries</div>
               </div>
-              <div className="bg-white/10 backdrop-blur rounded-xl p-6">
+              <div className="bg-card/10 backdrop-blur rounded-xl p-6">
                 <div className="text-3xl font-bold">10K+</div>
                 <div className="font-semibold">Students Placed</div>
               </div>
@@ -81,7 +81,7 @@ export default function Partners() {
             <h2 className="text-3xl font-bold text-mtendere-blue mb-4">
               Featured Partners
             </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
               Our flagship partnerships with world-renowned institutions
             </p>
           </div>
@@ -107,14 +107,14 @@ export default function Partners() {
                       <Users className="w-5 h-5 text-mtendere-blue mr-1" />
                     </div>
                     <div className="text-2xl font-bold text-mtendere-blue">5K+</div>
-                    <div className="text-sm text-gray-600">Students</div>
+                    <div className="text-sm text-muted-foreground">Students</div>
                   </div>
                   <div className="text-center">
                     <div className="flex items-center justify-center mb-2">
                       <Trophy className="w-5 h-5 text-mtendere-orange mr-1" />
                     </div>
                     <div className="text-2xl font-bold text-mtendere-orange">Top 50</div>
-                    <div className="text-sm text-gray-600">Global Ranking</div>
+                    <div className="text-sm text-muted-foreground">Global Ranking</div>
                   </div>
                 </div>
                 <div className="space-y-2 mb-6">
@@ -122,7 +122,7 @@ export default function Partners() {
                   <Badge className="bg-mtendere-green text-white">Executive Education</Badge>
                   <Badge className="bg-mtendere-orange text-white">Research Programs</Badge>
                 </div>
-                <Button className="w-full bg-mtendere-blue hover:bg-blue-700">
+                <Button className="w-full bg-mtendere-blue hover:bg-mtendere-blue/90">
                   <ExternalLink className="w-4 h-4 mr-2" />
                   Learn More
                 </Button>
@@ -149,14 +149,14 @@ export default function Partners() {
                       <Users className="w-5 h-5 text-mtendere-green mr-1" />
                     </div>
                     <div className="text-2xl font-bold text-mtendere-green">30K+</div>
-                    <div className="text-sm text-gray-600">Students</div>
+                    <div className="text-sm text-muted-foreground">Students</div>
                   </div>
                   <div className="text-center">
                     <div className="flex items-center justify-center mb-2">
                       <Award className="w-5 h-5 text-mtendere-orange mr-1" />
                     </div>
                     <div className="text-2xl font-bold text-mtendere-orange">NAAC A+</div>
-                    <div className="text-sm text-gray-600">Accreditation</div>
+                    <div className="text-sm text-muted-foreground">Accreditation</div>
                   </div>
                 </div>
                 <div className="space-y-2 mb-6">
@@ -164,7 +164,7 @@ export default function Partners() {
                   <Badge className="bg-mtendere-blue text-white">Management</Badge>
                   <Badge className="bg-mtendere-orange text-white">Technology</Badge>
                 </div>
-                <Button className="w-full bg-mtendere-green hover:bg-green-700">
+                <Button className="w-full bg-mtendere-green hover:bg-mtendere-green/90">
                   <ExternalLink className="w-4 h-4 mr-2" />
                   Learn More
                 </Button>
@@ -191,14 +191,14 @@ export default function Partners() {
                       <Globe className="w-5 h-5 text-mtendere-orange mr-1" />
                     </div>
                     <div className="text-2xl font-bold text-mtendere-orange">50+</div>
-                    <div className="text-sm text-gray-600">Countries</div>
+                    <div className="text-sm text-muted-foreground">Countries</div>
                   </div>
                   <div className="text-center">
                     <div className="flex items-center justify-center mb-2">
                       <GraduationCap className="w-5 h-5 text-mtendere-blue mr-1" />
                     </div>
                     <div className="text-2xl font-bold text-mtendere-blue">200+</div>
-                    <div className="text-sm text-gray-600">Universities</div>
+                    <div className="text-sm text-muted-foreground">Universities</div>
                   </div>
                 </div>
                 <div className="space-y-2 mb-6">
@@ -206,7 +206,7 @@ export default function Partners() {
                   <Badge className="bg-mtendere-blue text-white">Exchange Programs</Badge>
                   <Badge className="bg-mtendere-green text-white">Joint Degrees</Badge>
                 </div>
-                <Button className="w-full bg-mtendere-orange hover:bg-orange-600">
+                <Button className="w-full bg-mtendere-orange hover:bg-mtendere-orange/90">
                   <ExternalLink className="w-4 h-4 mr-2" />
                   Explore Network
                 </Button>
@@ -221,7 +221,7 @@ export default function Partners() {
             <h2 className="text-3xl font-bold text-mtendere-blue mb-4">
               All Partners
             </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
               Discover our complete network of educational institutions and organizations
             </p>
           </div>
@@ -255,7 +255,7 @@ export default function Partners() {
                 ];
                 const coverImg = partner.logoUrl || universityImages[idx % universityImages.length];
                 return (
-                <Card key={partner.id} className="hover:shadow-2xl transition-all duration-500 overflow-hidden group border-none bg-white shadow-md flex flex-col">
+                <Card key={partner.id} className="hover:shadow-2xl transition-all duration-500 overflow-hidden group border-none bg-card shadow-md flex flex-col">
                   <div className="relative h-44 overflow-hidden">
                     <img
                       src={coverImg}
@@ -279,7 +279,7 @@ export default function Partners() {
                   </div>
 
                   <CardContent className="pt-4 flex-1 flex flex-col">
-                    <p className="text-gray-600 mb-4 line-clamp-3 text-sm leading-relaxed flex-1">
+                    <p className="text-muted-foreground mb-4 line-clamp-3 text-sm leading-relaxed flex-1">
                       {partner.description}
                     </p>
                     
@@ -287,12 +287,12 @@ export default function Partners() {
                       <div className="flex items-center gap-2 mb-4 text-sm">
                         <Users className="w-4 h-4 text-mtendere-blue" />
                         <span className="font-bold text-mtendere-blue">{formatStudentCount(partner.studentCount)}</span>
-                        <span className="text-gray-500">students enrolled</span>
+                        <span className="text-muted-foreground">students enrolled</span>
                       </div>
                     )}
 
                     <div className="flex gap-2">
-                      <Button className="flex-1 bg-mtendere-blue hover:bg-blue-700 text-white font-bold" size="sm">
+                      <Button className="flex-1 bg-mtendere-blue hover:bg-mtendere-blue/90 text-white font-bold" size="sm">
                         <BookOpen className="w-4 h-4 mr-2" />
                         View Programs
                       </Button>
@@ -313,11 +313,11 @@ export default function Partners() {
 
           {partners?.length === 0 && !isLoading && (
             <div className="text-center py-12">
-              <Building className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-600 mb-2">
+              <Building className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-muted-foreground mb-2">
                 No partners found
               </h3>
-              <p className="text-gray-500">
+              <p className="text-muted-foreground">
                 We're continuously expanding our network. Check back soon for new partnerships.
               </p>
             </div>
@@ -330,7 +330,7 @@ export default function Partners() {
             <h2 className="text-2xl font-bold text-mtendere-blue mb-4">
               Partnership Benefits
             </h2>
-            <p className="text-gray-600">
+            <p className="text-muted-foreground">
               What our partnerships mean for you
             </p>
           </div>
@@ -341,7 +341,7 @@ export default function Partners() {
                 <Star className="w-6 h-6 text-white" />
               </div>
               <h3 className="font-semibold text-mtendere-blue mb-2">Direct Admission</h3>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted-foreground">
                 Fast-track admission process with our partner institutions
               </p>
             </div>
@@ -351,7 +351,7 @@ export default function Partners() {
                 <Award className="w-6 h-6 text-white" />
               </div>
               <h3 className="font-semibold text-mtendere-blue mb-2">Special Discounts</h3>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted-foreground">
                 Exclusive scholarships and fee waivers for Mtendere students
               </p>
             </div>
@@ -361,7 +361,7 @@ export default function Partners() {
                 <Calendar className="w-6 h-6 text-white" />
               </div>
               <h3 className="font-semibold text-mtendere-blue mb-2">Priority Support</h3>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted-foreground">
                 Dedicated support throughout your application and enrollment process
               </p>
             </div>
@@ -372,3 +372,6 @@ export default function Partners() {
     </div>
   );
 }
+
+
+

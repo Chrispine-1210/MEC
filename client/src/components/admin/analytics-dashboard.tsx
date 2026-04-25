@@ -66,15 +66,15 @@ export default function AnalyticsDashboard() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-mtendere-blue">Analytics Dashboard</h1>
-          <div className="animate-pulse bg-gray-200 h-10 w-32 rounded"></div>
+          <div className="animate-pulse bg-muted h-10 w-32 rounded"></div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           {[...Array(4)].map((_, i) => (
             <Card key={i}>
               <CardContent className="p-6">
                 <div className="animate-pulse space-y-3">
-                  <div className="bg-gray-200 h-4 w-20 rounded"></div>
-                  <div className="bg-gray-200 h-8 w-16 rounded"></div>
+                  <div className="bg-muted h-4 w-20 rounded"></div>
+                  <div className="bg-muted h-8 w-16 rounded"></div>
                 </div>
               </CardContent>
             </Card>
@@ -94,14 +94,14 @@ export default function AnalyticsDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-mtendere-blue">Analytics Dashboard</h1>
-          <p className="text-gray-600">Real-time insights into user activity and platform performance</p>
+          <p className="text-muted-foreground">Real-time insights into user activity and platform performance</p>
         </div>
         <div className="flex items-center space-x-2">
           <Button variant="outline" onClick={handleRefresh}>
             <RefreshCw className="w-4 h-4 mr-2" />
             Refresh
           </Button>
-          <Button className="bg-mtendere-blue hover:bg-blue-700">
+          <Button className="bg-mtendere-blue hover:bg-mtendere-blue/90">
             <Download className="w-4 h-4 mr-2" />
             Export Data
           </Button>
@@ -114,7 +114,7 @@ export default function AnalyticsDashboard() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total Users</p>
+                <p className="text-sm text-muted-foreground">Total Users</p>
                 <p className="text-2xl font-bold text-mtendere-blue">
                   {summary?.totalUsers || 0}
                 </p>
@@ -128,7 +128,7 @@ export default function AnalyticsDashboard() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Applications</p>
+                <p className="text-sm text-muted-foreground">Applications</p>
                 <p className="text-2xl font-bold text-mtendere-green">
                   {summary?.totalApplications || 0}
                 </p>
@@ -142,7 +142,7 @@ export default function AnalyticsDashboard() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total Events</p>
+                <p className="text-sm text-muted-foreground">Total Events</p>
                 <p className="text-2xl font-bold text-mtendere-orange">
                   {analytics?.length || 0}
                 </p>
@@ -156,7 +156,7 @@ export default function AnalyticsDashboard() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Active Sessions</p>
+                <p className="text-sm text-muted-foreground">Active Sessions</p>
                 <p className="text-2xl font-bold text-mtendere-blue">
                   {Object.keys(eventCounts).length}
                 </p>
@@ -179,7 +179,7 @@ export default function AnalyticsDashboard() {
               {popularPages.map(([event, count]) => (
                 <div key={event} className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-mtendere-blue bg-opacity-10 rounded-full flex items-center justify-center">
+                    <div className="w-8 h-8 bg-mtendere-blue/10 rounded-full flex items-center justify-center">
                       <Activity className="w-4 h-4 text-mtendere-blue" />
                     </div>
                     <span className="font-medium">{formatEventName(event)}</span>
@@ -189,7 +189,7 @@ export default function AnalyticsDashboard() {
               ))}
               
               {popularPages.length === 0 && (
-                <p className="text-center text-gray-500 py-8">No activity data available</p>
+                <p className="text-center text-muted-foreground py-8">No activity data available</p>
               )}
             </div>
           </CardContent>
@@ -210,16 +210,16 @@ export default function AnalyticsDashboard() {
                     <p className="text-sm font-medium truncate">
                       {formatEventName(activity.event)}
                     </p>
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-gray-500">
+                  <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">
                         {activity.userId ? `User ID: ${activity.userId}` : 'Anonymous'}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-muted-foreground">
                         {activity.timestamp.toLocaleTimeString()}
                       </p>
                     </div>
                     {activity.metadata && (
-                      <p className="text-xs text-gray-400 mt-1 truncate">
+                      <p className="text-xs text-muted-foreground/70 mt-1 truncate">
                         {JSON.stringify(activity.metadata)}
                       </p>
                     )}
@@ -228,7 +228,7 @@ export default function AnalyticsDashboard() {
               ))}
               
               {recentActivity.length === 0 && (
-                <p className="text-center text-gray-500 py-8">No recent activity</p>
+                <p className="text-center text-muted-foreground py-8">No recent activity</p>
               )}
             </div>
           </CardContent>
@@ -254,19 +254,19 @@ export default function AnalyticsDashboard() {
             <div className="space-y-2">
               <h4 className="font-semibold text-mtendere-blue">Content Metrics</h4>
               <div className="space-y-1 text-sm">
-                <div className="flex justify-between">
+                <div className="flex justify-between text-muted-foreground">
                   <span>Total Scholarships:</span>
                   <span className="font-medium">{summary?.totalScholarships || 0}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between text-muted-foreground">
                   <span>Total Jobs:</span>
                   <span className="font-medium">{summary?.totalJobs || 0}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between text-muted-foreground">
                   <span>Published Blogs:</span>
                   <span className="font-medium">{summary?.publishedBlogPosts || 0}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between text-muted-foreground">
                   <span>Approved Testimonials:</span>
                   <span className="font-medium">{summary?.activeTestimonials || 0}</span>
                 </div>
@@ -276,15 +276,15 @@ export default function AnalyticsDashboard() {
             <div className="space-y-2">
               <h4 className="font-semibold text-mtendere-green">User Engagement</h4>
               <div className="space-y-1 text-sm">
-                <div className="flex justify-between">
+                <div className="flex justify-between text-muted-foreground">
                   <span>User Registrations:</span>
                   <span className="font-medium">{eventCounts['user_registered'] || 0}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between text-muted-foreground">
                   <span>Login Sessions:</span>
                   <span className="font-medium">{eventCounts['user_logged_in'] || 0}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between text-muted-foreground">
                   <span>Applications Submitted:</span>
                   <span className="font-medium">{eventCounts['application_submitted'] || 0}</span>
                 </div>
@@ -294,17 +294,17 @@ export default function AnalyticsDashboard() {
             <div className="space-y-2">
               <h4 className="font-semibold text-mtendere-orange">Performance</h4>
               <div className="space-y-1 text-sm">
-                <div className="flex justify-between">
+                <div className="flex justify-between text-muted-foreground">
                   <span>Success Rate:</span>
-                  <span className="font-medium text-green-600">95%</span>
+                  <span className="font-medium text-mtendere-green">95%</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between text-muted-foreground">
                   <span>Avg. Response Time:</span>
                   <span className="font-medium">1.2s</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between text-muted-foreground">
                   <span>System Uptime:</span>
-                  <span className="font-medium text-green-600">99.9%</span>
+                  <span className="font-medium text-mtendere-green">99.9%</span>
                 </div>
               </div>
             </div>
@@ -314,3 +314,4 @@ export default function AnalyticsDashboard() {
     </div>
   );
 }
+

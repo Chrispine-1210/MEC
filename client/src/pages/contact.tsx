@@ -149,7 +149,7 @@ export default function Contact() {
               <h2 className="text-2xl font-bold text-mtendere-blue mb-4">
                 Contact Information
               </h2>
-              <p className="text-gray-600 mb-6">
+              <p className="text-muted-foreground mb-6">
                 Reach out to us through any of these channels. Our team is ready to assist you.
               </p>
             </div>
@@ -159,7 +159,7 @@ export default function Contact() {
                 <Card key={index} className="hover:shadow-lg transition-shadow duration-300">
                   <CardContent className="p-6">
                     <div className="flex items-start space-x-4">
-                      <div className={`w-12 h-12 ${info.color} bg-gray-50 rounded-full flex items-center justify-center flex-shrink-0`}>
+                      <div className={`w-12 h-12 ${info.color} bg-muted/40 rounded-full flex items-center justify-center flex-shrink-0`}>
                         <info.icon className="w-6 h-6" />
                       </div>
                       <div>
@@ -167,7 +167,7 @@ export default function Contact() {
                           {info.title}
                         </h3>
                         {info.details.map((detail, idx) => (
-                          <p key={idx} className="text-gray-600 text-sm">
+                          <p key={idx} className="text-muted-foreground text-sm">
                             {detail}
                           </p>
                         ))}
@@ -189,15 +189,15 @@ export default function Contact() {
               <CardContent>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Monday - Friday</span>
+                    <span className="text-muted-foreground">Monday - Friday</span>
                     <span className="font-medium">9:00 AM - 6:00 PM</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Saturday</span>
+                    <span className="text-muted-foreground">Saturday</span>
                     <span className="font-medium">10:00 AM - 4:00 PM</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Sunday</span>
+                    <span className="text-muted-foreground">Sunday</span>
                     <span className="font-medium">Closed</span>
                   </div>
                 </div>
@@ -311,7 +311,7 @@ export default function Contact() {
 
                   <Button
                     type="submit"
-                    className="w-full bg-mtendere-blue hover:bg-blue-700"
+                    className="w-full bg-mtendere-blue hover:bg-mtendere-blue/90"
                     disabled={isLoading}
                     size="lg"
                   >
@@ -339,7 +339,7 @@ export default function Contact() {
             <h2 className="text-3xl font-bold text-mtendere-blue mb-4">
               Frequently Asked Questions
             </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
               Quick answers to common questions about our services
             </p>
           </div>
@@ -352,7 +352,7 @@ export default function Contact() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-600 text-sm">
+                <p className="text-muted-foreground text-sm">
                   Simply create an account on our platform, browse available scholarships, 
                   and submit your application through our streamlined process. Our team will 
                   guide you through each step.
@@ -367,7 +367,7 @@ export default function Contact() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-600 text-sm">
+                <p className="text-muted-foreground text-sm">
                   We offer scholarship guidance, job placement, study abroad assistance, 
                   career counseling, and partnership programs with leading institutions worldwide.
                 </p>
@@ -381,7 +381,7 @@ export default function Contact() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-600 text-sm">
+                <p className="text-muted-foreground text-sm">
                   Many of our basic services are free. For premium services and personalized 
                   guidance, we offer affordable packages. Contact us for detailed pricing information.
                 </p>
@@ -395,7 +395,7 @@ export default function Contact() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-600 text-sm">
+                <p className="text-muted-foreground text-sm">
                   Application processing time varies by institution and program. Typically, 
                   scholarship applications take 4-8 weeks, while job applications may have 
                   faster turnaround times.
@@ -410,7 +410,7 @@ export default function Contact() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-600 text-sm">
+                <p className="text-muted-foreground text-sm">
                   Yes! We provide ongoing support throughout your educational journey, 
                   including academic guidance, career counseling, and alumni networking opportunities.
                 </p>
@@ -424,7 +424,7 @@ export default function Contact() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-600 text-sm">
+                <p className="text-muted-foreground text-sm">
                   Absolutely! We serve students from over 50 countries and have partnerships 
                   with institutions worldwide. We also provide visa assistance and cultural preparation.
                 </p>
@@ -440,20 +440,20 @@ export default function Contact() {
               <h2 className="text-2xl font-bold text-mtendere-blue mb-4">
                 Follow Our Journey
               </h2>
-              <p className="text-gray-600 mb-6">
+              <p className="text-muted-foreground mb-6">
                 Connect with us on social media for the latest scholarship updates and educational tips.
               </p>
               <div className="flex justify-center md:justify-start space-x-6">
-                <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-600 transition-colors">
+                <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="text-muted-foreground/70 hover:text-mtendere-blue transition-colors">
                   <Facebook className="w-8 h-8" />
                 </a>
-                <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-400 transition-colors">
+                <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-muted-foreground/70 hover:text-mtendere-blue/80 transition-colors">
                   <Twitter className="w-8 h-8" />
                 </a>
-                <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-pink-600 transition-colors">
+                <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-muted-foreground/70 hover:text-mtendere-orange transition-colors">
                   <Instagram className="w-8 h-8" />
                 </a>
-                <a href="https://www.linkedin.com/in/mtendere-education-consult-478133298/" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-700 transition-colors">
+                <a href="https://www.linkedin.com/in/mtendere-education-consult-478133298/" target="_blank" rel="noopener noreferrer" className="text-muted-foreground/70 hover:text-mtendere-blue transition-colors">
                   <Linkedin className="w-8 h-8" />
                 </a>
               </div>
@@ -463,11 +463,11 @@ export default function Contact() {
               <h2 className="text-2xl font-bold text-mtendere-blue mb-4">
                 Need Immediate Assistance?
               </h2>
-              <p className="text-gray-600 mb-6">
+              <p className="text-muted-foreground mb-6">
                 For urgent matters or emergency support, contact us directly
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button className="bg-mtendere-green hover:bg-green-700 text-white font-bold">
+                <Button className="bg-mtendere-green hover:bg-mtendere-green/90 text-white font-bold">
                   <Phone className="w-4 h-4 mr-2" />
                   Call Emergency Line
                 </Button>
@@ -484,3 +484,7 @@ export default function Contact() {
     </div>
   );
 }
+
+
+
+

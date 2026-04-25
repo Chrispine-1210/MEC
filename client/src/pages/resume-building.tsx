@@ -129,7 +129,7 @@ export default function ResumeBuilding() {
       >
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/93 via-mtendere-blue/85 to-mtendere-green/80" />
         <div className="container relative z-10 mx-auto px-4 text-center max-w-4xl">
-          <Badge className="mb-6 bg-white/20 text-white border-white/30 px-5 py-1.5 text-xs font-bold uppercase tracking-widest">
+          <Badge className="mb-6 bg-card/20 text-white border-white/30 px-5 py-1.5 text-xs font-bold uppercase tracking-widest">
             Professional Resume Services
           </Badge>
           <h1 className="text-5xl md:text-7xl font-extrabold mb-6 leading-tight drop-shadow-2xl">
@@ -141,12 +141,12 @@ export default function ResumeBuilding() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/contact">
-              <Button size="lg" className="bg-mtendere-orange hover:bg-orange-600 text-white font-bold px-10 py-6 text-lg rounded-xl shadow-2xl hover:scale-105 transition-transform">
+              <Button size="lg" className="bg-mtendere-orange hover:bg-mtendere-orange/90 text-white font-bold px-10 py-6 text-lg rounded-xl shadow-2xl hover:scale-105 transition-transform">
                 Get Started Today <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Link>
             <a href="#packages">
-              <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/20 font-bold px-10 py-6 text-lg rounded-xl">
+              <Button size="lg" variant="outline" className="border-white text-white hover:bg-card/20 font-bold px-10 py-6 text-lg rounded-xl">
                 View Packages
               </Button>
             </a>
@@ -159,7 +159,7 @@ export default function ResumeBuilding() {
               { value: "500+", label: "Resumes Written" },
               { value: "48h", label: "Average Turnaround" },
             ].map((s) => (
-              <div key={s.label} className="bg-white/15 backdrop-blur-sm rounded-2xl p-4 text-center border border-white/20">
+              <div key={s.label} className="bg-card/15 backdrop-blur-sm rounded-2xl p-4 text-center border border-white/20">
                 <div className="text-3xl font-extrabold text-mtendere-orange mb-1">{s.value}</div>
                 <div className="text-sm font-semibold opacity-90">{s.label}</div>
               </div>
@@ -169,14 +169,14 @@ export default function ResumeBuilding() {
       </section>
 
       {/* Services */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-card">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <Badge variant="outline" className="mb-3 text-mtendere-blue border-mtendere-blue px-4 py-1 uppercase tracking-wider text-xs font-bold">
               What We Offer
             </Badge>
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Comprehensive Career Document Services</h2>
-            <p className="text-gray-600 max-w-2xl mx-auto">
+            <p className="text-muted-foreground max-w-2xl mx-auto">
               Everything you need to present your best professional self to employers, universities, and scholarship committees
             </p>
           </div>
@@ -186,7 +186,7 @@ export default function ResumeBuilding() {
               {
                 icon: Layout,
                 color: "text-mtendere-blue",
-                bg: "bg-blue-50",
+                bg: "bg-mtendere-blue/10",
                 title: "Resume & CV Writing",
                 desc: "ATS-optimized, professionally designed resumes tailored to your target role and industry.",
                 bullets: ["ATS keyword optimization", "Industry-specific formatting", "Professional summaries", "Quantified achievements"],
@@ -194,7 +194,7 @@ export default function ResumeBuilding() {
               {
                 icon: Linkedin,
                 color: "text-mtendere-green",
-                bg: "bg-green-50",
+                bg: "bg-mtendere-green/10",
                 title: "LinkedIn Optimization",
                 desc: "Transform your LinkedIn profile into a powerful personal brand that attracts recruiters.",
                 bullets: ["Compelling headline writing", "About section storytelling", "Skills endorsement strategy", "Profile completeness audit"],
@@ -202,7 +202,7 @@ export default function ResumeBuilding() {
               {
                 icon: Briefcase,
                 color: "text-mtendere-orange",
-                bg: "bg-orange-50",
+                bg: "bg-mtendere-orange/10",
                 title: "Interview Coaching",
                 desc: "Prepare to confidently answer any interview question and negotiate the salary you deserve.",
                 bullets: ["Mock interview sessions", "STAR method training", "Salary negotiation tactics", "Industry-specific prep"],
@@ -210,7 +210,7 @@ export default function ResumeBuilding() {
               {
                 icon: FileText,
                 color: "text-mtendere-blue",
-                bg: "bg-blue-50",
+                bg: "bg-mtendere-blue/10",
                 title: "Cover Letters",
                 desc: "Compelling, personalized cover letters that tell your story and make hiring managers want to meet you.",
                 bullets: ["Tailored to each application", "Attention-grabbing openings", "Value proposition focus", "Professional tone"],
@@ -218,7 +218,7 @@ export default function ResumeBuilding() {
               {
                 icon: BookOpen,
                 color: "text-mtendere-green",
-                bg: "bg-green-50",
+                bg: "bg-mtendere-green/10",
                 title: "Personal Statements",
                 desc: "Powerful statements for university admissions, graduate school, and scholarship applications.",
                 bullets: ["University applications", "Graduate school SOPs", "Scholarship essays", "Fellowship applications"],
@@ -226,24 +226,24 @@ export default function ResumeBuilding() {
               {
                 icon: User,
                 color: "text-mtendere-orange",
-                bg: "bg-orange-50",
+                bg: "bg-mtendere-orange/10",
                 title: "Personal Branding",
                 desc: "Build a consistent, compelling personal brand across all your professional touchpoints.",
                 bullets: ["Brand identity development", "Professional bio writing", "Online presence audit", "Thought leadership strategy"],
               },
             ].map((s) => (
-              <Card key={s.title} className="h-full hover:shadow-xl transition-all duration-300 group border-none bg-gray-50">
+              <Card key={s.title} className="h-full hover:shadow-xl transition-all duration-300 group border-none bg-muted/40">
                 <CardHeader>
                   <div className={`w-14 h-14 ${s.bg} rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
                     <s.icon className={`w-7 h-7 ${s.color}`} />
                   </div>
                   <CardTitle className="text-xl font-bold text-mtendere-blue">{s.title}</CardTitle>
-                  <CardDescription className="text-gray-600 leading-relaxed">{s.desc}</CardDescription>
+                  <CardDescription className="text-muted-foreground leading-relaxed">{s.desc}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-2">
                     {s.bullets.map((b) => (
-                      <li key={b} className="flex items-center gap-2 text-sm text-gray-600">
+                      <li key={b} className="flex items-center gap-2 text-sm text-muted-foreground">
                         <CheckCircle2 className="w-4 h-4 text-mtendere-green flex-shrink-0" />
                         {b}
                       </li>
@@ -257,11 +257,11 @@ export default function ResumeBuilding() {
       </section>
 
       {/* Process */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-20 bg-muted/40">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">How It Works</h2>
-            <p className="text-gray-600 max-w-xl mx-auto">Our streamlined 5-step process ensures your career documents are ready quickly and professionally</p>
+            <p className="text-muted-foreground max-w-xl mx-auto">Our streamlined 5-step process ensures your career documents are ready quickly and professionally</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
             {PROCESS.map((p, i) => (
@@ -274,7 +274,7 @@ export default function ResumeBuilding() {
                 </div>
                 <div className="text-2xl font-black text-mtendere-orange mb-1">{p.step}</div>
                 <h3 className="text-lg font-bold text-mtendere-blue mb-2">{p.title}</h3>
-                <p className="text-sm text-gray-600 leading-relaxed">{p.desc}</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">{p.desc}</p>
               </div>
             ))}
           </div>
@@ -282,14 +282,14 @@ export default function ResumeBuilding() {
       </section>
 
       {/* Packages */}
-      <section id="packages" className="py-20 bg-white">
+      <section id="packages" className="py-20 bg-card">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <Badge variant="outline" className="mb-3 text-mtendere-blue border-mtendere-blue px-4 py-1 uppercase tracking-wider text-xs font-bold">
               Pricing
             </Badge>
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Choose Your Package</h2>
-            <p className="text-gray-600 max-w-xl mx-auto">Transparent pricing with no hidden fees. All packages come with expert career guidance.</p>
+            <p className="text-muted-foreground max-w-xl mx-auto">Transparent pricing with no hidden fees. All packages come with expert career guidance.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
@@ -305,19 +305,19 @@ export default function ResumeBuilding() {
                 <CardHeader className="text-center pt-8">
                   <CardTitle className="text-2xl font-extrabold text-mtendere-blue">{pkg.name}</CardTitle>
                   <div className="text-5xl font-extrabold text-mtendere-orange my-3">{pkg.price}</div>
-                  <CardDescription className="text-gray-600">{pkg.desc}</CardDescription>
+                  <CardDescription className="text-muted-foreground">{pkg.desc}</CardDescription>
                 </CardHeader>
                 <CardContent className="flex-1 flex flex-col">
                   <ul className="space-y-3 mb-8 flex-1">
                     {pkg.features.map((f) => (
-                      <li key={f} className="flex items-start gap-2 text-sm text-gray-700">
+                      <li key={f} className="flex items-start gap-2 text-sm text-foreground/80">
                         <CheckCircle2 className="w-4 h-4 text-mtendere-green flex-shrink-0 mt-0.5" />
                         {f}
                       </li>
                     ))}
                   </ul>
                   <Link href="/contact">
-                    <Button className="w-full bg-mtendere-blue hover:bg-blue-700 text-white font-bold py-3 rounded-xl">
+                    <Button className="w-full bg-mtendere-blue hover:bg-mtendere-blue/90 text-white font-bold py-3 rounded-xl">
                       Get Started
                     </Button>
                   </Link>
@@ -329,33 +329,27 @@ export default function ResumeBuilding() {
       </section>
 
       {/* Testimonials */}
-      <section
-        className="py-20 text-white relative overflow-hidden"
-        style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&q=80&w=2000')`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        }}
-      >
-        <div className="absolute inset-0 bg-mtendere-dark/90 z-0" />
-        <div className="container relative z-10 mx-auto px-4">
+      <section className="relative overflow-hidden bg-gradient-to-br from-white via-white to-mtendere-gray py-20">
+        <div className="absolute left-12 top-10 h-48 w-48 rounded-full bg-mtendere-orange/10 blur-3xl" />
+        <div className="absolute right-12 top-16 h-56 w-56 rounded-full bg-mtendere-blue/10 blur-3xl" />
+        <div className="container relative mx-auto px-4">
           <div className="text-center mb-14">
-            <h2 className="text-4xl font-extrabold mb-4 drop-shadow-lg">What Our Clients Say</h2>
+            <h2 className="mb-4 text-4xl font-extrabold text-mtendere-blue">What Our Clients Say</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {TESTIMONIALS.map((t) => (
-              <div key={t.name} className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20">
+              <div key={t.name} className="rounded-2xl border border-border/70 bg-card p-8 shadow-lg">
                 <div className="flex items-center gap-1 mb-4">
                   {[...Array(t.rating)].map((_, i) => (
                     <Star key={i} className="w-5 h-5 fill-mtendere-orange text-mtendere-orange" />
                   ))}
                 </div>
-                <p className="text-gray-200 italic mb-6 leading-relaxed">"{t.text}"</p>
+                <p className="mb-6 italic leading-relaxed text-muted-foreground">"{t.text}"</p>
                 <div className="flex items-center gap-3">
                   <img src={t.img} alt={t.name} className="w-12 h-12 rounded-full object-cover border-2 border-mtendere-orange" />
                   <div>
-                    <div className="font-bold text-white">{t.name}</div>
-                    <div className="text-sm text-gray-300">{t.role}</div>
+                    <div className="font-bold text-foreground">{t.name}</div>
+                    <div className="text-sm text-mtendere-blue/80">{t.role}</div>
                   </div>
                 </div>
               </div>
@@ -365,7 +359,7 @@ export default function ResumeBuilding() {
       </section>
 
       {/* FAQ */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-card">
         <div className="container mx-auto px-4 max-w-3xl">
           <div className="text-center mb-14">
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Frequently Asked Questions</h2>
@@ -376,7 +370,7 @@ export default function ResumeBuilding() {
                 <AccordionTrigger className="text-left font-bold text-mtendere-blue hover:text-mtendere-green py-5">
                   {faq.q}
                 </AccordionTrigger>
-                <AccordionContent className="text-gray-600 pb-5 leading-relaxed">
+                <AccordionContent className="text-muted-foreground pb-5 leading-relaxed">
                   {faq.a}
                 </AccordionContent>
               </AccordionItem>
@@ -402,12 +396,12 @@ export default function ResumeBuilding() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/contact">
-              <Button size="lg" className="bg-mtendere-orange hover:bg-orange-600 text-white font-bold px-10 py-6 text-lg rounded-xl shadow-2xl hover:scale-105 transition-transform">
+              <Button size="lg" className="bg-mtendere-orange hover:bg-mtendere-orange/90 text-white font-bold px-10 py-6 text-lg rounded-xl shadow-2xl hover:scale-105 transition-transform">
                 Book Free Consultation <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Link>
             <Link href="/scholarships">
-              <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/20 font-bold px-10 py-6 text-lg rounded-xl">
+              <Button size="lg" variant="outline" className="border-white text-white hover:bg-card/20 font-bold px-10 py-6 text-lg rounded-xl">
                 Explore Scholarships
               </Button>
             </Link>
@@ -418,3 +412,7 @@ export default function ResumeBuilding() {
     </div>
   );
 }
+
+
+
+

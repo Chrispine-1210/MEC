@@ -48,7 +48,7 @@ export default function Dashboard() {
       <div className="min-h-screen bg-mtendere-gray flex items-center justify-center">
         <div className="text-center">
           <div className="loading-spinner mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading your dashboard...</p>
+          <p className="text-muted-foreground">Loading your dashboard...</p>
         </div>
       </div>
     );
@@ -72,7 +72,7 @@ export default function Dashboard() {
       <section className="bg-gradient-to-r from-mtendere-blue to-mtendere-green text-white py-12">
         <div className="container mx-auto px-4">
           <div className="flex items-center space-x-6">
-            <div className="w-20 h-20 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+            <div className="w-20 h-20 bg-card bg-opacity-20 rounded-full flex items-center justify-center">
               <User className="w-10 h-10" />
             </div>
             <div>
@@ -81,10 +81,10 @@ export default function Dashboard() {
               </h1>
               <p className="text-xl opacity-90">{user.role === 'user' ? 'Student' : user.role}</p>
               <div className="flex items-center space-x-4 mt-3">
-                <Badge variant="secondary" className="bg-white bg-opacity-20 text-white">
+                <Badge variant="secondary" className="bg-card bg-opacity-20 text-white">
                   Profile {profileCompletion}% Complete
                 </Badge>
-                <Badge variant="secondary" className="bg-white bg-opacity-20 text-white">
+                <Badge variant="secondary" className="bg-card bg-opacity-20 text-white">
                   {applications?.length || 0} Applications
                 </Badge>
               </div>
@@ -103,7 +103,7 @@ export default function Dashboard() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-gray-600">Total Applications</p>
+                      <p className="text-sm text-muted-foreground">Total Applications</p>
                       <p className="text-2xl font-bold text-mtendere-blue">
                         {applications?.length || 0}
                       </p>
@@ -117,7 +117,7 @@ export default function Dashboard() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-gray-600">Approved</p>
+                      <p className="text-sm text-muted-foreground">Approved</p>
                       <p className="text-2xl font-bold text-mtendere-green">
                         {completedApplications}
                       </p>
@@ -131,7 +131,7 @@ export default function Dashboard() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-gray-600">Pending</p>
+                      <p className="text-sm text-muted-foreground">Pending</p>
                       <p className="text-2xl font-bold text-mtendere-orange">
                         {pendingApplications}
                       </p>
@@ -145,7 +145,7 @@ export default function Dashboard() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-gray-600">Referrals</p>
+                      <p className="text-sm text-muted-foreground">Referrals</p>
                       <p className="text-2xl font-bold text-mtendere-blue">
                         {totalReferrals}
                       </p>
@@ -205,7 +205,7 @@ export default function Dashboard() {
                     </div>
                     <Progress value={profileCompletion} className="h-2" />
                   </div>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-muted-foreground">
                     Complete your profile to increase your chances of success
                   </p>
                   <Button className="w-full" variant="outline">
@@ -223,21 +223,21 @@ export default function Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button asChild className="w-full bg-mtendere-blue hover:bg-blue-700">
+                <Button asChild className="w-full bg-mtendere-blue hover:bg-mtendere-blue/90">
                   <Link href="/scholarships">
                     <Plus className="w-4 h-4 mr-2" />
                     New Application
                   </Link>
                 </Button>
                 
-                <Button asChild className="w-full bg-mtendere-green hover:bg-green-700">
+                <Button asChild className="w-full bg-mtendere-green hover:bg-mtendere-green/90">
                   <Link href="/scholarships">
                     <Search className="w-4 h-4 mr-2" />
                     Find Scholarships
                   </Link>
                 </Button>
                 
-                <Button asChild className="w-full bg-mtendere-orange hover:bg-orange-600">
+                <Button asChild className="w-full bg-mtendere-orange hover:bg-mtendere-orange/90">
                   <Link href="/jobs">
                     <Briefcase className="w-4 h-4 mr-2" />
                     Browse Jobs
@@ -269,7 +269,7 @@ export default function Dashboard() {
                         <p className="text-sm font-medium">
                           Applied for {application.type}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-muted-foreground">
                           Status: {application.status}
                         </p>
                       </div>
@@ -277,7 +277,7 @@ export default function Dashboard() {
                   ))}
                   
                   {(!applications || applications.length === 0) && (
-                    <p className="text-sm text-gray-500 text-center py-4">
+                    <p className="text-sm text-muted-foreground text-center py-4">
                       No recent activity
                     </p>
                   )}
@@ -290,3 +290,6 @@ export default function Dashboard() {
     </div>
   );
 }
+
+
+

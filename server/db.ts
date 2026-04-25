@@ -5,6 +5,10 @@ import ws from "ws";
 import * as schema from "@shared/schema";
 
 neonConfig.webSocketConstructor = ws;
+if (process.env.NODE_ENV !== "production") {
+  // In local dev, avoid flaky WebSocket connections by sending Pool queries over HTTP.
+  neonConfig.poolQueryViaFetch = true;
+}
 
 const connectionString = process.env.DATABASE_URL;
 

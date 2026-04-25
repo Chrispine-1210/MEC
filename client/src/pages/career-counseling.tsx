@@ -16,42 +16,42 @@ const COUNSELING_SERVICES = [
     title: "Career Discovery",
     desc: "Not sure what career path is right for you? We use scientifically validated assessments to map your personality, skills, values, and interests to the careers where you'll thrive.",
     color: "text-mtendere-blue",
-    bg: "bg-blue-50",
+    bg: "bg-mtendere-blue/10",
   },
   {
     icon: Target,
     title: "Career Planning & Goal Setting",
     desc: "With a clear destination in mind, we build a structured, realistic career plan with short, medium, and long-term milestones — and hold you accountable to your goals.",
     color: "text-mtendere-green",
-    bg: "bg-green-50",
+    bg: "bg-mtendere-green/10",
   },
   {
     icon: TrendingUp,
     title: "Industry Insights & Market Analysis",
     desc: "Stay ahead with up-to-date intelligence on growing industries, hiring trends, salary benchmarks, and in-demand skills in African and global job markets.",
     color: "text-mtendere-orange",
-    bg: "bg-orange-50",
+    bg: "bg-mtendere-orange/10",
   },
   {
     icon: Award,
     title: "Skills Gap Assessment",
     desc: "We identify the gap between your current capabilities and those required for your target role, then recommend specific training, certifications, or experience to close that gap.",
     color: "text-mtendere-blue",
-    bg: "bg-blue-50",
+    bg: "bg-mtendere-blue/10",
   },
   {
     icon: Users,
     title: "Mentorship Matching",
     desc: "Get connected with experienced mentors in your target industry from our network of 500+ professionals across Africa, Europe, North America, and beyond.",
     color: "text-mtendere-green",
-    bg: "bg-green-50",
+    bg: "bg-mtendere-green/10",
   },
   {
     icon: Globe,
     title: "International Career Pathways",
     desc: "Specific guidance for Malawians seeking careers at international organizations like the UN, World Bank, African Development Bank, and multinational corporations.",
     color: "text-mtendere-orange",
-    bg: "bg-orange-50",
+    bg: "bg-mtendere-orange/10",
   },
 ];
 
@@ -125,7 +125,7 @@ export default function CareerCounseling() {
       >
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-orange/90 to-mtendere-blue/88" />
         <div className="container relative z-10 mx-auto px-4 text-center max-w-4xl">
-          <Badge className="mb-6 bg-white/20 text-white border-white/30 px-5 py-1.5 text-xs font-bold uppercase tracking-widest">
+          <Badge className="mb-6 bg-card/20 text-white border-white/30 px-5 py-1.5 text-xs font-bold uppercase tracking-widest">
             Career Strategy
           </Badge>
           <h1 className="text-5xl md:text-7xl font-extrabold mb-6 leading-tight drop-shadow-2xl">
@@ -137,12 +137,12 @@ export default function CareerCounseling() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/contact">
-              <Button size="lg" className="bg-white text-mtendere-blue hover:bg-gray-100 font-bold px-10 py-6 text-lg rounded-xl shadow-2xl hover:scale-105 transition-transform">
+              <Button size="lg" className="bg-card text-mtendere-blue hover:bg-muted font-bold px-10 py-6 text-lg rounded-xl shadow-2xl hover:scale-105 transition-transform">
                 Book a Session <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Link>
             <a href="#sessions">
-              <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/20 font-bold px-10 py-6 text-lg rounded-xl">
+              <Button size="lg" variant="outline" className="border-white text-white hover:bg-card/20 font-bold px-10 py-6 text-lg rounded-xl">
                 View Packages
               </Button>
             </a>
@@ -154,7 +154,7 @@ export default function CareerCounseling() {
               { value: "85%", label: "Career Goal Achieved" },
               { value: "50+", label: "Industries Covered" },
             ].map((s) => (
-              <div key={s.label} className="bg-white/15 backdrop-blur-sm rounded-2xl p-4 text-center border border-white/20">
+              <div key={s.label} className="bg-card/15 backdrop-blur-sm rounded-2xl p-4 text-center border border-white/20">
                 <div className="text-3xl font-extrabold text-white mb-1">{s.value}</div>
                 <div className="text-xs font-semibold opacity-90">{s.label}</div>
               </div>
@@ -164,18 +164,18 @@ export default function CareerCounseling() {
       </section>
 
       {/* Services */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-card">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <Badge variant="outline" className="mb-3 text-mtendere-orange border-mtendere-orange px-4 py-1 uppercase tracking-wider text-xs font-bold">
               What We Offer
             </Badge>
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Career Counseling Services</h2>
-            <p className="text-gray-600 max-w-xl mx-auto">Comprehensive support at every stage of your career journey — from first exploration to senior leadership</p>
+            <p className="text-muted-foreground max-w-xl mx-auto">Comprehensive support at every stage of your career journey — from first exploration to senior leadership</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {COUNSELING_SERVICES.map((s) => (
-              <Card key={s.title} className="hover:shadow-xl transition-all group border-none bg-gray-50">
+              <Card key={s.title} className="hover:shadow-xl transition-all group border-none bg-muted/40">
                 <CardHeader>
                   <div className={`w-14 h-14 ${s.bg} rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
                     <s.icon className={`w-7 h-7 ${s.color}`} />
@@ -183,7 +183,7 @@ export default function CareerCounseling() {
                   <CardTitle className="text-xl font-bold text-mtendere-blue">{s.title}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-gray-600 leading-relaxed">{s.desc}</p>
+                  <p className="text-muted-foreground leading-relaxed">{s.desc}</p>
                 </CardContent>
               </Card>
             ))}
@@ -192,11 +192,11 @@ export default function CareerCounseling() {
       </section>
 
       {/* Sessions/Packages */}
-      <section id="sessions" className="py-20 bg-gray-50">
+      <section id="sessions" className="py-20 bg-muted/40">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Session Packages</h2>
-            <p className="text-gray-600 max-w-xl mx-auto">Choose the level of support that fits your needs and goals</p>
+            <p className="text-muted-foreground max-w-xl mx-auto">Choose the level of support that fits your needs and goals</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             {SESSIONS.map((s) => (
@@ -209,23 +209,23 @@ export default function CareerCounseling() {
                 <CardHeader className="text-center pt-6">
                   <CardTitle className="text-2xl font-extrabold text-mtendere-blue">{s.name}</CardTitle>
                   <div className="flex items-center justify-center gap-2 my-2">
-                    <Clock className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm text-gray-500">{s.duration}</span>
+                    <Clock className="w-4 h-4 text-muted-foreground/70" />
+                    <span className="text-sm text-muted-foreground">{s.duration}</span>
                   </div>
                   <div className="text-5xl font-extrabold text-mtendere-orange my-3">{s.price}</div>
-                  <p className="text-sm text-gray-500 leading-relaxed">{s.desc}</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{s.desc}</p>
                 </CardHeader>
                 <CardContent className="flex-1 flex flex-col">
                   <ul className="space-y-3 mb-8 flex-1">
                     {s.features.map((f) => (
-                      <li key={f} className="flex items-start gap-2 text-sm text-gray-700">
+                      <li key={f} className="flex items-start gap-2 text-sm text-foreground/80">
                         <CheckCircle2 className="w-4 h-4 text-mtendere-green flex-shrink-0 mt-0.5" />
                         {f}
                       </li>
                     ))}
                   </ul>
                   <Link href="/contact">
-                    <Button className={`w-full font-bold py-3 ${s.popular ? "bg-mtendere-green hover:bg-green-700" : "bg-mtendere-blue hover:bg-blue-700"} text-white`}>
+                    <Button className={`w-full font-bold py-3 ${s.popular ? "bg-mtendere-green hover:bg-mtendere-green/90" : "bg-mtendere-blue hover:bg-mtendere-blue/90"} text-white`}>
                       Book This Package
                     </Button>
                   </Link>
@@ -237,31 +237,25 @@ export default function CareerCounseling() {
       </section>
 
       {/* Success Stories */}
-      <section
-        className="py-20 text-white relative overflow-hidden"
-        style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&q=80&w=2000')`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        }}
-      >
-        <div className="absolute inset-0 bg-mtendere-dark/90 z-0" />
-        <div className="container relative z-10 mx-auto px-4">
+      <section className="relative overflow-hidden bg-gradient-to-br from-white via-white to-mtendere-gray py-20">
+        <div className="absolute left-1/2 top-0 h-56 w-56 -translate-x-1/2 rounded-full bg-mtendere-blue/10 blur-3xl" />
+        <div className="absolute right-0 top-20 h-48 w-48 rounded-full bg-mtendere-orange/10 blur-3xl" />
+        <div className="container relative mx-auto px-4">
           <div className="text-center mb-14">
-            <h2 className="text-4xl font-extrabold mb-4 drop-shadow-lg">Success Stories</h2>
-            <p className="opacity-90 max-w-xl mx-auto">Real people, real transformations</p>
+            <h2 className="mb-4 text-4xl font-extrabold text-mtendere-blue">Success Stories</h2>
+            <p className="mx-auto max-w-xl text-muted-foreground">Real people, real transformations.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {SUCCESS_STORIES.map((s) => (
-              <div key={s.name} className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20">
+              <div key={s.name} className="rounded-2xl border border-border/70 bg-card p-8 shadow-lg">
                 <div className="flex items-center gap-1 mb-5">
                   {[...Array(5)].map((_, i) => <Star key={i} className="w-4 h-4 fill-mtendere-orange text-mtendere-orange" />)}
                 </div>
-                <p className="text-gray-200 italic leading-relaxed mb-6 text-sm">"{s.text}"</p>
-                <div className="flex items-center gap-3 pt-4 border-t border-white/20">
+                <p className="mb-6 text-sm italic leading-relaxed text-muted-foreground">"{s.text}"</p>
+                <div className="flex items-center gap-3 border-t border-border/60 pt-4">
                   <img src={s.img} alt={s.name} className="w-12 h-12 rounded-full object-cover border-2 border-mtendere-orange" />
                   <div>
-                    <div className="font-bold text-white">{s.name}</div>
+                    <div className="font-bold text-foreground">{s.name}</div>
                     <div className="text-xs text-mtendere-orange font-semibold">{s.role}</div>
                   </div>
                 </div>
@@ -272,7 +266,7 @@ export default function CareerCounseling() {
       </section>
 
       {/* FAQ */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-card">
         <div className="container mx-auto px-4 max-w-3xl">
           <div className="text-center mb-14">
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Frequently Asked Questions</h2>
@@ -281,7 +275,7 @@ export default function CareerCounseling() {
             {FAQS.map((faq, i) => (
               <AccordionItem key={i} value={`faq-${i}`} className="border rounded-xl px-6 shadow-sm">
                 <AccordionTrigger className="text-left font-bold text-mtendere-blue hover:text-mtendere-green py-5">{faq.q}</AccordionTrigger>
-                <AccordionContent className="text-gray-600 pb-5 leading-relaxed">{faq.a}</AccordionContent>
+                <AccordionContent className="text-muted-foreground pb-5 leading-relaxed">{faq.a}</AccordionContent>
               </AccordionItem>
             ))}
           </Accordion>
@@ -303,12 +297,12 @@ export default function CareerCounseling() {
           <p className="text-xl opacity-95 mb-8 font-semibold drop-shadow">Don't leave your career to chance. Book a counseling session today and start building the career you deserve.</p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/contact">
-              <Button size="lg" className="bg-white text-mtendere-blue hover:bg-gray-100 font-bold px-10 py-6 text-lg rounded-xl shadow-2xl hover:scale-105 transition-transform">
+              <Button size="lg" className="bg-card text-mtendere-blue hover:bg-muted font-bold px-10 py-6 text-lg rounded-xl shadow-2xl hover:scale-105 transition-transform">
                 Book Free Discovery Call <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Link>
             <Link href="/jobs">
-              <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/20 font-bold px-10 py-6 text-lg rounded-xl">
+              <Button size="lg" variant="outline" className="border-white text-white hover:bg-card/20 font-bold px-10 py-6 text-lg rounded-xl">
                 Browse Job Opportunities
               </Button>
             </Link>
@@ -319,3 +313,7 @@ export default function CareerCounseling() {
     </div>
   );
 }
+
+
+
+
