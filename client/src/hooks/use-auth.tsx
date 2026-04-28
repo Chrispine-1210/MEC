@@ -4,10 +4,14 @@ import { useToast } from "@/hooks/use-toast";
 
 interface User {
   id: number;
+  username: string;
   email: string;
   firstName: string;
   lastName: string;
   role: string;
+  profilePicture?: string | null;
+  phone?: string | null;
+  dateOfBirth?: string | null;
 }
 
 interface AuthContextType {

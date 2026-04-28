@@ -86,6 +86,7 @@ export const partners = pgTable("partners", {
   country: text("country"),
   studentCount: integer("student_count"),
   ranking: text("ranking"),
+  programs: jsonb("programs"),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -162,6 +163,26 @@ export const analytics = pgTable("analytics", {
   timestamp: timestamp("timestamp").defaultNow(),
 });
 
+export const savedItems = pgTable("saved_items", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  type: varchar("type", { length: 50 }).notNull(),
+  referenceId: integer("reference_id").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const messages = pgTable("messages", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  email: varchar("email", { length: 255 }).notNull(),
+  phone: varchar("phone", { length: 20 }),
+  subject: text("subject"),
+  message: text("message").notNull(),
+  isRead: boolean("is_read").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const usersRelations = relations(users, ({ many }) => ({
   applications: many(applications),
   testimonials: many(testimonials),
@@ -169,6 +190,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   blogComments: many(blogComments),
   referrals: many(referrals),
   analytics: many(analytics),
+  savedItems: many(savedItems),
 }));
 
 export const scholarshipsRelations = relations(scholarships, ({ one }) => ({
@@ -232,6 +254,13 @@ export const referralsRelations = relations(referrals, ({ one }) => ({
 export const analyticsRelations = relations(analytics, ({ one }) => ({
   user: one(users, {
     fields: [analytics.userId],
+    references: [users.id],
+  }),
+}));
+
+export const savedItemsRelations = relations(savedItems, ({ one }) => ({
+  user: one(users, {
+    fields: [savedItems.userId],
     references: [users.id],
   }),
 }));
@@ -302,6 +331,17 @@ export const insertAnalyticsSchema = createInsertSchema(analytics).omit({
   timestamp: true,
 });
 
+export const insertSavedItemSchema = createInsertSchema(savedItems).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertMessageSchema = createInsertSchema(messages).omit({
+  id: true,
+  createdAt: true,
+  isRead: true,
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Scholarship = typeof scholarships.$inferSelect;
@@ -324,3 +364,7 @@ export type Referral = typeof referrals.$inferSelect;
 export type InsertReferral = z.infer<typeof insertReferralSchema>;
 export type Analytics = typeof analytics.$inferSelect;
 export type InsertAnalytics = z.infer<typeof insertAnalyticsSchema>;
+export type SavedItem = typeof savedItems.$inferSelect;
+export type InsertSavedItem = z.infer<typeof insertSavedItemSchema>;
+export type Message = typeof messages.$inferSelect;
+export type InsertMessage = z.infer<typeof insertMessageSchema>;

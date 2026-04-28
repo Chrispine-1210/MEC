@@ -13,6 +13,8 @@ import {
   insertBlogCommentSchema,
   insertTeamMemberSchema,
   insertReferralSchema,
+  insertSavedItemSchema,
+  insertMessageSchema,
 } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import fs from "fs";
@@ -2375,6 +2377,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Analytics fetch error:', error);
       res.status(500).json({ message: 'Failed to fetch analytics' });
+    }
+  });
+
+  // Saved Items routes
+  app.get('/api/saved-items', authenticateToken, async (req, res) => {
+    try {
+      const userId = getAuthenticatedUser(req).id;
+      const items = await storage.getUserSavedItems(userId);
+      res.json(items);
+    } catch (error) {
+      console.error('Saved items fetch error:', error);
+      res.status(500).json({ message: 'Failed to fetch saved items' });
+    }
+  });
+
+  app.post('/api/saved-items', authenticateToken, async (req, res) => {
+    try {
+      const userId = getAuthenticatedUser(req).id;
+      const savedItemData = insertSavedItemSchema.parse({
+        ...req.body,
+        userId,
+      });
+      const item = await storage.createSavedItem(savedItemData);
+      res.status(201).json(item);
+    } catch (error) {
+      console.error('Saved item creation error:', error);
+      res.status(400).json({ message: 'Failed to save item', error: getErrorMessage(error) });
+    }
+  });
+
+  app.delete('/api/saved-items/:id', authenticateToken, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
+      const success = await storage.deleteSavedItem(id);
+      if (success) {
+        res.json({ message: 'Saved item removed' });
+      } else {
+        res.status(404).json({ message: 'Saved item not found' });
+      }
+    } catch (error) {
+      console.error('Saved item deletion error:', error);
+      res.status(500).json({ message: 'Failed to remove saved item' });
+    }
+  });
+
+  app.get('/api/saved-items/check', authenticateToken, async (req, res) => {
+    try {
+      const userId = getAuthenticatedUser(req).id;
+      const { type, referenceId } = req.query;
+      if (!type || !referenceId) {
+        return res.status(400).json({ message: 'Type and referenceId required' });
+      }
+      const isSaved = await storage.isItemSaved(userId, String(type), Number(referenceId));
+      res.json({ isSaved });
+    } catch (error) {
+      console.error('Saved item check error:', error);
+      res.status(500).json({ message: 'Failed to check saved status' });
+    }
+  });
+
+  // Messages / Contact routes
+  app.post('/api/messages', async (req, res) => {
+    try {
+      const messageData = insertMessageSchema.parse(req.body);
+      const message = await storage.createMessage(messageData);
+      res.status(201).json({ message: 'Message sent successfully', data: message });
+    } catch (error) {
+      console.error('Message creation error:', error);
+      res.status(400).json({ message: 'Failed to send message', error: getErrorMessage(error) });
+    }
+  });
+
+  app.get('/api/messages', authenticateToken, requireAdmin, async (_req, res) => {
+    try {
+      const messages = await storage.getAllMessages();
+      res.json(messages);
+    } catch (error) {
+      console.error('Messages fetch error:', error);
+      res.status(500).json({ message: 'Failed to fetch messages' });
+    }
+  });
+
+  app.put('/api/messages/:id/read', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
+      const message = await storage.markMessageRead(id);
+      res.json(message);
+    } catch (error) {
+      console.error('Message read error:', error);
+      res.status(500).json({ message: 'Failed to mark message as read' });
     }
   });
 

@@ -153,3 +153,17 @@ export interface ApiAnalyticsSummary {
   activeTestimonials: number;
   publishedBlogPosts: number;
 }
+
+export interface ApiSavedItem {
+  id: number;
+  userId: number;
+  type: "scholarship" | "job" | "partner" | "blog_post";
+  referenceId: number;
+  notes?: string | null;
+  createdAt: string;
+}
+
+export interface ApiMessage {
+  id: number;
+  name: string;
+  email: string;

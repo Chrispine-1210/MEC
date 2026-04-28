@@ -165,10 +165,8 @@ export default function Jobs() {
               {isSearching && (
                 <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
                   <div className="loading-spinner"></div>
-                </div>
               )}
             </div>
-          </div>
         </div>
       </section>
 
@@ -184,7 +182,7 @@ export default function Jobs() {
               variant={selectedType === "" ? "default" : "outline"}
               size="sm"
               onClick={() => setSelectedType("")}
-              className={selectedType === "" ? "bg-mtendere-blue" : ""}
+              className={selectedType === "" ? "bg-mtendere-blue text-white" : ""}
             >
               All Types
             </Button>
@@ -194,7 +192,7 @@ export default function Jobs() {
                 variant={selectedType === type ? "default" : "outline"}
                 size="sm"
                 onClick={() => setSelectedType(type)}
-                className={selectedType === type ? "bg-mtendere-blue" : ""}
+                className={selectedType === type ? "bg-mtendere-blue text-white" : ""}
               >
                 {type}
               </Button>
@@ -210,7 +208,7 @@ export default function Jobs() {
               variant={selectedLocation === "" ? "default" : "outline"}
               size="sm"
               onClick={() => setSelectedLocation("")}
-              className={selectedLocation === "" ? "bg-mtendere-green" : ""}
+              className={selectedLocation === "" ? "bg-mtendere-green text-white" : ""}
             >
               All Locations
             </Button>
@@ -220,13 +218,12 @@ export default function Jobs() {
                 variant={selectedLocation === location ? "default" : "outline"}
                 size="sm"
                 onClick={() => setSelectedLocation(location)}
-                className={selectedLocation === location ? "bg-mtendere-green" : ""}
+                className={selectedLocation === location ? "bg-mtendere-green text-white" : ""}
               >
                 {location}
               </Button>
             ))}
           </div>
-        </div>
 
         {/* Results Count */}
         <div className="mb-6">
@@ -263,18 +260,6 @@ export default function Jobs() {
                 "https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&q=80&w=800",
                 "https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&q=80&w=800",
                 "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&q=80&w=800",
-                "https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&q=80&w=800",
-              ];
-              const coverImg = job.imageUrl || jobImages[idx % jobImages.length];
-              return (
-              <Card key={job.id} className="hover:shadow-2xl transition-all duration-500 overflow-hidden group border-none bg-card shadow-md flex flex-col">
-                <div className="relative h-44 overflow-hidden">
-                  <img
-                    src={coverImg}
-                    alt={job.title}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                   <div className="absolute top-3 left-3 flex gap-2">
                     <Badge className="bg-mtendere-green text-white font-bold text-xs">{job.jobType}</Badge>
                     {job.isRemote && (

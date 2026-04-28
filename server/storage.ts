@@ -1,9 +1,10 @@
 import {
-  users, scholarships, jobs, applications, partners, testimonials, blogPosts, teamMembers, referrals, analytics, blogComments,
+  users, scholarships, jobs, applications, partners, testimonials, blogPosts, teamMembers, referrals, analytics, blogComments, savedItems, messages,
   type User, type InsertUser, type Scholarship, type InsertScholarship, type Job, type InsertJob,
   type Application, type InsertApplication, type Partner, type InsertPartner, type Testimonial, type InsertTestimonial,
   type BlogPost, type InsertBlogPost, type TeamMember, type InsertTeamMember, type Referral, type InsertReferral,
-  type Analytics, type InsertAnalytics, type BlogComment, type InsertBlogComment
+  type Analytics, type InsertAnalytics, type BlogComment, type InsertBlogComment,
+  type SavedItem, type InsertSavedItem, type Message, type InsertMessage
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, or, like, count, sql } from "drizzle-orm";
@@ -92,6 +93,18 @@ export interface IStorage {
   logAnalytics(analytics: InsertAnalytics): Promise<Analytics>;
   getAnalytics(startDate?: Date, endDate?: Date): Promise<Analytics[]>;
   getAnalyticsSummary(): Promise<any>;
+
+  // Saved Items
+  getSavedItem(id: number): Promise<SavedItem | undefined>;
+  getUserSavedItems(userId: number): Promise<SavedItem[]>;
+  createSavedItem(savedItem: InsertSavedItem): Promise<SavedItem>;
+  deleteSavedItem(id: number): Promise<boolean>;
+  isItemSaved(userId: number, type: string, referenceId: number): Promise<boolean>;
+
+  // Messages
+  createMessage(message: InsertMessage): Promise<Message>;
+  getAllMessages(): Promise<Message[]>;
+  markMessageRead(id: number): Promise<Message>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -555,6 +568,61 @@ export class DatabaseStorage implements IStorage {
       activeTestimonials: activeTestimonials[0].count,
       publishedBlogPosts: publishedBlogPosts[0].count,
     };
+  }
+
+  // Saved Items
+  async getSavedItem(id: number): Promise<SavedItem | undefined> {
+    const [item] = await db.select().from(savedItems).where(eq(savedItems.id, id));
+    return item || undefined;
+  }
+
+  async getUserSavedItems(userId: number): Promise<SavedItem[]> {
+    return await db
+      .select()
+      .from(savedItems)
+      .where(eq(savedItems.userId, userId))
+      .orderBy(desc(savedItems.createdAt));
+  }
+
+  async createSavedItem(insertSavedItem: InsertSavedItem): Promise<SavedItem> {
+    const [item] = await db.insert(savedItems).values(insertSavedItem).returning();
+    return item;
+  }
+
+  async deleteSavedItem(id: number): Promise<boolean> {
+    const result = await db.delete(savedItems).where(eq(savedItems.id, id));
+    return (result as any).rowCount > 0;
+  }
+
+  async isItemSaved(userId: number, type: string, referenceId: number): Promise<boolean> {
+    const [item] = await db
+      .select()
+      .from(savedItems)
+      .where(and(
+        eq(savedItems.userId, userId),
+        eq(savedItems.type, type),
+        eq(savedItems.referenceId, referenceId)
+      ));
+    return !!item;
+  }
+
+  // Messages
+  async createMessage(insertMessage: InsertMessage): Promise<Message> {
+    const [message] = await db.insert(messages).values(insertMessage).returning();
+    return message;
+  }
+
+  async getAllMessages(): Promise<Message[]> {
+    return await db.select().from(messages).orderBy(desc(messages.createdAt));
+  }
+
+  async markMessageRead(id: number): Promise<Message> {
+    const [message] = await db
+      .update(messages)
+      .set({ isRead: true })
+      .where(eq(messages.id, id))
+      .returning();
+    return message;
   }
 }
 

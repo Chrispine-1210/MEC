@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +26,7 @@ import {
 
 export default function Dashboard() {
   const { user, isLoading } = useAuth();
+  const { toast } = useToast();
   const [, setLocation] = useLocation();
 
   const { data: applications } = useQuery<ApiApplication[]>({
@@ -50,7 +52,6 @@ export default function Dashboard() {
           <div className="loading-spinner mx-auto mb-4"></div>
           <p className="text-muted-foreground">Loading your dashboard...</p>
         </div>
-      </div>
     );
   }
 
@@ -62,7 +63,19 @@ export default function Dashboard() {
   const pendingApplications = applications?.filter(app => app.status === "pending").length || 0;
   const totalReferrals = referrals?.length || 0;
   const completedReferrals = referrals?.filter(ref => ref.status === "completed").length || 0;
-  const profileCompletion = 85; // This would be calculated based on filled profile fields
+
+  // Calculate real profile completion from available user fields
+  const profileFields = [
+    user?.firstName,
+    user?.lastName,
+    user?.email,
+    user?.username,
+    user?.phone,
+    user?.dateOfBirth,
+    user?.profilePicture,
+  ];
+  const filledFields = profileFields.filter(Boolean).length;
+  const profileCompletion = Math.round((filledFields / profileFields.length) * 100);
 
   return (
     <div className="min-h-screen bg-mtendere-gray">
@@ -71,26 +84,24 @@ export default function Dashboard() {
       {/* Header Section */}
       <section className="bg-gradient-to-r from-mtendere-blue to-mtendere-green text-white py-12">
         <div className="container mx-auto px-4">
-          <div className="flex items-center space-x-6">
-            <div className="w-20 h-20 bg-card bg-opacity-20 rounded-full flex items-center justify-center">
+          <div className="flex flex-col md:flex-row items-center gap-6">
+            <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
               <User className="w-10 h-10" />
             </div>
-            <div>
+            <div className="text-center md:text-left">
               <h1 className="text-3xl font-bold">
                 Welcome back, {user.firstName}!
               </h1>
-              <p className="text-xl opacity-90">{user.role === 'user' ? 'Student' : user.role}</p>
-              <div className="flex items-center space-x-4 mt-3">
-                <Badge variant="secondary" className="bg-card bg-opacity-20 text-white">
+              <p className="text-xl opacity-90 mt-1">{user.role === 'user' ? 'Student' : user.role}</p>
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mt-3">
+                <Badge className="bg-white/20 text-white border-white/30 hover:bg-white/30">
                   Profile {profileCompletion}% Complete
                 </Badge>
-                <Badge variant="secondary" className="bg-card bg-opacity-20 text-white">
+                <Badge className="bg-white/20 text-white border-white/30 hover:bg-white/30">
                   {applications?.length || 0} Applications
                 </Badge>
               </div>
-            </div>
           </div>
-        </div>
       </section>
 
       <div className="container mx-auto px-4 py-8">
@@ -98,7 +109,7 @@ export default function Dashboard() {
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-8">
             {/* Quick Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               <Card>
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
@@ -199,16 +210,25 @@ export default function Dashboard() {
               <CardContent>
                 <div className="space-y-4">
                   <div>
-                    <div className="flex justify-between text-sm mb-2">
+                    <div className="flex justify-between text-sm font-semibold mb-2">
                       <span>Profile Progress</span>
                       <span>{profileCompletion}%</span>
                     </div>
-                    <Progress value={profileCompletion} className="h-2" />
+                    <Progress value={profileCompletion} className="h-3" />
                   </div>
                   <p className="text-sm text-muted-foreground">
                     Complete your profile to increase your chances of success
                   </p>
-                  <Button className="w-full" variant="outline">
+                  <Button
+                    className="w-full"
+                    variant="outline"
+                    onClick={() =>
+                      toast({
+                        title: "Profile Settings",
+                        description: "Profile editing will be available in the next update. Fill in your phone, date of birth, and profile picture to reach 100%.",
+                      })
+                    }
+                  >
                     Complete Profile
                   </Button>
                 </div>
@@ -273,7 +293,6 @@ export default function Dashboard() {
                           Status: {application.status}
                         </p>
                       </div>
-                    </div>
                   ))}
                   
                   {(!applications || applications.length === 0) && (
@@ -285,11 +304,6 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           </div>
-        </div>
       </div>
-    </div>
   );
 }
-
-
-
