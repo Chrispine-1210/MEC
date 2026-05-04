@@ -22,6 +22,25 @@ async function main() {
       `ALTER TABLE "blog_posts" ADD COLUMN IF NOT EXISTS "likes" integer DEFAULT 0;`,
       `ALTER TABLE "team_members" ADD COLUMN IF NOT EXISTS "display_order" integer DEFAULT 0;`,
       `ALTER TABLE "partners" ADD COLUMN IF NOT EXISTS "student_count" integer;`,
+      `ALTER TABLE "partners" ADD COLUMN IF NOT EXISTS "programs" jsonb;`,
+      `CREATE TABLE IF NOT EXISTS "saved_items" (
+        "id" serial PRIMARY KEY NOT NULL,
+        "user_id" integer NOT NULL,
+        "type" varchar(50) NOT NULL,
+        "reference_id" integer NOT NULL,
+        "notes" text,
+        "created_at" timestamp DEFAULT now()
+      );`,
+      `CREATE TABLE IF NOT EXISTS "messages" (
+        "id" serial PRIMARY KEY NOT NULL,
+        "name" text NOT NULL,
+        "email" varchar(255) NOT NULL,
+        "phone" varchar(20),
+        "subject" text,
+        "message" text NOT NULL,
+        "is_read" boolean DEFAULT false,
+        "created_at" timestamp DEFAULT now()
+      );`,
     ];
 
     for (const q of queries) {

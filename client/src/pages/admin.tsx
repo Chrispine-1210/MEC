@@ -76,7 +76,7 @@ export default function Admin() {
           <div className="space-y-8">
             {/* Admin Header */}
             <div className="bg-card rounded-lg border border-border/60 shadow-soft p-6">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                   <h1 className="text-2xl font-bold text-mtendere-blue">
                     Admin Dashboard
@@ -85,7 +85,7 @@ export default function Admin() {
                     Welcome back, {user.firstName}. Here's what's happening.
                   </p>
                 </div>
-                <div className="flex items-center space-x-4">
+                <div className="flex flex-wrap items-center gap-3">
                   <Badge className="bg-mtendere-green text-white">
                     <Activity className="w-3 h-3 mr-1" />
                     LIVE
@@ -254,9 +254,9 @@ export default function Admin() {
       />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-h-screen lg:ml-64">
+      <div className="flex-1 flex flex-col min-h-screen lg:ml-64 bg-gradient-to-b from-background to-mtendere-gray/20">
         {/* Mobile Header */}
-        <div className="lg:hidden bg-card/90 backdrop-blur shadow-sm border-b border-border/60 p-4">
+        <div className="lg:hidden sticky top-0 z-30 bg-card/95 backdrop-blur shadow-sm border-b border-border/60 p-4">
           <Button 
             variant="ghost" 
             size="sm" 
@@ -267,7 +267,7 @@ export default function Admin() {
         </div>
 
         {/* Content Area */}
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-4 sm:p-6">
           {renderContent()}
         </main>
       </div>
