@@ -27,8 +27,13 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (user) {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        return;
+      }
+
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      const wsUrl = `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`;
       
       const ws = new WebSocket(wsUrl);
       
@@ -36,17 +41,21 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         console.log("WebSocket connected");
         setIsConnected(true);
         
-        // Subscribe to default channels
+        const isPrivilegedUser =
+          user.role === "editor" || user.role === "admin" || user.role === "super_admin";
         const defaultChannels = [
           "scholarships",
           "jobs",
-          "applications",
           "partners",
           "blog-posts",
           "team-members",
-          "user_activity",
           "announcements",
+          `applications:user:${user.id}`,
+          `referrals:user:${user.id}`,
         ];
+        if (isPrivilegedUser) {
+          defaultChannels.push("applications", "user_activity", "admin-dashboard", "admin-notifications");
+        }
         ws.send(JSON.stringify({ type: "subscribe", channels: defaultChannels }));
         setSubscriptions(defaultChannels);
       };
@@ -65,6 +74,16 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
               break;
             case "applications":
               invalidateByPrefix(["/api/applications"]);
+              break;
+            default:
+              if (channel?.startsWith("applications:user:")) {
+                invalidateByPrefix(["/api/applications"]);
+                break;
+              }
+              if (channel?.startsWith("referrals:user:")) {
+                invalidateByPrefix(["/api/referrals"]);
+                break;
+              }
               break;
             case "partners":
               invalidateByPrefix(["/api/partners"]);

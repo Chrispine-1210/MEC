@@ -1,52 +1,69 @@
-# Production Readiness - Mtendere App
+# Referral + Payments System Implementation TODO
 
-## Audit Status: ✅ COMPLETE
-**Date**: Current session  
-**Issues Found**: 8 critical, 3 high-impact, 2 polish items  
+Status: 0/28 ✅ In Progress
 
-## Current State
-```
-✅ Dashboard: Profile progress bar functional (placeholder toast)
-✅ Admin: Responsive sidebar + Analytics/ContentManager working  
-✅ Client: ApplicationTracker + ReferralSystem imported  
-❌ CSS: Dark mode broken, loading spinner invisible  
-❌ Forms: ContentManager incomplete (testimonials/partners/team-members)
-```
+## 1. PROJECT SETUP (3/3) ✅
+- [x] Create server/ directory structure (package.json, src/)
+- [x] Setup client/ deps (@stripe/*, fingerprintjs)
+- [x] Docker-compose.yml + .env.example
 
-## Implementation Plan (Step-by-Step)
+## 2. DATABASE & PRISMA (4/4) ✅
+- [ ] npx prisma init + schema.prisma (models: User,Referral,Payment,Wallet,Transaction)
+- [ ] Add fraud fields (deviceFingerprint, ipHash)
+- [ ] npx prisma migrate dev --name init
+- [ ] npx prisma generate + seed.ts (test users/codes)
 
-### Phase 1: CSS Fixes (2 files)
-```
-1. [ ] client/src/index.css - Fix dark mode variables
-2. [ ] client/src/index.css - Fix loading spinner color
-3. [ ] client/src/components/admin/admin-sidebar.tsx - Fix width
-```
+## 3. BACKEND CORE (6/6)
+- [ ] server/src/server.ts (Express, CORS, helmet, Prisma connect)
+- [ ] Auth middleware (JWT from existing AuthProvider)
+- [ ] Rate limiting + idempotency
+- [ ] Stripe init + test keys
+- [ ] Fingerprint middleware
+- [ ] BullMQ + Redis for delayed payouts
 
-### Phase 2: Profile Completion (1 file)
-```
-4. [ ] client/src/pages/dashboard.tsx - Replace placeholder toast
-```
+## 4. REFERRAL MODULE (5/5)
+- [ ] /api/referrals/generate (unique code/link)
+- [ ] /api/referrals/:code/stats (RT dashboard)
+- [ ] /api/referrals/claim (track signup, fraud check)
+- [ ] Multi-tier logic + expiry
+- [ ] Campaign boosts
 
-### Phase 3: Complete Forms (1 file)
-```
-5. [ ] client/src/components/admin/content-manager.tsx - Add missing forms
-```
+## 5. PAYMENTS MODULE (4/4)
+- [ ] /api/payments/checkout-session (Stripe + Link)
+- [ ] /api/webhooks/stripe (idempotent, commission calc)
+- [ ] Commission algo (10% L1, 5% L2)
+- [ ] Queue payout after 7d
 
-### Phase 4: Fix Hardcoded Data (1 file)
-```
-6. [ ] client/src/components/admin/analytics-dashboard.tsx - Real metrics
-```
+## 6. WALLET & PAYOUTS (3/3)
+- [ ] /api/wallet/balance, /withdraw
+- [ ] Tx ledger
+- [ ] Threshold payouts (Stripe Connect)
 
-### Phase 5: Functional Buttons (1 file)
-```
-7. [ ] client/src/components/user/application-tracker.tsx - Working buttons
-```
+## 7. FRONTEND INTEGRATION (6/6)
+- [ ] App.tsx: Add routes (/referrals, /wallet, /checkout)
+- [ ] admin-sidebar.tsx: Add Referrals/Wallet nav
+- [ ] ReferralDashboard component (DataTable, copy code)
+- [ ] WalletBalance + history
+- [ ] StripeCheckout (Elements, Link)
+- [ ] Fraud alerts/UI
 
-### Phase 6: Verify
-```
-8. [ ] Test responsive breakpoints
-9. [ ] Test dark mode
-10. [ ] npm run build
-```
+## 8. ADMIN & ANALYTICS (4/4)
+- [ ] /admin/referrals (leaderboard, rates)
+- [ ] Fraud logs
+- [ ] CAC/LTV metrics
+- [ ] Commission overrides
 
-## Next Step
+## 9. TESTING & DEPLOY (3/3)
+- [ ] Local: npm run dev (both), Stripe CLI webhooks
+- [ ] Fraud sim + e2e tests
+- [ ] Deploy: Vercel(frontend)/Railway(backend)
+
+## Commands to Run
+```
+# Backend
+cd server && npm i && npx prisma migrate dev && npm run dev
+
+# Frontend  
+cd client && npm i && npm run dev
+
+# Webhooks

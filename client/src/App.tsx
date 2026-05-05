@@ -27,7 +27,10 @@ import BlogDetail from "@/pages/blog-detail";
 import StudyAbroad from "@/pages/study-abroad";
 import UniversityApplications from "@/pages/university-applications";
 import CareerCounseling from "@/pages/career-counseling";
+
 import ResumeBuilding from "@/pages/resume-building";
+import Referrals from "@/pages/referrals";
+
 
 function Router() {
   return (
