@@ -1,33 +1,82 @@
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
+import cors from "cors";
 import { env } from "./env";
 
 import helmet from "helmet";
 import express, { type NextFunction, type Request, type Response } from "express";
+import { closeCache, initializeCache } from "./cache";
 import { ensureDatabaseSchema } from "./db";
+import { recordAppError, recordHttpRequest, renderPrometheusMetrics } from "./observability";
 import { registerRoutes } from "./routes";
+import { captureServerException, initializeSentry, isSentryEnabled } from "./sentry";
 import { log, setupVite } from "./vite";
 
 const app = express();
 const isProduction = env.NODE_ENV === "production";
 const port = env.PORT;
+const SENSITIVE_LOG_FIELDS = new Set([
+  "password",
+  "token",
+  "refreshToken",
+  "authorization",
+  "cookie",
+  "apiKey",
+  "secret",
+]);
+
+initializeSentry();
+
+const sanitizeForLog = (value: unknown, depth = 0): unknown => {
+  if (value === null || value === undefined) return value;
+  if (depth > 4) return "[truncated]";
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeForLog(item, depth + 1));
+  }
+  if (typeof value === "object") {
+    const sanitized: Record<string, unknown> = {};
+    for (const [key, nestedValue] of Object.entries(value as Record<string, unknown>)) {
+      sanitized[key] = SENSITIVE_LOG_FIELDS.has(key) ? "[redacted]" : sanitizeForLog(nestedValue, depth + 1);
+    }
+    return sanitized;
+  }
+  return value;
+};
 
 app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+        scriptSrc: isProduction
+          ? ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"]
+          : ["'self'", "'unsafe-inline'", "'unsafe-eval'", "http://localhost:*", "https://cdnjs.cloudflare.com"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        imgSrc: ["'self'", "data:", "https:"],
-        connectSrc: ["'self'", "https:", "ws:", "wss:"],
+        imgSrc: ["'self'", "data:", "https:", "https://mtendereeducationconsult.com"],
+        connectSrc: isProduction
+          ? ["'self'", "https:", "wss:", "https://api.mtendereeducationconsult.com"]
+          : ["'self'", "http://localhost:*", "ws://localhost:*", "https:", "ws:", "wss:"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
-        mediaSrc: ["'self'", "https:"],
+        mediaSrc: ["'self'", "https:", "https://mtendereeducationconsult.com"],
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"]
       },
     },
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true
+    }
+  }),
+);
+
+app.use(
+  cors({
+    origin: process.env.CORS_ORIGIN?.split(",") || ["https://mtendereeducationconsult.com"],
+    credentials: true,
   }),
 );
 
@@ -93,15 +142,17 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   };
 
   res.on("finish", () => {
+    const duration = Date.now() - startTime;
+    recordHttpRequest(req.method, requestPath, res.statusCode, duration);
+
     if (!requestPath.startsWith("/api")) {
       return;
     }
 
-    const duration = Date.now() - startTime;
     let line = `[${requestId}] ${req.method} ${requestPath} ${res.statusCode} in ${duration}ms`;
 
     if (responseBody !== undefined) {
-      line += ` :: ${JSON.stringify(responseBody)}`;
+      line += ` :: ${JSON.stringify(sanitizeForLog(responseBody))}`;
     }
 
     if (line.length > 180) {
@@ -114,9 +165,26 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+app.get(env.METRICS_PATH, (_req, res) => {
+  res.setHeader("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+  res.send(renderPrometheusMetrics());
+});
+
 (async () => {
-  await ensureDatabaseSchema();
+  await initializeCache();
+  if (env.SKIP_DB_SCHEMA_BOOTSTRAP) {
+    log("Skipping database schema bootstrap because SKIP_DB_SCHEMA_BOOTSTRAP is enabled.");
+  } else {
+    await ensureDatabaseSchema();
+  }
   const server = await registerRoutes(app);
+
+  app.use(["/api", "/auth"], (req, res) => {
+    res.status(404).json({
+      message: "API route not found",
+      path: req.originalUrl,
+    });
+  });
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     const status =
@@ -135,6 +203,13 @@ app.use((req: Request, res: Response, next: NextFunction) => {
       console.error(err);
     }
 
+    captureServerException(err, {
+      status,
+      path: _req.path,
+      method: _req.method,
+      requestId: _req.headers["x-request-id"],
+    });
+    recordAppError(status);
     res.status(status).json({ message });
   });
 
@@ -167,5 +242,24 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
   server.listen(port, "0.0.0.0", () => {
     log(`Server listening on port ${port}`);
+    if (isSentryEnabled()) {
+      log("Sentry error tracking enabled");
+    }
+  });
+
+  const shutdown = async (signal: string) => {
+    log(`Received ${signal}. Shutting down gracefully...`);
+    await closeCache();
+    server.close(() => {
+      process.exit(0);
+    });
+  };
+
+  process.on("SIGINT", () => {
+    void shutdown("SIGINT");
+  });
+
+  process.on("SIGTERM", () => {
+    void shutdown("SIGTERM");
   });
 })();

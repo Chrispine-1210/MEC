@@ -16,7 +16,8 @@ import {
   ChevronDown,
   User,
   Settings,
-  LogOut
+  LogOut,
+  Share2
 } from "lucide-react";
 
 import logoImg from "@assets/mtendere-logo.svg";
@@ -233,6 +234,14 @@ export default function ExpandingNav() {
                         <User className="w-4 h-4" />
                         <span>Dashboard</span>
                       </Link>
+                      <Link
+                        href="/referrals"
+                        onClick={closeMenu}
+                        className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm text-foreground/80 hover:bg-muted/60"
+                      >
+                        <Share2 className="w-4 h-4" />
+                        <span>Referrals</span>
+                      </Link>
                       {(user.role === 'admin' || user.role === 'super_admin') && (
                         <Link
                           href="/admin"
@@ -353,6 +362,13 @@ export default function ExpandingNav() {
                       className="block px-3 py-2 text-base font-medium text-foreground hover:text-mtendere-blue"
                     >
                       Dashboard
+                    </Link>
+                    <Link
+                      href="/referrals"
+                      onClick={closeMenu}
+                      className="block px-3 py-2 text-base font-medium text-foreground hover:text-mtendere-blue"
+                    >
+                      Referrals
                     </Link>
                     {(user.role === 'admin' || user.role === 'super_admin') && (
                       <Link

@@ -1,4 +1,4 @@
-# Replit.md - Mtendere Education Platform
+# Descri.md - Mtendere Education Platform
 
 ## Overview
 

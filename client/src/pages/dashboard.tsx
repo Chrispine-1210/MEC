@@ -36,6 +36,7 @@ export default function Dashboard() {
   const { user, isLoading } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const hasStoredToken = typeof window !== "undefined" && Boolean(localStorage.getItem("token"));
 
   const { data: applications } = useQuery<ApiApplication[]>({
     queryKey: ["/api/applications"],
@@ -48,10 +49,10 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
-    if (!isLoading && !user) {
+    if (!isLoading && !user && !hasStoredToken) {
       setLocation("/login");
     }
-  }, [isLoading, setLocation, user]);
+  }, [hasStoredToken, isLoading, setLocation, user]);
 
   const profileChecklist = useMemo(
     () => [
@@ -70,7 +71,7 @@ export default function Dashboard() {
   const profileCompletion = Math.round((completedProfileFields / profileChecklist.length) * 100);
   const missingProfileFields = profileChecklist.filter((field) => !field.complete).map((field) => field.label);
 
-  if (isLoading) {
+  if (isLoading || (!user && hasStoredToken)) {
     return (
       <div className="min-h-screen bg-mtendere-gray flex items-center justify-center">
         <div className="text-center">

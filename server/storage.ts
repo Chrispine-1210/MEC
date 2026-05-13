@@ -99,6 +99,7 @@ export interface IStorage {
   getUserSavedItems(userId: number): Promise<SavedItem[]>;
   createSavedItem(savedItem: InsertSavedItem): Promise<SavedItem>;
   deleteSavedItem(id: number): Promise<boolean>;
+  deleteUserSavedItem(id: number, userId: number): Promise<boolean>;
   isItemSaved(userId: number, type: string, referenceId: number): Promise<boolean>;
 
   // Messages
@@ -591,6 +592,13 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSavedItem(id: number): Promise<boolean> {
     const result = await db.delete(savedItems).where(eq(savedItems.id, id));
+    return (result as any).rowCount > 0;
+  }
+
+  async deleteUserSavedItem(id: number, userId: number): Promise<boolean> {
+    const result = await db
+      .delete(savedItems)
+      .where(and(eq(savedItems.id, id), eq(savedItems.userId, userId)));
     return (result as any).rowCount > 0;
   }
 

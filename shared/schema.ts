@@ -24,6 +24,12 @@ export const users = pgTable("users", {
   phone: varchar("phone", { length: 20 }),
   dateOfBirth: timestamp("date_of_birth"),
   isActive: boolean("is_active").default(true),
+
+  // MFA (TOTP)
+  mfaEnabled: boolean("mfa_enabled").default(false),
+  totpSecret: text("totp_secret"),
+  mfaConfirmedAt: timestamp("mfa_confirmed_at"),
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -142,6 +148,7 @@ export const teamMembers = pgTable("team_members", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Legacy/simple referral table (will be superseded by the production referral engine tables).
 export const referrals = pgTable("referrals", {
   id: serial("id").primaryKey(),
   referrerId: integer("referrer_id").notNull(),
@@ -151,6 +158,184 @@ export const referrals = pgTable("referrals", {
   rewardAmount: integer("reward_amount").default(0),
   createdAt: timestamp("created_at").defaultNow(),
   completedAt: timestamp("completed_at"),
+});
+
+// -----------------------------
+// Production Referral Engine
+// -----------------------------
+
+export const referralPrograms = pgTable("referral_programs", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  attributionModel: varchar("attribution_model", { length: 50 }).notNull().default("last_click"),
+  level1Percent: integer("level1_percent").default(0),
+  level1Flat: integer("level1_flat").default(0),
+  level2Enabled: boolean("level2_enabled").default(false),
+  level2Percent: integer("level2_percent").default(0),
+  level2Flat: integer("level2_flat").default(0),
+  rewardDelayDays: integer("reward_delay_days").default(7),
+  codeExpiryDays: integer("code_expiry_days").default(90),
+  isActive: boolean("is_active").default(true),
+  startAt: timestamp("start_at"),
+  endAt: timestamp("end_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const referralCodes = pgTable("referral_codes", {
+  id: serial("id").primaryKey(),
+  programId: integer("program_id").notNull(),
+  referrerId: integer("referrer_id").notNull(),
+  code: varchar("code", { length: 64 }).notNull().unique(),
+  referralLinkPath: varchar("referral_link_path", { length: 255 }).notNull().default("/register"),
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at"),
+  usedAt: timestamp("used_at"),
+  isActive: boolean("is_active").default(true),
+});
+
+export const referralClicks = pgTable("referral_clicks", {
+  id: serial("id").primaryKey(),
+  programId: integer("program_id").notNull(),
+  codeId: integer("code_id").notNull(),
+  referrerId: integer("referrer_id").notNull(),
+  // Anonymous before signup
+  referredEmail: varchar("referred_email", { length: 255 }),
+  fingerprintHash: varchar("fingerprint_hash", { length: 128 }).notNull(),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: text("user_agent"),
+  utmSource: varchar("utm_source", { length: 255 }),
+  utmMedium: varchar("utm_medium", { length: 255 }),
+  utmCampaign: varchar("utm_campaign", { length: 255 }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const referralAttributions = pgTable("referral_attributions", {
+  id: serial("id").primaryKey(),
+  clickId: integer("click_id").notNull(),
+  programId: integer("program_id").notNull(),
+  codeId: integer("code_id").notNull(),
+  referrerId: integer("referrer_id").notNull(),
+  referredUserId: integer("referred_user_id"),
+  referredEmail: varchar("referred_email", { length: 255 }),
+  // Funnel staging
+  signupAt: timestamp("signup_at"),
+  activationAt: timestamp("activation_at"),
+  attributionScore: integer("attribution_score").default(0),
+  level: integer("level").notNull().default(1),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const referralRewards = pgTable("referral_rewards", {
+  id: serial("id").primaryKey(),
+  attributionId: integer("attribution_id").notNull(),
+  programId: integer("program_id").notNull(),
+  referrerId: integer("referrer_id").notNull(),
+  referredUserId: integer("referred_user_id"),
+  // Triggered by payment success
+  paymentId: integer("payment_id"),
+  // Snapshot of computed commission
+  amount: integer("amount").notNull(),
+  currency: varchar("currency", { length: 10 }).default("USD"),
+  level: integer("level").notNull().default(1),
+  // State machine
+  state: varchar("state", { length: 30 }).notNull().default("on_hold"),
+  ruleSnapshot: jsonb("rule_snapshot"),
+  heldAt: timestamp("held_at").defaultNow(),
+  releasedAt: timestamp("released_at"),
+  reversedAt: timestamp("reversed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  // Admin override
+  disputeNote: text("dispute_note"),
+});
+
+export const fraudSignals = pgTable("fraud_signals", {
+  id: serial("id").primaryKey(),
+  referralClickId: integer("referral_click_id").notNull(),
+  signalType: varchar("signal_type", { length: 100 }).notNull(),
+  scoreDelta: integer("score_delta").default(0),
+  details: jsonb("details"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const referralRiskScores = pgTable("referral_risk_scores", {
+  id: serial("id").primaryKey(),
+  programId: integer("program_id").notNull(),
+  clickId: integer("click_id").notNull(),
+  referrerId: integer("referrer_id").notNull(),
+  fingerprintHash: varchar("fingerprint_hash", { length: 128 }).notNull(),
+  score: integer("score").notNull().default(0),
+  riskBand: varchar("risk_band", { length: 20 }).notNull().default("low"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// -----------------------------
+// Stripe Payment + Wallet Ledger
+// -----------------------------
+
+export const stripeEvents = pgTable("stripe_events", {
+  id: serial("id").primaryKey(),
+  stripeEventId: varchar("stripe_event_id", { length: 255 }).notNull().unique(),
+  eventType: varchar("event_type", { length: 255 }).notNull(),
+  receivedAt: timestamp("received_at").defaultNow(),
+  processedAt: timestamp("processed_at"),
+});
+
+export const payments = pgTable("payments", {
+  id: serial("id").primaryKey(),
+  stripePaymentIntentId: varchar("stripe_payment_intent_id", { length: 255 }),
+  stripeCheckoutSessionId: varchar("stripe_checkout_session_id", { length: 255 }),
+  userId: integer("user_id"),
+  programId: integer("program_id"),
+  attributionId: integer("attribution_id"),
+  amount: integer("amount").notNull(),
+  currency: varchar("currency", { length: 10 }).default("USD"),
+  status: varchar("status", { length: 30 }).notNull().default("succeeded"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  raw: jsonb("raw"),
+});
+
+export const wallets = pgTable("wallets", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().unique(),
+  currency: varchar("currency", { length: 10 }).default("USD"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const walletLedgerEntries = pgTable("wallet_ledger_entries", {
+  id: serial("id").primaryKey(),
+  walletId: integer("wallet_id").notNull(),
+  referralRewardId: integer("referral_reward_id"),
+  paymentId: integer("payment_id"),
+  type: varchar("type", { length: 30 }).notNull(),
+  amount: integer("amount").notNull(),
+  currency: varchar("currency", { length: 10 }).default("USD"),
+  createdAt: timestamp("created_at").defaultNow(),
+  metadata: jsonb("metadata"),
+});
+
+export const walletBalances = pgTable("wallet_balances", {
+  id: serial("id").primaryKey(),
+  walletId: integer("wallet_id").notNull().unique(),
+  availableBalance: integer("available_balance").notNull().default(0),
+  pendingBalance: integer("pending_balance").notNull().default(0),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const payoutRequests = pgTable("payout_requests", {
+  id: serial("id").primaryKey(),
+  walletId: integer("wallet_id").notNull(),
+  amount: integer("amount").notNull(),
+  currency: varchar("currency", { length: 10 }).default("USD"),
+  method: varchar("method", { length: 50 }).default("bank"),
+  status: varchar("status", { length: 30 }).notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+  processedAt: timestamp("processed_at"),
+  metadata: jsonb("metadata"),
 });
 
 export const analytics = pgTable("analytics", {

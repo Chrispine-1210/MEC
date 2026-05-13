@@ -1,0 +1,14 @@
+.git
+.github
+.qodo
+.sixth
+node_modules
+Admin/node_modules
+dist
+uploads
+*.log
+.env
+.env.*
+!.env.example
+coverage
+tmp

@@ -3,6 +3,12 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import {
+  getActiveReferralPrograms,
+  getReferralCodeByCode,
+  createReferralClick,
+  createOrUpdateAttribution,
+} from "./referral-storage-v2";
+import {
   insertUserSchema,
   insertScholarshipSchema,
   insertJobSchema,
@@ -17,11 +23,21 @@ import {
   insertMessageSchema,
 } from "@shared/schema";
 import bcrypt from "bcryptjs";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+  timingSafeEqual,
+} from "crypto";
 import fs from "fs";
 import jwt from "jsonwebtoken";
 import multer from "multer";
+import { generateSecret, generateURI, verify } from "otplib";
 import path from "path";
+import QRCode from "qrcode";
 import { z } from "zod";
+import { getCacheMode } from "./cache";
 import { env } from "./env";
 import { getChatResponse } from "./ai";
 import {
@@ -54,11 +70,22 @@ import {
 } from "./admin-state";
 
 const JWT_SECRET = env.JWT_SECRET;
+const MFA_CHALLENGE_PURPOSE = "mfa_challenge";
+const MFA_CHALLENGE_TTL_SECONDS = 5 * 60;
+const MFA_ENCRYPTION_KEY = createHash("sha256")
+  .update(env.MFA_ENCRYPTION_KEY || JWT_SECRET)
+  .digest();
+const mfaRequiredRoles = new Set(
+  env.MFA_REQUIRED_ROLES.split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean),
+);
 
 type JwtUser = {
   id: number;
   email: string;
   role: string;
+  mfaVerified?: boolean;
 };
 
 type AuthenticatedRequest = Request & {
@@ -72,7 +99,261 @@ type MulterRequest = Request & {
 
 type SocketWithSubscriptions = WebSocket & {
   subscriptions?: string[];
+  user?: JwtUser;
 };
+
+const FALLBACK_ROLE_PERMISSIONS: Record<string, string[]> = {
+  viewer: ["view_dashboard"],
+  editor: [
+    "view_dashboard",
+    "manage_scholarships",
+    "manage_jobs",
+    "manage_blog",
+    "manage_partners",
+    "manage_team",
+  ],
+  admin: [
+    "view_dashboard",
+    "manage_scholarships",
+    "manage_jobs",
+    "manage_partners",
+    "manage_blog",
+    "manage_team",
+    "manage_users",
+    "review_applications",
+    "manage_roles",
+    "view_analytics",
+  ],
+  super_admin: [
+    "view_dashboard",
+    "manage_scholarships",
+    "manage_jobs",
+    "manage_partners",
+    "manage_blog",
+    "manage_team",
+    "manage_users",
+    "review_applications",
+    "manage_roles",
+    "view_analytics",
+    "manage_settings",
+  ],
+};
+
+const normalizeRoleId = (role: string) => role.trim().toLowerCase().replace(/\s+/g, "_");
+
+const getPermissionsForRole = (role: string) => {
+  const normalized = normalizeRoleId(role);
+  const configuredRole = getAdminRoles().find((item) => normalizeRoleId(item.id) === normalized);
+  if (configuredRole && Array.isArray(configuredRole.permissions)) {
+    return configuredRole.permissions.map((item) => String(item));
+  }
+  return FALLBACK_ROLE_PERMISSIONS[normalized] ?? [];
+};
+
+const hasPermission = (user: JwtUser, permission: string) =>
+  getPermissionsForRole(user.role).includes(permission);
+
+const hasAnyPermission = (user: JwtUser, permissions: string[]) =>
+  permissions.some((permission) => hasPermission(user, permission));
+
+const roleRequiresMfa = (role: string) => mfaRequiredRoles.has(normalizeRoleId(role));
+
+const encryptSecret = (plainText: string) => {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", MFA_ENCRYPTION_KEY, iv);
+  const encrypted = Buffer.concat([cipher.update(plainText, "utf8"), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return `${iv.toString("base64url")}.${authTag.toString("base64url")}.${encrypted.toString("base64url")}`;
+};
+
+const decryptSecret = (cipherText: string) => {
+  const parts = cipherText.split(".");
+  if (parts.length !== 3) {
+    throw new Error("Invalid encrypted payload");
+  }
+  const [ivB64, authTagB64, encryptedB64] = parts;
+  const decipher = createDecipheriv(
+    "aes-256-gcm",
+    MFA_ENCRYPTION_KEY,
+    Buffer.from(ivB64, "base64url"),
+  );
+  decipher.setAuthTag(Buffer.from(authTagB64, "base64url"));
+  const decrypted = Buffer.concat([
+    decipher.update(Buffer.from(encryptedB64, "base64url")),
+    decipher.final(),
+  ]);
+  return decrypted.toString("utf8");
+};
+
+const getTotpSecretForUser = (rawSecret: string | null | undefined) => {
+  if (!rawSecret) return null;
+  try {
+    return decryptSecret(rawSecret);
+  } catch {
+    // Backward compatibility for previously unencrypted stored secrets.
+    return rawSecret;
+  }
+};
+
+const verifyTotpCode = async (secret: string, code: string) => {
+  const sanitized = code.replace(/\s+/g, "");
+  if (!/^\d{6}$/.test(sanitized)) return false;
+  const result = await verify({
+    secret,
+    token: sanitized,
+    epochTolerance: 30,
+  });
+  return Boolean(result.valid);
+};
+
+const isMfaChallengePayload = (payload: unknown): payload is { id: number; email: string; role: string } => {
+  if (!payload || typeof payload !== "object") return false;
+  const candidate = payload as Record<string, unknown>;
+  const purpose = String(candidate.purpose ?? "");
+  const expected = Buffer.from(MFA_CHALLENGE_PURPOSE, "utf8");
+  const actual = Buffer.from(purpose, "utf8");
+  if (actual.length !== expected.length) return false;
+  if (!timingSafeEqual(actual, expected)) return false;
+  return (
+    typeof candidate.id === "number" &&
+    typeof candidate.email === "string" &&
+    typeof candidate.role === "string"
+  );
+};
+
+const privilegedRealtimeChannels = new Set([
+  "applications",
+  "referrals",
+  "user_activity",
+  "admin-dashboard",
+  "admin-notifications",
+  "admin-roles",
+  "admin-settings",
+  "admin-audit-logs",
+  "messages",
+]);
+
+const hasPrivilegedRealtimeAccess = (user: JwtUser) => {
+  const privileged =
+    hasAnyPermission(user, [
+      "manage_scholarships",
+      "manage_jobs",
+      "manage_blog",
+      "manage_partners",
+      "manage_team",
+      "manage_users",
+      "manage_roles",
+      "manage_settings",
+      "review_applications",
+      "view_analytics",
+    ]) || normalizeRoleId(user.role) === "super_admin";
+
+  if (!privileged) return false;
+  if (!roleRequiresMfa(user.role)) return true;
+  return Boolean(user.mfaVerified);
+};
+
+const canSubscribeToChannel = (user: JwtUser, channel: string) => {
+  if (!channel) return false;
+
+  if (channel.startsWith("applications:user:")) {
+    const suffix = channel.slice("applications:user:".length);
+    return suffix === String(user.id) || hasPrivilegedRealtimeAccess(user);
+  }
+
+  if (channel.startsWith("referrals:user:")) {
+    const suffix = channel.slice("referrals:user:".length);
+    return suffix === String(user.id) || hasPrivilegedRealtimeAccess(user);
+  }
+
+  if (privilegedRealtimeChannels.has(channel)) {
+    return hasPrivilegedRealtimeAccess(user);
+  }
+
+  return true;
+};
+
+const applicationCreateSchema = insertApplicationSchema
+  .pick({
+    type: true,
+    referenceId: true,
+    documents: true,
+    notes: true,
+  })
+  .strict();
+
+const applicationUserUpdateSchema = z
+  .object({
+    documents: z.any().optional(),
+    notes: z.string().max(5000).optional(),
+  })
+  .strict();
+
+
+const applicationAdminUpdateSchema = insertApplicationSchema
+  .pick({
+    status: true,
+    documents: true,
+    notes: true,
+  })
+  .partial()
+  .strict();
+
+const referralCreateSchema = z
+  .object({
+    referredEmail: z.string().email().max(255),
+  })
+  .strict();
+
+const publicRegisterSchema = z
+  .object({
+    username: z.string().trim().min(3).max(255),
+    email: z.string().trim().toLowerCase().email().max(255),
+    password: z.string().min(8).max(255),
+    firstName: z.string().trim().min(1).max(255),
+    lastName: z.string().trim().min(1).max(255),
+  })
+  .strict();
+
+const adminRegisterSchema = z
+  .object({
+    username: z.string().trim().min(3).max(255),
+    email: z.string().trim().toLowerCase().email().max(255),
+    password: z.string().min(8).max(255),
+    firstName: z.string().trim().min(1).max(255),
+    lastName: z.string().trim().min(1).max(255),
+    role: z.enum(["viewer", "editor", "admin"]).default("viewer"),
+  })
+  .strict();
+
+const loginSchema = z
+  .object({
+    email: z.string().optional(),
+    username: z.string().optional(),
+    identifier: z.string().optional(),
+    password: z.string().min(1),
+    mfaCode: z.string().optional(),
+  })
+  .strict();
+
+const mfaEnableSchema = z
+  .object({
+    code: z.string().min(6).max(12),
+  })
+  .strict();
+
+const mfaVerifySchema = z
+  .object({
+    challengeToken: z.string().min(10),
+    code: z.string().min(6).max(12),
+  })
+  .strict();
+
+const mfaDisableSchema = z
+  .object({
+    code: z.string().min(6).max(12),
+  })
+  .strict();
 
 const getErrorMessage = (error: unknown) => {
   if (error instanceof z.ZodError) {
@@ -84,6 +365,34 @@ const getErrorMessage = (error: unknown) => {
   }
 
   return "Unknown error";
+};
+
+type RegistrationConflictFields = Partial<Record<"email" | "username", string>>;
+
+const getRegistrationConflict = async (userData: { email: string; username: string }) => {
+  const [existingEmailUser, existingUsernameUser] = await Promise.all([
+    storage.getUserByEmail(userData.email),
+    storage.getUserByUsername(userData.username),
+  ]);
+
+  const fields: RegistrationConflictFields = {};
+  if (existingEmailUser) fields.email = "This email is already registered";
+  if (existingUsernameUser) fields.username = "This username is already taken";
+
+  if (Object.keys(fields).length === 0) return null;
+
+  const message =
+    fields.email && fields.username
+      ? "Email and username are already in use"
+      : fields.email
+        ? fields.email
+        : fields.username ?? "Account already exists";
+
+  return {
+    message,
+    code: "REGISTRATION_CONFLICT",
+    fields,
+  };
 };
 
 const isTransientDbConnectivityError = (error: unknown) => {
@@ -313,23 +622,41 @@ const toAdminTeamMember = (member: any) => {
   };
 };
 
-const signToken = (user: { id: number; email: string; role: string }) =>
-  jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, {
-    expiresIn: "24h",
-  });
+const signToken = (
+  user: { id: number; email: string; role: string },
+  options?: { mfaVerified?: boolean },
+) =>
+  jwt.sign(
+    {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      mfaVerified: Boolean(options?.mfaVerified),
+    },
+    JWT_SECRET,
+    { expiresIn: "24h" },
+  );
+
+const signMfaChallengeToken = (user: { id: number; email: string; role: string }) =>
+  jwt.sign(
+    {
+      purpose: MFA_CHALLENGE_PURPOSE,
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    },
+    JWT_SECRET,
+    { expiresIn: MFA_CHALLENGE_TTL_SECONDS },
+  );
 
 const getAuthenticatedUser = (req: Request) => (req as AuthenticatedRequest).user;
 
-const getOptionalAuthenticatedUser = (req: Request): JwtUser | null => {
+const readBearerToken = (req: Request) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith("Bearer ")
-    ? authHeader.slice("Bearer ".length)
-    : null;
+  return authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+};
 
-  if (!token) {
-    return null;
-  }
-
+const parseAccessToken = (token: string): JwtUser | null => {
   try {
     return jwt.verify(token, JWT_SECRET) as JwtUser;
   } catch {
@@ -337,55 +664,164 @@ const getOptionalAuthenticatedUser = (req: Request): JwtUser | null => {
   }
 };
 
+const getOptionalAuthenticatedUser = (req: Request): JwtUser | null => {
+  const token = readBearerToken(req);
+  if (!token) return null;
+  return parseAccessToken(token);
+};
+
 const isAdmin = (user: JwtUser | null) =>
-  user?.role === "admin" || user?.role === "super_admin";
+  Boolean(
+    user &&
+      (normalizeRoleId(user.role) === "super_admin" ||
+        hasAnyPermission(user, ["manage_users", "manage_roles", "manage_settings"])),
+  );
+
+const isEditor = (user: JwtUser | null) =>
+  Boolean(
+    user &&
+      (isAdmin(user) ||
+        hasAnyPermission(user, [
+          "manage_scholarships",
+          "manage_jobs",
+          "manage_blog",
+          "manage_partners",
+          "manage_team",
+        ])),
+  );
 
 const authenticateToken = (req: Request, res: Response, next: NextFunction) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith("Bearer ")
-    ? authHeader.slice("Bearer ".length)
-    : null;
+  const token = readBearerToken(req);
 
   if (!token) {
     return res.status(401).json({ message: "Access token required" });
   }
 
-  jwt.verify(token, JWT_SECRET, (error: unknown, user: unknown) => {
-    if (error || !user) {
-      return res.status(403).json({ message: "Invalid or expired token" });
-    }
+  const user = parseAccessToken(token);
+  if (!user) {
+    return res.status(403).json({ message: "Invalid or expired token" });
+  }
 
-    (req as AuthenticatedRequest).user = user as JwtUser;
-    next();
-  });
+  (req as AuthenticatedRequest).user = user;
+  next();
 };
 
-const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
+const requirePrivilegedMfa = async (req: Request, res: Response, next: NextFunction) => {
+  const user = getAuthenticatedUser(req);
+  if (!roleRequiresMfa(user.role)) {
+    return next();
+  }
+
+  const persistedUser = await storage.getUser(user.id);
+  if (!persistedUser) {
+    return res.status(401).json({ message: "User not found" });
+  }
+
+  const persistedSecret = getTotpSecretForUser(persistedUser.totpSecret);
+  if (!persistedUser.mfaEnabled || !persistedSecret) {
+    return res.status(403).json({
+      message: "MFA setup required for privileged access",
+      code: "MFA_SETUP_REQUIRED",
+    });
+  }
+
+  if (!user.mfaVerified) {
+    return res.status(403).json({
+      message: "MFA verification required",
+      code: "MFA_VERIFICATION_REQUIRED",
+    });
+  }
+
+  return next();
+};
+
+const requireAdmin = async (req: Request, res: Response, next: NextFunction) => {
   if (!isAdmin(getAuthenticatedUser(req))) {
     return res.status(403).json({ message: "Admin access required" });
   }
-
-  next();
+  return requirePrivilegedMfa(req, res, next);
 };
 
-const isEditor = (user: JwtUser | null) =>
-  user?.role === "editor" || user?.role === "admin" || user?.role === "super_admin";
-
-const requireEditor = (req: Request, res: Response, next: NextFunction) => {
+const requireEditor = async (req: Request, res: Response, next: NextFunction) => {
   if (!isEditor(getAuthenticatedUser(req))) {
     return res.status(403).json({ message: "Editor access required" });
   }
-
-  next();
+  return requirePrivilegedMfa(req, res, next);
 };
+
+const requirePermission =
+  (...permissions: string[]) =>
+  (req: Request, res: Response, next: NextFunction) => {
+    const user = getAuthenticatedUser(req);
+    if (!user) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    const isSuperAdmin = normalizeRoleId(user.role) === "super_admin";
+    if (isSuperAdmin || permissions.length === 0 || hasAnyPermission(user, permissions)) {
+      return next();
+    }
+
+    return res.status(403).json({
+      message: "Insufficient permissions",
+      code: "INSUFFICIENT_PERMISSION",
+      requiredAnyOf: permissions,
+    });
+  };
+
+const requireDashboardPermission = requirePermission("view_dashboard");
+const requireUserManagementPermission = requirePermission("manage_users");
+const requireScholarshipManagementPermission = requirePermission("manage_scholarships");
+const requireJobManagementPermission = requirePermission("manage_jobs");
+const requirePartnerManagementPermission = requirePermission("manage_partners");
+const requireBlogManagementPermission = requirePermission("manage_blog");
+const requireTeamManagementPermission = requirePermission("manage_team");
+const requireApplicationReviewPermission = requirePermission("review_applications");
+const requireRoleManagementPermission = requirePermission("manage_roles");
+const requireSettingsManagementPermission = requirePermission("manage_settings");
+const requireAnalyticsPermission = requirePermission("view_analytics");
+const requireAiManagementPermission = requirePermission("manage_users", "manage_settings");
+const requireContentUploadPermission = requirePermission(
+  "manage_scholarships",
+  "manage_jobs",
+  "manage_partners",
+  "manage_blog",
+  "manage_team",
+);
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
   // WebSocket setup for real-time updates
-  const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+  const wss = new WebSocketServer({ noServer: true });
 
-  wss.on("connection", (ws: SocketWithSubscriptions) => {
+  httpServer.on("upgrade", (req, socket, head) => {
+    const requestUrl = new URL(req.url ?? "", `http://${req.headers.host ?? "localhost"}`);
+    if (requestUrl.pathname !== "/ws") {
+      return;
+    }
+
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      wss.emit("connection", ws, req);
+    });
+  });
+
+  wss.on("connection", (ws: SocketWithSubscriptions, req) => {
+    const requestUrl = new URL(req.url ?? "", `http://${req.headers.host ?? "localhost"}`);
+    const token = requestUrl.searchParams.get("token");
+
+    if (!token) {
+      ws.close(1008, "Authentication required");
+      return;
+    }
+
+    try {
+      ws.user = jwt.verify(token, JWT_SECRET) as JwtUser;
+    } catch {
+      ws.close(1008, "Invalid token");
+      return;
+    }
+
     ws.subscriptions = [];
 
     ws.on("message", (rawMessage: Buffer) => {
@@ -395,19 +831,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           channels?: string[];
           data?: { channels?: string[] };
         };
-        const channels = Array.isArray(payload.channels)
+        const requestedChannels = Array.isArray(payload.channels)
           ? payload.channels
           : Array.isArray(payload.data?.channels)
             ? payload.data.channels
             : [];
+        const allowedChannels = requestedChannels.filter((channel) =>
+          canSubscribeToChannel(ws.user as JwtUser, String(channel)),
+        );
 
         if (payload.type === "subscribe") {
-          ws.subscriptions = Array.from(new Set([...(ws.subscriptions ?? []), ...channels]));
+          ws.subscriptions = Array.from(new Set([...(ws.subscriptions ?? []), ...allowedChannels]));
         }
 
         if (payload.type === "unsubscribe") {
           ws.subscriptions = (ws.subscriptions ?? []).filter(
-            (channel) => !channels.includes(channel),
+            (channel) => !allowedChannels.includes(channel),
           );
         }
       } catch (error) {
@@ -472,7 +911,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const uploadsDir = path.resolve(import.meta.dirname, "..", "uploads");
   fs.mkdirSync(uploadsDir, { recursive: true });
-  app.use("/uploads", express.static(uploadsDir));
+  app.use(
+    "/uploads",
+    express.static(uploadsDir, {
+      index: false,
+      fallthrough: false,
+      maxAge: "7d",
+      setHeaders: (res) => {
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        res.setHeader("Cross-Origin-Resource-Policy", "same-site");
+      },
+    }),
+  );
+
+  const allowedUploadMimeTypes = new Set([
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "image/svg+xml",
+  ]);
+  const allowedUploadExtensions = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"]);
 
   const upload = multer({
     storage: multer.diskStorage({
@@ -483,24 +942,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cb(null, `${base}-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`);
       },
     }),
+    fileFilter: (_req, file, cb) => {
+      const extension = path.extname(file.originalname).toLowerCase();
+      const mimeTypeAllowed = allowedUploadMimeTypes.has(file.mimetype.toLowerCase());
+      const extensionAllowed = allowedUploadExtensions.has(extension);
+
+      if (!mimeTypeAllowed || !extensionAllowed) {
+        cb(new Error("Only image uploads are allowed"));
+        return;
+      }
+
+      cb(null, true);
+    },
     limits: { fileSize: 10 * 1024 * 1024 },
   });
 
   app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok" });
+    res.json({
+      status: "ok",
+      timestamp: new Date().toISOString(),
+      services: {
+        api: "up",
+        cache: getCacheMode(),
+      },
+    });
   });
 
   // Authentication routes
   const registerHandler = async (req: Request, res: Response) => {
     try {
-      const userData = insertUserSchema.parse(req.body);
-      
-      // Check if user already exists
-      const existingUser =
-        (await storage.getUserByEmail(userData.email)) ||
-        (await storage.getUserByUsername(userData.username));
-      if (existingUser) {
-        return res.status(400).json({ message: 'A user with that email or username already exists' });
+      const userData = publicRegisterSchema.parse(req.body);
+
+      const conflict = await getRegistrationConflict(userData);
+      if (conflict) {
+        return res.status(409).json(conflict);
       }
 
       // Hash password
@@ -510,9 +985,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.createUser({
         ...userData,
         password: hashedPassword,
+        role: "user",
+        mfaEnabled: false,
+        totpSecret: null,
+        mfaConfirmedAt: null,
       });
 
-      // Generate JWT token
       // Log analytics
       await storage.logAnalytics({
         event: 'user_registered',
@@ -526,7 +1004,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.status(201).json({
         message: 'User created successfully',
-        token: signToken(user),
+        token: signToken(user, { mfaVerified: false }),
         user: buildPublicUser(user),
       });
     } catch (error) {
@@ -535,11 +1013,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
+  const registerAdminHandler = async (req: Request, res: Response) => {
+    try {
+      const userData = adminRegisterSchema.parse(req.body);
+
+      const conflict = await getRegistrationConflict(userData);
+      if (conflict) {
+        return res.status(409).json(conflict);
+      }
+
+      const hashedPassword = await bcrypt.hash(userData.password, 10);
+      const role = normalizeRoleId(userData.role);
+
+      const user = await storage.createUser({
+        ...userData,
+        password: hashedPassword,
+        role,
+        mfaEnabled: false,
+        totpSecret: null,
+        mfaConfirmedAt: null,
+      });
+
+      await storage.logAnalytics({
+        event: "admin_user_registered",
+        userId: user.id,
+        metadata: { email: user.email, role: user.role, origin: "admin_panel" },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+
+      broadcast("user_activity", {
+        type: "admin_user_registered",
+        user: buildPublicUser(user),
+      });
+
+      res.status(201).json({
+        message: "Admin user created successfully",
+        token: signToken(user, { mfaVerified: false }),
+        user: buildPublicUser(user),
+      });
+    } catch (error) {
+      console.error("Admin registration error:", error);
+      res.status(400).json({ message: "Registration failed", error: getErrorMessage(error) });
+    }
+  };
+
   const loginHandler = async (req: Request, res: Response) => {
     try {
-      const identifier = req.body.email ?? req.body.username ?? req.body.identifier;
-      const { password } = req.body;
-      
+      const payload = loginSchema.parse(req.body);
+      const identifier = payload.email ?? payload.username ?? payload.identifier;
+      const { password, mfaCode } = payload;
+
       if (!identifier || !password) {
         return res.status(400).json({ message: 'Email or username and password are required' });
       }
@@ -561,12 +1085,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: 'Invalid credentials' });
       }
 
-      // Generate JWT token
+      const totpSecret = getTotpSecretForUser(user.totpSecret);
+      const mfaRequired = Boolean(user.mfaEnabled && totpSecret);
+
+      if (mfaRequired) {
+        if (!mfaCode) {
+          return res.status(202).json({
+            message: 'MFA verification required',
+            mfaRequired: true,
+            challengeToken: signMfaChallengeToken(user),
+          });
+        }
+
+        const isValidMfaCode = await verifyTotpCode(totpSecret as string, mfaCode);
+        if (!isValidMfaCode) {
+          return res.status(401).json({ message: 'Invalid MFA code' });
+        }
+      }
+
       // Log analytics
       await storage.logAnalytics({
         event: 'user_logged_in',
         userId: user.id,
-        metadata: { email: user.email },
+        metadata: { email: user.email, mfaVerified: mfaRequired },
         ipAddress: req.ip,
         userAgent: req.get("user-agent"),
       });
@@ -575,8 +1116,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({
         message: 'Login successful',
-        token: signToken(user),
+        token: signToken(user, { mfaVerified: mfaRequired }),
         user: buildPublicUser(user),
+        mfaVerified: mfaRequired,
       });
     } catch (error) {
       console.error('Login error:', error);
@@ -591,12 +1133,210 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
+  const verifyMfaChallengeHandler = async (req: Request, res: Response) => {
+    try {
+      const payload = mfaVerifySchema.parse(req.body);
+      const decoded = jwt.verify(payload.challengeToken, JWT_SECRET);
+      if (!isMfaChallengePayload(decoded)) {
+        return res.status(401).json({ message: 'Invalid MFA challenge token' });
+      }
+
+      const user = await storage.getUser(decoded.id);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      const totpSecret = getTotpSecretForUser(user.totpSecret);
+      if (!user.mfaEnabled || !totpSecret) {
+        return res.status(400).json({ message: 'MFA is not enabled for this user' });
+      }
+
+      const isValidMfaCode = await verifyTotpCode(totpSecret, payload.code);
+      if (!isValidMfaCode) {
+        return res.status(401).json({ message: 'Invalid MFA code' });
+      }
+
+      await storage.logAnalytics({
+        event: "user_logged_in_mfa_verified",
+        userId: user.id,
+        metadata: { email: user.email },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+
+      res.json({
+        message: "MFA verification successful",
+        token: signToken(user, { mfaVerified: true }),
+        user: buildPublicUser(user),
+        mfaVerified: true,
+      });
+    } catch (error) {
+      console.error("MFA verification error:", error);
+      res.status(401).json({ message: "MFA verification failed" });
+    }
+  };
+
+  const mfaStatusHandler = async (req: Request, res: Response) => {
+    try {
+      const sessionUser = getAuthenticatedUser(req);
+      const user = await storage.getUser(sessionUser.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const totpSecret = getTotpSecretForUser(user.totpSecret);
+      return res.json({
+        mfaEnabled: Boolean(user.mfaEnabled),
+        mfaEnrolled: Boolean(totpSecret),
+        mfaRequiredForRole: roleRequiresMfa(user.role),
+        role: user.role,
+      });
+    } catch (error) {
+      console.error("MFA status error:", error);
+      return res.status(500).json({ message: "Failed to fetch MFA status" });
+    }
+  };
+
+  const mfaSetupHandler = async (req: Request, res: Response) => {
+    try {
+      const sessionUser = getAuthenticatedUser(req);
+      const user = await storage.getUser(sessionUser.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const secret = generateSecret();
+      const encryptedSecret = encryptSecret(secret);
+      await storage.updateUser(user.id, {
+        totpSecret: encryptedSecret,
+        mfaEnabled: false,
+        mfaConfirmedAt: null,
+      });
+
+      const issuer = "Mtendere Education Consult";
+      const otpauthUrl = generateURI({
+        issuer,
+        label: user.email,
+        secret,
+      });
+      const qrCodeDataUrl = await QRCode.toDataURL(otpauthUrl, {
+        errorCorrectionLevel: "M",
+        margin: 2,
+        width: 240,
+      });
+
+      return res.json({
+        message: "MFA setup initialized",
+        secret,
+        otpauthUrl,
+        qrCodeDataUrl,
+        account: user.email,
+        issuer,
+        type: "totp",
+        digits: 6,
+        period: 30,
+      });
+    } catch (error) {
+      console.error("MFA setup error:", error);
+      return res.status(500).json({ message: "Failed to initialize MFA setup" });
+    }
+  };
+
+  const mfaEnableHandler = async (req: Request, res: Response) => {
+    try {
+      const payload = mfaEnableSchema.parse(req.body);
+      const sessionUser = getAuthenticatedUser(req);
+      const user = await storage.getUser(sessionUser.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const totpSecret = getTotpSecretForUser(user.totpSecret);
+      if (!totpSecret) {
+        return res.status(400).json({ message: "MFA is not set up yet" });
+      }
+
+      const isValidCode = await verifyTotpCode(totpSecret, payload.code);
+      if (!isValidCode) {
+        return res.status(401).json({ message: "Invalid MFA code" });
+      }
+
+      await storage.updateUser(user.id, {
+        mfaEnabled: true,
+        mfaConfirmedAt: new Date(),
+      });
+
+      await storage.logAnalytics({
+        event: "user_mfa_enabled",
+        userId: user.id,
+        metadata: { email: user.email, role: user.role },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+
+      return res.json({ message: "MFA enabled successfully", mfaEnabled: true });
+    } catch (error) {
+      console.error("MFA enable error:", error);
+      return res.status(400).json({ message: "Failed to enable MFA", error: getErrorMessage(error) });
+    }
+  };
+
+  const mfaDisableHandler = async (req: Request, res: Response) => {
+    try {
+      const payload = mfaDisableSchema.parse(req.body);
+      const sessionUser = getAuthenticatedUser(req);
+      const user = await storage.getUser(sessionUser.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const totpSecret = getTotpSecretForUser(user.totpSecret);
+      if (!user.mfaEnabled || !totpSecret) {
+        return res.status(400).json({ message: "MFA is not enabled" });
+      }
+
+      const isValidCode = await verifyTotpCode(totpSecret, payload.code);
+      if (!isValidCode) {
+        return res.status(401).json({ message: "Invalid MFA code" });
+      }
+
+      await storage.updateUser(user.id, {
+        mfaEnabled: false,
+        totpSecret: null,
+        mfaConfirmedAt: null,
+      });
+
+      await storage.logAnalytics({
+        event: "user_mfa_disabled",
+        userId: user.id,
+        metadata: { email: user.email, role: user.role },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+
+      return res.json({ message: "MFA disabled successfully", mfaEnabled: false });
+    } catch (error) {
+      console.error("MFA disable error:", error);
+      return res.status(400).json({ message: "Failed to disable MFA", error: getErrorMessage(error) });
+    }
+  };
+
   app.post('/api/auth/register', registerHandler);
   app.post('/api/auth/login', loginHandler);
+  app.post('/api/auth/mfa/verify', verifyMfaChallengeHandler);
+  app.get('/api/auth/mfa/status', authenticateToken, mfaStatusHandler);
+  app.post('/api/auth/mfa/setup', authenticateToken, mfaSetupHandler);
+  app.post('/api/auth/mfa/enable', authenticateToken, mfaEnableHandler);
+  app.post('/api/auth/mfa/disable', authenticateToken, mfaDisableHandler);
 
   // Admin client aliases
-  app.post('/auth/register', registerHandler);
+  app.post('/auth/register', registerAdminHandler);
   app.post('/auth/login', loginHandler);
+  app.post('/auth/mfa/verify', verifyMfaChallengeHandler);
+  app.get('/auth/mfa/status', authenticateToken, mfaStatusHandler);
+  app.post('/auth/mfa/setup', authenticateToken, mfaSetupHandler);
+  app.post('/auth/mfa/enable', authenticateToken, mfaEnableHandler);
+  app.post('/auth/mfa/disable', authenticateToken, mfaDisableHandler);
   app.post('/auth/logout', (_req, res) => {
     res.json({ message: 'Logged out successfully' });
   });
@@ -622,7 +1362,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/user', authenticateToken, sendUserProfile);
   app.get('/api/user/profile', authenticateToken, sendUserProfile);
 
-  app.get('/api/users', authenticateToken, requireAdmin, async (_req, res) => {
+  app.get('/api/users', authenticateToken, requireAdmin, requireUserManagementPermission, async (_req, res) => {
     try {
       const users = await storage.getAllUsers();
       res.json(users.map(buildPublicUser));
@@ -632,7 +1372,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
+  app.post('/api/users', authenticateToken, requireAdmin, requireUserManagementPermission, async (req, res) => {
     try {
       const userData = insertUserSchema.parse(req.body);
       const existingUser =
@@ -655,7 +1395,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+  app.put('/api/users/:id', authenticateToken, requireAdmin, requireUserManagementPermission, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
@@ -675,7 +1415,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+  app.delete('/api/users/:id', authenticateToken, requireAdmin, requireUserManagementPermission, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
@@ -724,7 +1464,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/scholarships', authenticateToken, requireAdmin, async (req, res) => {
+  app.post('/api/scholarships', authenticateToken, requireAdmin, requireScholarshipManagementPermission, async (req, res) => {
     try {
       const scholarshipData = insertScholarshipSchema.parse({
         ...req.body,
@@ -741,7 +1481,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/scholarships/:id', authenticateToken, requireAdmin, async (req, res) => {
+  app.put('/api/scholarships/:id', authenticateToken, requireAdmin, requireScholarshipManagementPermission, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
@@ -758,7 +1498,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/scholarships/:id', authenticateToken, requireAdmin, async (req, res) => {
+  app.delete('/api/scholarships/:id', authenticateToken, requireAdmin, requireScholarshipManagementPermission, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const success = await storage.deleteScholarship(id);
@@ -804,7 +1544,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/jobs', authenticateToken, requireAdmin, async (req, res) => {
+  app.post('/api/jobs', authenticateToken, requireAdmin, requireJobManagementPermission, async (req, res) => {
     try {
       const jobData = insertJobSchema.parse({
         ...req.body,
@@ -821,7 +1561,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/jobs/:id', authenticateToken, requireAdmin, async (req, res) => {
+  app.put('/api/jobs/:id', authenticateToken, requireAdmin, requireJobManagementPermission, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
@@ -838,7 +1578,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/jobs/:id', authenticateToken, requireAdmin, async (req, res) => {
+  app.delete('/api/jobs/:id', authenticateToken, requireAdmin, requireJobManagementPermission, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const success = await storage.deleteJob(id);
@@ -873,13 +1613,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/applications', authenticateToken, async (req, res) => {
     try {
       const authUser = getAuthenticatedUser(req);
+      const payload = applicationCreateSchema.parse(req.body);
       const applicationData = insertApplicationSchema.parse({
-        ...req.body,
+        ...payload,
         userId: authUser.id,
+        status: "pending",
       });
       
       const application = await storage.createApplication(applicationData);
       broadcast('applications', { type: 'application_created', application });
+      broadcast(`applications:user:${authUser.id}`, { type: 'application_created', application });
       
       // Log analytics
       await storage.logAnalytics({
@@ -904,7 +1647,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
-      const updateData = insertApplicationSchema.partial().parse(req.body);
       
       // Check if user owns the application or is admin
       const existingApplication = await storage.getApplication(id);
@@ -913,12 +1655,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const user = getAuthenticatedUser(req);
-      if (existingApplication.userId !== user.id && user.role !== 'admin' && user.role !== 'super_admin') {
+      const isPrivilegedReviewer =
+        normalizeRoleId(user.role) === "super_admin" || hasPermission(user, "review_applications");
+      if (existingApplication.userId !== user.id && !isPrivilegedReviewer) {
         return res.status(403).json({ message: 'Not authorized to update this application' });
       }
+
+      const updateData = isPrivilegedReviewer
+        ? applicationAdminUpdateSchema.parse(req.body)
+        : applicationUserUpdateSchema.parse(req.body);
       
       const application = await storage.updateApplication(id, updateData);
       broadcast('applications', { type: 'application_updated', application });
+      broadcast(`applications:user:${existingApplication.userId}`, {
+        type: 'application_updated',
+        application,
+      });
       
       res.json(application);
     } catch (error) {
@@ -941,7 +1693,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/partners', authenticateToken, requireAdmin, async (req, res) => {
+  app.post('/api/partners', authenticateToken, requireAdmin, requirePartnerManagementPermission, async (req, res) => {
     try {
       const partnerData = insertPartnerSchema.parse(req.body);
       const partner = await storage.createPartner(partnerData);
@@ -1074,7 +1826,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/blog-posts', authenticateToken, requireAdmin, async (req, res) => {
+  app.post('/api/blog-posts', authenticateToken, requireAdmin, requireBlogManagementPermission, async (req, res) => {
     try {
       const blogPostData = insertBlogPostSchema.parse({
         ...req.body,
@@ -1094,7 +1846,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/blog-posts/:id', authenticateToken, requireAdmin, async (req, res) => {
+  app.put('/api/blog-posts/:id', authenticateToken, requireAdmin, requireBlogManagementPermission, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
@@ -1115,7 +1867,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/blog-posts/:id', authenticateToken, requireAdmin, async (req, res) => {
+  app.delete('/api/blog-posts/:id', authenticateToken, requireAdmin, requireBlogManagementPermission, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
@@ -1147,7 +1899,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/team-members', authenticateToken, requireAdmin, async (req, res) => {
+  app.post('/api/team-members', authenticateToken, requireAdmin, requireTeamManagementPermission, async (req, res) => {
     try {
       // Strict validation for creation
       const teamMemberData = insertTeamMemberSchema.parse(req.body);
@@ -1163,7 +1915,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/team-members/:id', authenticateToken, requireAdmin, async (req, res) => {
+  app.put('/api/team-members/:id', authenticateToken, requireAdmin, requireTeamManagementPermission, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
@@ -1185,7 +1937,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/team-members/:id', authenticateToken, requireAdmin, async (req, res) => {
+  app.delete('/api/team-members/:id', authenticateToken, requireAdmin, requireTeamManagementPermission, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
@@ -1203,7 +1955,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Referrals routes
+  // Referrals routes (legacy)
+  // Note: Production referral engine endpoints are implemented below.
   app.get('/api/referrals', authenticateToken, async (req, res) => {
     try {
       const referrals = await storage.getUserReferrals(getAuthenticatedUser(req).id);
@@ -1216,13 +1969,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/referrals', authenticateToken, async (req, res) => {
     try {
+      const payload = referralCreateSchema.parse(req.body);
       const referralData = insertReferralSchema.parse({
-        ...req.body,
+        referredEmail: payload.referredEmail,
         referrerId: getAuthenticatedUser(req).id,
+        status: "pending",
+        rewardAmount: 50,
       });
       
       const referral = await storage.createReferral(referralData);
-      broadcast('referrals', { type: 'referral_created', referral });
+      broadcast(`referrals:user:${referral.referrerId}`, { type: 'referral_created', referral });
       
       res.status(201).json(referral);
     } catch (error) {
@@ -1234,6 +1990,106 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ------------------------------
+  // Production Referral Engine
+  // ------------------------------
+
+  // Public redirect: /r/:code
+  // Captures click + creates attribution placeholder.
+  app.get('/r/:code', async (req, res) => {
+    try {
+      const code = String(req.params.code ?? "").trim();
+      if (!code) return res.status(400).send('Missing referral code');
+
+      // Find active referral code
+      const referralCode = await getReferralCodeByCode(code);
+      if (!referralCode) {
+        res.redirect('/register');
+        return;
+      }
+
+      const programId = referralCode.programId;
+      const codeId = referralCode.id;
+      const referrerId = referralCode.referrerId;
+
+      // Basic fingerprint: combine IP + UA (placeholder; production should use device fingerprint)
+      const fingerprintHash = `${req.ip ?? 'na'}|${req.get('user-agent') ?? 'na'}`;
+
+      const referralClick = await createReferralClick({
+        programId,
+        codeId,
+        referrerId,
+        fingerprintHash,
+        referredEmail: null,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        utmSource: typeof req.query.utm_source === 'string' ? req.query.utm_source : null,
+        utmMedium: typeof req.query.utm_medium === 'string' ? req.query.utm_medium : null,
+        utmCampaign: typeof req.query.utm_campaign === 'string' ? req.query.utm_campaign : null,
+      });
+
+      // Create or update attribution placeholder (level 1)
+      await createOrUpdateAttribution({
+        clickId: referralClick.id,
+        programId,
+        codeId,
+        referrerId,
+        referredUserId: null,
+        referredEmail: null,
+        level: 1,
+        attributionScore: 0,
+        signupAt: null,
+        activationAt: null,
+      });
+
+      // Redirect to register with code for tracking linkage
+      // (In production, you should pass attributionId or store in a signed cookie.)
+      const redirectUrl = `/register?ref=${encodeURIComponent(code)}`;
+      res.redirect(302, redirectUrl);
+    } catch (error) {
+      console.error('Referral redirect error:', error);
+      res.redirect('/register');
+    }
+  });
+
+  // Auth endpoints: /api/referrals/my
+  app.get('/api/referrals/my', authenticateToken, async (req, res) => {
+    try {
+      const userId = getAuthenticatedUser(req).id;
+      const programs = await getActiveReferralPrograms();
+      // Minimal shape for now (frontend can evolve)
+      res.json({ programs, userId });
+    } catch (error) {
+      console.error('Referrals my error:', error);
+      res.status(500).json({ message: 'Failed to fetch referral dashboard' });
+    }
+  });
+
+  // Auth endpoints: /api/referrals/stats
+  app.get('/api/referrals/stats', authenticateToken, async (req, res) => {
+    try {
+      // v2 currently has write helpers only; stats will be implemented after read helpers exist.
+      // Return safe empty state matching existing UI expectations.
+      res.json({
+        balance: 0,
+        pending: 0,
+        recent: [],
+      });
+    } catch (error) {
+      console.error('Referrals stats error:', error);
+      res.status(500).json({ message: 'Failed to fetch referral stats' });
+    }
+  });
+
+  app.get('/api/referrals/leaderboard', authenticateToken, async (req, res) => {
+    try {
+      res.json({ leaders: [], period: 'all_time' });
+    } catch (error) {
+      console.error('Referrals leaderboard error:', error);
+      res.status(500).json({ message: 'Failed to fetch leaderboard' });
+    }
+  });
+
   // Admin routes (shared backend)
   const paginate = <T,>(items: T[], page: number, limit: number) => {
     const total = items.length;
@@ -1241,7 +2097,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return { items: items.slice(start, start + limit), total };
   };
 
-  app.get('/api/admin/dashboard/stats', authenticateToken, requireEditor, async (_req, res) => {
+  app.get('/api/admin/dashboard/stats', authenticateToken, requirePrivilegedMfa, requireDashboardPermission, async (_req, res) => {
     try {
       const [
         users,
@@ -1312,7 +2168,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/dashboard/recent-activity', authenticateToken, requireEditor, async (_req, res) => {
+  app.get('/api/admin/dashboard/recent-activity', authenticateToken, requirePrivilegedMfa, requireDashboardPermission, async (_req, res) => {
     try {
       const recentActivity = (await storage.getAnalytics())
         .slice(0, 20)
@@ -1336,7 +2192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+  app.get('/api/admin/users', authenticateToken, requireAdmin, requireUserManagementPermission, async (req, res) => {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
@@ -1358,7 +2214,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+  app.get('/api/admin/users/:id', authenticateToken, requireAdmin, requireUserManagementPermission, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -1371,7 +2227,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+  app.post('/api/admin/users', authenticateToken, requireAdmin, requireUserManagementPermission, async (req, res) => {
     try {
       const userData = insertUserSchema.parse(req.body);
       const existing =
@@ -1402,7 +2258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+  app.put('/api/admin/users/:id', authenticateToken, requireAdmin, requireUserManagementPermission, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -1430,7 +2286,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+  app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, requireUserManagementPermission, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -1451,7 +2307,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/scholarships', authenticateToken, requireEditor, async (req, res) => {
+  app.get('/api/admin/scholarships', authenticateToken, requireEditor, requireScholarshipManagementPermission, async (req, res) => {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
@@ -1478,7 +2334,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/admin/scholarships', authenticateToken, requireEditor, async (req, res) => {
+  app.post('/api/admin/scholarships', authenticateToken, requireEditor, requireScholarshipManagementPermission, async (req, res) => {
     try {
       const createdBy = getAuthenticatedUser(req).id;
       const amount = parseNumber(req.body.amount);
@@ -1523,7 +2379,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/admin/scholarships/:id', authenticateToken, requireEditor, async (req, res) => {
+  app.put('/api/admin/scholarships/:id', authenticateToken, requireEditor, requireScholarshipManagementPermission, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -1569,7 +2425,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/admin/scholarships/:id', authenticateToken, requireEditor, async (req, res) => {
+  app.delete('/api/admin/scholarships/:id', authenticateToken, requireEditor, requireScholarshipManagementPermission, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -1590,7 +2446,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/jobs', authenticateToken, requireEditor, async (req, res) => {
+  app.get('/api/admin/jobs', authenticateToken, requireEditor, requireJobManagementPermission, async (req, res) => {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
@@ -1616,7 +2472,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/admin/jobs', authenticateToken, requireEditor, async (req, res) => {
+  app.post('/api/admin/jobs', authenticateToken, requireEditor, requireJobManagementPermission, async (req, res) => {
     try {
       const createdBy = getAuthenticatedUser(req).id;
       const jobData = insertJobSchema.parse({
@@ -1664,7 +2520,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/admin/jobs/:id', authenticateToken, requireEditor, async (req, res) => {
+  app.put('/api/admin/jobs/:id', authenticateToken, requireEditor, requireJobManagementPermission, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -1710,7 +2566,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/admin/jobs/:id', authenticateToken, requireEditor, async (req, res) => {
+  app.delete('/api/admin/jobs/:id', authenticateToken, requireEditor, requireJobManagementPermission, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -1731,7 +2587,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/partners', authenticateToken, requireEditor, async (req, res) => {
+  app.get('/api/admin/partners', authenticateToken, requireEditor, requirePartnerManagementPermission, async (req, res) => {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
@@ -1752,7 +2608,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/admin/partners', authenticateToken, requireEditor, async (req, res) => {
+  app.post('/api/admin/partners', authenticateToken, requireEditor, requirePartnerManagementPermission, async (req, res) => {
     try {
       const partnerData = insertPartnerSchema.parse({
         name: req.body.name ?? "",
@@ -1792,7 +2648,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/admin/partners/:id', authenticateToken, requireEditor, async (req, res) => {
+  app.put('/api/admin/partners/:id', authenticateToken, requireEditor, requirePartnerManagementPermission, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -1837,7 +2693,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/admin/partners/:id', authenticateToken, requireEditor, async (req, res) => {
+  app.delete('/api/admin/partners/:id', authenticateToken, requireEditor, requirePartnerManagementPermission, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -1858,7 +2714,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/blog', authenticateToken, requireEditor, async (req, res) => {
+  app.get('/api/admin/blog', authenticateToken, requireEditor, requireBlogManagementPermission, async (req, res) => {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
@@ -1884,7 +2740,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/admin/blog', authenticateToken, requireEditor, async (req, res) => {
+  app.post('/api/admin/blog', authenticateToken, requireEditor, requireBlogManagementPermission, async (req, res) => {
     try {
       const authorId = getAuthenticatedUser(req).id;
       const postData = insertBlogPostSchema.parse({
@@ -1920,7 +2776,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/admin/blog/:id', authenticateToken, requireEditor, async (req, res) => {
+  app.put('/api/admin/blog/:id', authenticateToken, requireEditor, requireBlogManagementPermission, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -1959,7 +2815,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/admin/blog/:id', authenticateToken, requireEditor, async (req, res) => {
+  app.delete('/api/admin/blog/:id', authenticateToken, requireEditor, requireBlogManagementPermission, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -1980,7 +2836,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/team', authenticateToken, requireEditor, async (req, res) => {
+  app.get('/api/admin/team', authenticateToken, requireEditor, requireTeamManagementPermission, async (req, res) => {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
@@ -1998,7 +2854,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/admin/team', authenticateToken, requireEditor, async (req, res) => {
+  app.post('/api/admin/team', authenticateToken, requireEditor, requireTeamManagementPermission, async (req, res) => {
     try {
       const memberData = insertTeamMemberSchema.parse({
         name: req.body.name ?? "",
@@ -2031,7 +2887,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/admin/team/:id', authenticateToken, requireEditor, async (req, res) => {
+  app.put('/api/admin/team/:id', authenticateToken, requireEditor, requireTeamManagementPermission, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -2071,7 +2927,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/admin/team/:id', authenticateToken, requireEditor, async (req, res) => {
+  app.delete('/api/admin/team/:id', authenticateToken, requireEditor, requireTeamManagementPermission, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -2092,7 +2948,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/applications', authenticateToken, requireAdmin, async (req, res) => {
+  app.get('/api/admin/applications', authenticateToken, requireAdmin, requireApplicationReviewPermission, async (req, res) => {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
@@ -2139,7 +2995,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/admin/applications/:id', authenticateToken, requireAdmin, async (req, res) => {
+  app.put('/api/admin/applications/:id', authenticateToken, requireAdmin, requireApplicationReviewPermission, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -2164,19 +3020,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/ai-chat/conversations', authenticateToken, requireAdmin, (_req, res) => {
+  app.get('/api/admin/ai-chat/conversations', authenticateToken, requireAdmin, requireAiManagementPermission, (_req, res) => {
     res.json({ conversations: [], total: 0 });
   });
 
-  app.get('/api/admin/ai-chat/conversations/:id', authenticateToken, requireAdmin, (_req, res) => {
+  app.get('/api/admin/ai-chat/conversations/:id', authenticateToken, requireAdmin, requireAiManagementPermission, (_req, res) => {
     res.status(404).json({ message: "Conversation not found" });
   });
 
-  app.get('/api/admin/ai/conversations', authenticateToken, requireAdmin, (req, res) => {
+  app.get('/api/admin/ai/conversations', authenticateToken, requireAdmin, requireAiManagementPermission, (req, res) => {
     res.redirect(307, "/api/admin/ai-chat/conversations");
   });
 
-  app.post('/api/admin/ai/chat', authenticateToken, requireAdmin, async (req, res) => {
+  app.post('/api/admin/ai/chat', authenticateToken, requireAdmin, requireAiManagementPermission, async (req, res) => {
     try {
       const { message } = req.body;
       if (!message) return res.status(400).json({ message: "Message is required" });
@@ -2188,7 +3044,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/roles', authenticateToken, requireAdmin, (req, res) => {
+  app.get('/api/admin/roles', authenticateToken, requireAdmin, requireRoleManagementPermission, (req, res) => {
     const search = String(req.query.search ?? "").toLowerCase();
     const roles = getAdminRoles().filter((role) => {
       if (!search) return true;
@@ -2200,7 +3056,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ roles, total: roles.length });
   });
 
-  app.post('/api/admin/roles', authenticateToken, requireAdmin, async (req, res) => {
+  app.post('/api/admin/roles', authenticateToken, requireAdmin, requireRoleManagementPermission, async (req, res) => {
     const role = upsertAdminRole({
       id: req.body.name?.toLowerCase().replace(/\s+/g, "-") || String(Date.now()),
       name: req.body.name ?? "Role",
@@ -2218,7 +3074,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(role);
   });
 
-  app.put('/api/admin/roles/:id', authenticateToken, requireAdmin, async (req, res) => {
+  app.put('/api/admin/roles/:id', authenticateToken, requireAdmin, requireRoleManagementPermission, async (req, res) => {
     const role = upsertAdminRole({
       id: req.params.id,
       name: req.body.name ?? req.params.id,
@@ -2236,7 +3092,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(role);
   });
 
-  app.delete('/api/admin/roles/:id', authenticateToken, requireAdmin, async (req, res) => {
+  app.delete('/api/admin/roles/:id', authenticateToken, requireAdmin, requireRoleManagementPermission, async (req, res) => {
     deleteAdminRole(req.params.id);
     await emitAdminRealtimeEvent(req, {
       event: "role_deleted",
@@ -2248,11 +3104,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(204).send();
   });
 
-  app.get('/api/admin/settings', authenticateToken, requireAdmin, (_req, res) => {
+  app.get('/api/admin/settings', authenticateToken, requireAdmin, requireSettingsManagementPermission, (_req, res) => {
     res.json(getAdminSettings());
   });
 
-  app.put('/api/admin/settings', authenticateToken, requireAdmin, async (req, res) => {
+  app.put('/api/admin/settings', authenticateToken, requireAdmin, requireSettingsManagementPermission, async (req, res) => {
     const settings = updateAdminSettings({
       platformName: req.body.platformName,
       supportEmail: req.body.supportEmail,
@@ -2268,7 +3124,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(settings);
   });
 
-  app.get('/api/admin/notifications', authenticateToken, requireEditor, async (req, res) => {
+  app.get('/api/admin/notifications', authenticateToken, requirePrivilegedMfa, requireDashboardPermission, async (req, res) => {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 20);
@@ -2288,18 +3144,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/admin/notifications/:id/read', authenticateToken, requireEditor, (req, res) => {
+  app.put('/api/admin/notifications/:id/read', authenticateToken, requirePrivilegedMfa, requireDashboardPermission, (req, res) => {
     markNotificationRead(req.params.id);
     res.status(204).send();
   });
 
-  app.put('/api/admin/notifications/read-all', authenticateToken, requireEditor, async (_req, res) => {
+  app.put('/api/admin/notifications/read-all', authenticateToken, requirePrivilegedMfa, requireDashboardPermission, async (_req, res) => {
     const ids = (await storage.getAnalytics()).map((item) => `analytics-${item.id}`);
     markNotificationsRead(ids);
     res.status(204).send();
   });
 
-  app.get('/api/admin/audit-logs', authenticateToken, requireAdmin, async (req, res) => {
+  app.get('/api/admin/audit-logs', authenticateToken, requireAdmin, requireSettingsManagementPermission, async (req, res) => {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
@@ -2331,7 +3187,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/admin/upload', authenticateToken, requireEditor, upload.single("file"), (req, res) => {
+  app.post('/api/admin/upload', authenticateToken, requireEditor, requireContentUploadPermission, upload.single("file"), (req, res) => {
     const file = (req as MulterRequest).file;
     if (!file) return res.status(400).json({ message: "No file uploaded" });
     res.json({
@@ -2342,7 +3198,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.post('/api/admin/upload/multiple', authenticateToken, requireEditor, upload.array("files", 10), (req, res) => {
+  app.post('/api/admin/upload/multiple', authenticateToken, requireEditor, requireContentUploadPermission, upload.array("files", 10), (req, res) => {
     const filesPayload = (req as MulterRequest).files;
     const files = Array.isArray(filesPayload) ? filesPayload : [];
     res.json({
@@ -2356,7 +3212,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Analytics routes
-  app.get('/api/analytics/summary', authenticateToken, requireAdmin, async (req, res) => {
+  app.get('/api/analytics/summary', authenticateToken, requireAdmin, requireAnalyticsPermission, async (req, res) => {
     try {
       const summary = await storage.getAnalyticsSummary();
       res.json(summary);
@@ -2366,7 +3222,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/analytics', authenticateToken, requireAdmin, async (req, res) => {
+  app.get('/api/analytics', authenticateToken, requireAdmin, requireAnalyticsPermission, async (req, res) => {
     try {
       const { startDate, endDate } = req.query;
       const analytics = await storage.getAnalytics(
@@ -2411,7 +3267,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
-      const success = await storage.deleteSavedItem(id);
+      const userId = getAuthenticatedUser(req).id;
+      const success = await storage.deleteUserSavedItem(id, userId);
       if (success) {
         res.json({ message: 'Saved item removed' });
       } else {
@@ -2450,7 +3307,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/messages', authenticateToken, requireAdmin, async (_req, res) => {
+  app.get('/api/messages', authenticateToken, requireAdmin, requireUserManagementPermission, async (_req, res) => {
     try {
       const messages = await storage.getAllMessages();
       res.json(messages);
@@ -2460,7 +3317,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/messages/:id/read', authenticateToken, requireAdmin, async (req, res) => {
+  app.put('/api/messages/:id/read', authenticateToken, requireAdmin, requireUserManagementPermission, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });

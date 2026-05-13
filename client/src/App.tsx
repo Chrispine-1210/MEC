@@ -11,7 +11,6 @@ import Home from "@/pages/home";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
 import Dashboard from "@/pages/dashboard";
-import Admin from "@/pages/admin";
 import Scholarships from "@/pages/scholarships";
 import ScholarshipDetail from "@/pages/scholarship-detail";
 import Jobs from "@/pages/jobs";
@@ -39,8 +38,8 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/dashboard" component={Dashboard} />
-      <Route path="/admin" component={Admin} />
       <Route path="/scholarships/:id" component={ScholarshipDetail} />
+
       <Route path="/scholarships" component={Scholarships} />
       <Route path="/jobs/:id" component={JobDetail} />
       <Route path="/jobs" component={Jobs} />
@@ -54,6 +53,7 @@ function Router() {
       <Route path="/university-applications" component={UniversityApplications} />
       <Route path="/career-counseling" component={CareerCounseling} />
       <Route path="/resume-building" component={ResumeBuilding} />
+      <Route path="/referrals" component={Referrals} />
       <Route component={NotFound} />
     </Switch>
   );

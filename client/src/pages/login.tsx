@@ -9,7 +9,7 @@ import logoImg from "@assets/mtendere-logo.svg";
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -19,7 +19,7 @@ export default function Login() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const success = await login(email, password);
+      const success = await login(identifier, password);
       if (success) {
         setLocation("/dashboard");
       }
@@ -88,13 +88,14 @@ export default function Login() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <Label htmlFor="email" className="text-sm font-semibold text-foreground/80">Email address</Label>
+              <Label htmlFor="identifier" className="text-sm font-semibold text-foreground/80">Email or username</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="identifier"
+                type="text"
+                autoComplete="username"
+                placeholder="you@example.com or username"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 required
                 disabled={isLoading}
                 className="mt-1.5 h-12 border-border/60 focus-visible:ring-mtendere-blue"
