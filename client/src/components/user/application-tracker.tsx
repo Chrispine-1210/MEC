@@ -22,7 +22,7 @@ interface Application {
   referenceId: number;
   status: string;
   documents?: any;
-  notes?: string;
+  notes?: string | null;
   submittedAt: string;
   updatedAt: string;
 }
@@ -36,17 +36,17 @@ export default function ApplicationTracker({ applications }: ApplicationTrackerP
     switch (status.toLowerCase()) {
       case 'approved':
       case 'accepted':
-        return <CheckCircle className="w-5 h-5 text-green-600" />;
+        return <CheckCircle className="w-5 h-5 text-mtendere-green" />;
       case 'rejected':
       case 'declined':
-        return <XCircle className="w-5 h-5 text-red-600" />;
+        return <XCircle className="w-5 h-5 text-destructive" />;
       case 'pending':
       case 'under review':
-        return <Clock className="w-5 h-5 text-yellow-600" />;
+        return <Clock className="w-5 h-5 text-mtendere-orange" />;
       case 'documents required':
-        return <AlertCircle className="w-5 h-5 text-orange-600" />;
+        return <AlertCircle className="w-5 h-5 text-mtendere-orange" />;
       default:
-        return <FileText className="w-5 h-5 text-gray-600" />;
+        return <FileText className="w-5 h-5 text-muted-foreground" />;
     }
   };
 
@@ -54,17 +54,17 @@ export default function ApplicationTracker({ applications }: ApplicationTrackerP
     switch (status.toLowerCase()) {
       case 'approved':
       case 'accepted':
-        return 'bg-green-100 text-green-800 border-green-200';
+        return 'bg-mtendere-green/15 text-mtendere-green border-mtendere-green/20';
       case 'rejected':
       case 'declined':
-        return 'bg-red-100 text-red-800 border-red-200';
+        return 'bg-destructive/15 text-destructive border-destructive/20';
       case 'pending':
       case 'under review':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+        return 'bg-mtendere-orange/15 text-mtendere-orange border-mtendere-orange/30';
       case 'documents required':
-        return 'bg-orange-100 text-orange-800 border-orange-200';
+        return 'bg-mtendere-orange/15 text-mtendere-orange border-mtendere-orange/20';
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        return 'bg-muted text-foreground border-border/60';
     }
   };
 
@@ -109,24 +109,30 @@ export default function ApplicationTracker({ applications }: ApplicationTrackerP
     return `${application.type === 'scholarship' ? 'Scholarship' : 'Job'} Application #${application.referenceId}`;
   };
 
+  const getReferencePath = (application: Application) => {
+    return application.type === "scholarship"
+      ? `/scholarships/${application.referenceId}`
+      : `/jobs/${application.referenceId}`;
+  };
+
   if (!applications || applications.length === 0) {
     return (
       <div className="text-center py-12">
-        <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-        <h3 className="text-lg font-semibold text-gray-600 mb-2">
+        <FileText className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-muted-foreground mb-2">
           No Applications Yet
         </h3>
-        <p className="text-gray-500 mb-6">
+        <p className="text-muted-foreground mb-6">
           Start your journey by applying for scholarships or jobs
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Button asChild className="bg-mtendere-blue hover:bg-blue-700">
+          <Button asChild className="bg-mtendere-blue hover:bg-mtendere-blue/90">
             <Link href="/scholarships">
               <GraduationCap className="w-4 h-4 mr-2" />
               Browse Scholarships
             </Link>
           </Button>
-          <Button asChild className="bg-mtendere-green hover:bg-green-700">
+          <Button asChild className="bg-mtendere-green hover:bg-mtendere-green/90">
             <Link href="/jobs">
               <Briefcase className="w-4 h-4 mr-2" />
               Find Jobs
@@ -145,49 +151,49 @@ export default function ApplicationTracker({ applications }: ApplicationTrackerP
     <div className="space-y-6">
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-blue-50 rounded-lg p-4">
+        <div className="bg-mtendere-blue/10 rounded-lg p-4 border border-mtendere-blue/20">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-blue-600 font-medium">Total Applications</p>
-              <p className="text-2xl font-bold text-blue-700">{applications.length}</p>
+              <p className="text-sm text-mtendere-blue font-medium">Total Applications</p>
+              <p className="text-2xl font-bold text-mtendere-blue">{applications.length}</p>
             </div>
-            <FileText className="w-8 h-8 text-blue-600" />
+            <FileText className="w-8 h-8 text-mtendere-blue" />
           </div>
         </div>
 
-        <div className="bg-green-50 rounded-lg p-4">
+        <div className="bg-mtendere-green/10 rounded-lg p-4 border border-mtendere-green/20">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-green-600 font-medium">Approved</p>
-              <p className="text-2xl font-bold text-green-700">
-                {applications.filter(app => app.status.toLowerCase() === 'approved').length}
+              <p className="text-sm text-mtendere-green font-medium">Approved</p>
+              <p className="text-2xl font-bold text-mtendere-green">
+                {applications.filter(app => ["approved", "accepted"].includes(app.status.toLowerCase())).length}
               </p>
             </div>
-            <CheckCircle className="w-8 h-8 text-green-600" />
+            <CheckCircle className="w-8 h-8 text-mtendere-green" />
           </div>
         </div>
 
-        <div className="bg-yellow-50 rounded-lg p-4">
+        <div className="bg-mtendere-orange/10 rounded-lg p-4 border border-mtendere-orange/30">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-yellow-600 font-medium">Pending</p>
-              <p className="text-2xl font-bold text-yellow-700">
-                {applications.filter(app => app.status.toLowerCase() === 'pending').length}
+              <p className="text-sm text-mtendere-orange font-medium">Pending</p>
+              <p className="text-2xl font-bold text-mtendere-orange">
+                {applications.filter(app => ["pending", "under review"].includes(app.status.toLowerCase())).length}
               </p>
             </div>
-            <Clock className="w-8 h-8 text-yellow-600" />
+            <Clock className="w-8 h-8 text-mtendere-orange" />
           </div>
         </div>
 
-        <div className="bg-orange-50 rounded-lg p-4">
+        <div className="bg-mtendere-orange/10 rounded-lg p-4 border border-mtendere-orange/30">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-orange-600 font-medium">Action Required</p>
-              <p className="text-2xl font-bold text-orange-700">
-                {applications.filter(app => app.status.toLowerCase().includes('documents')).length}
+              <p className="text-sm text-mtendere-orange font-medium">Action Required</p>
+              <p className="text-2xl font-bold text-mtendere-orange">
+                {applications.filter(app => app.status.toLowerCase().includes('document')).length}
               </p>
             </div>
-            <AlertCircle className="w-8 h-8 text-orange-600" />
+            <AlertCircle className="w-8 h-8 text-mtendere-orange" />
           </div>
         </div>
       </div>
@@ -195,14 +201,14 @@ export default function ApplicationTracker({ applications }: ApplicationTrackerP
       {/* Applications List */}
       <div className="space-y-4">
         {sortedApplications.map((application) => (
-          <Card key={application.id} className="hover:shadow-lg transition-shadow duration-300">
+          <Card key={application.id} className="hover:shadow-lg transition-shadow duration-300 border-border/60">
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
                 <div className="flex items-start space-x-3">
                   <div className={`p-2 rounded-lg ${
                     application.type === 'scholarship' 
-                      ? 'bg-blue-100 text-blue-600' 
-                      : 'bg-green-100 text-green-600'
+                      ? 'bg-mtendere-blue/15 text-mtendere-blue' 
+                      : 'bg-mtendere-green/15 text-mtendere-green'
                   }`}>
                     {getTypeIcon(application.type)}
                   </div>
@@ -235,7 +241,7 @@ export default function ApplicationTracker({ applications }: ApplicationTrackerP
             <CardContent>
               {/* Progress Bar */}
               <div className="mb-4">
-                <div className="flex justify-between text-sm text-gray-600 mb-2">
+                <div className="flex justify-between text-sm text-muted-foreground mb-2">
                   <span>Application Progress</span>
                   <span>{getProgressValue(application.status)}%</span>
                 </div>
@@ -247,8 +253,8 @@ export default function ApplicationTracker({ applications }: ApplicationTrackerP
 
               {/* Notes */}
               {application.notes && (
-                <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-700">
+                <div className="mb-4 p-3 bg-muted/40 rounded-lg">
+                  <p className="text-sm text-foreground/80">
                     <strong>Notes:</strong> {application.notes}
                   </p>
                 </div>
@@ -257,7 +263,7 @@ export default function ApplicationTracker({ applications }: ApplicationTrackerP
               {/* Documents */}
               {application.documents && (
                 <div className="mb-4">
-                  <p className="text-sm font-medium text-gray-700 mb-2">Documents Submitted:</p>
+                  <p className="text-sm font-medium text-foreground/80 mb-2">Documents Submitted:</p>
                   <div className="flex flex-wrap gap-2">
                     {Object.keys(application.documents).map((doc) => (
                       <Badge key={doc} variant="outline" className="text-xs">
@@ -269,24 +275,35 @@ export default function ApplicationTracker({ applications }: ApplicationTrackerP
               )}
 
               {/* Actions */}
-              <div className="flex items-center justify-between pt-4 border-t">
-                <div className="flex space-x-2">
-                  <Button size="sm" variant="outline">
-                    <Eye className="w-4 h-4 mr-2" />
-                    View Details
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pt-4 border-t">
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={getReferencePath(application)}>
+                      <Eye className="w-4 h-4 mr-2" />
+                      View Details
+                    </Link>
                   </Button>
-                  
-                  {application.status.toLowerCase().includes('documents') && (
-                    <Button size="sm" className="bg-mtendere-orange hover:bg-orange-600">
-                      <FileText className="w-4 h-4 mr-2" />
-                      Upload Documents
+
+                  {application.status.toLowerCase().includes('document') && (
+                    <Button asChild size="sm" className="bg-mtendere-orange hover:bg-mtendere-orange/90">
+                      <Link href={getReferencePath(application)}>
+                        <FileText className="w-4 h-4 mr-2" />
+                        Continue Application
+                      </Link>
                     </Button>
                   )}
+
+                  <Button asChild size="sm" variant="ghost" className="text-mtendere-blue hover:text-mtendere-blue">
+                    <Link href={getReferencePath(application)}>
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      Open Opportunity
+                    </Link>
+                  </Button>
                 </div>
 
-                <Button size="sm" variant="ghost">
-                  <ExternalLink className="w-4 h-4" />
-                </Button>
+                <Badge variant="outline" className="text-xs text-muted-foreground">
+                  Ref #{application.referenceId}
+                </Badge>
               </div>
             </CardContent>
           </Card>
@@ -305,7 +322,7 @@ export default function ApplicationTracker({ applications }: ApplicationTrackerP
               <Link href="/scholarships">
                 <GraduationCap className="w-6 h-6 text-mtendere-blue" />
                 <span className="font-medium">Apply for New Scholarship</span>
-                <span className="text-xs text-gray-500">Browse available opportunities</span>
+                <span className="text-xs text-muted-foreground">Browse available opportunities</span>
               </Link>
             </Button>
             
@@ -313,14 +330,14 @@ export default function ApplicationTracker({ applications }: ApplicationTrackerP
               <Link href="/jobs">
                 <Briefcase className="w-6 h-6 text-mtendere-green" />
                 <span className="font-medium">Find Job Opportunities</span>
-                <span className="text-xs text-gray-500">Explore our job portal</span>
+                <span className="text-xs text-muted-foreground">Explore our job portal</span>
               </Link>
             </Button>
             
             <Button variant="outline" className="h-auto p-4 flex flex-col items-center space-y-2">
               <FileText className="w-6 h-6 text-mtendere-orange" />
               <span className="font-medium">Update Documents</span>
-              <span className="text-xs text-gray-500">Upload required files</span>
+              <span className="text-xs text-muted-foreground">Upload required files</span>
             </Button>
           </div>
         </CardContent>
@@ -328,3 +345,8 @@ export default function ApplicationTracker({ applications }: ApplicationTrackerP
     </div>
   );
 }
+
+
+
+
+

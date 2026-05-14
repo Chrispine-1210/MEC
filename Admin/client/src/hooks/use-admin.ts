@@ -13,6 +13,7 @@ import {
   auditLogsApi
 } from "@/lib/admin-api";
 import { useToast } from "@/hooks/use-toast";
+import { authFetch } from "@/lib/queryClient";
 
 // Dashboard hooks
 export function useDashboardStats() {
@@ -29,7 +30,7 @@ export function useRecentActivity() {
   return useQuery({
     queryKey: ["/api/admin/dashboard/recent-activity"],
     queryFn: async () => {
-      const response = await fetch("/api/admin/dashboard/recent-activity");
+      const response = await authFetch("/api/admin/dashboard/recent-activity");
       if (!response.ok) throw new Error("Failed to fetch recent activity");
       return response.json();
     },

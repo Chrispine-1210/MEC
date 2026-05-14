@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { SEO } from "@/components/SEO";
+import { authFetch, queryClient, apiRequest } from "@/lib/queryClient";
 import DataTable from "@/components/admin/DataTable";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
@@ -11,8 +12,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertPartnerInstitutionSchema, type PartnerInstitution, type InsertPartnerInstitution } from "@shared/schema";
-import { Plus, Building2, Pencil, Trash2 } from "lucide-react";
+import { Plus, Building2, Pencil, Trash2, Upload } from "lucide-react";
 import { z } from "zod";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Editor } from "@tinymce/tinymce-react";
+import { useCreateAction } from "@/hooks/use-create-action";
 
 const formSchema = insertPartnerInstitutionSchema;
 
@@ -22,10 +26,37 @@ export default function PartnersPage() {
   const [search, setSearch] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPartner, setEditingPartner] = useState<PartnerInstitution | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
+
+  useCreateAction(() => { setEditingPartner(null); setIsDialogOpen(true); });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await authFetch("/api/admin/upload", { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      form.setValue("logo", data.url);
+      toast({ title: "Success", description: "Logo uploaded successfully" });
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to upload logo", variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["/api/admin/partners", page, limit, search],
+    queryFn: async () => {
+      const response = await authFetch(`/api/admin/partners?page=${page}&limit=${limit}&search=${search}`);
+      if (!response.ok) throw new Error("Failed to fetch partners");
+      return response.json();
+    },
   });
 
   const createMutation = useMutation({
@@ -36,9 +67,6 @@ export default function PartnersPage() {
       setIsDialogOpen(false);
       form.reset();
       toast({ title: "Success", description: "Partner created successfully" });
-    },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to create partner", variant: "destructive" });
     },
   });
 
@@ -52,9 +80,6 @@ export default function PartnersPage() {
       form.reset();
       toast({ title: "Success", description: "Partner updated successfully" });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to update partner", variant: "destructive" });
-    },
   });
 
   const deleteMutation = useMutation({
@@ -62,9 +87,6 @@ export default function PartnersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/partners"] });
       toast({ title: "Success", description: "Partner deleted successfully" });
-    },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to delete partner", variant: "destructive" });
     },
   });
 
@@ -80,6 +102,9 @@ export default function PartnersPage() {
       contactPhone: "",
       address: "",
       isActive: true,
+      region: "Global",
+      isPremium: false,
+      paymentStatus: "unpaid",
     },
   });
 
@@ -95,6 +120,9 @@ export default function PartnersPage() {
       contactPhone: partner.contactPhone || "",
       address: partner.address || "",
       isActive: partner.isActive,
+      region: partner.region || "Global",
+      isPremium: partner.isPremium || false,
+      paymentStatus: partner.paymentStatus || "unpaid",
     });
     setIsDialogOpen(true);
   };
@@ -114,14 +142,42 @@ export default function PartnersPage() {
   };
 
   const columns = [
-    { key: "name", header: "Name", sortable: true },
-    { key: "partnershipType", header: "Type", sortable: true },
-    { key: "address", header: "Location" },
+    {
+      key: "name",
+      header: "Partner",
+      sortable: true,
+      render: (value: string, row: any) => (
+        <div className="flex items-center gap-3">
+          {row.logo ? (
+            <img src={row.logo} alt="" className="w-10 h-10 object-contain rounded-lg flex-shrink-0 border bg-card p-0.5" />
+          ) : (
+            <div className="w-10 h-10 bg-gradient-to-br from-accent/20 to-accent/5 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Building2 className="h-5 w-5 text-accent" />
+            </div>
+          )}
+          <div>
+            <p className="text-sm font-medium text-foreground leading-tight">{value}</p>
+            {row.website && <a href={row.website} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline truncate block max-w-36">{row.website}</a>}
+          </div>
+        </div>
+      )
+    },
+    { key: "partnershipType", header: "Type", render: (v: string) => <span className="text-xs capitalize bg-accent/15 text-accent px-2 py-0.5 rounded">{v}</span> },
+    { key: "region", header: "Region", render: (v: string) => <span className="text-xs text-muted-foreground">{v || "-"}</span> },
+    {
+      key: "isPremium",
+      header: "Listing",
+      render: (value: boolean) => (
+        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${value ? "bg-info/15 text-info" : "bg-muted text-muted-foreground"}`}>
+          {value ? "Premium" : "Standard"}
+        </span>
+      ),
+    },
     {
       key: "isActive",
       header: "Status",
       render: (value: boolean) => (
-        <span className={`px-2 py-1 rounded text-xs ${value ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}>
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${value ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}>
           {value ? "Active" : "Inactive"}
         </span>
       ),
@@ -135,7 +191,7 @@ export default function PartnersPage() {
             <Pencil className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="sm" onClick={() => handleDelete(row.id)} data-testid={`button-delete-${row.id}`}>
-            <Trash2 className="h-4 w-4 text-red-500" />
+            <Trash2 className="h-4 w-4 text-destructive" />
           </Button>
         </div>
       ),
@@ -144,13 +200,17 @@ export default function PartnersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <SEO 
+        title="Partners Management" 
+        description="Manage educational and corporate partners of Mtendere Platform."
+      />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2" data-testid="page-title">
-            <Building2 className="h-8 w-8" />
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-2" data-testid="page-title">
+            <Building2 className="h-8 w-8 text-primary" />
             Partners Management
           </h1>
-          <p className="text-gray-600">Manage partner institutions</p>
+          <p className="text-muted-foreground">Manage partner institutions</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open);
@@ -160,18 +220,47 @@ export default function PartnersPage() {
           }
         }}>
           <DialogTrigger asChild>
-            <Button data-testid="button-add">
+            <Button data-testid="button-add" className="shadow-lg hover:shadow-primary/20 transition-all duration-300">
               <Plus className="h-4 w-4 mr-2" />
               Add Partner
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto animate-scaleIn">
             <DialogHeader>
               <DialogTitle>{editingPartner ? "Edit Partner" : "Add Partner"}</DialogTitle>
-              <DialogDescription>Fill in the details below to {editingPartner ? "update" : "create"} a partner</DialogDescription>
+              <DialogDescription>Manage partner organization details and visibility</DialogDescription>
             </DialogHeader>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 form-section">
+                <FormField
+                  control={form.control}
+                  name="logo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Partner Logo</FormLabel>
+                      <div className="flex flex-col gap-4">
+                        {field.value && (
+                          <div className="relative w-32 h-32 rounded-lg overflow-hidden border bg-card p-2 flex items-center justify-center">
+                            <img src={field.value} alt="Preview" className="max-w-full max-h-full object-contain" />
+                            <Button type="button" variant="destructive" size="sm" className="absolute top-1 right-1" onClick={() => field.onChange("")}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-4">
+                          <Input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" id="partner-logo-upload" disabled={isUploading} />
+                          <Button type="button" variant="outline" className="w-full h-24 border-dashed" onClick={() => (document.getElementById("partner-logo-upload") as HTMLInputElement)?.click()} disabled={isUploading}>
+                            <div className="flex flex-col items-center gap-2">
+                              <Upload className="h-6 w-6 text-muted-foreground/70" />
+                              <span className="text-sm text-muted-foreground">{isUploading ? "Uploading..." : "Click to upload logo"}</span>
+                            </div>
+                          </Button>
+                        </div>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name="name"
@@ -192,13 +281,24 @@ export default function PartnersPage() {
                     <FormItem>
                       <FormLabel>Description</FormLabel>
                       <FormControl>
-                        <Textarea {...field} rows={3} data-testid="input-description" />
+                        <Editor
+                          apiKey={import.meta.env.VITE_TINYMCE_API_KEY}
+                          init={{
+                            height: 350,
+                            menubar: true,
+                            plugins: ['advlist', 'autolink', 'lists', 'link', 'image', 'preview', 'wordcount'],
+                            toolbar: 'undo redo | bold italic | alignleft aligncenter alignright | bullist numlist | removeformat',
+                            content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px }'
+                          }}
+                          value={field.value}
+                          onEditorChange={(content: string) => field.onChange(content)}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="partnershipType"
@@ -226,7 +326,7 @@ export default function PartnersPage() {
                     )}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="website"
@@ -254,7 +354,69 @@ export default function PartnersPage() {
                     )}
                   />
                 </div>
-                <div className="flex justify-end gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="region"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Region</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            value={field.value || ""} 
+                            placeholder="Regional Scaling" 
+                            data-testid="input-region" 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="isPremium"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                        <FormControl>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-border/70 text-primary focus:ring-primary"
+                            checked={field.value || false}
+                            onChange={field.onChange}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>Paid Placement</FormLabel>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                {form.watch("isPremium") && (
+                  <FormField
+                    control={form.control}
+                    name="paymentStatus"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Payment Status</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value || "unpaid"}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-payment-status">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="unpaid">Unpaid</SelectItem>
+                              <SelectItem value="paid">Paid</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+                <div className="flex justify-end gap-2 pt-4">
                   <Button type="button" variant="outline" onClick={() => {
                     setIsDialogOpen(false);
                     setEditingPartner(null);
@@ -262,7 +424,7 @@ export default function PartnersPage() {
                   }}>
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} data-testid="button-submit">
+                  <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending || isUploading} data-testid="button-submit" className="shadow-md">
                     {createMutation.isPending || updateMutation.isPending ? "Saving..." : "Save"}
                   </Button>
                 </div>
@@ -274,12 +436,13 @@ export default function PartnersPage() {
 
       <DataTable
         columns={columns}
-        data={data?.partners || []}
+        data={(data as any)?.partners || []}
         loading={isLoading}
+        searchable
         pagination={{
           page,
           limit,
-          total: data?.total || 0,
+          total: (data as any)?.total || 0,
           onPageChange: setPage,
           onLimitChange: setLimit,
         }}
@@ -288,4 +451,7 @@ export default function PartnersPage() {
     </div>
   );
 }
+
+
+
 

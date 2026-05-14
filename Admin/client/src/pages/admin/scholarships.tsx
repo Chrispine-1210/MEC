@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { SEO } from "@/components/SEO";
+import { authFetch, queryClient, apiRequest } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertScholarshipSchema } from "@shared/schema";
@@ -13,12 +14,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, GraduationCap } from "lucide-react";
+import { Plus, Pencil, Trash2, GraduationCap, Upload } from "lucide-react";
 import type { Scholarship } from "@shared/schema";
+import { Editor } from "@tinymce/tinymce-react";
+import { useCreateAction } from "@/hooks/use-create-action";
 
-const formSchema = insertScholarshipSchema.extend({
-  deadline: z.string().min(1, "Deadline is required"),
-});
+const formSchema = insertScholarshipSchema;
 
 export default function ScholarshipsPage() {
   const [page, setPage] = useState(1);
@@ -27,11 +28,44 @@ export default function ScholarshipsPage() {
   const [status, setStatus] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingScholarship, setEditingScholarship] = useState<Scholarship | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
 
-  const { data, isLoading } = useQuery({
+  useCreateAction(() => { setEditingScholarship(null); setIsDialogOpen(true); });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await authFetch("/api/admin/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) throw new Error("Upload failed");
+
+      const data = await res.json();
+      form.setValue("featuredImage", data.url);
+      toast({ title: "Success", description: "Image uploaded successfully" });
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to upload image", variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const { data, isLoading } = useQuery<{ data: Scholarship[], total: number }>({
     queryKey: ["/api/admin/scholarships", page, limit, search, status],
-    queryFn: () => `/api/admin/scholarships?page=${page}&limit=${limit}&search=${search}&status=${status}`,
+    queryFn: async () => {
+      const response = await authFetch(`/api/admin/scholarships?page=${page}&limit=${limit}&search=${search}&status=${status}`);
+      if (!response.ok) throw new Error("Failed to fetch scholarships");
+      return response.json();
+    },
   });
 
   const createMutation = useMutation({
@@ -84,13 +118,17 @@ export default function ScholarshipsPage() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       title: "",
+      institution: "",
       description: "",
       eligibility: "",
-      amount: "",
-      deadline: "",
+      deadline: new Date().toISOString().split("T")[0] as any,
       category: "",
-      institution: "",
+      amount: "",
       status: "draft",
+      region: "Global",
+      isPremium: false,
+      paymentStatus: "unpaid",
+      featuredImage: "",
     },
   });
 
@@ -98,13 +136,17 @@ export default function ScholarshipsPage() {
     setEditingScholarship(scholarship);
     form.reset({
       title: scholarship.title,
-      description: scholarship.description,
-      eligibility: scholarship.eligibility,
-      amount: scholarship.amount || "",
-      deadline: scholarship.deadline ? new Date(scholarship.deadline).toISOString().split("T")[0] : "",
-      category: scholarship.category,
       institution: scholarship.institution,
+      description: scholarship.description,
+      eligibility: scholarship.eligibility || "",
+      deadline: new Date(scholarship.deadline).toISOString().split("T")[0] as any,
+      category: scholarship.category,
+      amount: scholarship.amount || "",
       status: scholarship.status,
+      region: scholarship.region || "Global",
+      isPremium: scholarship.isPremium || false,
+      paymentStatus: scholarship.paymentStatus || "unpaid",
+      featuredImage: scholarship.featuredImage || "",
     });
     setIsDialogOpen(true);
   };
@@ -124,34 +166,67 @@ export default function ScholarshipsPage() {
   };
 
   const columns = [
-    { key: "title", header: "Title", sortable: true },
-    { key: "institution", header: "Institution", sortable: true },
-    { key: "category", header: "Category", sortable: true },
-    { key: "amount", header: "Amount" },
+    {
+      key: "title",
+      header: "Scholarship",
+      sortable: true,
+      render: (value: string, row: any) => (
+        <div className="flex items-center gap-3">
+          {row.featuredImage ? (
+            <img src={row.featuredImage} alt="" className="w-10 h-10 object-cover rounded-lg flex-shrink-0 border" />
+          ) : (
+            <div className="w-10 h-10 bg-gradient-to-br from-primary/15 to-primary/5 rounded-lg flex items-center justify-center flex-shrink-0">
+              <GraduationCap className="h-5 w-5 text-primary" />
+            </div>
+          )}
+          <div>
+            <p className="text-sm font-medium text-foreground leading-tight">{value}</p>
+            <p className="text-xs text-muted-foreground">{row.institution}</p>
+          </div>
+        </div>
+      )
+    },
+    { key: "category", header: "Category", render: (v: string) => <span className="text-xs text-muted-foreground capitalize">{v}</span> },
     {
       key: "deadline",
       header: "Deadline",
-      render: (value: string) => new Date(value).toLocaleDateString(),
+      render: (value: string) => {
+        const date = new Date(value);
+        const now = new Date();
+        const daysLeft = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        const isUrgent = daysLeft <= 14;
+        const isPast = daysLeft < 0;
+        return (
+          <div>
+            <p className={`text-xs font-medium ${isPast ? "text-destructive" : isUrgent ? "text-warning" : "text-foreground/80"}`}>
+              {date.toLocaleDateString()}
+            </p>
+            {!isPast && <p className={`text-xs ${isUrgent ? "text-warning" : "text-muted-foreground/70"}`}>{daysLeft}d left</p>}
+            {isPast && <p className="text-xs text-destructive/70">Expired</p>}
+          </div>
+        );
+      }
     },
+    { key: "amount", header: "Amount", render: (v: string) => <span className="text-sm font-medium text-success">{v || "—"}</span> },
     {
       key: "status",
       header: "Status",
       render: (value: string) => (
-        <span className={`px-2 py-1 rounded text-xs ${value === "published" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}>
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${value === "published" ? "bg-success/15 text-success" : value === "draft" ? "bg-muted text-muted-foreground" : "bg-warning/15 text-warning"}`}>
           {value}
         </span>
       ),
     },
     {
       key: "actions",
-      header: "Actions",
+      header: "",
       render: (_: unknown, row: Scholarship) => (
-        <div className="flex gap-2">
-          <Button variant="ghost" size="sm" onClick={() => handleEdit(row)} data-testid={`button-edit-${row.id}`}>
-            <Pencil className="h-4 w-4" />
+        <div className="flex gap-1">
+          <Button variant="ghost" size="sm" onClick={() => handleEdit(row)} className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary" data-testid={`button-edit-${row.id}`}>
+            <Pencil className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => handleDelete(row.id)} data-testid={`button-delete-${row.id}`}>
-            <Trash2 className="h-4 w-4 text-red-500" />
+          <Button variant="ghost" size="sm" onClick={() => handleDelete(row.id)} className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive" data-testid={`button-delete-${row.id}`}>
+            <Trash2 className="h-3.5 w-3.5" />
           </Button>
         </div>
       ),
@@ -160,13 +235,17 @@ export default function ScholarshipsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <SEO 
+        title="Scholarships Management" 
+        description="Manage and publish scholarship opportunities for students in Malawi and beyond."
+      />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2" data-testid="page-title">
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-2" data-testid="page-title">
             <GraduationCap className="h-8 w-8" />
             Scholarships Management
           </h1>
-          <p className="text-gray-600">Manage scholarship opportunities</p>
+          <p className="text-muted-foreground">Manage scholarship opportunities</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open);
@@ -176,18 +255,68 @@ export default function ScholarshipsPage() {
           }
         }}>
           <DialogTrigger asChild>
-            <Button data-testid="button-add">
+            <Button data-testid="button-add" className="shadow-lg hover:shadow-primary/20 transition-all duration-300">
               <Plus className="h-4 w-4 mr-2" />
               Add Scholarship
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto animate-scaleIn">
             <DialogHeader>
               <DialogTitle>{editingScholarship ? "Edit Scholarship" : "Add Scholarship"}</DialogTitle>
-              <DialogDescription>Fill in the details below to {editingScholarship ? "update" : "create"} a scholarship</DialogDescription>
+              <DialogDescription>Manage scholarship listings and details</DialogDescription>
             </DialogHeader>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 form-section">
+                <FormField
+                  control={form.control}
+                  name="featuredImage"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Featured Image</FormLabel>
+                      <div className="flex flex-col gap-4">
+                        {field.value && (
+                          <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
+                            <img src={field.value} alt="Preview" className="w-full h-full object-cover" />
+                            <Button 
+                              type="button" 
+                              variant="destructive" 
+                              size="sm" 
+                              className="absolute top-2 right-2"
+                              onClick={() => field.onChange("")}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-4">
+                          <Input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleFileUpload}
+                            className="hidden"
+                            id="scholarship-image-upload"
+                            disabled={isUploading}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full h-24 border-dashed"
+                            onClick={() => (document.getElementById("scholarship-image-upload") as HTMLInputElement)?.click()}
+                            disabled={isUploading}
+                          >
+                            <div className="flex flex-col items-center gap-2">
+                              <Upload className="h-6 w-6 text-muted-foreground/70" />
+                              <span className="text-sm text-muted-foreground">
+                                {isUploading ? "Uploading..." : "Click to upload image"}
+                              </span>
+                            </div>
+                          </Button>
+                        </div>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name="title"
@@ -214,7 +343,7 @@ export default function ScholarshipsPage() {
                     </FormItem>
                   )}
                 />
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="category"
@@ -249,12 +378,74 @@ export default function ScholarshipsPage() {
                     <FormItem>
                       <FormLabel>Deadline</FormLabel>
                       <FormControl>
-                        <Input type="date" {...field} data-testid="input-deadline" />
+                        <Input type="date" {...field} value={field.value instanceof Date ? field.value.toISOString().split("T")[0] : (field.value || "")} data-testid="input-deadline" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="region"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Region</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            value={field.value || ""} 
+                            placeholder="Regional Scaling" 
+                            data-testid="input-region" 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="isPremium"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                        <FormControl>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-border/70 text-primary focus:ring-primary"
+                            checked={field.value || false}
+                            onChange={field.onChange}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>Premium Visibility</FormLabel>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                {form.watch("isPremium") && (
+                  <FormField
+                    control={form.control}
+                    name="paymentStatus"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Payment Status</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || "unpaid"}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-payment-status">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="unpaid">Unpaid</SelectItem>
+                            <SelectItem value="paid">Paid</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
                 <FormField
                   control={form.control}
                   name="description"
@@ -262,7 +453,25 @@ export default function ScholarshipsPage() {
                     <FormItem>
                       <FormLabel>Description</FormLabel>
                       <FormControl>
-                        <Textarea {...field} rows={3} data-testid="input-description" />
+                        <Editor
+                          apiKey={import.meta.env.VITE_TINYMCE_API_KEY}
+                          init={{
+                            height: 400,
+                            menubar: true,
+                            plugins: [
+                              'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+                              'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+                              'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount'
+                            ],
+                            toolbar: 'undo redo | blocks | ' +
+                              'bold italic forecolor | alignleft aligncenter ' +
+                              'alignright alignjustify | bullist numlist outdent indent | ' +
+                              'removeformat | help',
+                            content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px }'
+                          }}
+                          value={field.value}
+                          onEditorChange={(content: string) => field.onChange(content)}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -275,7 +484,18 @@ export default function ScholarshipsPage() {
                     <FormItem>
                       <FormLabel>Eligibility</FormLabel>
                       <FormControl>
-                        <Textarea {...field} rows={3} data-testid="input-eligibility" />
+                        <Editor
+                          apiKey={import.meta.env.VITE_TINYMCE_API_KEY}
+                          init={{
+                            height: 300,
+                            menubar: false,
+                            plugins: ['lists', 'link', 'wordcount'],
+                            toolbar: 'undo redo | bold italic | bullist numlist | removeformat',
+                            content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px }'
+                          }}
+                          value={field.value || ""}
+                          onEditorChange={(content: string) => field.onChange(content)}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -303,11 +523,11 @@ export default function ScholarshipsPage() {
                     </FormItem>
                   )}
                 />
-                <div className="flex justify-end gap-2">
+                <div className="flex justify-end gap-2 pt-4">
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} data-testid="button-submit">
+                  <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending || isUploading} data-testid="button-submit" className="shadow-md">
                     {createMutation.isPending || updateMutation.isPending ? "Saving..." : editingScholarship ? "Update" : "Create"}
                   </Button>
                 </div>
@@ -334,3 +554,7 @@ export default function ScholarshipsPage() {
     </div>
   );
 }
+
+
+
+

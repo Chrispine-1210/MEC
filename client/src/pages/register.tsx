@@ -57,8 +57,8 @@ export default function Register() {
 
     if (!formData.password) {
       newErrors.password = "Password is required";
-    } else if (formData.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters long";
+    } else if (formData.password.length < 8) {
+      newErrors.password = "Password must be at least 8 characters long";
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -79,7 +79,7 @@ export default function Register() {
     setIsLoading(true);
 
     try {
-      const success = await register({
+      const result = await register({
         firstName: formData.firstName,
         lastName: formData.lastName,
         email: formData.email,
@@ -87,8 +87,10 @@ export default function Register() {
         password: formData.password,
       });
 
-      if (success) {
+      if (result.success) {
         setLocation("/dashboard");
+      } else if (result.fields) {
+        setErrors((prev) => ({ ...prev, ...result.fields }));
       }
     } catch (error) {
       console.error("Registration error:", error);
@@ -124,7 +126,7 @@ export default function Register() {
                   disabled={isLoading}
                 />
                 {errors.firstName && (
-                  <p className="text-sm text-red-500">{errors.firstName}</p>
+                  <p className="text-sm text-destructive">{errors.firstName}</p>
                 )}
               </div>
 
@@ -140,7 +142,7 @@ export default function Register() {
                   disabled={isLoading}
                 />
                 {errors.lastName && (
-                  <p className="text-sm text-red-500">{errors.lastName}</p>
+                  <p className="text-sm text-destructive">{errors.lastName}</p>
                 )}
               </div>
             </div>
@@ -158,7 +160,7 @@ export default function Register() {
                 disabled={isLoading}
               />
               {errors.email && (
-                <p className="text-sm text-red-500">{errors.email}</p>
+                <p className="text-sm text-destructive">{errors.email}</p>
               )}
             </div>
 
@@ -174,7 +176,7 @@ export default function Register() {
                 disabled={isLoading}
               />
               {errors.username && (
-                <p className="text-sm text-red-500">{errors.username}</p>
+                <p className="text-sm text-destructive">{errors.username}</p>
               )}
             </div>
 
@@ -207,7 +209,7 @@ export default function Register() {
                 </Button>
               </div>
               {errors.password && (
-                <p className="text-sm text-red-500">{errors.password}</p>
+                <p className="text-sm text-destructive">{errors.password}</p>
               )}
             </div>
 
@@ -240,13 +242,13 @@ export default function Register() {
                 </Button>
               </div>
               {errors.confirmPassword && (
-                <p className="text-sm text-red-500">{errors.confirmPassword}</p>
+                <p className="text-sm text-destructive">{errors.confirmPassword}</p>
               )}
             </div>
 
             <Button
               type="submit"
-              className="w-full bg-mtendere-green hover:bg-green-700"
+              className="w-full bg-mtendere-green hover:bg-mtendere-green/90"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -261,7 +263,7 @@ export default function Register() {
           </form>
 
           <div className="mt-6 text-center text-sm">
-            <p className="text-gray-600">
+            <p className="text-muted-foreground">
               Already have an account?{" "}
               <Link href="/login" className="text-mtendere-blue hover:underline">
                 Sign in here
@@ -270,7 +272,7 @@ export default function Register() {
           </div>
 
           <div className="mt-4 text-center">
-            <Link href="/" className="text-sm text-gray-600 hover:text-mtendere-blue">
+            <Link href="/" className="text-sm text-muted-foreground hover:text-mtendere-blue">
               Back to Home
             </Link>
           </div>
@@ -279,3 +281,6 @@ export default function Register() {
     </div>
   );
 }
+
+
+

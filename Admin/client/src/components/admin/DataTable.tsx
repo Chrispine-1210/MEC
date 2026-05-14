@@ -32,6 +32,7 @@ import {
   SortDesc,
   ChevronLeft,
   ChevronRight,
+  Inbox,
 } from "lucide-react";
 
 interface Column {
@@ -107,7 +108,8 @@ export default function DataTable({
     direction: "asc" | "desc";
   } | null>(null);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
-  const [filters, setFilters] = useState<Record<string, any>>({});
+  const showActionsColumn = Boolean(onRowAction || actions.length > 0);
+  const tableColumnCount = columns.length + (selectable ? 1 : 0) + (showActionsColumn ? 1 : 0);
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
@@ -180,20 +182,22 @@ export default function DataTable({
   const LoadingSkeleton = () => (
     <>
       {[...Array(5)].map((_, i) => (
-        <tr key={i} className="border-b border-gray-200">
+        <tr key={i} className="border-b border-border/60">
           {selectable && (
             <td className="px-4 py-3">
-              <div className="h-4 w-4 bg-gray-200 rounded animate-pulse" />
+              <div className="h-4 w-4 bg-muted rounded animate-pulse" />
             </td>
           )}
           {columns.map((col, j) => (
             <td key={j} className="px-4 py-3">
-              <div className="h-4 bg-gray-200 rounded animate-pulse" />
+              <div className="h-4 bg-muted rounded animate-pulse" />
             </td>
           ))}
-          <td className="px-4 py-3">
-            <div className="h-8 w-8 bg-gray-200 rounded animate-pulse" />
-          </td>
+          {showActionsColumn && (
+            <td className="px-4 py-3">
+              <div className="h-8 w-8 bg-muted rounded animate-pulse" />
+            </td>
+          )}
         </tr>
       ))}
     </>
@@ -201,12 +205,12 @@ export default function DataTable({
 
   const EmptyState = () => (
     <tr>
-      <td colSpan={columns.length + (selectable ? 1 : 0) + 1} className="px-4 py-12">
+      <td colSpan={tableColumnCount} className="px-4 py-12">
         {emptyState || (
-          <div className="text-center text-gray-500">
-            <div className="text-4xl mb-4">📊</div>
-            <h3 className="text-lg font-medium mb-2">No data found</h3>
-            <p className="text-sm">
+          <div className="text-center text-muted-foreground">
+            <Inbox className="mx-auto h-10 w-10 text-muted-foreground/60 mb-3" />
+            <h3 className="text-lg font-medium text-foreground mb-1">No data found</h3>
+            <p className="text-sm text-muted-foreground">
               {searchQuery ? "Try adjusting your search terms" : "No records to display"}
             </p>
           </div>
@@ -225,22 +229,22 @@ export default function DataTable({
       
       <CardContent className="p-0">
         {/* Table Controls */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <div className="flex items-center space-x-2">
+        <div className="flex flex-col gap-3 p-4 border-b border-border/60 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             {searchable && (
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <div className="relative w-full sm:w-auto">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search..."
                   value={searchQuery}
                   onChange={(e) => handleSearch(e.target.value)}
-                  className="pl-10 w-64"
+                  className="pl-10 w-full sm:w-64"
                   data-testid="table-search"
                 />
               </div>
             )}
             
-            {filterable && (
+            {filterable && onFilter && (
               <Button variant="outline" size="sm" data-testid="table-filter">
                 <Filter className="h-4 w-4 mr-2" />
                 Filter
@@ -266,8 +270,8 @@ export default function DataTable({
             )}
           </div>
 
-          <div className="flex items-center space-x-2">
-            {refreshable && (
+          <div className="flex items-center justify-end space-x-2">
+            {refreshable && onRefresh && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -278,7 +282,7 @@ export default function DataTable({
               </Button>
             )}
             
-            {exportable && (
+            {exportable && onExport && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -294,7 +298,7 @@ export default function DataTable({
         {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-muted/40 border-b border-border/60">
               <tr>
                 {selectable && (
                   <th className="px-4 py-3 text-left">
@@ -309,8 +313,8 @@ export default function DataTable({
                 {columns.map((column) => (
                   <th
                     key={column.key}
-                    className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${
-                      column.sortable ? "cursor-pointer hover:bg-gray-100" : ""
+                    className={`px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider ${
+                      column.sortable ? "cursor-pointer hover:bg-muted/50" : ""
                     }`}
                     style={{ width: column.width }}
                     onClick={column.sortable ? () => handleSort(column.key) : undefined}
@@ -324,16 +328,16 @@ export default function DataTable({
                             className={`h-3 w-3 ${
                               sortConfig?.column === column.key &&
                               sortConfig.direction === "asc"
-                                ? "text-blue-600"
-                                : "text-gray-400"
+                                ? "text-primary"
+                                : "text-muted-foreground/70"
                             }`}
                           />
                           <SortDesc
                             className={`h-3 w-3 ${
                               sortConfig?.column === column.key &&
                               sortConfig.direction === "desc"
-                                ? "text-blue-600"
-                                : "text-gray-400"
+                                ? "text-primary"
+                                : "text-muted-foreground/70"
                             }`}
                           />
                         </div>
@@ -342,13 +346,15 @@ export default function DataTable({
                   </th>
                 ))}
                 
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
+                {showActionsColumn && (
+                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Actions
+                  </th>
+                )}
               </tr>
             </thead>
             
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-card divide-y divide-border/60">
               {loading ? (
                 <LoadingSkeleton />
               ) : data.length === 0 ? (
@@ -357,9 +363,9 @@ export default function DataTable({
                 data.map((row, index) => (
                   <tr
                     key={index}
-                    className={`hover:bg-gray-50 ${
+                    className={`hover:bg-muted/40 ${
                       onRowClick ? "cursor-pointer" : ""
-                    } ${selectedRows.has(index.toString()) ? "bg-blue-50" : ""}`}
+                    } ${selectedRows.has(index.toString()) ? "bg-primary/10" : ""}`}
                     onClick={onRowClick ? () => onRowClick(row) : undefined}
                     data-testid={`table-row-${index}`}
                   >
@@ -377,58 +383,78 @@ export default function DataTable({
                     {columns.map((column) => (
                       <td
                         key={column.key}
-                        className="px-4 py-3 text-sm text-gray-900"
+                        className="px-4 py-3 text-sm text-foreground"
                         data-testid={`cell-${column.key}-${index}`}
                       >
                         {renderCell(column, row, index)}
                       </td>
                     ))}
                     
-                    <td className="px-4 py-3 text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => e.stopPropagation()}
-                            data-testid={`row-actions-${index}`}
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onRowAction?.("view", row);
-                            }}
-                          >
-                            <Eye className="h-4 w-4 mr-2" />
-                            View
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onRowAction?.("edit", row);
-                            }}
-                          >
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onRowAction?.("delete", row);
-                            }}
-                            className="text-red-600"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </td>
+                    {showActionsColumn && (
+                      <td className="px-4 py-3 text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => e.stopPropagation()}
+                              data-testid={`row-actions-${index}`}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {actions.length > 0 ? (
+                              actions.map((action) => (
+                                <DropdownMenuItem
+                                  key={action.action}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRowAction?.(action.action, row);
+                                  }}
+                                  className={action.variant === "destructive" ? "text-destructive" : undefined}
+                                >
+                                  {action.icon && <span className="mr-2">{action.icon}</span>}
+                                  {action.label}
+                                </DropdownMenuItem>
+                              ))
+                            ) : (
+                              <>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRowAction?.("view", row);
+                                  }}
+                                >
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  View
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRowAction?.("edit", row);
+                                  }}
+                                >
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRowAction?.("delete", row);
+                                  }}
+                                  className="text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
@@ -438,10 +464,10 @@ export default function DataTable({
 
         {/* Pagination */}
         {pagination && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-gray-500">
-                Showing {((pagination.page - 1) * pagination.limit) + 1} to{" "}
+          <div className="flex flex-col gap-3 px-4 py-3 border-t border-border/60 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <span className="text-sm text-muted-foreground">
+                Showing {pagination.total === 0 ? 0 : ((pagination.page - 1) * pagination.limit) + 1} to{" "}
                 {Math.min(pagination.page * pagination.limit, pagination.total)} of{" "}
                 {pagination.total} results
               </span>
@@ -462,7 +488,7 @@ export default function DataTable({
               </Select>
             </div>
             
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center justify-between gap-2 sm:justify-end">
               <Button
                 variant="outline"
                 size="sm"
@@ -473,15 +499,15 @@ export default function DataTable({
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               
-              <span className="text-sm text-gray-700">
-                Page {pagination.page} of {Math.ceil(pagination.total / pagination.limit)}
+              <span className="text-sm text-foreground/80 whitespace-nowrap">
+                Page {pagination.page} of {Math.max(1, Math.ceil(pagination.total / pagination.limit))}
               </span>
               
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => pagination.onPageChange(pagination.page + 1)}
-                disabled={pagination.page >= Math.ceil(pagination.total / pagination.limit)}
+                disabled={pagination.page >= Math.max(1, Math.ceil(pagination.total / pagination.limit))}
                 data-testid="next-page"
               >
                 <ChevronRight className="h-4 w-4" />
@@ -493,3 +519,4 @@ export default function DataTable({
     </Card>
   );
 }
+

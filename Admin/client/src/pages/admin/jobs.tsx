@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { SEO } from "@/components/SEO";
+import { authFetch, queryClient, apiRequest } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertJobOpportunitySchema } from "@shared/schema";
@@ -13,8 +14,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Briefcase } from "lucide-react";
+import { Plus, Pencil, Trash2, Briefcase, Upload } from "lucide-react";
 import type { JobOpportunity } from "@shared/schema";
+import { Editor } from "@tinymce/tinymce-react";
+import { useCreateAction } from "@/hooks/use-create-action";
 
 const formSchema = insertJobOpportunitySchema;
 
@@ -25,11 +28,37 @@ export default function JobsPage() {
   const [status, setStatus] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<JobOpportunity | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
 
-  const { data, isLoading } = useQuery({
+  useCreateAction(() => { setEditingJob(null); setIsDialogOpen(true); });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await authFetch("/api/admin/upload", { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      form.setValue("featuredImage", data.url);
+      toast({ title: "Success", description: "Image uploaded successfully" });
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to upload image", variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const { data, isLoading } = useQuery<{ data: JobOpportunity[], total: number }>({
     queryKey: ["/api/admin/jobs", page, limit, search, status],
-    queryFn: () => `/api/admin/jobs?page=${page}&limit=${limit}&search=${search}&status=${status}`,
+    queryFn: async () => {
+      const response = await authFetch(`/api/admin/jobs?page=${page}&limit=${limit}&search=${search}&status=${status}`);
+      if (!response.ok) throw new Error("Failed to fetch jobs");
+      return response.json();
+    },
   });
 
   const createMutation = useMutation({
@@ -75,6 +104,11 @@ export default function JobsPage() {
       benefits: "",
       applicationUrl: "",
       status: "draft",
+      region: "Global",
+      isPremium: false,
+      price: "",
+      paymentStatus: "unpaid",
+      featuredImage: "",
     },
   });
 
@@ -90,6 +124,11 @@ export default function JobsPage() {
       benefits: job.benefits || "",
       applicationUrl: job.applicationUrl || "",
       status: job.status,
+      region: job.region || "Global",
+      isPremium: job.isPremium || false,
+      price: job.price || "",
+      paymentStatus: job.paymentStatus || "unpaid",
+      featuredImage: job.featuredImage || "",
     });
     setIsDialogOpen(true);
   };
@@ -109,30 +148,57 @@ export default function JobsPage() {
   };
 
   const columns = [
-    { key: "title", header: "Title", sortable: true },
-    { key: "company", header: "Company", sortable: true },
-    { key: "location", header: "Location" },
-    { key: "jobType", header: "Type" },
-    { key: "salaryRange", header: "Salary" },
+    {
+      key: "title",
+      header: "Position",
+      sortable: true,
+      render: (value: string, row: any) => (
+        <div className="flex items-center gap-3">
+          {row.featuredImage ? (
+            <img src={row.featuredImage} alt="" className="w-10 h-10 object-cover rounded-lg flex-shrink-0 border" />
+          ) : (
+            <div className="w-10 h-10 bg-gradient-to-br from-warning/20 to-warning/10 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Briefcase className="h-5 w-5 text-warning" />
+            </div>
+          )}
+          <div>
+            <p className="text-sm font-medium text-foreground leading-tight">{value}</p>
+            <p className="text-xs text-muted-foreground">{row.company}</p>
+          </div>
+        </div>
+      )
+    },
+    { key: "location", header: "Location", render: (v: string) => <span className="text-xs text-muted-foreground">{v || "—"}</span> },
+    { key: "jobType", header: "Type", render: (v: string) => <span className="text-xs capitalize bg-primary/10 text-primary px-2 py-0.5 rounded">{v || "—"}</span> },
+    { key: "salaryRange", header: "Salary", render: (v: string) => <span className="text-sm font-medium text-success">{v || "—"}</span> },
+    {
+      key: "isPremium",
+      header: "Listing",
+      render: (value: boolean) => (
+        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${value ? "bg-info/15 text-info" : "bg-muted text-muted-foreground"}`}>
+          {value ? "✦ Premium" : "Standard"}
+        </span>
+      ),
+    },
     {
       key: "status",
       header: "Status",
       render: (value: string) => (
-        <span className={`px-2 py-1 rounded text-xs ${value === "published" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}>
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${value === "published" ? "bg-success/15 text-success" : value === "draft" ? "bg-muted text-muted-foreground" : "bg-warning/15 text-warning"}`}>
           {value}
         </span>
       ),
     },
     {
       key: "actions",
-      header: "Actions",
+      header: "",
       render: (_: unknown, row: JobOpportunity) => (
-        <div className="flex gap-2">
-          <Button variant="ghost" size="sm" onClick={() => handleEdit(row)} data-testid={`button-edit-${row.id}`}>
-            <Pencil className="h-4 w-4" />
+        <div className="flex gap-1">
+          <Button variant="ghost" size="sm" onClick={() => handleEdit(row)} className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary" data-testid={`button-edit-${row.id}`}>
+            <Pencil className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => handleDelete(row.id)} data-testid={`button-delete-${row.id}`}>
-            <Trash2 className="h-4 w-4 text-red-500" />
+          <Button variant="ghost" size="sm" onClick={() => handleDelete(row.id)} className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive" data-testid={`button-delete-${row.id}`}>
+            <Trash2 className="h-4 w-4 text-destructive" />
           </Button>
         </div>
       ),
@@ -141,13 +207,21 @@ export default function JobsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <SEO 
+        title="Jobs Management" 
+        description="Manage job listings and recruitment opportunities on the Mtendere Platform."
+      />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2" data-testid="page-title">
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-2" data-testid="page-title">
             <Briefcase className="h-8 w-8" />
             Jobs Management
           </h1>
-          <p className="text-gray-600">Manage job opportunities • <span className="font-semibold text-orange-600">5 pending</span></p>
+          <div className="flex gap-4 mt-1">
+            <p className="text-sm text-muted-foreground">Total: <span className="font-semibold">{(data as any)?.total || 0}</span></p>
+            <p className="text-sm text-warning font-medium">Pending: 5</p>
+            <p className="text-sm text-info font-medium">Premium: {((data as any)?.data || []).filter((j: any) => j.isPremium).length}</p>
+          </div>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open);
@@ -157,18 +231,47 @@ export default function JobsPage() {
           }
         }}>
           <DialogTrigger asChild>
-            <Button data-testid="button-add">
+            <Button data-testid="button-add" className="shadow-lg hover:shadow-primary/20 transition-all duration-300">
               <Plus className="h-4 w-4 mr-2" />
               Add Job
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto animate-scaleIn">
             <DialogHeader>
               <DialogTitle>{editingJob ? "Edit Job" : "Add Job"}</DialogTitle>
-              <DialogDescription>Fill in the details below</DialogDescription>
+              <DialogDescription>Manage job listing details</DialogDescription>
             </DialogHeader>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 form-section">
+                <FormField
+                  control={form.control}
+                  name="featuredImage"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Company Logo / Featured Image</FormLabel>
+                      <div className="flex flex-col gap-4">
+                        {field.value && (
+                          <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
+                            <img src={field.value} alt="Preview" className="w-full h-full object-cover" />
+                            <Button type="button" variant="destructive" size="sm" className="absolute top-2 right-2" onClick={() => field.onChange("")}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-4">
+                          <Input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" id="job-image-upload" disabled={isUploading} />
+                          <Button type="button" variant="outline" className="w-full h-24 border-dashed" onClick={() => (document.getElementById("job-image-upload") as HTMLInputElement)?.click()} disabled={isUploading}>
+                            <div className="flex flex-col items-center gap-2">
+                              <Upload className="h-6 w-6 text-muted-foreground/70" />
+                              <span className="text-sm text-muted-foreground">{isUploading ? "Uploading..." : "Click to upload image"}</span>
+                            </div>
+                          </Button>
+                        </div>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name="title"
@@ -182,7 +285,7 @@ export default function JobsPage() {
                     </FormItem>
                   )}
                 />
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="company"
@@ -210,7 +313,7 @@ export default function JobsPage() {
                     )}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="jobType"
@@ -255,7 +358,25 @@ export default function JobsPage() {
                     <FormItem>
                       <FormLabel>Description</FormLabel>
                       <FormControl>
-                        <Textarea {...field} rows={3} data-testid="input-description" />
+                        <Editor
+                          apiKey={import.meta.env.VITE_TINYMCE_API_KEY}
+                          init={{
+                            height: 400,
+                            menubar: true,
+                            plugins: [
+                              'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+                              'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+                              'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount'
+                            ],
+                            toolbar: 'undo redo | blocks | ' +
+                              'bold italic forecolor | alignleft aligncenter ' +
+                              'alignright alignjustify | bullist numlist outdent indent | ' +
+                              'removeformat | help',
+                            content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px }'
+                          }}
+                          value={field.value}
+                          onEditorChange={(content: string) => field.onChange(content)}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -268,7 +389,18 @@ export default function JobsPage() {
                     <FormItem>
                       <FormLabel>Benefits</FormLabel>
                       <FormControl>
-                        <Textarea {...field} value={field.value || ""} rows={2} data-testid="input-benefits" />
+                        <Editor
+                          apiKey={import.meta.env.VITE_TINYMCE_API_KEY}
+                          init={{
+                            height: 250,
+                            menubar: false,
+                            plugins: ['lists', 'link'],
+                            toolbar: 'undo redo | bold italic | bullist numlist',
+                            content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px }'
+                          }}
+                          value={field.value || ""}
+                          onEditorChange={(content: string) => field.onChange(content)}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -287,6 +419,89 @@ export default function JobsPage() {
                     </FormItem>
                   )}
                 />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="region"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Region (Scaling)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          value={field.value || ""} 
+                          placeholder="e.g., East Africa, SADC" 
+                          data-testid="input-region" 
+                        />
+                      </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="isPremium"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                        <FormControl>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-border/70 text-primary focus:ring-primary"
+                            checked={field.value || false}
+                            onChange={field.onChange}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>Premium Listing</FormLabel>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                {form.watch("isPremium") && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-primary/10 rounded-lg">
+                    <FormField
+                      control={form.control}
+                      name="price"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Listing Price</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              value={field.value || ""} 
+                              placeholder="e.g., $50" 
+                              data-testid="input-price" 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="paymentStatus"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Payment Status</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value || "unpaid"}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="unpaid">Unpaid</SelectItem>
+                              <SelectItem value="paid">Paid</SelectItem>
+                              <SelectItem value="refunded">Refunded</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
                 <FormField
                   control={form.control}
                   name="status"
@@ -313,7 +528,7 @@ export default function JobsPage() {
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} data-testid="button-submit">
+                  <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending || isUploading} data-testid="button-submit">
                     {createMutation.isPending || updateMutation.isPending ? "Saving..." : editingJob ? "Update" : "Create"}
                   </Button>
                 </div>
@@ -340,3 +555,7 @@ export default function JobsPage() {
     </div>
   );
 }
+
+
+
+

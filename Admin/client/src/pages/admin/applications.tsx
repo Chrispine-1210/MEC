@@ -1,34 +1,59 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { insertApplicationSchema } from "@shared/schema";
-import { z } from "zod";
-import DataTable from "@/components/admin/DataTable";
+import { SEO } from "@/components/SEO";
+import { authFetch, queryClient, apiRequest } from "@/lib/queryClient";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Pencil, CheckCircle, XCircle, FileText } from "lucide-react";
+import DataTable from "@/components/admin/DataTable";
+import { ClipboardList, CheckCircle, XCircle, Clock, AlertCircle, Eye, ChevronRight } from "lucide-react";
 import type { Application } from "@shared/schema";
 
-const formSchema = insertApplicationSchema;
+type AdminApplication = Application & {
+  applicantName?: string;
+  applicantEmail?: string;
+  opportunityTitle?: string;
+  opportunityType?: string;
+  coverLetter?: string;
+};
+
+const statusConfig: Record<string, { color: string; icon: any; label: string }> = {
+  pending: { color: "bg-warning/15 text-warning", icon: Clock, label: "Pending" },
+  approved: { color: "bg-success/15 text-success", icon: CheckCircle, label: "Approved" },
+  rejected: { color: "bg-destructive/15 text-destructive", icon: XCircle, label: "Rejected" },
+  waitlisted: { color: "bg-info/15 text-info", icon: AlertCircle, label: "Waitlisted" },
+  under_review: { color: "bg-primary/10 text-primary", icon: Eye, label: "Under Review" },
+};
+
+const statCardStyles: Record<string, { card: string; icon: string }> = {
+  amber: { card: "border-l-4 border-l-warning bg-warning/5", icon: "text-warning" },
+  green: { card: "border-l-4 border-l-success bg-success/5", icon: "text-success" },
+  red: { card: "border-l-4 border-l-destructive bg-destructive/5", icon: "text-destructive" },
+};
 
 export default function ApplicationsPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingApp, setEditingApp] = useState<Application | null>(null);
+  const [selectedApp, setSelectedApp] = useState<AdminApplication | null>(null);
+  const [reviewNotes, setReviewNotes] = useState("");
+  const [newStatus, setNewStatus] = useState("");
   const { toast } = useToast();
 
   const { data, isLoading } = useQuery<{ applications: Application[], total: number }>({
     queryKey: ["/api/admin/applications", page, limit, search, status],
-    queryFn: () => `/api/admin/applications?page=${page}&limit=${limit}&search=${search}&status=${status}`,
+    queryFn: async () => {
+      const response = await authFetch(`/api/admin/applications?page=${page}&limit=${limit}&search=${search}&status=${status}`);
+      if (!response.ok) throw new Error("Failed to fetch applications");
+      return response.json();
+    },
   });
 
   const updateMutation = useMutation({
@@ -36,111 +61,292 @@ export default function ApplicationsPage() {
       apiRequest("PUT", `/api/admin/applications/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/applications"] });
-      setIsDialogOpen(false);
-      setEditingApp(null);
-      form.reset();
-      toast({ title: "Success", description: "Application updated" });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/dashboard/stats"] });
+      setSelectedApp(null);
+      toast({ title: "Application updated", description: "Status has been saved." });
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to update application", variant: "destructive" });
     },
   });
 
-  const form = useForm<any>({
-    defaultValues: {
-      status: "pending",
-      reviewNotes: "",
-    },
-  });
-
-  const handleReview = (app: Application) => {
-    setEditingApp(app);
-    form.reset({
-      status: app.status,
-      reviewNotes: app.reviewNotes || "",
-    });
-    setIsDialogOpen(true);
+  const quickUpdate = (id: string, status: string) => {
+    updateMutation.mutate({ id, data: { status } });
   };
 
-  const onSubmit = (data: any) => {
-    if (editingApp) {
-      updateMutation.mutate({ id: editingApp.id, data });
-    }
+  const openReview = (app: any) => {
+    setSelectedApp(app as AdminApplication);
+    setNewStatus(app.status);
+    setReviewNotes("");
   };
 
-  const statusColors: Record<string, string> = {
-    pending: "bg-yellow-100 text-yellow-800",
-    approved: "bg-green-100 text-green-800",
-    rejected: "bg-red-100 text-red-800",
-    waitlisted: "bg-blue-100 text-blue-800",
+  const submitReview = () => {
+    if (!selectedApp) return;
+    updateMutation.mutate({ id: selectedApp.id, data: { status: newStatus, reviewNotes } });
   };
+
+  // Summary stats
+  const pendingCount = data?.applications?.filter(a => a.status === "pending").length ?? 0;
+  const approvedCount = data?.applications?.filter(a => a.status === "approved").length ?? 0;
+  const rejectedCount = data?.applications?.filter(a => a.status === "rejected").length ?? 0;
 
   const columns = [
-    { key: "id", header: "App ID", render: (value: string) => value.substring(0, 8) },
-    { key: "status", header: "Status", render: (value: string) => (
-      <span className={`px-2 py-1 rounded text-xs ${statusColors[value] || "bg-gray-100 text-gray-800"}`}>
-        {value}
-      </span>
-    )},
-    { key: "createdAt", header: "Date", render: (value: Date) => new Date(value).toLocaleDateString() },
-    { key: "actions", header: "Actions", render: (_: unknown, row: Application) => (
-      <Button variant="ghost" size="sm" onClick={() => handleReview(row)}><Pencil className="h-4 w-4" /></Button>
-    )},
+    {
+      key: "applicantName",
+      header: "Applicant",
+      sortable: true,
+      render: (value: string, row: any) => (
+        <div className="flex items-center gap-3">
+          <Avatar className="h-8 w-8">
+            <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-white text-xs font-bold">
+              {value?.[0]?.toUpperCase() || "A"}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <p className="text-sm font-medium">{value || "Anonymous"}</p>
+            <p className="text-xs text-muted-foreground">{row.applicantEmail || ""}</p>
+          </div>
+        </div>
+      )
+    },
+    { key: "opportunityTitle", header: "Opportunity", render: (v: string) => <span className="text-sm font-medium">{v}</span> },
+    {
+      key: "opportunityType",
+      header: "Type",
+      render: (v: string) => (
+        <Badge variant="outline" className="text-xs capitalize">{v}</Badge>
+      )
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (v: string) => {
+        const cfg = statusConfig[v] || statusConfig.pending;
+        const Icon = cfg.icon;
+        return (
+          <Badge className={`${cfg.color} border-0 text-xs`}>
+            <Icon className="h-3 w-3 mr-1" />
+            {cfg.label}
+          </Badge>
+        );
+      }
+    },
+    {
+      key: "createdAt",
+      header: "Applied",
+      render: (v: string) => <span className="text-xs text-muted-foreground">{new Date(v).toLocaleDateString()}</span>
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      render: (_: any, row: any) => (
+        <div className="flex gap-1 items-center">
+          {row.status === "pending" && (
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-success hover:bg-success/10 hover:text-success text-xs"
+                onClick={(e) => { e.stopPropagation(); quickUpdate(row.id, "approved"); }}
+                disabled={updateMutation.isPending}
+              >
+                <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                Approve
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive text-xs"
+                onClick={(e) => { e.stopPropagation(); quickUpdate(row.id, "rejected"); }}
+                disabled={updateMutation.isPending}
+              >
+                <XCircle className="h-3.5 w-3.5 mr-1" />
+                Reject
+              </Button>
+            </>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0 hover:bg-primary/10 hover:text-primary"
+            onClick={() => openReview(row)}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )
+    },
   ];
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div><h1 className="text-3xl font-bold flex items-center gap-2"><FileText className="h-8 w-8" />Applications Review</h1><p className="text-gray-600">Review and manage applications</p></div>
-      </div>
-      <div className="flex gap-2">
-        <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="w-40"><SelectValue placeholder="Filter by status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="approved">Approved</SelectItem>
-            <SelectItem value="rejected">Rejected</SelectItem>
-            <SelectItem value="waitlisted">Waitlisted</SelectItem>
-          </SelectContent>
-        </Select>
+      <SEO title="Applications" description="Review and manage student and professional applications." />
+
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-2 text-foreground">
+            <ClipboardList className="h-8 w-8 text-primary" />
+            Applications
+          </h1>
+          <p className="text-muted-foreground mt-1">{data?.total ?? 0} total applications on the platform</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Select value={status} onValueChange={(v) => { setStatus(v === "all" ? "" : v); setPage(1); }}>
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="approved">Approved</SelectItem>
+              <SelectItem value="rejected">Rejected</SelectItem>
+              <SelectItem value="waitlisted">Waitlisted</SelectItem>
+              <SelectItem value="under_review">Under Review</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      {editingApp && (
-        <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) { setEditingApp(null); form.reset(); } }}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader><DialogTitle>Review Application</DialogTitle></DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField control={form.control} name="status" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                      <SelectContent>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="approved">Approved</SelectItem>
-                        <SelectItem value="rejected">Rejected</SelectItem>
-                        <SelectItem value="waitlisted">Waitlisted</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="reviewNotes" render={({ field }) => (
-                  <FormItem><FormLabel>Review Notes</FormLabel><FormControl><Textarea {...field} rows={4} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => { setIsDialogOpen(false); setEditingApp(null); form.reset(); }}>Cancel</Button>
-                  <Button type="submit" disabled={updateMutation.isPending}>Save Review</Button>
+      {/* Quick Stats */}
+      {data && data.applications.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[
+            { label: "Pending Review", count: data.applications.filter(a => a.status === "pending").length, color: "amber", icon: Clock },
+            { label: "Approved", count: data.applications.filter(a => a.status === "approved").length, color: "green", icon: CheckCircle },
+            { label: "Rejected", count: data.applications.filter(a => a.status === "rejected").length, color: "red", icon: XCircle },
+          ].map(({ label, count, color, icon: Icon }) => (
+            <Card key={label} className={statCardStyles[color].card}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <Icon className={`h-8 w-8 ${statCardStyles[color].icon}`} />
+                <div>
+                  <p className="text-2xl font-bold">{count}</p>
+                  <p className="text-sm text-muted-foreground">{label}</p>
                 </div>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       )}
 
-      <DataTable columns={columns} data={data?.applications || []} loading={isLoading} pagination={{ page, limit, total: data?.total || 0, onPageChange: setPage, onLimitChange: setLimit }} onSearch={setSearch} />
+      <DataTable
+        columns={columns}
+        data={data?.applications || []}
+        loading={isLoading}
+        pagination={{ page, limit, total: data?.total || 0, onPageChange: setPage, onLimitChange: setLimit }}
+        onSearch={setSearch}
+      />
+
+      {/* Review Dialog */}
+      <Dialog open={!!selectedApp} onOpenChange={(open) => { if (!open) setSelectedApp(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              Review Application
+            </DialogTitle>
+            <DialogDescription>Review and update application status</DialogDescription>
+          </DialogHeader>
+
+          {selectedApp && (
+            <div className="space-y-4">
+              <div className="p-4 bg-muted/40 rounded-lg space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Applicant</span>
+                  <span className="text-sm font-medium">{selectedApp.applicantName || "Unknown"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Email</span>
+                  <span className="text-sm">{selectedApp.applicantEmail || "—"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Opportunity</span>
+                  <span className="text-sm font-medium">{selectedApp.opportunityTitle || "—"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Type</span>
+                  <Badge variant="outline" className="text-xs capitalize">{selectedApp.opportunityType}</Badge>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Applied</span>
+                  <span className="text-sm">{new Date(selectedApp.createdAt).toLocaleString()}</span>
+                </div>
+              </div>
+
+              {selectedApp.coverLetter && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-sm font-medium mb-2">Cover Letter</p>
+                    <div className="p-3 bg-muted/40 rounded-lg text-sm text-foreground/80 max-h-32 overflow-y-auto">
+                      {selectedApp.coverLetter}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <Separator />
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium mb-1.5 block">Update Status</label>
+                  <Select value={newStatus} onValueChange={setNewStatus}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="under_review">Under Review</SelectItem>
+                      <SelectItem value="approved">Approved</SelectItem>
+                      <SelectItem value="rejected">Rejected</SelectItem>
+                      <SelectItem value="waitlisted">Waitlisted</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1.5 block">Review Notes (optional)</label>
+                  <Textarea
+                    value={reviewNotes}
+                    onChange={e => setReviewNotes(e.target.value)}
+                    placeholder="Add notes about this application..."
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-between gap-2 pt-1">
+                <Button variant="outline" onClick={() => setSelectedApp(null)}>Cancel</Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="text-success border-success/40 hover:bg-success/10"
+                    onClick={() => { setNewStatus("approved"); submitReview(); }}
+                    disabled={updateMutation.isPending}
+                  >
+                    <CheckCircle className="h-4 w-4 mr-1" />
+                    Approve
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="text-destructive border-destructive/40 hover:bg-destructive/10"
+                    onClick={() => { setNewStatus("rejected"); submitReview(); }}
+                    disabled={updateMutation.isPending}
+                  >
+                    <XCircle className="h-4 w-4 mr-1" />
+                    Reject
+                  </Button>
+                  <Button onClick={submitReview} disabled={updateMutation.isPending}>
+                    {updateMutation.isPending ? "Saving..." : "Save"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
+
+
+

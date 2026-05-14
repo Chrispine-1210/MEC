@@ -1,124 +1,74 @@
-import { useEffect, useRef } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { useEffect, useRef, useState } from "react";
 
 interface WebSocketMessage {
   type: string;
-  data: any;
+  data?: unknown;
+  channels?: string[];
 }
 
-export function useWebSocket() {
-  const wsRef = useRef<WebSocket | null>(null);
-  const { toast } = useToast();
+export function useWebSocket(channels: string[] = []) {
+  const socketRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<number | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    // Get current user ID from localStorage or context
-    const currentUserId = localStorage.getItem("userId") || "anonymous";
-    
-    // Determine WebSocket protocol based on current protocol
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws?userId=${currentUserId}`;
+    let isMounted = true;
 
-    try {
-      const socket = new WebSocket(wsUrl);
-      wsRef.current = socket;
+    const clearReconnect = () => {
+      if (reconnectTimeoutRef.current !== null) {
+        window.clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+    };
+
+    const connect = () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        return;
+      }
+
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const socket = new WebSocket(
+        `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`,
+      );
+      socketRef.current = socket;
 
       socket.onopen = () => {
-        console.log("WebSocket connected");
-      };
-
-      socket.onmessage = (event) => {
-        try {
-          const message: WebSocketMessage = JSON.parse(event.data);
-          handleWebSocketMessage(message);
-        } catch (error) {
-          console.error("Error parsing WebSocket message:", error);
+        if (!isMounted) return;
+        setIsConnected(true);
+        if (channels.length > 0) {
+          socket.send(JSON.stringify({ type: "subscribe", channels }));
         }
       };
 
-      socket.onclose = (event) => {
-        console.log("WebSocket disconnected:", event.reason);
-        // Attempt to reconnect after 3 seconds
-        setTimeout(() => {
-          if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
-            // Recursive call to reconnect
-            useWebSocket();
-          }
-        }, 3000);
+      socket.onclose = () => {
+        if (!isMounted) return;
+        setIsConnected(false);
+        clearReconnect();
+        reconnectTimeoutRef.current = window.setTimeout(connect, 3000);
       };
 
       socket.onerror = (error) => {
-        console.error("WebSocket error:", error);
+        console.error("Admin websocket error:", error);
       };
-    } catch (error) {
-      console.error("Failed to create WebSocket connection:", error);
-    }
+    };
+
+    connect();
 
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
+      isMounted = false;
+      clearReconnect();
+      if (socketRef.current) {
+        socketRef.current.close();
       }
     };
-  }, []);
-
-  const handleWebSocketMessage = (message: WebSocketMessage) => {
-    switch (message.type) {
-      case "USER_UPDATED":
-        toast({
-          title: "User Updated",
-          description: `User ${message.data.username} has been updated`,
-        });
-        break;
-
-      case "USER_DELETED":
-        toast({
-          title: "User Deleted",
-          description: "A user has been removed from the system",
-          variant: "destructive",
-        });
-        break;
-
-      case "SCHOLARSHIP_CREATED":
-        toast({
-          title: "New Scholarship",
-          description: `Scholarship "${message.data.title}" has been created`,
-        });
-        break;
-
-      case "APPLICATION_SUBMITTED":
-        toast({
-          title: "New Application",
-          description: "A new application has been submitted for review",
-        });
-        break;
-
-      case "CONTENT_FLAGGED":
-        toast({
-          title: "Content Flagged",
-          description: "Content has been flagged by moderation system",
-          variant: "destructive",
-        });
-        break;
-
-      case "NOTIFICATION":
-        toast({
-          title: message.data.title || "Notification",
-          description: message.data.message,
-          variant: message.data.type === "error" ? "destructive" : "default",
-        });
-        break;
-
-      default:
-        console.log("Unknown WebSocket message type:", message.type);
-    }
-  };
+  }, [channels.join(",")]);
 
   const sendMessage = (message: WebSocketMessage) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(message));
-    } else {
-      console.warn("WebSocket is not connected");
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify(message));
     }
   };
 
-  return { sendMessage };
+  return { isConnected, sendMessage };
 }

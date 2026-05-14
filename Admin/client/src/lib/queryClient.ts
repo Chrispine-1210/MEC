@@ -7,12 +7,31 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+const getAuthToken = () => {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("token");
+};
+
+export const authFetch = (input: RequestInfo | URL, init: RequestInit = {}) => {
+  const headers = new Headers(init.headers);
+  const token = getAuthToken();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  return fetch(input, {
+    ...init,
+    headers,
+    credentials: init.credentials ?? "include",
+  });
+};
+
 export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const token = localStorage.getItem("token");
+  const token = getAuthToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
@@ -21,46 +40,18 @@ export async function apiRequest(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  let res = await fetch(url, {
+  const res = await fetch(url, {
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
 
-  // Handle token refresh
-  if (res.status === 401 && token && url !== "/auth/login") {
-    try {
-      const refreshRes = await fetch("/auth/refresh", { 
-        method: "POST",
-        credentials: "include"
-      });
-      
-      if (refreshRes.ok) {
-        const { token: newToken } = await refreshRes.json();
-        localStorage.setItem("token", newToken);
-        
-        // Retry original request
-        headers["Authorization"] = `Bearer ${newToken}`;
-        res = await fetch(url, {
-          method,
-          headers,
-          body: data ? JSON.stringify(data) : undefined,
-          credentials: "include",
-        });
-      } else {
-        localStorage.removeItem("token");
-        window.location.href = "/auth";
-      }
-    } catch (e) {
-      localStorage.removeItem("token");
-      window.location.href = "/auth";
-    }
-  }
-
   if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.message || "Something went wrong");
+    const payload = await res.json().catch(() => ({ message: res.statusText }));
+    const error = new Error(payload.message || "Something went wrong");
+    Object.assign(error, { status: res.status, payload });
+    throw error;
   }
 
   return res;
@@ -72,9 +63,8 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
-      credentials: "include",
-    });
+    const url = queryKey[0] as string;
+    const res = await authFetch(url);
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
       return null;

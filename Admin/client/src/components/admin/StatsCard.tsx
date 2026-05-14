@@ -29,12 +29,12 @@ export default function StatsCard({
     return (
       <Card className={className}>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
-          <div className="h-6 w-6 bg-gray-200 rounded animate-pulse" />
+          <div className="h-4 w-24 bg-muted rounded animate-pulse" />
+          <div className="h-6 w-6 bg-muted rounded animate-pulse" />
         </CardHeader>
         <CardContent>
-          <div className="h-8 w-16 bg-gray-200 rounded animate-pulse mb-2" />
-          <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
+          <div className="h-8 w-16 bg-muted rounded animate-pulse mb-2" />
+          <div className="h-4 w-32 bg-muted rounded animate-pulse" />
         </CardContent>
       </Card>
     );
@@ -67,8 +67,8 @@ export default function StatsCard({
   };
 
   const getTrendColor = () => {
-    if (!trend || trend.value === 0) return "text-gray-500";
-    return trend.isPositive ? "text-green-600" : "text-red-600";
+    if (!trend || trend.value === 0) return "text-muted-foreground";
+    return trend.isPositive ? "text-success" : "text-destructive";
   };
 
   const getTrendBadgeVariant = () => {
@@ -78,25 +78,25 @@ export default function StatsCard({
 
   return (
     <Card 
-      className={`${className} animate-scaleIn hover:shadow-lg transition-all duration-300 hover:border-blue-200 cursor-pointer group`}
+      className={`${className} animate-scaleIn hover:shadow-lg transition-all duration-300 hover:border-primary/20 cursor-pointer group`}
       data-testid="stats-card"
     >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-gray-600 group-hover:text-blue-600 transition" data-testid="stats-title">
+        <CardTitle className="text-sm font-medium text-muted-foreground group-hover:text-primary transition" data-testid="stats-title">
           {title}
         </CardTitle>
-        <div className="text-gray-400 group-hover:text-blue-500 group-hover:animate-float transition" data-testid="stats-icon">
+        <div className="text-muted-foreground/70 group-hover:text-primary group-hover:animate-float transition" data-testid="stats-icon">
           {icon}
         </div>
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold text-gray-900 group-hover:text-blue-600 transition mb-1" data-testid="stats-value">
+        <div className="text-2xl font-bold text-foreground group-hover:text-primary transition mb-1" data-testid="stats-value">
           {formatValue(value)}
         </div>
         
         <div className="flex items-center justify-between">
           {description && (
-            <p className="text-xs text-gray-500 group-hover:text-gray-700 transition" data-testid="stats-description">
+            <p className="text-xs text-muted-foreground group-hover:text-foreground/80 transition" data-testid="stats-description">
               {description}
             </p>
           )}

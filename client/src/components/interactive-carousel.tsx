@@ -34,7 +34,7 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
       type: 'scholarship' as const,
       title: scholarship.title,
       description: scholarship.description,
-      imageUrl: scholarship.imageUrl,
+      imageUrl: scholarship.imageUrl || 'https://images.unsplash.com/photo-1523050853063-bd805a9ce011?auto=format&fit=crop&q=80&w=800',
       metadata: {
         institution: scholarship.institution,
         country: scholarship.country,
@@ -49,7 +49,7 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
       type: 'job' as const,
       title: job.title,
       description: job.description,
-      imageUrl: job.imageUrl,
+      imageUrl: job.imageUrl || 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?auto=format&fit=crop&q=80&w=800',
       metadata: {
         company: job.company,
         location: job.location,
@@ -64,7 +64,7 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
       type: 'testimonial' as const,
       title: "Student Success Story",
       description: testimonial.content,
-      imageUrl: testimonial.imageUrl,
+      imageUrl: testimonial.imageUrl || 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&q=80&w=800',
       metadata: {
         rating: testimonial.rating,
         userId: testimonial.userId,
@@ -142,14 +142,21 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
     switch (item.type) {
       case 'scholarship':
         return (
-          <Card className="h-full hover:shadow-xl transition-shadow duration-300">
+          <Card className="h-full hover:shadow-xl transition-shadow duration-300 overflow-hidden">
+            <div className="h-48 w-full overflow-hidden">
+              <img 
+                src={item.imageUrl} 
+                alt={item.title} 
+                className="w-full h-full object-cover transition-transform duration-500 hover:scale-110" 
+              />
+            </div>
             <CardHeader>
               <div className="flex items-center justify-between mb-2">
                 <Badge className="bg-mtendere-green text-white">
                   <GraduationCap className="w-3 h-3 mr-1" />
                   Scholarship
                 </Badge>
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-muted-foreground">
                   Deadline: {formatDate(item.metadata.deadline)}
                 </span>
               </div>
@@ -168,16 +175,16 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-600 mb-4 line-clamp-3">
+              <p className="text-muted-foreground mb-4 line-clamp-3">
                 {item.description}
               </p>
               <div className="flex items-center justify-between mb-4">
-                <span className="text-sm text-gray-600">Award Amount</span>
+                <span className="text-sm text-muted-foreground">Award Amount</span>
                 <span className="font-semibold text-mtendere-green">
                   {item.metadata.amount ? formatCurrency(item.metadata.amount, item.metadata.currency) : 'Full Coverage'}
                 </span>
               </div>
-              <Button asChild className="w-full bg-mtendere-blue hover:bg-blue-700">
+              <Button asChild className="w-full bg-mtendere-blue hover:bg-mtendere-blue/90 text-white font-bold">
                 <Link href="/scholarships">
                   Learn More
                 </Link>
@@ -188,7 +195,14 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
 
       case 'job':
         return (
-          <Card className="h-full hover:shadow-xl transition-shadow duration-300">
+          <Card className="h-full hover:shadow-xl transition-shadow duration-300 overflow-hidden">
+            <div className="h-48 w-full overflow-hidden">
+              <img 
+                src={item.imageUrl} 
+                alt={item.title} 
+                className="w-full h-full object-cover transition-transform duration-500 hover:scale-110" 
+              />
+            </div>
             <CardHeader>
               <div className="flex items-center justify-between mb-2">
                 <Badge className="bg-mtendere-orange text-white">
@@ -216,16 +230,16 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-600 mb-4 line-clamp-3">
+              <p className="text-muted-foreground mb-4 line-clamp-3">
                 {item.description}
               </p>
               <div className="flex items-center justify-between mb-4">
-                <span className="text-sm text-gray-600">Salary</span>
+                <span className="text-sm text-muted-foreground">Salary</span>
                 <span className="font-semibold text-mtendere-green">
                   {item.metadata.salary ? formatCurrency(item.metadata.salary, item.metadata.currency) : 'Competitive'}
                 </span>
               </div>
-              <Button asChild className="w-full bg-mtendere-green hover:bg-green-700">
+              <Button asChild className="w-full bg-mtendere-green hover:bg-mtendere-green/90 text-white font-bold">
                 <Link href="/jobs">
                   Apply Now
                 </Link>
@@ -247,7 +261,7 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
                   {[...Array(5)].map((_, i) => (
                     <Star
                       key={i}
-                      className={`w-4 h-4 ${i < item.metadata.rating ? 'text-mtendere-orange fill-current' : 'text-gray-300'}`}
+                      className={`w-4 h-4 ${i < item.metadata.rating ? 'text-mtendere-orange fill-current' : 'text-muted-foreground/50'}`}
                     />
                   ))}
                 </div>
@@ -260,7 +274,7 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-600 mb-4 italic line-clamp-4">
+              <p className="text-muted-foreground mb-4 italic line-clamp-4">
                 "{item.description}"
               </p>
               <div className="flex items-center">
@@ -277,7 +291,7 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
                 </div>
                 <div>
                   <div className="font-semibold text-mtendere-blue">Student</div>
-                  <div className="text-sm text-gray-500">Successful Graduate</div>
+                  <div className="text-sm text-muted-foreground">Successful Graduate</div>
                 </div>
               </div>
               <Button asChild variant="outline" className="w-full mt-4 border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white">
@@ -297,10 +311,10 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
   if (totalSlides === 0) {
     return (
       <div className="text-center py-12">
-        <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-          <Star className="w-8 h-8 text-gray-400" />
+        <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+          <Star className="w-8 h-8 text-muted-foreground/70" />
         </div>
-        <p className="text-gray-500">No featured content available at the moment.</p>
+        <p className="text-muted-foreground">No featured content available at the moment.</p>
       </div>
     );
   }
@@ -344,7 +358,7 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
           <Button
             variant="outline"
             size="icon"
-            className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-4 bg-white shadow-lg hover:bg-gray-50 z-10"
+            className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-4 bg-card shadow-lg hover:bg-muted/40 z-10"
             onClick={prevSlide}
           >
             <ChevronLeft className="w-5 h-5 text-mtendere-blue" />
@@ -353,7 +367,7 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
           <Button
             variant="outline"
             size="icon"
-            className="absolute right-0 top-1/2 transform -translate-y-1/2 translate-x-4 bg-white shadow-lg hover:bg-gray-50 z-10"
+            className="absolute right-0 top-1/2 transform -translate-y-1/2 translate-x-4 bg-card shadow-lg hover:bg-muted/40 z-10"
             onClick={nextSlide}
           >
             <ChevronRight className="w-5 h-5 text-mtendere-blue" />
@@ -370,7 +384,7 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
               className={`w-3 h-3 rounded-full transition-all duration-300 ${
                 index === currentSlide
                   ? 'bg-mtendere-blue'
-                  : 'bg-gray-300 hover:bg-gray-400'
+                  : 'bg-muted-foreground/40 hover:bg-muted-foreground/60'
               }`}
               onClick={() => goToSlide(index)}
             />
@@ -384,7 +398,7 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
           variant="ghost"
           size="sm"
           onClick={() => setIsAutoPlaying(!isAutoPlaying)}
-          className="text-gray-600 hover:text-mtendere-blue"
+          className="text-muted-foreground hover:text-mtendere-blue"
         >
           {isAutoPlaying ? 'Pause Auto-play' : 'Resume Auto-play'}
         </Button>
@@ -392,3 +406,6 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
     </div>
   );
 }
+
+
+

@@ -1,4 +1,4 @@
-import { apiRequest } from "./queryClient";
+import { apiRequest, authFetch } from "./queryClient";
 
 // Dashboard API
 export const dashboardApi = {
@@ -159,10 +159,9 @@ export const uploadApi = {
     const formData = new FormData();
     formData.append("file", file);
     
-    return fetch("/api/admin/upload", {
+    return authFetch("/api/admin/upload", {
       method: "POST",
       body: formData,
-      credentials: "include",
     });
   },
 };

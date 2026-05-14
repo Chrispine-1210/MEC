@@ -59,11 +59,11 @@ export default function AnalyticsChart({
     return (
       <Card className={className}>
         <CardHeader>
-          <div className="h-6 w-48 bg-gray-200 rounded animate-pulse mb-2" />
-          <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
+          <div className="h-6 w-48 bg-muted rounded animate-pulse mb-2" />
+          <div className="h-4 w-32 bg-muted rounded animate-pulse" />
         </CardHeader>
         <CardContent>
-          <div className="h-64 bg-gray-200 rounded animate-pulse" />
+          <div className="h-64 bg-muted rounded animate-pulse" />
         </CardContent>
       </Card>
     );
@@ -73,17 +73,17 @@ export default function AnalyticsChart({
     <div className="space-y-2">
       {data.map((item, index) => (
         <div key={index} className="flex items-center justify-between">
-          <span className="text-sm text-gray-600 min-w-0 flex-1">
+          <span className="text-sm text-muted-foreground min-w-0 flex-1">
             {item.name}
           </span>
           <div className="flex items-center space-x-3 min-w-0 flex-1">
-            <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="w-full bg-muted rounded-full h-2">
               <div
-                className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                className="bg-primary h-2 rounded-full transition-all duration-500"
                 style={{ width: `${(item.value / maxValue) * 100}%` }}
               />
             </div>
-            <span className="text-sm font-medium text-gray-900 w-12 text-right">
+            <span className="text-sm font-medium text-foreground w-12 text-right">
               {item.value.toLocaleString()}
             </span>
           </div>
@@ -97,16 +97,16 @@ export default function AnalyticsChart({
       <div className="grid grid-cols-2 gap-4">
         {data.map((item, index) => {
           const percentage = totalValue > 0 ? (item.value / totalValue) * 100 : 0;
-          const colors = ["bg-blue-500", "bg-green-500", "bg-yellow-500", "bg-purple-500", "bg-red-500"];
+          const colors = ["bg-primary/100", "bg-success/100", "bg-warning", "bg-info", "bg-destructive/100"];
           
           return (
             <div key={index} className="flex items-center space-x-2">
               <div className={`w-3 h-3 rounded-full ${colors[index % colors.length]}`} />
               <div className="flex-1 min-w-0">
-                <div className="text-sm text-gray-900 font-medium truncate">
+                <div className="text-sm text-foreground font-medium truncate">
                   {item.name}
                 </div>
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-muted-foreground">
                   {percentage.toFixed(1)}% ({item.value.toLocaleString()})
                 </div>
               </div>
@@ -122,8 +122,8 @@ export default function AnalyticsChart({
       <svg width="100%" height={height} className="overflow-visible">
         <defs>
           <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="rgb(59, 130, 246)" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="rgb(59, 130, 246)" stopOpacity="0" />
+            <stop offset="0%" stopColor="hsl(var(--chart-1))" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="hsl(var(--chart-1))" stopOpacity="0" />
           </linearGradient>
         </defs>
         
@@ -135,7 +135,7 @@ export default function AnalyticsChart({
             y1={`${(i / 4) * 100}%`}
             x2="100%"
             y2={`${(i / 4) * 100}%`}
-            stroke="#e5e7eb"
+            stroke="hsl(var(--border))"
             strokeWidth="1"
           />
         ))}
@@ -150,7 +150,7 @@ export default function AnalyticsChart({
             })
             .join(" ")}
           fill="none"
-          stroke="rgb(59, 130, 246)"
+          stroke="hsl(var(--chart-1))"
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -167,7 +167,7 @@ export default function AnalyticsChart({
               cx={`${x}%`}
               cy={`${y}%`}
               r="4"
-              fill="rgb(59, 130, 246)"
+              fill="hsl(var(--chart-1))"
               className="cursor-pointer hover:r-6 transition-all"
             />
           );
@@ -175,7 +175,7 @@ export default function AnalyticsChart({
       </svg>
       
       {/* X-axis labels */}
-      <div className="flex justify-between mt-2 text-xs text-gray-500">
+      <div className="flex justify-between mt-2 text-xs text-muted-foreground">
         {data.map((item, i) => (
           <span key={i} className="text-center">
             {item.label || item.name}
@@ -267,9 +267,9 @@ export default function AnalyticsChart({
           {data.length > 0 ? (
             renderChart()
           ) : (
-            <div className="h-full flex items-center justify-center text-gray-500">
+            <div className="h-full flex items-center justify-center text-muted-foreground">
               <div className="text-center">
-                <BarChart3 className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                <BarChart3 className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
                 <p className="text-sm">No data available</p>
               </div>
             </div>
@@ -279,3 +279,5 @@ export default function AnalyticsChart({
     </Card>
   );
 }
+
+

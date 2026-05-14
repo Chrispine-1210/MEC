@@ -123,9 +123,9 @@ export default function CreateContentModal({
     }
   };
 
-  const form = useForm({
-    resolver: zodResolver(getSchema()),
-    defaultValues: getDefaultValues(),
+  const form = useForm<any>({
+    resolver: zodResolver(getSchema() as any),
+    defaultValues: getDefaultValues() as any,
   });
 
   function getDefaultValues() {
@@ -164,7 +164,7 @@ export default function CreateContentModal({
 
   const removeTag = (tagToRemove: string) => {
     const currentTags = form.getValues("tags") || [];
-    form.setValue("tags", currentTags.filter(tag => tag !== tagToRemove));
+    form.setValue("tags", currentTags.filter((tag: string) => tag !== tagToRemove));
   };
 
   const addSkill = (fieldName: "skills" | "requirements" | "services") => {
@@ -177,7 +177,7 @@ export default function CreateContentModal({
 
   const removeSkill = (skillToRemove: string, fieldName: "skills" | "requirements" | "services") => {
     const currentSkills = form.getValues(fieldName) || [];
-    form.setValue(fieldName, currentSkills.filter(skill => skill !== skillToRemove));
+    form.setValue(fieldName, currentSkills.filter((skill: string) => skill !== skillToRemove));
   };
 
   const getTitle = () => {
@@ -197,7 +197,7 @@ export default function CreateContentModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="create-content-modal">
+      <DialogContent className="admin-dialog max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="create-content-modal">
         <DialogHeader>
           <DialogTitle data-testid="modal-title">{getTitle()}</DialogTitle>
           <DialogDescription>
@@ -206,7 +206,7 @@ export default function CreateContentModal({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="admin-form space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Basic Fields */}
               {contentType !== "team" && (
@@ -435,7 +435,7 @@ export default function CreateContentModal({
               <div>
                 <FormLabel>Tags</FormLabel>
                 <div className="flex flex-wrap gap-2 mb-2">
-                  {form.watch("tags")?.map((tag, index) => (
+                  {form.watch("tags")?.map((tag: string, index: number) => (
                     <Badge key={index} variant="secondary" className="flex items-center gap-1" data-testid={`tag-${index}`}>
                       {tag}
                       <X
@@ -460,7 +460,7 @@ export default function CreateContentModal({
               </div>
             )}
 
-            <div className="flex justify-end space-x-4 pt-6 border-t">
+            <div className="flex justify-end space-x-4 pt-6 border-t border-border/60">
               <Button type="button" variant="outline" onClick={onClose} data-testid="button-cancel">
                 Cancel
               </Button>

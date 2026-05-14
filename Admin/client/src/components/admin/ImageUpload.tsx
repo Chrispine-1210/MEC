@@ -170,13 +170,13 @@ export default function ImageUpload({
                   </Button>
                 </div>
               ) : (
-                <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                  <File className="w-8 h-8 text-gray-400" />
+                <div className="flex items-center space-x-3 p-3 bg-muted/40 rounded-lg">
+                  <File className="w-8 h-8 text-muted-foreground/70" />
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">
+                    <p className="text-sm font-medium text-foreground">
                       {value.split('/').pop() || 'Uploaded file'}
                     </p>
-                    <p className="text-xs text-gray-500">File uploaded successfully</p>
+                    <p className="text-xs text-muted-foreground">File uploaded successfully</p>
                   </div>
                   <Button
                     type="button"
@@ -198,8 +198,8 @@ export default function ImageUpload({
             <div
               className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
                 dragActive
-                  ? "border-blue-500 bg-blue-50"
-                  : "border-gray-300 hover:border-gray-400"
+                  ? "border-primary bg-primary/10"
+                  : "border-border/70 hover:border-border/80"
               }`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -217,25 +217,25 @@ export default function ImageUpload({
               
               {uploading ? (
                 <div className="space-y-4">
-                  <Upload className="w-12 h-12 mx-auto text-blue-500 animate-bounce" />
+                  <Upload className="w-12 h-12 mx-auto text-primary animate-bounce" />
                   <div>
-                    <p className="text-lg font-medium text-gray-900">
+                    <p className="text-lg font-medium text-foreground">
                       Uploading...
                     </p>
                     <Progress value={uploadProgress} className="mt-2" />
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="text-sm text-muted-foreground mt-1">
                       {uploadProgress}% complete
                     </p>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <ImageIcon className="w-12 h-12 mx-auto text-gray-400" />
+                  <ImageIcon className="w-12 h-12 mx-auto text-muted-foreground/70" />
                   <div>
-                    <p className="text-lg font-medium text-gray-900">
+                    <p className="text-lg font-medium text-foreground">
                       Drop files here or click to upload
                     </p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-muted-foreground">
                       Supports: {acceptedFileTypes} (max {maxFileSize}MB)
                     </p>
                   </div>
@@ -247,7 +247,7 @@ export default function ImageUpload({
             </div>
 
             {!uploading && (
-              <div className="mt-4 flex items-start space-x-2 text-xs text-gray-500">
+              <div className="mt-4 flex items-start space-x-2 text-xs text-muted-foreground">
                 <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                 <div>
                   <p>
@@ -268,3 +268,4 @@ export default function ImageUpload({
     </div>
   );
 }
+

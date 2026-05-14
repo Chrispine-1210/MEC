@@ -1,4 +1,13 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, varchar } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  integer,
+  jsonb,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  varchar,
+} from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -15,6 +24,12 @@ export const users = pgTable("users", {
   phone: varchar("phone", { length: 20 }),
   dateOfBirth: timestamp("date_of_birth"),
   isActive: boolean("is_active").default(true),
+
+  // MFA (TOTP)
+  mfaEnabled: boolean("mfa_enabled").default(false),
+  totpSecret: text("totp_secret"),
+  mfaConfirmedAt: timestamp("mfa_confirmed_at"),
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -59,8 +74,8 @@ export const jobs = pgTable("jobs", {
 export const applications = pgTable("applications", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
-  type: varchar("type", { length: 50 }).notNull(), // 'scholarship' or 'job'
-  referenceId: integer("reference_id").notNull(), // scholarship_id or job_id
+  type: varchar("type", { length: 50 }).notNull(),
+  referenceId: integer("reference_id").notNull(),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
   documents: jsonb("documents"),
   notes: text("notes"),
@@ -77,6 +92,7 @@ export const partners = pgTable("partners", {
   country: text("country"),
   studentCount: integer("student_count"),
   ranking: text("ranking"),
+  programs: jsonb("programs"),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -103,6 +119,16 @@ export const blogPosts = pgTable("blog_posts", {
   tags: text("tags").array(),
   isPublished: boolean("is_published").default(false),
   authorId: integer("author_id").notNull(),
+  likes: integer("likes").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const blogComments = pgTable("blog_comments", {
+  id: serial("id").primaryKey(),
+  blogPostId: integer("blog_post_id").notNull(),
+  userId: integer("user_id").notNull(),
+  content: text("content").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -116,11 +142,13 @@ export const teamMembers = pgTable("team_members", {
   email: varchar("email", { length: 255 }),
   linkedin: text("linkedin"),
   twitter: text("twitter"),
+  order: integer("display_order").default(0),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Legacy/simple referral table (will be superseded by the production referral engine tables).
 export const referrals = pgTable("referrals", {
   id: serial("id").primaryKey(),
   referrerId: integer("referrer_id").notNull(),
@@ -132,23 +160,222 @@ export const referrals = pgTable("referrals", {
   completedAt: timestamp("completed_at"),
 });
 
+// -----------------------------
+// Production Referral Engine
+// -----------------------------
+
+export const referralPrograms = pgTable("referral_programs", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  attributionModel: varchar("attribution_model", { length: 50 }).notNull().default("last_click"),
+  level1Percent: integer("level1_percent").default(0),
+  level1Flat: integer("level1_flat").default(0),
+  level2Enabled: boolean("level2_enabled").default(false),
+  level2Percent: integer("level2_percent").default(0),
+  level2Flat: integer("level2_flat").default(0),
+  rewardDelayDays: integer("reward_delay_days").default(7),
+  codeExpiryDays: integer("code_expiry_days").default(90),
+  isActive: boolean("is_active").default(true),
+  startAt: timestamp("start_at"),
+  endAt: timestamp("end_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const referralCodes = pgTable("referral_codes", {
+  id: serial("id").primaryKey(),
+  programId: integer("program_id").notNull(),
+  referrerId: integer("referrer_id").notNull(),
+  code: varchar("code", { length: 64 }).notNull().unique(),
+  referralLinkPath: varchar("referral_link_path", { length: 255 }).notNull().default("/register"),
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at"),
+  usedAt: timestamp("used_at"),
+  isActive: boolean("is_active").default(true),
+});
+
+export const referralClicks = pgTable("referral_clicks", {
+  id: serial("id").primaryKey(),
+  programId: integer("program_id").notNull(),
+  codeId: integer("code_id").notNull(),
+  referrerId: integer("referrer_id").notNull(),
+  // Anonymous before signup
+  referredEmail: varchar("referred_email", { length: 255 }),
+  fingerprintHash: varchar("fingerprint_hash", { length: 128 }).notNull(),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: text("user_agent"),
+  utmSource: varchar("utm_source", { length: 255 }),
+  utmMedium: varchar("utm_medium", { length: 255 }),
+  utmCampaign: varchar("utm_campaign", { length: 255 }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const referralAttributions = pgTable("referral_attributions", {
+  id: serial("id").primaryKey(),
+  clickId: integer("click_id").notNull(),
+  programId: integer("program_id").notNull(),
+  codeId: integer("code_id").notNull(),
+  referrerId: integer("referrer_id").notNull(),
+  referredUserId: integer("referred_user_id"),
+  referredEmail: varchar("referred_email", { length: 255 }),
+  // Funnel staging
+  signupAt: timestamp("signup_at"),
+  activationAt: timestamp("activation_at"),
+  attributionScore: integer("attribution_score").default(0),
+  level: integer("level").notNull().default(1),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const referralRewards = pgTable("referral_rewards", {
+  id: serial("id").primaryKey(),
+  attributionId: integer("attribution_id").notNull(),
+  programId: integer("program_id").notNull(),
+  referrerId: integer("referrer_id").notNull(),
+  referredUserId: integer("referred_user_id"),
+  // Triggered by payment success
+  paymentId: integer("payment_id"),
+  // Snapshot of computed commission
+  amount: integer("amount").notNull(),
+  currency: varchar("currency", { length: 10 }).default("USD"),
+  level: integer("level").notNull().default(1),
+  // State machine
+  state: varchar("state", { length: 30 }).notNull().default("on_hold"),
+  ruleSnapshot: jsonb("rule_snapshot"),
+  heldAt: timestamp("held_at").defaultNow(),
+  releasedAt: timestamp("released_at"),
+  reversedAt: timestamp("reversed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  // Admin override
+  disputeNote: text("dispute_note"),
+});
+
+export const fraudSignals = pgTable("fraud_signals", {
+  id: serial("id").primaryKey(),
+  referralClickId: integer("referral_click_id").notNull(),
+  signalType: varchar("signal_type", { length: 100 }).notNull(),
+  scoreDelta: integer("score_delta").default(0),
+  details: jsonb("details"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const referralRiskScores = pgTable("referral_risk_scores", {
+  id: serial("id").primaryKey(),
+  programId: integer("program_id").notNull(),
+  clickId: integer("click_id").notNull(),
+  referrerId: integer("referrer_id").notNull(),
+  fingerprintHash: varchar("fingerprint_hash", { length: 128 }).notNull(),
+  score: integer("score").notNull().default(0),
+  riskBand: varchar("risk_band", { length: 20 }).notNull().default("low"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// -----------------------------
+// Stripe Payment + Wallet Ledger
+// -----------------------------
+
+export const stripeEvents = pgTable("stripe_events", {
+  id: serial("id").primaryKey(),
+  stripeEventId: varchar("stripe_event_id", { length: 255 }).notNull().unique(),
+  eventType: varchar("event_type", { length: 255 }).notNull(),
+  receivedAt: timestamp("received_at").defaultNow(),
+  processedAt: timestamp("processed_at"),
+});
+
+export const payments = pgTable("payments", {
+  id: serial("id").primaryKey(),
+  stripePaymentIntentId: varchar("stripe_payment_intent_id", { length: 255 }),
+  stripeCheckoutSessionId: varchar("stripe_checkout_session_id", { length: 255 }),
+  userId: integer("user_id"),
+  programId: integer("program_id"),
+  attributionId: integer("attribution_id"),
+  amount: integer("amount").notNull(),
+  currency: varchar("currency", { length: 10 }).default("USD"),
+  status: varchar("status", { length: 30 }).notNull().default("succeeded"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  raw: jsonb("raw"),
+});
+
+export const wallets = pgTable("wallets", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().unique(),
+  currency: varchar("currency", { length: 10 }).default("USD"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const walletLedgerEntries = pgTable("wallet_ledger_entries", {
+  id: serial("id").primaryKey(),
+  walletId: integer("wallet_id").notNull(),
+  referralRewardId: integer("referral_reward_id"),
+  paymentId: integer("payment_id"),
+  type: varchar("type", { length: 30 }).notNull(),
+  amount: integer("amount").notNull(),
+  currency: varchar("currency", { length: 10 }).default("USD"),
+  createdAt: timestamp("created_at").defaultNow(),
+  metadata: jsonb("metadata"),
+});
+
+export const walletBalances = pgTable("wallet_balances", {
+  id: serial("id").primaryKey(),
+  walletId: integer("wallet_id").notNull().unique(),
+  availableBalance: integer("available_balance").notNull().default(0),
+  pendingBalance: integer("pending_balance").notNull().default(0),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const payoutRequests = pgTable("payout_requests", {
+  id: serial("id").primaryKey(),
+  walletId: integer("wallet_id").notNull(),
+  amount: integer("amount").notNull(),
+  currency: varchar("currency", { length: 10 }).default("USD"),
+  method: varchar("method", { length: 50 }).default("bank"),
+  status: varchar("status", { length: 30 }).notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+  processedAt: timestamp("processed_at"),
+  metadata: jsonb("metadata"),
+});
+
 export const analytics = pgTable("analytics", {
   id: serial("id").primaryKey(),
   event: varchar("event", { length: 100 }).notNull(),
   userId: integer("user_id"),
-  metadata: jsonb("metadata"),
+  metadata: jsonb("metadata").$type<Record<string, unknown> | null>(),
   ipAddress: varchar("ip_address", { length: 45 }),
   userAgent: text("user_agent"),
   timestamp: timestamp("timestamp").defaultNow(),
 });
 
-// Relations
+export const savedItems = pgTable("saved_items", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  type: varchar("type", { length: 50 }).notNull(),
+  referenceId: integer("reference_id").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const messages = pgTable("messages", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  email: varchar("email", { length: 255 }).notNull(),
+  phone: varchar("phone", { length: 20 }),
+  subject: text("subject"),
+  message: text("message").notNull(),
+  isRead: boolean("is_read").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const usersRelations = relations(users, ({ many }) => ({
   applications: many(applications),
   testimonials: many(testimonials),
   blogPosts: many(blogPosts),
+  blogComments: many(blogComments),
   referrals: many(referrals),
   analytics: many(analytics),
+  savedItems: many(savedItems),
 }));
 
 export const scholarshipsRelations = relations(scholarships, ({ one }) => ({
@@ -179,9 +406,21 @@ export const testimonialsRelations = relations(testimonials, ({ one }) => ({
   }),
 }));
 
-export const blogPostsRelations = relations(blogPosts, ({ one }) => ({
+export const blogPostsRelations = relations(blogPosts, ({ one, many }) => ({
   author: one(users, {
     fields: [blogPosts.authorId],
+    references: [users.id],
+  }),
+  comments: many(blogComments),
+}));
+
+export const blogCommentsRelations = relations(blogComments, ({ one }) => ({
+  post: one(blogPosts, {
+    fields: [blogComments.blogPostId],
+    references: [blogPosts.id],
+  }),
+  user: one(users, {
+    fields: [blogComments.userId],
     references: [users.id],
   }),
 }));
@@ -204,7 +443,13 @@ export const analyticsRelations = relations(analytics, ({ one }) => ({
   }),
 }));
 
-// Insert schemas
+export const savedItemsRelations = relations(savedItems, ({ one }) => ({
+  user: one(users, {
+    fields: [savedItems.userId],
+    references: [users.id],
+  }),
+}));
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -245,6 +490,13 @@ export const insertBlogPostSchema = createInsertSchema(blogPosts).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  likes: true,
+});
+
+export const insertBlogCommentSchema = createInsertSchema(blogComments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 export const insertTeamMemberSchema = createInsertSchema(teamMembers).omit({
@@ -264,7 +516,17 @@ export const insertAnalyticsSchema = createInsertSchema(analytics).omit({
   timestamp: true,
 });
 
-// Types
+export const insertSavedItemSchema = createInsertSchema(savedItems).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertMessageSchema = createInsertSchema(messages).omit({
+  id: true,
+  createdAt: true,
+  isRead: true,
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Scholarship = typeof scholarships.$inferSelect;
@@ -279,9 +541,15 @@ export type Testimonial = typeof testimonials.$inferSelect;
 export type InsertTestimonial = z.infer<typeof insertTestimonialSchema>;
 export type BlogPost = typeof blogPosts.$inferSelect;
 export type InsertBlogPost = z.infer<typeof insertBlogPostSchema>;
+export type BlogComment = typeof blogComments.$inferSelect;
+export type InsertBlogComment = z.infer<typeof insertBlogCommentSchema>;
 export type TeamMember = typeof teamMembers.$inferSelect;
 export type InsertTeamMember = z.infer<typeof insertTeamMemberSchema>;
 export type Referral = typeof referrals.$inferSelect;
 export type InsertReferral = z.infer<typeof insertReferralSchema>;
 export type Analytics = typeof analytics.$inferSelect;
 export type InsertAnalytics = z.infer<typeof insertAnalyticsSchema>;
+export type SavedItem = typeof savedItems.$inferSelect;
+export type InsertSavedItem = z.infer<typeof insertSavedItemSchema>;
+export type Message = typeof messages.$inferSelect;
+export type InsertMessage = z.infer<typeof insertMessageSchema>;

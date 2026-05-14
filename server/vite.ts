@@ -5,6 +5,7 @@ import { createServer as createViteServer, createLogger } from "vite";
 import { type Server } from "http";
 import viteConfig from "../vite.config";
 import { nanoid } from "nanoid";
+import { env } from "./env";
 
 const viteLogger = createLogger();
 
@@ -22,7 +23,13 @@ export function log(message: string, source = "express") {
 export async function setupVite(app: Express, server: Server) {
   const serverOptions = {
     middlewareMode: true,
-    hmr: { server },
+    hmr: {
+      server,
+      path: "/__vite_hmr",
+      host: "localhost",
+      protocol: "ws" as const,
+      clientPort: env.PORT,
+    },
     allowedHosts: true as const,
   };
 

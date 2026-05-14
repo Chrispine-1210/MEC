@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { authFetch } from "@/lib/queryClient";
 import {
   LayoutDashboard,
   Users,
@@ -13,7 +16,6 @@ import {
   Building2,
   FileText,
   UserCheck,
-  MessageSquare,
   BarChart3,
   Shield,
   Settings,
@@ -22,255 +24,196 @@ import {
   ClipboardList,
   Bot,
   Flame,
+  ChevronRight,
 } from "lucide-react";
 
 interface SidebarProps {
   onClose?: () => void;
 }
 
-const navigationItems = [
-  {
-    name: "Dashboard",
-    href: "/admin",
-    icon: LayoutDashboard,
-    description: "Overview and stats"
-  },
-  {
-    name: "Analytics",
-    href: "/admin/analytics",
-    icon: BarChart3,
-    description: "Performance metrics"
-  },
-  {
-    name: "Activity & Achievements",
-    href: "/admin/activity",
-    icon: Flame,
-    description: "Track your progress",
-    badge: "New"
-  }
-];
-
-const contentManagement = [
-  {
-    name: "Scholarships",
-    href: "/admin/scholarships",
-    icon: GraduationCap,
-    description: "Manage scholarships",
-    badge: "12 new"
-  },
-  {
-    name: "Job Opportunities",
-    href: "/admin/jobs",
-    icon: Briefcase,
-    description: "Manage job postings",
-    badge: "5 pending"
-  },
-  {
-    name: "Partners",
-    href: "/admin/partners",
-    icon: Building2,
-    description: "Educational partners"
-  },
-  {
-    name: "Blog Posts",
-    href: "/admin/blog",
-    icon: FileText,
-    description: "Content management"
-  },
-  {
-    name: "Team Members",
-    href: "/admin/team",
-    icon: UserCheck,
-    description: "Team profiles"
-  }
-];
-
-const userManagement = [
-  {
-    name: "Users",
-    href: "/admin/users",
-    icon: Users,
-    description: "User management"
-  },
-  {
-    name: "Applications",
-    href: "/admin/applications",
-    icon: ClipboardList,
-    description: "User applications",
-    badge: "23 new"
-  },
-  {
-    name: "Roles & Permissions",
-    href: "/admin/roles",
-    icon: Shield,
-    description: "Access control"
-  }
-];
-
-const aiFeatures = [
-  {
-    name: "AI Chat Assistant",
-    href: "/admin/ai-chat",
-    icon: Bot,
-    description: "AI conversations",
-    badge: "Beta"
-  }
-];
-
-const systemSettings = [
-  {
-    name: "Settings",
-    href: "/admin/settings",
-    icon: Settings,
-    description: "System configuration"
-  }
-];
-
 export default function Sidebar({ onClose }: SidebarProps) {
   const [location] = useLocation();
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
+  const { data: stats } = useQuery<any>({
+    queryKey: ["/api/admin/dashboard/stats"],
+    queryFn: async () => {
+      const res = await authFetch("/api/admin/dashboard/stats");
+      if (!res.ok) return null;
+      return res.json();
+    },
+    refetchInterval: 60000,
+    staleTime: 30000,
+  });
 
   const isActive = (href: string) => {
-    if (href === "/admin") {
-      return location === "/admin" || location === "/admin/dashboard";
-    }
+    if (href === "/admin") return location === "/admin" || location === "/admin/dashboard";
     return location.startsWith(href);
   };
 
   const canAccess = (item: any) => {
     if (!user) return false;
     const role = user.role;
-    
-    if (role === 'admin' || role === 'super_admin') return true;
-    
+    if (role === "admin" || role === "super_admin") return true;
     const editorRoutes = [
-      "/admin", 
+      "/admin",
       "/admin/dashboard",
+      "/admin/analytics",
+      "/admin/activity",
       "/admin/scholarships",
       "/admin/jobs",
       "/admin/partners",
       "/admin/blog",
       "/admin/team",
-      "/admin/applications",
-      "/admin/ai-chat"
     ];
-    
-    if (role === 'editor') {
-      return editorRoutes.includes(item.href);
-    }
-    
-    if (role === 'viewer') {
-      const viewerRoutes = [
-        "/admin",
-        "/admin/dashboard",
-        "/admin/scholarships",
-        "/admin/jobs",
-        "/admin/partners",
-        "/admin/blog",
-        "/admin/team",
-        "/admin/applications"
-      ];
-      return viewerRoutes.includes(item.href);
-    }
-    
+    if (role === "editor") return editorRoutes.includes(item.href);
+    const viewerRoutes = ["/admin", "/admin/dashboard", "/admin/analytics", "/admin/activity"];
+    if (role === "viewer") return viewerRoutes.includes(item.href);
     return false;
   };
 
-  const NavSection = ({ title, items }: { title: string; items: any[] }) => {
-    const filteredItems = items.filter(canAccess);
-    if (filteredItems.length === 0) return null;
+  const navigationItems = [
+    { name: "Dashboard", href: "/admin", icon: LayoutDashboard, description: "Overview and stats" },
+    { name: "Analytics", href: "/admin/analytics", icon: BarChart3, description: "Performance metrics" },
+    { name: "Activity", href: "/admin/activity", icon: Flame, description: "Track your progress", badge: "New" },
+  ];
 
+  const contentManagement = [
+    { name: "Scholarships", href: "/admin/scholarships", icon: GraduationCap, description: "Manage scholarships", count: stats?.totalScholarships },
+    { name: "Job Opportunities", href: "/admin/jobs", icon: Briefcase, description: "Manage job postings", count: stats?.totalJobs },
+    { name: "Partners", href: "/admin/partners", icon: Building2, description: "Educational partners", count: stats?.totalPartners },
+    { name: "Blog Posts", href: "/admin/blog", icon: FileText, description: "Content management", count: stats?.publishedPosts },
+    { name: "Team Members", href: "/admin/team", icon: UserCheck, description: "Team profiles" },
+  ];
+
+  const userManagement = [
+    { name: "Users", href: "/admin/users", icon: Users, description: "User management", count: stats?.totalUsers },
+    { name: "Applications", href: "/admin/applications", icon: ClipboardList, description: "User applications", count: stats?.pendingApplications, countVariant: "warning" },
+    { name: "Roles & Permissions", href: "/admin/roles", icon: Shield, description: "Access control" },
+  ];
+
+  const aiFeatures = [
+    { name: "AI Chat Assistant", href: "/admin/ai-chat", icon: Bot, description: "AI conversations", badge: "Beta" },
+  ];
+
+  const systemSettings = [
+    { name: "Settings", href: "/admin/settings", icon: Settings, description: "System configuration" },
+  ];
+
+  const NavItem = ({ item }: { item: any }) => {
+    const active = isActive(item.href);
+    return (
+      <Link href={item.href}>
+        <button
+          className={`w-full flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${
+            active
+              ? "bg-primary/10 text-primary shadow-sm"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          }`}
+        >
+          <div className={`flex-shrink-0 ${active ? "text-primary" : "text-muted-foreground group-hover:text-foreground"}`}>
+            <item.icon className="h-4 w-4" />
+          </div>
+          <span className="ml-3 flex-1 text-left truncate">{item.name}</span>
+          {item.badge && (
+            <Badge variant="secondary" className={`ml-1 text-xs px-1.5 py-0 ${item.badge === "New" ? "bg-success/15 text-success" : "bg-info/15 text-info"}`}>
+              {item.badge}
+            </Badge>
+          )}
+          {typeof item.count === "number" && item.count > 0 && (
+            <Badge variant={item.countVariant === "warning" ? "destructive" : "secondary"} className={`ml-1 text-xs px-1.5 py-0 ${item.countVariant === "warning" ? "bg-warning/15 text-warning border-0" : "bg-muted text-muted-foreground"}`}>
+              {item.count}
+            </Badge>
+          )}
+          {active && <ChevronRight className="h-3 w-3 ml-1 text-primary/70" />}
+        </button>
+      </Link>
+    );
+  };
+
+  const NavSection = ({ title, items }: { title: string; items: any[] }) => {
+    const filtered = items.filter(canAccess);
+    if (filtered.length === 0) return null;
     return (
       <div>
-        <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-          {title}
-        </h3>
-        <nav className="space-y-1">
-          {filteredItems.map((item) => (
-            <Link key={item.name} href={item.href}>
-              <Button
-                variant={isActive(item.href) ? "secondary" : "ghost"}
-                className={`w-full justify-start px-3 py-2 text-sm font-medium ${
-                  isActive(item.href)
-                    ? "bg-blue-50 text-blue-700 border-r-2 border-blue-700"
-                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-                }`}
-                data-testid={`nav-${item.name.toLowerCase().replace(/\s+/g, '-')}`}
-              >
-                <item.icon className="mr-3 h-4 w-4" />
-                <span className="flex-1 text-left">{item.name}</span>
-                {item.badge && (
-                  <Badge variant="secondary" className="ml-auto text-xs">
-                    {item.badge}
-                  </Badge>
-                )}
-              </Button>
-            </Link>
-          ))}
+        <p className="px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">{title}</p>
+        <nav className="space-y-0.5">
+          {filtered.map((item) => <NavItem key={item.name} item={item} />)}
         </nav>
       </div>
     );
   };
 
+  const roleColors: Record<string, string> = {
+    super_admin: "bg-info/15 text-info",
+    admin: "bg-primary/15 text-primary",
+    editor: "bg-success/15 text-success",
+    viewer: "bg-muted text-muted-foreground",
+  };
+
   return (
-    <div className="flex h-full flex-col bg-white border-r border-gray-200">
-      {/* Logo and close button */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-            <BookOpen className="w-5 h-5 text-white" />
+    <TooltipProvider>
+      <div className="flex h-full flex-col border-r border-border/60 shadow-sm bg-card admin-sidebar">
+        {/* Logo */}
+        <div className="flex items-center justify-between px-4 py-4 border-b border-border/60">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 bg-gradient-to-br from-primary to-chart-4 rounded-xl flex items-center justify-center shadow-md">
+              <BookOpen className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-sm font-bold text-foreground leading-none">Mtendere</h1>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Education Admin</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg font-semibold text-gray-900">
-              Mtendere Education
-            </h1>
-            <p className="text-xs text-gray-500">Admin Panel</p>
-          </div>
+          {onClose && (
+            <Button variant="ghost" size="sm" onClick={onClose} className="lg:hidden h-7 w-7 p-0 hover:bg-muted">
+              <X className="h-4 w-4" />
+            </Button>
+          )}
         </div>
-        {onClose && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onClose}
-            className="lg:hidden"
-            data-testid="close-sidebar"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
 
-      {/* Navigation */}
-      <ScrollArea className="flex-1 px-3 py-4">
-        <div className="space-y-6">
-          <NavSection title="Main" items={navigationItems} />
-          <Separator />
-          <NavSection title="Content Management" items={contentManagement} />
-          <Separator />
-          <NavSection title="User Management" items={userManagement} />
-          <Separator />
-          <NavSection title="AI Features" items={aiFeatures} />
-          <Separator />
-          <NavSection title="System" items={systemSettings} />
-        </div>
-      </ScrollArea>
-
-      {/* Footer */}
-      <div className="border-t border-gray-200 p-4">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-            <Users className="w-4 h-4 text-gray-600" />
+        {/* Navigation */}
+        <ScrollArea className="flex-1 px-3 py-4 scrollbar-thin">
+          <div className="space-y-5">
+            <NavSection title="Overview" items={navigationItems} />
+            <Separator className="mx-2" />
+            <NavSection title="Content" items={contentManagement} />
+            <Separator className="mx-2" />
+            <NavSection title="People" items={userManagement} />
+            <Separator className="mx-2" />
+            <NavSection title="Intelligence" items={aiFeatures} />
+            <Separator className="mx-2" />
+            <NavSection title="System" items={systemSettings} />
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">
-              Admin User
-            </p>
-            <p className="text-xs text-gray-500 truncate">
-              admin@mtendere.com
-            </p>
+        </ScrollArea>
+
+        {/* Footer / User */}
+        <div className="border-t border-border/60 p-3">
+          {stats?.pendingApplications > 0 && (
+            <div className="mb-3 p-2.5 rounded-lg bg-warning/10 border border-warning/30">
+              <p className="text-xs font-medium text-warning flex items-center gap-1.5">
+                <ClipboardList className="h-3 w-3" />
+                {stats.pendingApplications} application{stats.pendingApplications !== 1 ? "s" : ""} need review
+              </p>
+            </div>
+          )}
+          <div className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer">
+            <Avatar className="h-8 w-8 flex-shrink-0">
+              <AvatarImage src={(user as any)?.profileImage || (user as any)?.profilePicture || ""} />
+              <AvatarFallback className="bg-gradient-to-br from-primary to-chart-4 text-white text-xs font-bold">
+                {user?.firstName?.[0]}{user?.lastName?.[0] || user?.username?.[0]?.toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-foreground truncate">
+                {user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.username || "Admin User"}
+              </p>
+              <Badge className={`text-[10px] px-1.5 py-0 h-4 border-0 ${roleColors[user?.role || "viewer"] || roleColors.viewer}`}>
+                {user?.role?.replace("_", " ") || "viewer"}
+              </Badge>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }

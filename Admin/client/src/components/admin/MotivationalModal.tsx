@@ -5,28 +5,28 @@ import { X, Zap, Target, Trophy, Lightbulb } from "lucide-react";
 
 const motivationalMessages = [
   {
-    icon: <Zap className="h-8 w-8 text-yellow-500" />,
+    icon: <Zap className="h-8 w-8 text-warning" />,
     title: "Keep the Momentum Going!",
     message: "Every action you take today brings us closer to our platform goals. You're doing great!",
-    color: "from-yellow-50 to-amber-50"
+    color: "from-warning/10 to-warning/5"
   },
   {
-    icon: <Target className="h-8 w-8 text-blue-500" />,
+    icon: <Target className="h-8 w-8 text-primary" />,
     title: "Stay Focused on Our Mission",
     message: "We're building something meaningful for education. Your dedication matters!",
-    color: "from-blue-50 to-cyan-50"
+    color: "from-primary/10 to-info/5"
   },
   {
-    icon: <Trophy className="h-8 w-8 text-green-500" />,
+    icon: <Trophy className="h-8 w-8 text-success" />,
     title: "You're Making an Impact",
     message: "Every scholarship processed, every opportunity listed - it changes lives. Great work!",
-    color: "from-green-50 to-emerald-50"
+    color: "from-success/10 to-success/5"
   },
   {
-    icon: <Lightbulb className="h-8 w-8 text-purple-500" />,
+    icon: <Lightbulb className="h-8 w-8 text-info" />,
     title: "Innovation in Progress",
     message: "Your admin work powers meaningful connections. Keep shining!",
-    color: "from-purple-50 to-pink-50"
+    color: "from-info/10 to-info/5"
   },
 ];
 
@@ -60,7 +60,7 @@ export default function MotivationalModal({ open = true, onOpenChange }: Motivat
         <DialogHeader className="text-center space-y-4">
           <button
             onClick={handleClose}
-            className="absolute right-4 top-4 p-1 hover:bg-gray-100 rounded-full transition"
+            className="absolute right-4 top-4 p-1 hover:bg-muted rounded-full transition"
           >
             <X className="h-4 w-4" />
           </button>
@@ -72,10 +72,10 @@ export default function MotivationalModal({ open = true, onOpenChange }: Motivat
           </div>
           
           <div className="space-y-2">
-            <h2 className="text-2xl font-bold text-gray-900">
+            <h2 className="text-2xl font-bold text-foreground">
               {message.title}
             </h2>
-            <p className="text-gray-600 text-sm leading-relaxed">
+            <p className="text-muted-foreground text-sm leading-relaxed">
               {message.message}
             </p>
           </div>
@@ -91,7 +91,7 @@ export default function MotivationalModal({ open = true, onOpenChange }: Motivat
           </Button>
           <Button
             onClick={handleNext}
-            className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white"
+            className="bg-gradient-to-r from-primary to-chart-4 hover:from-primary/90 hover:to-chart-4/90 text-white"
           >
             Next Tip
           </Button>
@@ -102,7 +102,7 @@ export default function MotivationalModal({ open = true, onOpenChange }: Motivat
             <div
               key={idx}
               className={`h-1 rounded-full transition-all ${
-                idx === currentMessage ? "bg-blue-500 w-6" : "bg-gray-300 w-1"
+                idx === currentMessage ? "bg-primary/100 w-6" : "bg-muted-foreground/40 w-1"
               }`}
             />
           ))}
@@ -111,3 +111,6 @@ export default function MotivationalModal({ open = true, onOpenChange }: Motivat
     </Dialog>
   );
 }
+
+
+

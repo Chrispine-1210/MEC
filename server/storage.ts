@@ -1,27 +1,13 @@
 import {
-  users as usersTable,
-  scholarships as scholarshipsTable,
-  jobs as jobsTable,
-  applications as applicationsTable,
-  partners as partnersTable,
-  testimonials as testimonialsTable,
-  blogPosts as blogPostsTable,
-  teamMembers as teamMembersTable,
-  referrals as referralsTable,
-  analytics as analyticsTable,
-  type User, type InsertUser,
-  type Scholarship, type InsertScholarship,
-  type Job, type InsertJob,
-  type Application, type InsertApplication,
-  type Partner, type InsertPartner,
-  type Testimonial, type InsertTestimonial,
-  type BlogPost, type InsertBlogPost,
-  type TeamMember, type InsertTeamMember,
-  type Referral, type InsertReferral,
-  type Analytics, type InsertAnalytics
+  users, scholarships, jobs, applications, partners, testimonials, blogPosts, teamMembers, referrals, analytics, blogComments, savedItems, messages,
+  type User, type InsertUser, type Scholarship, type InsertScholarship, type Job, type InsertJob,
+  type Application, type InsertApplication, type Partner, type InsertPartner, type Testimonial, type InsertTestimonial,
+  type BlogPost, type InsertBlogPost, type TeamMember, type InsertTeamMember, type Referral, type InsertReferral,
+  type Analytics, type InsertAnalytics, type BlogComment, type InsertBlogComment,
+  type SavedItem, type InsertSavedItem, type Message, type InsertMessage
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, or, like, count, sql } from "drizzle-orm";
+import { eq, desc, asc, and, or, like, count, sql } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -82,6 +68,10 @@ export interface IStorage {
   createBlogPost(blogPost: InsertBlogPost): Promise<BlogPost>;
   updateBlogPost(id: number, blogPost: Partial<InsertBlogPost>): Promise<BlogPost>;
   deleteBlogPost(id: number): Promise<boolean>;
+  searchBlogPosts(query: string): Promise<BlogPost[]>;
+  incrementBlogLikes(id: number): Promise<BlogPost>;
+  getBlogComments(blogPostId: number): Promise<BlogComment[]>;
+  createBlogComment(comment: InsertBlogComment): Promise<BlogComment>;
 
   // Team Members
   getTeamMember(id: number): Promise<TeamMember | undefined>;
@@ -103,315 +93,473 @@ export interface IStorage {
   logAnalytics(analytics: InsertAnalytics): Promise<Analytics>;
   getAnalytics(startDate?: Date, endDate?: Date): Promise<Analytics[]>;
   getAnalyticsSummary(): Promise<any>;
+
+  // Saved Items
+  getSavedItem(id: number): Promise<SavedItem | undefined>;
+  getUserSavedItems(userId: number): Promise<SavedItem[]>;
+  createSavedItem(savedItem: InsertSavedItem): Promise<SavedItem>;
+  deleteSavedItem(id: number): Promise<boolean>;
+  deleteUserSavedItem(id: number, userId: number): Promise<boolean>;
+  isItemSaved(userId: number, type: string, referenceId: number): Promise<boolean>;
+
+  // Messages
+  createMessage(message: InsertMessage): Promise<Message>;
+  getAllMessages(): Promise<Message[]>;
+  markMessageRead(id: number): Promise<Message>;
 }
 
 export class DatabaseStorage implements IStorage {
-  // ===================== USERS =====================
-  async getUser(id: number) {
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id));
+  // Users
+  async getUser(id: number): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user || undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
 
-  async getUserByUsername(username: string) {
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.username, username));
+  async updateUser(id: number, updateUser: Partial<InsertUser>): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ ...updateUser, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
     return user;
   }
 
-  async getUserByEmail(email: string) {
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email));
-    return user;
+  async deleteUser(id: number): Promise<boolean> {
+    const result = await db.delete(users).where(eq(users.id, id));
+    return (result as any).rowCount > 0;
   }
 
-  async createUser(user: InsertUser) {
-    const [newUser] = await db.insert(usersTable).values(user).returning();
-    return newUser;
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users).orderBy(desc(users.createdAt));
   }
 
-  async updateUser(id: number, user: Partial<InsertUser>) {
-    const [updated] = await db.update(usersTable).set({ ...user, updatedAt: new Date() }).where(eq(usersTable.id, id)).returning();
-    return updated;
+  // Scholarships
+  async getScholarship(id: number): Promise<Scholarship | undefined> {
+    const [scholarship] = await db.select().from(scholarships).where(eq(scholarships.id, id));
+    return scholarship || undefined;
   }
 
-  async deleteUser(id: number) {
-    const result = await db.delete(usersTable).where(eq(usersTable.id, id));
-    return result.rowCount > 0;
+  async getAllScholarships(): Promise<Scholarship[]> {
+    return await db.select().from(scholarships).orderBy(desc(scholarships.createdAt));
   }
 
-  async getAllUsers() {
-    return db.select().from(usersTable).orderBy(desc(usersTable.createdAt));
+  async getActiveScholarships(): Promise<Scholarship[]> {
+    return await db
+      .select()
+      .from(scholarships)
+      .where(and(eq(scholarships.isActive, true), sql`${scholarships.deadline} > NOW()`))
+      .orderBy(desc(scholarships.createdAt));
   }
 
-  // ===================== SCHOLARSHIPS =====================
-  async getScholarship(id: number) {
-    const [sch] = await db.select().from(scholarshipsTable).where(eq(scholarshipsTable.id, id));
-    return sch;
+  async createScholarship(insertScholarship: InsertScholarship): Promise<Scholarship> {
+    const [scholarship] = await db.insert(scholarships).values(insertScholarship).returning();
+    return scholarship;
   }
 
-  async getAllScholarships() {
-    return db.select().from(scholarshipsTable).orderBy(desc(scholarshipsTable.createdAt));
+  async updateScholarship(id: number, updateScholarship: Partial<InsertScholarship>): Promise<Scholarship> {
+    const [scholarship] = await db
+      .update(scholarships)
+      .set({ ...updateScholarship, updatedAt: new Date() })
+      .where(eq(scholarships.id, id))
+      .returning();
+    return scholarship;
   }
 
-  async getActiveScholarships() {
-    return db.select().from(scholarshipsTable).where(and(eq(scholarshipsTable.isActive, true), sql`${scholarshipsTable.deadline} > NOW()`)).orderBy(desc(scholarshipsTable.createdAt));
+  async deleteScholarship(id: number): Promise<boolean> {
+    const result = await db.delete(scholarships).where(eq(scholarships.id, id));
+    return (result as any).rowCount > 0;
   }
 
-  async createScholarship(scholarship: InsertScholarship) {
-    const [sch] = await db.insert(scholarshipsTable).values(scholarship).returning();
-    return sch;
+  async searchScholarships(query: string): Promise<Scholarship[]> {
+    return await db
+      .select()
+      .from(scholarships)
+      .where(
+        and(
+          eq(scholarships.isActive, true),
+          or(
+            like(scholarships.title, `%${query}%`),
+            like(scholarships.description, `%${query}%`),
+            like(scholarships.institution, `%${query}%`),
+            like(scholarships.country, `%${query}%`)
+          )
+        )
+      )
+      .orderBy(desc(scholarships.createdAt));
   }
 
-  async updateScholarship(id: number, scholarship: Partial<InsertScholarship>) {
-    const [sch] = await db.update(scholarshipsTable).set({ ...scholarship, updatedAt: new Date() }).where(eq(scholarshipsTable.id, id)).returning();
-    return sch;
+  // Jobs
+  async getJob(id: number): Promise<Job | undefined> {
+    const [job] = await db.select().from(jobs).where(eq(jobs.id, id));
+    return job || undefined;
   }
 
-  async deleteScholarship(id: number) {
-    const result = await db.delete(scholarshipsTable).where(eq(scholarshipsTable.id, id));
-    return result.rowCount > 0;
+  async getAllJobs(): Promise<Job[]> {
+    return await db.select().from(jobs).orderBy(desc(jobs.createdAt));
   }
 
-  async searchScholarships(query: string) {
-    return db.select().from(scholarshipsTable).where(and(eq(scholarshipsTable.isActive, true), or(
-      like(scholarshipsTable.title, `%${query}%`),
-      like(scholarshipsTable.description, `%${query}%`),
-      like(scholarshipsTable.institution, `%${query}%`),
-      like(scholarshipsTable.country, `%${query}%`)
-    ))).orderBy(desc(scholarshipsTable.createdAt));
+  async getActiveJobs(): Promise<Job[]> {
+    return await db
+      .select()
+      .from(jobs)
+      .where(eq(jobs.isActive, true))
+      .orderBy(desc(jobs.createdAt));
   }
 
-  // ===================== JOBS =====================
-  async getJob(id: number) {
-    const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
+  async createJob(insertJob: InsertJob): Promise<Job> {
+    const [job] = await db.insert(jobs).values(insertJob).returning();
     return job;
   }
 
-  async getAllJobs() {
-    return db.select().from(jobsTable).orderBy(desc(jobsTable.createdAt));
+  async updateJob(id: number, updateJob: Partial<InsertJob>): Promise<Job> {
+    const [job] = await db
+      .update(jobs)
+      .set({ ...updateJob, updatedAt: new Date() })
+      .where(eq(jobs.id, id))
+      .returning();
+    return job;
   }
 
-  async getActiveJobs() {
-    return db.select().from(jobsTable).where(eq(jobsTable.isActive, true)).orderBy(desc(jobsTable.createdAt));
+  async deleteJob(id: number): Promise<boolean> {
+    const result = await db.delete(jobs).where(eq(jobs.id, id));
+    return (result as any).rowCount > 0;
   }
 
-  async createJob(job: InsertJob) {
-    const [newJob] = await db.insert(jobsTable).values(job).returning();
-    return newJob;
+  async searchJobs(query: string): Promise<Job[]> {
+    return await db
+      .select()
+      .from(jobs)
+      .where(
+        and(
+          eq(jobs.isActive, true),
+          or(
+            like(jobs.title, `%${query}%`),
+            like(jobs.description, `%${query}%`),
+            like(jobs.company, `%${query}%`),
+            like(jobs.location, `%${query}%`)
+          )
+        )
+      )
+      .orderBy(desc(jobs.createdAt));
   }
 
-  async updateJob(id: number, job: Partial<InsertJob>) {
-    const [updated] = await db.update(jobsTable).set({ ...job, updatedAt: new Date() }).where(eq(jobsTable.id, id)).returning();
-    return updated;
+  // Applications
+  async getApplication(id: number): Promise<Application | undefined> {
+    const [application] = await db.select().from(applications).where(eq(applications.id, id));
+    return application || undefined;
   }
 
-  async deleteJob(id: number) {
-    const result = await db.delete(jobsTable).where(eq(jobsTable.id, id));
-    return result.rowCount > 0;
+  async getUserApplications(userId: number): Promise<Application[]> {
+    return await db
+      .select()
+      .from(applications)
+      .where(eq(applications.userId, userId))
+      .orderBy(desc(applications.submittedAt));
   }
 
-  async searchJobs(query: string) {
-    return db.select().from(jobsTable).where(and(eq(jobsTable.isActive, true), or(
-      like(jobsTable.title, `%${query}%`),
-      like(jobsTable.description, `%${query}%`),
-      like(jobsTable.company, `%${query}%`),
-      like(jobsTable.location, `%${query}%`)
-    ))).orderBy(desc(jobsTable.createdAt));
+  async getAllApplications(): Promise<Application[]> {
+    return await db.select().from(applications).orderBy(desc(applications.submittedAt));
   }
 
-  // ===================== APPLICATIONS =====================
-  async getApplication(id: number) {
-    const [app] = await db.select().from(applicationsTable).where(eq(applicationsTable.id, id));
-    return app;
+  async createApplication(insertApplication: InsertApplication): Promise<Application> {
+    const [application] = await db.insert(applications).values(insertApplication).returning();
+    return application;
   }
 
-  async getUserApplications(userId: number) {
-    return db.select().from(applicationsTable).where(eq(applicationsTable.userId, userId)).orderBy(desc(applicationsTable.submittedAt));
+  async updateApplication(id: number, updateApplication: Partial<InsertApplication>): Promise<Application> {
+    const [application] = await db
+      .update(applications)
+      .set({ ...updateApplication, updatedAt: new Date() })
+      .where(eq(applications.id, id))
+      .returning();
+    return application;
   }
 
-  async getAllApplications() {
-    return db.select().from(applicationsTable).orderBy(desc(applicationsTable.submittedAt));
+  async deleteApplication(id: number): Promise<boolean> {
+    const result = await db.delete(applications).where(eq(applications.id, id));
+    return (result as any).rowCount > 0;
   }
 
-  async createApplication(application: InsertApplication) {
-    const [app] = await db.insert(applicationsTable).values(application).returning();
-    return app;
+  // Partners
+  async getPartner(id: number): Promise<Partner | undefined> {
+    const [partner] = await db.select().from(partners).where(eq(partners.id, id));
+    return partner || undefined;
   }
 
-  async updateApplication(id: number, application: Partial<InsertApplication>) {
-    const [updated] = await db.update(applicationsTable).set({ ...application, updatedAt: new Date() }).where(eq(applicationsTable.id, id)).returning();
-    return updated;
+  async getAllPartners(): Promise<Partner[]> {
+    return await db.select().from(partners).orderBy(desc(partners.createdAt));
   }
 
-  async deleteApplication(id: number) {
-    const result = await db.delete(applicationsTable).where(eq(applicationsTable.id, id));
-    return result.rowCount > 0;
+  async getActivePartners(): Promise<Partner[]> {
+    return await db
+      .select()
+      .from(partners)
+      .where(eq(partners.isActive, true))
+      .orderBy(desc(partners.createdAt));
   }
 
-  // ===================== PARTNERS =====================
-  async getPartner(id: number) {
-    const [partner] = await db.select().from(partnersTable).where(eq(partnersTable.id, id));
+  async createPartner(insertPartner: InsertPartner): Promise<Partner> {
+    const [partner] = await db.insert(partners).values(insertPartner).returning();
     return partner;
   }
 
-  async getAllPartners() {
-    return db.select().from(partnersTable).orderBy(desc(partnersTable.createdAt));
+  async updatePartner(id: number, updatePartner: Partial<InsertPartner>): Promise<Partner> {
+    const [partner] = await db
+      .update(partners)
+      .set({ ...updatePartner, updatedAt: new Date() })
+      .where(eq(partners.id, id))
+      .returning();
+    return partner;
   }
 
-  async getActivePartners() {
-    return db.select().from(partnersTable).where(eq(partnersTable.isActive, true)).orderBy(desc(partnersTable.createdAt));
+  async deletePartner(id: number): Promise<boolean> {
+    const result = await db.delete(partners).where(eq(partners.id, id));
+    return (result as any).rowCount > 0;
   }
 
-  async createPartner(partner: InsertPartner) {
-    const [p] = await db.insert(partnersTable).values(partner).returning();
-    return p;
+  // Testimonials
+  async getTestimonial(id: number): Promise<Testimonial | undefined> {
+    const [testimonial] = await db.select().from(testimonials).where(eq(testimonials.id, id));
+    return testimonial || undefined;
   }
 
-  async updatePartner(id: number, partner: Partial<InsertPartner>) {
-    const [p] = await db.update(partnersTable).set({ ...partner, updatedAt: new Date() }).where(eq(partnersTable.id, id)).returning();
-    return p;
+  async getAllTestimonials(): Promise<Testimonial[]> {
+    return await db.select().from(testimonials).orderBy(desc(testimonials.createdAt));
   }
 
-  async deletePartner(id: number) {
-    const result = await db.delete(partnersTable).where(eq(partnersTable.id, id));
-    return result.rowCount > 0;
+  async getApprovedTestimonials(): Promise<Testimonial[]> {
+    return await db
+      .select()
+      .from(testimonials)
+      .where(eq(testimonials.isApproved, true))
+      .orderBy(desc(testimonials.createdAt));
   }
 
-  // ===================== TESTIMONIALS =====================
-  async getTestimonial(id: number) {
-    const [t] = await db.select().from(testimonialsTable).where(eq(testimonialsTable.id, id));
-    return t;
+  async createTestimonial(insertTestimonial: InsertTestimonial): Promise<Testimonial> {
+    const [testimonial] = await db.insert(testimonials).values(insertTestimonial).returning();
+    return testimonial;
   }
 
-  async getAllTestimonials() {
-    return db.select().from(testimonialsTable).orderBy(desc(testimonialsTable.createdAt));
+  async updateTestimonial(id: number, updateTestimonial: Partial<InsertTestimonial>): Promise<Testimonial> {
+    const [testimonial] = await db
+      .update(testimonials)
+      .set({ ...updateTestimonial, updatedAt: new Date() })
+      .where(eq(testimonials.id, id))
+      .returning();
+    return testimonial;
   }
 
-  async getApprovedTestimonials() {
-    return db.select().from(testimonialsTable).where(eq(testimonialsTable.isApproved, true)).orderBy(desc(testimonialsTable.createdAt));
+  async deleteTestimonial(id: number): Promise<boolean> {
+    const result = await db.delete(testimonials).where(eq(testimonials.id, id));
+    return (result as any).rowCount > 0;
   }
 
-  async createTestimonial(testimonial: InsertTestimonial) {
-    const [t] = await db.insert(testimonialsTable).values(testimonial).returning();
-    return t;
+  // Blog Posts
+  async getBlogPost(id: number): Promise<BlogPost | undefined> {
+    const [blogPost] = await db.select().from(blogPosts).where(eq(blogPosts.id, id));
+    return blogPost || undefined;
   }
 
-  async updateTestimonial(id: number, testimonial: Partial<InsertTestimonial>) {
-    const [t] = await db.update(testimonialsTable).set({ ...testimonial, updatedAt: new Date() }).where(eq(testimonialsTable.id, id)).returning();
-    return t;
+  async getAllBlogPosts(): Promise<BlogPost[]> {
+    return await db.select().from(blogPosts).orderBy(desc(blogPosts.createdAt));
   }
 
-  async deleteTestimonial(id: number) {
-    const result = await db.delete(testimonialsTable).where(eq(testimonialsTable.id, id));
-    return result.rowCount > 0;
+  async getPublishedBlogPosts(): Promise<BlogPost[]> {
+    return await db
+      .select()
+      .from(blogPosts)
+      .where(eq(blogPosts.isPublished, true))
+      .orderBy(desc(blogPosts.createdAt));
   }
 
-  // ===================== BLOG POSTS =====================
-  async getBlogPost(id: number) {
-    const [b] = await db.select().from(blogPostsTable).where(eq(blogPostsTable.id, id));
-    return b;
+  async createBlogPost(insertBlogPost: InsertBlogPost): Promise<BlogPost> {
+    const [blogPost] = await db.insert(blogPosts).values(insertBlogPost).returning();
+    return blogPost;
   }
 
-  async getAllBlogPosts() {
-    return db.select().from(blogPostsTable).orderBy(desc(blogPostsTable.createdAt));
+  async updateBlogPost(id: number, updateBlogPost: Partial<InsertBlogPost>): Promise<BlogPost> {
+    const [blogPost] = await db
+      .update(blogPosts)
+      .set({ ...updateBlogPost, updatedAt: new Date() })
+      .where(eq(blogPosts.id, id))
+      .returning();
+    return blogPost;
   }
 
-  async getPublishedBlogPosts() {
-    return db.select().from(blogPostsTable).where(eq(blogPostsTable.isPublished, true)).orderBy(desc(blogPostsTable.createdAt));
+  async deleteBlogPost(id: number): Promise<boolean> {
+    const result = await db.delete(blogPosts).where(eq(blogPosts.id, id));
+    return (result as any).rowCount > 0;
   }
 
-  async createBlogPost(blogPost: InsertBlogPost) {
-    const [b] = await db.insert(blogPostsTable).values(blogPost).returning();
-    return b;
+  async searchBlogPosts(query: string): Promise<BlogPost[]> {
+    return await db
+      .select()
+      .from(blogPosts)
+      .where(
+        or(
+          like(blogPosts.title, `%${query}%`),
+          like(blogPosts.content, `%${query}%`),
+          like(blogPosts.category, `%${query}%`)
+        )
+      )
+      .orderBy(desc(blogPosts.createdAt));
   }
 
-  async updateBlogPost(id: number, blogPost: Partial<InsertBlogPost>) {
-    const [b] = await db.update(blogPostsTable).set({ ...blogPost, updatedAt: new Date() }).where(eq(blogPostsTable.id, id)).returning();
-    return b;
+  async incrementBlogLikes(id: number): Promise<BlogPost> {
+    const [blogPost] = await db
+      .update(blogPosts)
+      .set({ likes: sql`${blogPosts.likes} + 1` })
+      .where(eq(blogPosts.id, id))
+      .returning();
+    return blogPost;
   }
 
-  async deleteBlogPost(id: number) {
-    const result = await db.delete(blogPostsTable).where(eq(blogPostsTable.id, id));
-    return result.rowCount > 0;
+  async getBlogComments(blogPostId: number): Promise<BlogComment[]> {
+    return await db
+      .select()
+      .from(blogComments)
+      .where(eq(blogComments.blogPostId, blogPostId))
+      .orderBy(blogComments.createdAt);
   }
 
-  // ===================== TEAM MEMBERS =====================
-  async getTeamMember(id: number) {
-    const [tm] = await db.select().from(teamMembersTable).where(eq(teamMembersTable.id, id));
-    return tm;
+  async createBlogComment(insertComment: InsertBlogComment): Promise<BlogComment> {
+    const [comment] = await db.insert(blogComments).values(insertComment).returning();
+    return comment;
   }
 
-  async getAllTeamMembers() {
-    return db.select().from(teamMembersTable).orderBy(desc(teamMembersTable.createdAt));
+  // Team Members
+  async getTeamMember(id: number): Promise<TeamMember | undefined> {
+    const [teamMember] = await db.select().from(teamMembers).where(eq(teamMembers.id, id));
+    return teamMember || undefined;
   }
 
-  async getActiveTeamMembers() {
-    return db.select().from(teamMembersTable).where(eq(teamMembersTable.isActive, true)).orderBy(desc(teamMembersTable.createdAt));
+  async getAllTeamMembers(): Promise<TeamMember[]> {
+    return await db
+      .select()
+      .from(teamMembers)
+      .orderBy(asc(teamMembers.order), desc(teamMembers.createdAt));
   }
 
-  async createTeamMember(teamMember: InsertTeamMember) {
-    const [tm] = await db.insert(teamMembersTable).values(teamMember).returning();
-    return tm;
+  async getActiveTeamMembers(): Promise<TeamMember[]> {
+    return await db
+      .select()
+      .from(teamMembers)
+      .where(eq(teamMembers.isActive, true))
+      .orderBy(asc(teamMembers.order), desc(teamMembers.createdAt));
   }
 
-  async updateTeamMember(id: number, teamMember: Partial<InsertTeamMember>) {
-    const [tm] = await db.update(teamMembersTable).set({ ...teamMember, updatedAt: new Date() }).where(eq(teamMembersTable.id, id)).returning();
-    return tm;
+  async createTeamMember(insertTeamMember: InsertTeamMember): Promise<TeamMember> {
+    const [teamMember] = await db.insert(teamMembers).values(insertTeamMember).returning();
+    return teamMember;
   }
 
-  async deleteTeamMember(id: number) {
-    const result = await db.delete(teamMembersTable).where(eq(teamMembersTable.id, id));
-    return result.rowCount > 0;
+  async updateTeamMember(id: number, updateTeamMember: Partial<InsertTeamMember>): Promise<TeamMember> {
+    const [teamMember] = await db
+      .update(teamMembers)
+      .set({ ...updateTeamMember, updatedAt: new Date() })
+      .where(eq(teamMembers.id, id))
+      .returning();
+    return teamMember;
   }
 
-  // ===================== REFERRALS =====================
-  async getReferral(id: number) {
-    const [r] = await db.select().from(referralsTable).where(eq(referralsTable.id, id));
-    return r;
+  async deleteTeamMember(id: number): Promise<boolean> {
+    const result = await db.delete(teamMembers).where(eq(teamMembers.id, id));
+    return (result as any).rowCount > 0;
   }
 
-  async getUserReferrals(userId: number) {
-    return db.select().from(referralsTable).where(eq(referralsTable.referrerId, userId)).orderBy(desc(referralsTable.createdAt));
+  // Referrals
+  async getReferral(id: number): Promise<Referral | undefined> {
+    const [referral] = await db.select().from(referrals).where(eq(referrals.id, id));
+    return referral || undefined;
   }
 
-  async getAllReferrals() {
-    return db.select().from(referralsTable).orderBy(desc(referralsTable.createdAt));
+  async getUserReferrals(userId: number): Promise<Referral[]> {
+    return await db
+      .select()
+      .from(referrals)
+      .where(eq(referrals.referrerId, userId))
+      .orderBy(desc(referrals.createdAt));
   }
 
-  async createReferral(referral: InsertReferral) {
-    const [r] = await db.insert(referralsTable).values(referral).returning();
-    return r;
+  async getAllReferrals(): Promise<Referral[]> {
+    return await db.select().from(referrals).orderBy(desc(referrals.createdAt));
   }
 
-  async updateReferral(id: number, referral: Partial<InsertReferral>) {
-    const [r] = await db.update(referralsTable).set(referral).where(eq(referralsTable.id, id)).returning();
-    return r;
+  async createReferral(insertReferral: InsertReferral): Promise<Referral> {
+    const [referral] = await db.insert(referrals).values(insertReferral).returning();
+    return referral;
   }
 
-  async deleteReferral(id: number) {
-    const result = await db.delete(referralsTable).where(eq(referralsTable.id, id));
-    return result.rowCount > 0;
+  async updateReferral(id: number, updateReferral: Partial<InsertReferral>): Promise<Referral> {
+    const [referral] = await db
+      .update(referrals)
+      .set(updateReferral)
+      .where(eq(referrals.id, id))
+      .returning();
+    return referral;
   }
 
-  // ===================== ANALYTICS =====================
-  async logAnalytics(analytics: InsertAnalytics) {
-    const [a] = await db.insert(analyticsTable).values(analytics).returning();
-    return a;
+  async deleteReferral(id: number): Promise<boolean> {
+    const result = await db.delete(referrals).where(eq(referrals.id, id));
+    return (result as any).rowCount > 0;
   }
 
-  async getAnalytics(startDate?: Date, endDate?: Date) {
-    let query = db.select().from(analyticsTable);
+  // Analytics
+  async logAnalytics(insertAnalytics: InsertAnalytics): Promise<Analytics> {
+    const metadata = insertAnalytics.metadata;
+    const safeMetadata =
+      metadata === undefined
+        ? undefined
+        : metadata === null
+          ? null
+          : typeof metadata === "object" && !Array.isArray(metadata)
+            ? (metadata as Record<string, unknown>)
+            : null;
+
+    const [log] = await db
+      .insert(analytics)
+      .values({ ...insertAnalytics, metadata: safeMetadata })
+      .returning();
+    return log;
+  }
+
+  async getAnalytics(startDate?: Date, endDate?: Date): Promise<Analytics[]> {
     if (startDate && endDate) {
-      query = query.where(and(sql`${analyticsTable.timestamp} >= ${startDate}`, sql`${analyticsTable.timestamp} <= ${endDate}`));
+      return await db
+        .select()
+        .from(analytics)
+        .where(and(
+          sql`${analytics.timestamp} >= ${startDate}`,
+          sql`${analytics.timestamp} <= ${endDate}`
+        ))
+        .orderBy(desc(analytics.timestamp));
     }
-    return query.orderBy(desc(analyticsTable.timestamp));
+
+    return await db.select().from(analytics).orderBy(desc(analytics.timestamp));
   }
 
-  async getAnalyticsSummary() {
-    const totalUsers = await db.select({ count: count() }).from(usersTable);
-    const totalScholarships = await db.select({ count: count() }).from(scholarshipsTable);
-    const totalJobs = await db.select({ count: count() }).from(jobsTable);
-    const totalApplications = await db.select({ count: count() }).from(applicationsTable);
-    const activeTestimonials = await db.select({ count: count() }).from(testimonialsTable).where(eq(testimonialsTable.isApproved, true));
-    const publishedBlogPosts = await db.select({ count: count() }).from(blogPostsTable).where(eq(blogPostsTable.isPublished, true));
+  async getAnalyticsSummary(): Promise<any> {
+    const totalUsers = await db.select({ count: count() }).from(users);
+    const totalScholarships = await db.select({ count: count() }).from(scholarships);
+    const totalJobs = await db.select({ count: count() }).from(jobs);
+    const totalApplications = await db.select({ count: count() }).from(applications);
+    const activeTestimonials = await db.select({ count: count() }).from(testimonials).where(eq(testimonials.isApproved, true));
+    const publishedBlogPosts = await db.select({ count: count() }).from(blogPosts).where(eq(blogPosts.isPublished, true));
 
     return {
       totalUsers: totalUsers[0].count,
@@ -419,8 +567,70 @@ export class DatabaseStorage implements IStorage {
       totalJobs: totalJobs[0].count,
       totalApplications: totalApplications[0].count,
       activeTestimonials: activeTestimonials[0].count,
-      publishedBlogPosts: publishedBlogPosts[0].count
+      publishedBlogPosts: publishedBlogPosts[0].count,
     };
+  }
+
+  // Saved Items
+  async getSavedItem(id: number): Promise<SavedItem | undefined> {
+    const [item] = await db.select().from(savedItems).where(eq(savedItems.id, id));
+    return item || undefined;
+  }
+
+  async getUserSavedItems(userId: number): Promise<SavedItem[]> {
+    return await db
+      .select()
+      .from(savedItems)
+      .where(eq(savedItems.userId, userId))
+      .orderBy(desc(savedItems.createdAt));
+  }
+
+  async createSavedItem(insertSavedItem: InsertSavedItem): Promise<SavedItem> {
+    const [item] = await db.insert(savedItems).values(insertSavedItem).returning();
+    return item;
+  }
+
+  async deleteSavedItem(id: number): Promise<boolean> {
+    const result = await db.delete(savedItems).where(eq(savedItems.id, id));
+    return (result as any).rowCount > 0;
+  }
+
+  async deleteUserSavedItem(id: number, userId: number): Promise<boolean> {
+    const result = await db
+      .delete(savedItems)
+      .where(and(eq(savedItems.id, id), eq(savedItems.userId, userId)));
+    return (result as any).rowCount > 0;
+  }
+
+  async isItemSaved(userId: number, type: string, referenceId: number): Promise<boolean> {
+    const [item] = await db
+      .select()
+      .from(savedItems)
+      .where(and(
+        eq(savedItems.userId, userId),
+        eq(savedItems.type, type),
+        eq(savedItems.referenceId, referenceId)
+      ));
+    return !!item;
+  }
+
+  // Messages
+  async createMessage(insertMessage: InsertMessage): Promise<Message> {
+    const [message] = await db.insert(messages).values(insertMessage).returning();
+    return message;
+  }
+
+  async getAllMessages(): Promise<Message[]> {
+    return await db.select().from(messages).orderBy(desc(messages.createdAt));
+  }
+
+  async markMessageRead(id: number): Promise<Message> {
+    const [message] = await db
+      .update(messages)
+      .set({ isRead: true })
+      .where(eq(messages.id, id))
+      .returning();
+    return message;
   }
 }
 

@@ -14,6 +14,7 @@ export const uploadApi = {
       method: 'POST',
       headers,
       body: formData,
+      credentials: "include",
     });
   },
 
@@ -33,6 +34,7 @@ export const uploadApi = {
       method: 'POST',
       headers,
       body: formData,
+      credentials: "include",
     });
   }
 };

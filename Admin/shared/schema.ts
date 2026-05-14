@@ -19,9 +19,19 @@ export const users = pgTable("users", {
   firstName: text("first_name"),
   lastName: text("last_name"),
   profileImage: text("profile_image"),
-  role: userRoleEnum("role").default("user").notNull(),
+
+  role: userRoleEnum("role").default("viewer").notNull(),
+  region: text("region").default("Global"),
+
   isActive: boolean("is_active").default(true).notNull(),
   lastLogin: timestamp("last_login"),
+
+  // ─── MFA (TOTP) ─────────────────────────────────────────────────────────────
+  mfaEnabled: boolean("mfa_enabled").default(false).notNull(),
+  // Stored server-side; for dev we store raw, for prod you should encrypt.
+  totpSecret: text("totp_secret"),
+  mfaConfirmedAt: timestamp("mfa_confirmed_at"),
+
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`now()`).notNull(),
 });
@@ -37,6 +47,9 @@ export const scholarships = pgTable("scholarships", {
   requirements: jsonb("requirements"),
   category: text("category").notNull(),
   institution: text("institution").notNull(),
+  region: text("region").default("Global"),
+  isPremium: boolean("is_premium").default(false),
+  paymentStatus: text("payment_status").default("unpaid"),
   status: contentStatusEnum("status").default("draft").notNull(),
   featuredImage: text("featured_image"),
   createdBy: varchar("created_by").notNull(),
@@ -51,12 +64,16 @@ export const jobOpportunities = pgTable("job_opportunities", {
   description: text("description").notNull(),
   company: text("company").notNull(),
   location: text("location").notNull(),
+  region: text("region").default("Global"),
   salaryRange: text("salary_range"),
   jobType: text("job_type").notNull(), // full-time, part-time, contract, internship
   requirements: jsonb("requirements"),
   benefits: text("benefits"),
   applicationUrl: text("application_url"),
   deadline: timestamp("deadline"),
+  isPremium: boolean("is_premium").default(false),
+  price: text("price"),
+  paymentStatus: text("payment_status").default("unpaid"),
   status: contentStatusEnum("status").default("draft").notNull(),
   featuredImage: text("featured_image"),
   createdBy: varchar("created_by").notNull(),
@@ -74,7 +91,10 @@ export const partnerInstitutions = pgTable("partner_institutions", {
   contactEmail: text("contact_email"),
   contactPhone: text("contact_phone"),
   address: text("address"),
+  region: text("region").default("Global"),
   partnershipType: text("partnership_type").notNull(),
+  isPremium: boolean("is_premium").default(false),
+  paymentStatus: text("payment_status").default("unpaid"),
   isActive: boolean("is_active").default(true).notNull(),
   createdBy: varchar("created_by").notNull(),
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
@@ -322,7 +342,25 @@ export const productsRelations = relations(products, ({ one }) => ({
   }),
 }));
 
+// Platform settings table
+export const settings = pgTable("settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  platformName: text("platform_name").notNull().default("Mtendere Education Platform"),
+  supportEmail: text("support_email").notNull().default("support@mtendere.com"),
+  sessionTimeout: integer("session_timeout").notNull().default(30),
+  maxLoginAttempts: integer("max_login_attempts").notNull().default(5),
+  updatedAt: timestamp("updated_at").default(sql`now()`).notNull(),
+});
+
 // Insert schemas
+export const insertSettingsSchema = createInsertSchema(settings).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type Settings = typeof settings.$inferSelect;
+export type InsertSettings = z.infer<typeof insertSettingsSchema>;
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   email: true,
@@ -331,6 +369,10 @@ export const insertUserSchema = createInsertSchema(users).pick({
   lastName: true,
   profileImage: true,
   role: true,
+  // MFA fields are managed via dedicated endpoints
+  mfaEnabled: true,
+  totpSecret: true,
+  mfaConfirmedAt: true,
 });
 
 export const insertScholarshipSchema = createInsertSchema(scholarships).omit({

@@ -38,7 +38,7 @@ export default function BackToTop() {
   return (
     <Button
       onClick={scrollToTop}
-      className="fixed bottom-6 left-6 w-12 h-12 rounded-full bg-mtendere-green hover:bg-green-700 shadow-lg z-40 transition-all duration-300 hover:scale-110"
+      className="fixed bottom-6 left-6 w-12 h-12 rounded-full bg-mtendere-green hover:bg-mtendere-green/90 shadow-lg z-40 transition-all duration-300 hover:scale-110"
       size="icon"
       aria-label="Scroll to top"
     >

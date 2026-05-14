@@ -16,8 +16,11 @@ import {
   ChevronDown,
   User,
   Settings,
-  LogOut
+  LogOut,
+  Share2
 } from "lucide-react";
+
+import logoImg from "@assets/mtendere-logo.svg";
 
 export default function ExpandingNav() {
   const [isOpen, setIsOpen] = useState(false);
@@ -79,8 +82,8 @@ export default function ExpandingNav() {
             icon: GraduationCap,
             items: [
               { label: "Scholarships", href: "/scholarships", icon: Award },
-              { label: "Study Abroad", href: "/about", icon: Globe },
-              { label: "University Applications", href: "/about", icon: BookOpen },
+              { label: "Study Abroad", href: "/study-abroad", icon: Globe },
+              { label: "University Applications", href: "/university-applications", icon: BookOpen },
             ]
           },
           {
@@ -88,8 +91,8 @@ export default function ExpandingNav() {
             icon: Briefcase,
             items: [
               { label: "Job Portal", href: "/jobs", icon: Briefcase },
-              { label: "Career Counseling", href: "/about", icon: TrendingUp },
-              { label: "Resume Building", href: "/about", icon: User },
+              { label: "Career Counseling", href: "/career-counseling", icon: TrendingUp },
+              { label: "Resume Building", href: "/resume-building", icon: User },
             ]
           }
         ]
@@ -99,6 +102,16 @@ export default function ExpandingNav() {
       label: "Partners",
       href: "/partners",
       active: location === "/partners",
+    },
+    {
+      label: "Blog",
+      href: "/blog",
+      active: location === "/blog",
+    },
+    {
+      label: "Team",
+      href: "/about#team",
+      active: false,
     },
     {
       label: "About",
@@ -116,16 +129,19 @@ export default function ExpandingNav() {
     <nav 
       ref={navRef}
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        isScrolled ? 'bg-white shadow-lg' : 'bg-white/95 backdrop-blur-sm'
+        isScrolled ? 'bg-background/95 shadow-lg border-b border-border/70' : 'bg-background/80 backdrop-blur-sm border-b border-border/50'
       }`}
     >
       <div className="container mx-auto px-4">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <Link href="/" onClick={closeMenu}>
-            <div className="font-bold text-2xl">
-              <span className="text-mtendere-blue">Mtendere</span>{" "}
-              <span className="text-mtendere-green">Education</span>
+            <div className="flex items-center group">
+              <img
+                src={logoImg}
+                alt="Mtendere Education Consult"
+                className="h-12 w-auto object-contain transform group-hover:scale-105 transition-transform duration-300"
+              />
             </div>
           </Link>
 
@@ -136,7 +152,7 @@ export default function ExpandingNav() {
                 {item.dropdown ? (
                   <div>
                     <button
-                      className="flex items-center space-x-1 text-mtendere-dark hover:text-mtendere-blue px-3 py-2 text-sm font-medium transition-colors"
+                      className="flex items-center space-x-1 text-foreground hover:text-mtendere-blue px-3 py-2 text-sm font-medium transition-colors"
                       onClick={() => toggleDropdown(item.dropdown!)}
                     >
                       <span>{item.label}</span>
@@ -147,7 +163,7 @@ export default function ExpandingNav() {
                     
                     {/* Mega Menu */}
                     {activeDropdown === item.dropdown && item.megaMenu && (
-                      <div className="absolute left-0 mt-2 w-96 bg-white rounded-lg shadow-xl border animate-scale-in">
+                      <div className="absolute left-0 mt-2 w-96 bg-card rounded-lg shadow-xl border border-border/60 animate-scale-in">
                         <div className="p-6 grid grid-cols-2 gap-6">
                           {item.megaMenu.sections.map((section) => (
                             <div key={section.title}>
@@ -162,7 +178,7 @@ export default function ExpandingNav() {
                                   key={subItem.label}
                                   href={subItem.href}
                                   onClick={closeMenu}
-                                  className="flex items-center space-x-2 py-2 text-sm text-gray-600 hover:text-mtendere-blue transition-colors"
+                                  className="flex items-center space-x-2 py-2 text-sm text-muted-foreground hover:text-mtendere-blue transition-colors"
                                 >
                                   <subItem.icon className="w-4 h-4" />
                                   <span>{subItem.label}</span>
@@ -181,7 +197,7 @@ export default function ExpandingNav() {
                     className={`px-3 py-2 text-sm font-medium transition-colors ${
                       item.active
                         ? 'text-mtendere-blue border-b-2 border-mtendere-blue'
-                        : 'text-mtendere-dark hover:text-mtendere-blue'
+                        : 'text-foreground hover:text-mtendere-blue'
                     }`}
                   >
                     {item.label}
@@ -208,21 +224,29 @@ export default function ExpandingNav() {
                 </Button>
                 
                 {activeDropdown === 'user' && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border animate-scale-in">
+                  <div className="absolute right-0 mt-2 w-48 bg-card rounded-lg shadow-xl border border-border/60 animate-scale-in">
                     <div className="p-2">
                       <Link
                         href="/dashboard"
                         onClick={closeMenu}
-                        className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-gray-100"
+                        className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm text-foreground/80 hover:bg-muted/60"
                       >
                         <User className="w-4 h-4" />
                         <span>Dashboard</span>
+                      </Link>
+                      <Link
+                        href="/referrals"
+                        onClick={closeMenu}
+                        className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm text-foreground/80 hover:bg-muted/60"
+                      >
+                        <Share2 className="w-4 h-4" />
+                        <span>Referrals</span>
                       </Link>
                       {(user.role === 'admin' || user.role === 'super_admin') && (
                         <Link
                           href="/admin"
                           onClick={closeMenu}
-                          className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-gray-100"
+                          className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm text-foreground/80 hover:bg-muted/60"
                         >
                           <Settings className="w-4 h-4" />
                           <span>Admin Panel</span>
@@ -230,7 +254,7 @@ export default function ExpandingNav() {
                       )}
                       <button
                         onClick={handleLogout}
-                        className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                        className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm text-foreground/80 hover:bg-muted/60 w-full text-left"
                       >
                         <LogOut className="w-4 h-4" />
                         <span>Logout</span>
@@ -244,7 +268,7 @@ export default function ExpandingNav() {
                 <Button asChild variant="outline" className="border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white">
                   <Link href="/login">Login</Link>
                 </Button>
-                <Button asChild className="bg-mtendere-green hover:bg-green-700">
+                <Button asChild className="bg-mtendere-green hover:bg-mtendere-green/90">
                   <Link href="/register">Register</Link>
                 </Button>
               </>
@@ -257,7 +281,7 @@ export default function ExpandingNav() {
               variant="ghost"
               size="icon"
               onClick={() => setIsOpen(!isOpen)}
-              className="text-mtendere-dark hover:text-mtendere-blue"
+              className="text-foreground hover:text-mtendere-blue"
             >
               {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </Button>
@@ -267,13 +291,13 @@ export default function ExpandingNav() {
         {/* Mobile Navigation */}
         {isOpen && (
           <div className="lg:hidden animate-slide-in">
-            <div className="px-2 pt-2 pb-3 space-y-1 bg-white border-t">
+            <div className="px-2 pt-2 pb-3 space-y-1 bg-card border-t border-border/60">
               {navItems.map((item) => (
                 <div key={item.label}>
                   {item.dropdown ? (
                     <div>
                       <button
-                        className="flex items-center justify-between w-full px-3 py-2 text-base font-medium text-mtendere-dark hover:text-mtendere-blue"
+                        className="flex items-center justify-between w-full px-3 py-2 text-base font-medium text-foreground hover:text-mtendere-blue"
                         onClick={() => toggleDropdown(item.dropdown!)}
                       >
                         <span>{item.label}</span>
@@ -295,7 +319,7 @@ export default function ExpandingNav() {
                                   key={subItem.label}
                                   href={subItem.href}
                                   onClick={closeMenu}
-                                  className="flex items-center space-x-2 pl-6 py-2 text-sm text-gray-600 hover:text-mtendere-blue"
+                                  className="flex items-center space-x-2 pl-6 py-2 text-sm text-muted-foreground hover:text-mtendere-blue"
                                 >
                                   <subItem.icon className="w-3 h-3" />
                                   <span>{subItem.label}</span>
@@ -312,8 +336,8 @@ export default function ExpandingNav() {
                       onClick={closeMenu}
                       className={`block px-3 py-2 text-base font-medium transition-colors ${
                         item.active
-                          ? 'text-mtendere-blue bg-blue-50'
-                          : 'text-mtendere-dark hover:text-mtendere-blue hover:bg-gray-50'
+                          ? 'text-mtendere-blue bg-mtendere-blue/10'
+                          : 'text-foreground hover:text-mtendere-blue hover:bg-muted/60'
                       }`}
                     >
                       {item.label}
@@ -335,22 +359,29 @@ export default function ExpandingNav() {
                     <Link
                       href="/dashboard"
                       onClick={closeMenu}
-                      className="block px-3 py-2 text-base font-medium text-mtendere-dark hover:text-mtendere-blue"
+                      className="block px-3 py-2 text-base font-medium text-foreground hover:text-mtendere-blue"
                     >
                       Dashboard
+                    </Link>
+                    <Link
+                      href="/referrals"
+                      onClick={closeMenu}
+                      className="block px-3 py-2 text-base font-medium text-foreground hover:text-mtendere-blue"
+                    >
+                      Referrals
                     </Link>
                     {(user.role === 'admin' || user.role === 'super_admin') && (
                       <Link
                         href="/admin"
                         onClick={closeMenu}
-                        className="block px-3 py-2 text-base font-medium text-mtendere-dark hover:text-mtendere-blue"
+                        className="block px-3 py-2 text-base font-medium text-foreground hover:text-mtendere-blue"
                       >
                         Admin Panel
                       </Link>
                     )}
                     <button
                       onClick={handleLogout}
-                      className="block w-full text-left px-3 py-2 text-base font-medium text-mtendere-dark hover:text-mtendere-blue"
+                      className="block w-full text-left px-3 py-2 text-base font-medium text-foreground hover:text-mtendere-blue"
                     >
                       Logout
                     </button>
@@ -381,3 +412,5 @@ export default function ExpandingNav() {
     </nav>
   );
 }
+
+

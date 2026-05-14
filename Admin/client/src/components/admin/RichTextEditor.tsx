@@ -40,7 +40,8 @@ export default function RichTextEditor({
   className,
   ...props
 }: RichTextEditorProps) {
-  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const apiKey = import.meta.env.VITE_TINYMCE_API_KEY || "no-api-key";
+  const editorRef = useRef<any>(null);
   const [isEditorLoaded, setIsEditorLoaded] = useState(false);
   const [currentValue, setCurrentValue] = useState(value);
 
@@ -48,7 +49,7 @@ export default function RichTextEditor({
   useEffect(() => {
     if (typeof window !== 'undefined' && !window.tinymce) {
       const script = document.createElement('script');
-      script.src = 'https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js';
+      script.src = `https://cdn.tiny.cloud/1/${apiKey}/tinymce/6/tinymce.min.js`;
       script.onload = () => {
         setIsEditorLoaded(true);
       };
@@ -62,7 +63,7 @@ export default function RichTextEditor({
   useEffect(() => {
     if (isEditorLoaded && editorRef.current && typeof window !== 'undefined' && window.tinymce) {
       window.tinymce.init({
-        target: editorRef.current,
+        target: editorRef.current as any,
         height: minHeight,
         menubar: false,
         plugins: [
@@ -92,7 +93,7 @@ export default function RichTextEditor({
 
     return () => {
       if (typeof window !== 'undefined' && window.tinymce && editorRef.current) {
-        window.tinymce.get(editorRef.current.id)?.remove();
+        window.tinymce.get(editorRef.current?.id as string)?.remove();
       }
     };
   }, [isEditorLoaded, minHeight, placeholder, value, onChange]);
@@ -163,7 +164,7 @@ export default function RichTextEditor({
               <Underline className="w-4 h-4" />
             </Button>
             
-            <div className="w-px h-6 bg-gray-300 mx-1" />
+            <div className="w-px h-6 bg-border/70 mx-1" />
             
             <Button
               type="button"
@@ -184,7 +185,7 @@ export default function RichTextEditor({
               <ListOrdered className="w-4 h-4" />
             </Button>
             
-            <div className="w-px h-6 bg-gray-300 mx-1" />
+            <div className="w-px h-6 bg-border/70 mx-1" />
             
             <Button
               type="button"
@@ -214,7 +215,7 @@ export default function RichTextEditor({
               <AlignRight className="w-4 h-4" />
             </Button>
             
-            <div className="w-px h-6 bg-gray-300 mx-1" />
+            <div className="w-px h-6 bg-border/70 mx-1" />
             
             <Button
               type="button"

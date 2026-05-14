@@ -3,7 +3,7 @@ import OpenAI from "openai";
 // Initialize OpenAI client only if API key is provided
 let openai: OpenAI | null = null;
 
-if (process.env.API_KEY) {
+if (process.env.OPENAI_API_KEY) {
   openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
   });
@@ -61,7 +61,7 @@ export const moderateContent = async (content: string): Promise<{
 
     return {
       flagged: result.flagged,
-      categories: result.categories,
+      categories: result.categories as unknown as { [key: string]: boolean },
       confidence: Math.max(...Object.values(result.category_scores)),
       suggestions: result.flagged ? suggestions : undefined,
     };
