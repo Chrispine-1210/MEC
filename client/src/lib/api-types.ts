@@ -167,10 +167,3 @@ export interface ApiMessage {
   id: number;
   name: string;
   email: string;
-  phone?: string | null;
-  subject?: string | null;
-  message: string;
-  isRead?: boolean | null;
-  createdAt: string | null;
-  updatedAt?: string | null;
-}

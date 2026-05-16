@@ -64,11 +64,11 @@ export default function Footer() {
             <div className="mb-6 space-y-3 text-sm text-muted-foreground">
               <div className="flex items-start gap-3">
                 <MapPin className="w-4 h-4 text-mtendere-orange mt-0.5 shrink-0" />
-Lilongwe, Malawi
+                <span>Off Mandala Road, Area 3, Behind NBS Bank, Lilongwe, Malawi</span>
               </div>
               <div className="flex items-center gap-3">
                 <Phone className="w-4 h-4 text-mtendere-orange shrink-0" />
-+265 999 360 325
+                <a href="tel:+265998882786" className="hover:text-mtendere-blue transition-colors">+265 998 882 786</a>
               </div>
               <div className="flex items-center gap-3">
                 <Mail className="w-4 h-4 text-mtendere-orange shrink-0" />

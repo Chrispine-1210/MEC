@@ -16,17 +16,11 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (identifier: string, password: string) => Promise<boolean>;
-  register: (userData: any) => Promise<AuthActionResult>;
+  login: (email: string, password: string) => Promise<boolean>;
+  register: (userData: any) => Promise<boolean>;
   logout: () => void;
   isLoading: boolean;
 }
-
-type AuthFieldErrors = Partial<Record<"email" | "username" | "password" | "firstName" | "lastName", string>>;
-
-type AuthActionResult =
-  | { success: true }
-  | { success: false; message: string; fields?: AuthFieldErrors };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -57,42 +51,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const getErrorDetails = (error: unknown, fallback: string): { message: string; fields?: AuthFieldErrors } => {
-    const payload =
-      typeof error === "object" && error !== null && "payload" in error
-        ? (error as { payload?: unknown }).payload
-        : undefined;
-
-    if (typeof payload === "object" && payload !== null) {
-      const message =
-        "message" in payload && typeof (payload as { message?: unknown }).message === "string"
-          ? (payload as { message: string }).message
-          : fallback;
-      const fields =
-        "fields" in payload && typeof (payload as { fields?: unknown }).fields === "object"
-          ? ((payload as { fields?: AuthFieldErrors }).fields ?? undefined)
-          : undefined;
-      return { message, fields };
-    }
-
-    if (error instanceof Error) {
-      const message = error.message.replace(/^\d+:\s*/, "").trim();
-      try {
-        const parsed = JSON.parse(message);
-        return {
-          message: parsed.message || parsed.error || fallback,
-          fields: parsed.fields,
-        };
-      } catch {
-        return { message: message || fallback };
-      }
-    }
-    return { message: fallback };
-  };
-
-  const login = async (identifier: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      const response = await apiRequest("POST", "/api/auth/login", { identifier, password });
+      const response = await apiRequest("POST", "/api/auth/login", { email, password });
       const data = await response.json();
       
       localStorage.setItem("token", data.token);
@@ -106,17 +67,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return true;
     } catch (error) {
       console.error("Login failed:", error);
-      const details = getErrorDetails(error, "Please check your credentials and try again.");
       toast({
         title: "Login failed",
-        description: details.message,
+        description: "Please check your credentials and try again.",
         variant: "destructive",
       });
       return false;
     }
   };
 
-  const register = async (userData: any): Promise<AuthActionResult> => {
+  const register = async (userData: any): Promise<boolean> => {
     try {
       const response = await apiRequest("POST", "/api/auth/register", userData);
       const data = await response.json();
@@ -129,16 +89,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         description: "Your account has been created successfully.",
       });
       
-      return { success: true };
+      return true;
     } catch (error) {
       console.error("Registration failed:", error);
-      const details = getErrorDetails(error, "Please check your information and try again.");
       toast({
         title: "Registration failed",
-        description: details.message,
+        description: "Please check your information and try again.",
         variant: "destructive",
       });
-      return { success: false, ...details };
+      return false;
     }
   };
 

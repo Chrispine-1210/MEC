@@ -109,12 +109,6 @@ export default function ApplicationTracker({ applications }: ApplicationTrackerP
     return `${application.type === 'scholarship' ? 'Scholarship' : 'Job'} Application #${application.referenceId}`;
   };
 
-  const getReferencePath = (application: Application) => {
-    return application.type === "scholarship"
-      ? `/scholarships/${application.referenceId}`
-      : `/jobs/${application.referenceId}`;
-  };
-
   if (!applications || applications.length === 0) {
     return (
       <div className="text-center py-12">
@@ -151,7 +145,7 @@ export default function ApplicationTracker({ applications }: ApplicationTrackerP
     <div className="space-y-6">
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-mtendere-blue/10 rounded-lg p-4 border border-mtendere-blue/20">
+        <div className="bg-mtendere-blue/10 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-mtendere-blue font-medium">Total Applications</p>
@@ -161,36 +155,36 @@ export default function ApplicationTracker({ applications }: ApplicationTrackerP
           </div>
         </div>
 
-        <div className="bg-mtendere-green/10 rounded-lg p-4 border border-mtendere-green/20">
+        <div className="bg-mtendere-green/10 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-mtendere-green font-medium">Approved</p>
               <p className="text-2xl font-bold text-mtendere-green">
-                {applications.filter(app => ["approved", "accepted"].includes(app.status.toLowerCase())).length}
+                {applications.filter(app => app.status.toLowerCase() === 'approved').length}
               </p>
             </div>
             <CheckCircle className="w-8 h-8 text-mtendere-green" />
           </div>
         </div>
 
-        <div className="bg-mtendere-orange/10 rounded-lg p-4 border border-mtendere-orange/30">
+        <div className="bg-mtendere-orange/10 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-mtendere-orange font-medium">Pending</p>
               <p className="text-2xl font-bold text-mtendere-orange">
-                {applications.filter(app => ["pending", "under review"].includes(app.status.toLowerCase())).length}
+                {applications.filter(app => app.status.toLowerCase() === 'pending').length}
               </p>
             </div>
             <Clock className="w-8 h-8 text-mtendere-orange" />
           </div>
         </div>
 
-        <div className="bg-mtendere-orange/10 rounded-lg p-4 border border-mtendere-orange/30">
+        <div className="bg-mtendere-orange/10 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-mtendere-orange font-medium">Action Required</p>
               <p className="text-2xl font-bold text-mtendere-orange">
-                {applications.filter(app => app.status.toLowerCase().includes('document')).length}
+                {applications.filter(app => app.status.toLowerCase().includes('documents')).length}
               </p>
             </div>
             <AlertCircle className="w-8 h-8 text-mtendere-orange" />
@@ -201,7 +195,7 @@ export default function ApplicationTracker({ applications }: ApplicationTrackerP
       {/* Applications List */}
       <div className="space-y-4">
         {sortedApplications.map((application) => (
-          <Card key={application.id} className="hover:shadow-lg transition-shadow duration-300 border-border/60">
+          <Card key={application.id} className="hover:shadow-lg transition-shadow duration-300">
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
                 <div className="flex items-start space-x-3">
@@ -275,35 +269,24 @@ export default function ApplicationTracker({ applications }: ApplicationTrackerP
               )}
 
               {/* Actions */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pt-4 border-t">
-                <div className="flex flex-wrap gap-2">
-                  <Button asChild size="sm" variant="outline">
-                    <Link href={getReferencePath(application)}>
-                      <Eye className="w-4 h-4 mr-2" />
-                      View Details
-                    </Link>
+              <div className="flex items-center justify-between pt-4 border-t">
+                <div className="flex space-x-2">
+                  <Button size="sm" variant="outline">
+                    <Eye className="w-4 h-4 mr-2" />
+                    View Details
                   </Button>
-
-                  {application.status.toLowerCase().includes('document') && (
-                    <Button asChild size="sm" className="bg-mtendere-orange hover:bg-mtendere-orange/90">
-                      <Link href={getReferencePath(application)}>
-                        <FileText className="w-4 h-4 mr-2" />
-                        Continue Application
-                      </Link>
+                  
+                  {application.status.toLowerCase().includes('documents') && (
+                    <Button size="sm" className="bg-mtendere-orange hover:bg-mtendere-orange/90">
+                      <FileText className="w-4 h-4 mr-2" />
+                      Upload Documents
                     </Button>
                   )}
-
-                  <Button asChild size="sm" variant="ghost" className="text-mtendere-blue hover:text-mtendere-blue">
-                    <Link href={getReferencePath(application)}>
-                      <ExternalLink className="w-4 h-4 mr-2" />
-                      Open Opportunity
-                    </Link>
-                  </Button>
                 </div>
 
-                <Badge variant="outline" className="text-xs text-muted-foreground">
-                  Ref #{application.referenceId}
-                </Badge>
+                <Button size="sm" variant="ghost">
+                  <ExternalLink className="w-4 h-4" />
+                </Button>
               </div>
             </CardContent>
           </Card>

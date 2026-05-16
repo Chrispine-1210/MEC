@@ -57,8 +57,8 @@ export default function Register() {
 
     if (!formData.password) {
       newErrors.password = "Password is required";
-    } else if (formData.password.length < 8) {
-      newErrors.password = "Password must be at least 8 characters long";
+    } else if (formData.password.length < 6) {
+      newErrors.password = "Password must be at least 6 characters long";
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -79,7 +79,7 @@ export default function Register() {
     setIsLoading(true);
 
     try {
-      const result = await register({
+      const success = await register({
         firstName: formData.firstName,
         lastName: formData.lastName,
         email: formData.email,
@@ -87,10 +87,8 @@ export default function Register() {
         password: formData.password,
       });
 
-      if (result.success) {
+      if (success) {
         setLocation("/dashboard");
-      } else if (result.fields) {
-        setErrors((prev) => ({ ...prev, ...result.fields }));
       }
     } catch (error) {
       console.error("Registration error:", error);

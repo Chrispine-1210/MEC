@@ -100,7 +100,7 @@ export default function AdminSidebar({ activeView, onViewChange, isOpen, onToggl
       )}
 
       {/* Sidebar */}
-      <div className={`fixed left-0 top-0 h-full w-64 bg-sidebar/95 backdrop-blur text-sidebar-foreground border-r border-sidebar-border/60 transform transition-transform duration-300 z-50 ${
+      <div className={`fixed left-0 top-0 h-full w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border/60 transform transition-transform duration-300 z-50 ${
         isOpen ? 'translate-x-0' : '-translate-x-full'
       } lg:translate-x-0`}>
         
@@ -143,7 +143,7 @@ export default function AdminSidebar({ activeView, onViewChange, isOpen, onToggl
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4 overflow-y-auto">
+        <nav className="flex-1 p-4">
           <div className="space-y-2">
             {menuItems.map((item) => (
               <button

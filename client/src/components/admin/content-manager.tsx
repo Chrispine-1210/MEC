@@ -107,9 +107,8 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
   };
 
   const handleEdit = (item: any) => {
-    const { password, ...safeItem } = item;
     setEditingItem(item);
-    setFormData({ ...safeItem });
+    setFormData({ ...item });
   };
 
   const handleSave = () => {
@@ -192,16 +191,6 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
           email: '',
           isActive: true,
         };
-      case 'users':
-        return {
-          username: '',
-          email: '',
-          password: '',
-          firstName: '',
-          lastName: '',
-          role: 'user',
-          isActive: true,
-        };
       default:
         return {};
     }
@@ -212,7 +201,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
       case 'scholarships':
         return (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="title">Title</Label>
                 <Input
@@ -244,7 +233,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="country">Country</Label>
                 <Input
@@ -260,7 +249,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
                   id="amount"
                   type="number"
                   value={formData.amount || ''}
-                  onChange={(e) => handleChange('amount', Number(e.target.value) || 0)}
+                  onChange={(e) => handleChange('amount', parseInt(e.target.value))}
                   placeholder="0"
                 />
               </div>
@@ -275,7 +264,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="category">Category</Label>
                 <Input
@@ -300,7 +289,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
       case 'jobs':
         return (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="title">Job Title</Label>
                 <Input
@@ -332,7 +321,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="location">Location</Label>
                 <Input
@@ -348,7 +337,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
                   id="salary"
                   type="number"
                   value={formData.salary || ''}
-                  onChange={(e) => handleChange('salary', Number(e.target.value) || 0)}
+                  onChange={(e) => handleChange('salary', parseInt(e.target.value))}
                   placeholder="0"
                 />
               </div>
@@ -363,7 +352,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
+            <div className="flex items-center space-x-6">
               <div className="flex items-center space-x-2">
                 <Switch
                   id="isRemote"
@@ -419,7 +408,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="category">Category</Label>
                 <Input
@@ -441,230 +430,8 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
           </>
         );
 
-      case 'testimonials':
-        return (
-          <>
-            <div>
-              <Label htmlFor="content">Testimonial</Label>
-              <Textarea
-                id="content"
-                value={formData.content || ''}
-                onChange={(e) => handleChange('content', e.target.value)}
-                placeholder="Student testimonial"
-                rows={4}
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="rating">Rating (1-5)</Label>
-                <Input
-                  id="rating"
-                  type="number"
-                  min={1}
-                  max={5}
-                  value={formData.rating || 5}
-                  onChange={(e) => handleChange('rating', Math.min(5, Math.max(1, Number(e.target.value) || 1)))}
-                />
-              </div>
-              <div className="flex items-center space-x-2 pt-6">
-                <Switch
-                  id="isApproved"
-                  checked={formData.isApproved || false}
-                  onCheckedChange={(checked) => handleChange('isApproved', checked)}
-                />
-                <Label htmlFor="isApproved">Approved</Label>
-              </div>
-            </div>
-          </>
-        );
-
-      case 'partners':
-        return (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="name">Partner Name</Label>
-                <Input
-                  id="name"
-                  value={formData.name || ''}
-                  onChange={(e) => handleChange('name', e.target.value)}
-                  placeholder="Institution or organization"
-                />
-              </div>
-              <div>
-                <Label htmlFor="country">Country</Label>
-                <Input
-                  id="country"
-                  value={formData.country || ''}
-                  onChange={(e) => handleChange('country', e.target.value)}
-                  placeholder="Country"
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="website">Website</Label>
-              <Input
-                id="website"
-                value={formData.website || ''}
-                onChange={(e) => handleChange('website', e.target.value)}
-                placeholder="https://example.org"
-              />
-            </div>
-            <div>
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={formData.description || ''}
-                onChange={(e) => handleChange('description', e.target.value)}
-                placeholder="Partner description"
-                rows={4}
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="isActive"
-                checked={formData.isActive || false}
-                onCheckedChange={(checked) => handleChange('isActive', checked)}
-              />
-              <Label htmlFor="isActive">Active</Label>
-            </div>
-          </>
-        );
-
-      case 'team-members':
-        return (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="name">Full Name</Label>
-                <Input
-                  id="name"
-                  value={formData.name || ''}
-                  onChange={(e) => handleChange('name', e.target.value)}
-                  placeholder="Team member name"
-                />
-              </div>
-              <div>
-                <Label htmlFor="position">Position</Label>
-                <Input
-                  id="position"
-                  value={formData.position || ''}
-                  onChange={(e) => handleChange('position', e.target.value)}
-                  placeholder="Position or title"
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.email || ''}
-                onChange={(e) => handleChange('email', e.target.value)}
-                placeholder="name@example.com"
-              />
-            </div>
-            <div>
-              <Label htmlFor="bio">Bio</Label>
-              <Textarea
-                id="bio"
-                value={formData.bio || ''}
-                onChange={(e) => handleChange('bio', e.target.value)}
-                placeholder="Short biography"
-                rows={4}
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="isActive"
-                checked={formData.isActive || false}
-                onCheckedChange={(checked) => handleChange('isActive', checked)}
-              />
-              <Label htmlFor="isActive">Active</Label>
-            </div>
-          </>
-        );
-
-      case 'users':
-        return (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="firstName">First Name</Label>
-                <Input
-                  id="firstName"
-                  value={formData.firstName || ''}
-                  onChange={(e) => handleChange('firstName', e.target.value)}
-                  placeholder="First name"
-                />
-              </div>
-              <div>
-                <Label htmlFor="lastName">Last Name</Label>
-                <Input
-                  id="lastName"
-                  value={formData.lastName || ''}
-                  onChange={(e) => handleChange('lastName', e.target.value)}
-                  placeholder="Last name"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="username">Username</Label>
-                <Input
-                  id="username"
-                  value={formData.username || ''}
-                  onChange={(e) => handleChange('username', e.target.value)}
-                  placeholder="Username"
-                />
-              </div>
-              <div>
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email || ''}
-                  onChange={(e) => handleChange('email', e.target.value)}
-                  placeholder="name@example.com"
-                />
-              </div>
-            </div>
-            {!editingItem && (
-              <div>
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={formData.password || ''}
-                  onChange={(e) => handleChange('password', e.target.value)}
-                  placeholder="Temporary password"
-                />
-              </div>
-            )}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="role">Role</Label>
-                <Input
-                  id="role"
-                  value={formData.role || 'user'}
-                  onChange={(e) => handleChange('role', e.target.value)}
-                  placeholder="user | admin | editor"
-                />
-              </div>
-              <div className="flex items-center space-x-2 pt-6">
-                <Switch
-                  id="isActive"
-                  checked={formData.isActive ?? true}
-                  onCheckedChange={(checked) => handleChange('isActive', checked)}
-                />
-                <Label htmlFor="isActive">Active</Label>
-              </div>
-            </div>
-          </>
-        );
-
       default:
-        return <p className="text-muted-foreground">No form is required for this content type.</p>;
+        return <p className="text-muted-foreground">Form fields for {contentType} not implemented yet.</p>;
     }
   };
 
@@ -673,7 +440,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
       <Card key={item.id} className="hover:shadow-lg transition-shadow duration-300">
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between">
-            <CardTitle className="text-lg line-clamp-1">{item.title || item.name || item.username || item.email}</CardTitle>
+            <CardTitle className="text-lg line-clamp-1">{item.title || item.name}</CardTitle>
             <div className="flex space-x-2">
               <Button variant="ghost" size="icon" onClick={() => handleEdit(item)}>
                 <Edit className="w-4 h-4" />
@@ -688,9 +455,9 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
               </Button>
             </div>
           </div>
-          {(item.description || item.content || item.email) && (
+          {item.description && (
             <CardDescription className="line-clamp-2">
-              {item.description || item.content || item.email}
+              {item.description}
             </CardDescription>
           )}
         </CardHeader>
@@ -726,9 +493,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
   const filteredItems = items?.filter((item: any) =>
     item.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     item.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.username?.toLowerCase().includes(searchQuery.toLowerCase())
+    item.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const getTitle = () => {
@@ -755,20 +520,20 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-mtendere-blue">{getTitle()}</h1>
           <p className="text-muted-foreground">Manage {contentType} content</p>
         </div>
-        <Button onClick={handleCreate} className="bg-mtendere-blue hover:bg-mtendere-blue/90 w-full sm:w-auto">
+        <Button onClick={handleCreate} className="bg-mtendere-blue hover:bg-mtendere-blue/90">
           <Plus className="w-4 h-4 mr-2" />
           Add New
         </Button>
       </div>
 
       {/* Search and Filters */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="relative flex-1 max-w-full sm:max-w-md">
+      <div className="flex items-center space-x-4">
+        <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
           <Input
             placeholder={`Search ${contentType}...`}
@@ -777,7 +542,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
             className="pl-10"
           />
         </div>
-        <Button variant="outline" className="w-full sm:w-auto">
+        <Button variant="outline">
           <Filter className="w-4 h-4 mr-2" />
           Filter
         </Button>
@@ -793,7 +558,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
           </CardHeader>
           <CardContent className="space-y-4">
             {renderFormFields()}
-            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
+            <div className="flex justify-end space-x-2">
               <Button variant="outline" onClick={handleCancel}>
                 <X className="w-4 h-4 mr-2" />
                 Cancel

@@ -26,127 +26,95 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    if (!user) return;
-
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    const configuredApiBase = import.meta.env.VITE_API_BASE_URL as string | undefined;
-    const apiUrl = configuredApiBase
-      ? new URL(configuredApiBase, window.location.origin)
-      : new URL(window.location.origin);
-    const isViteDevClient = !configuredApiBase && apiUrl.port && apiUrl.port !== "5000";
-    const apiOrigin = isViteDevClient ? `${apiUrl.hostname}:5000` : apiUrl.host;
-    const protocol = apiUrl.protocol === "https:" ? "wss:" : "ws:";
-
-    const wsUrl = `${protocol}//${apiOrigin}/ws?token=${encodeURIComponent(token)}`;
-    const ws = new WebSocket(wsUrl);
-    setSocket(ws);
-
-    ws.onopen = () => {
-      console.log("WebSocket connected");
-      setIsConnected(true);
-
-      const isPrivilegedUser =
-        user.role === "editor" || user.role === "admin" || user.role === "super_admin";
-
-      const defaultChannels = [
-        "scholarships",
-        "jobs",
-        "partners",
-        "blog-posts",
-        "team-members",
-        "announcements",
-        `applications:user:${user.id}`,
-        `referrals:user:${user.id}`,
-      ];
-
-      if (isPrivilegedUser) {
-        defaultChannels.push(
+    if (user) {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      
+      const ws = new WebSocket(wsUrl);
+      
+      ws.onopen = () => {
+        console.log("WebSocket connected");
+        setIsConnected(true);
+        
+        // Subscribe to default channels
+        const defaultChannels = [
+          "scholarships",
+          "jobs",
           "applications",
+          "partners",
+          "blog-posts",
+          "team-members",
           "user_activity",
-          "admin-dashboard",
-          "admin-notifications",
-        );
-      }
+          "announcements",
+        ];
+        ws.send(JSON.stringify({ type: "subscribe", channels: defaultChannels }));
+        setSubscriptions(defaultChannels);
+      };
 
-      ws.send(JSON.stringify({ type: "subscribe", channels: defaultChannels }));
-      setSubscriptions(defaultChannels);
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const { channel } = JSON.parse(event.data) as { channel?: string; data?: unknown };
-
-        // Handle real-time updates
-        switch (channel) {
-          case "scholarships":
-            invalidateByPrefix(["/api/scholarships"]);
-            break;
-          case "jobs":
-            invalidateByPrefix(["/api/jobs"]);
-            break;
-          case "applications":
-            invalidateByPrefix(["/api/applications"]);
-            break;
-          default:
-            if (channel?.startsWith("applications:user:")) {
+      ws.onmessage = (event) => {
+        try {
+          const { channel, data } = JSON.parse(event.data);
+          
+          // Handle real-time updates
+          switch (channel) {
+            case "scholarships":
+              invalidateByPrefix(["/api/scholarships"]);
+              break;
+            case "jobs":
+              invalidateByPrefix(["/api/jobs"]);
+              break;
+            case "applications":
               invalidateByPrefix(["/api/applications"]);
               break;
-            }
-            if (channel?.startsWith("referrals:user:")) {
-              invalidateByPrefix(["/api/referrals"]);
+            case "partners":
+              invalidateByPrefix(["/api/partners"]);
               break;
-            }
-            break;
-          case "partners":
-            invalidateByPrefix(["/api/partners"]);
-            break;
-          case "blog-posts":
-            invalidateByPrefix(["/api/blog-posts"]);
-            break;
-          case "team-members":
-            invalidateByPrefix(["/api/team-members"]);
-            break;
-          case "user_activity":
-            if (user.role === "admin" || user.role === "super_admin") {
-              invalidateByPrefix([
-                "/api/analytics",
-                "/api/admin/dashboard",
-                "/api/admin/notifications",
-                "/api/admin/users",
-              ]);
-            }
-            break;
+            case "blog-posts":
+              invalidateByPrefix(["/api/blog-posts"]);
+              break;
+            case "team-members":
+              invalidateByPrefix(["/api/team-members"]);
+              break;
+            case "user_activity":
+              if (user.role === "admin" || user.role === "super_admin") {
+                invalidateByPrefix([
+                  "/api/analytics",
+                  "/api/admin/dashboard",
+                  "/api/admin/notifications",
+                  "/api/admin/users",
+                ]);
+              }
+              break;
+          }
+        } catch (error) {
+          console.error("WebSocket message error:", error);
         }
-      } catch (error) {
-        console.error("WebSocket message error:", error);
-      }
-    };
+      };
 
-    ws.onclose = () => {
-      console.log("WebSocket disconnected");
-      setIsConnected(false);
-    };
+      ws.onclose = () => {
+        console.log("WebSocket disconnected");
+        setIsConnected(false);
+      };
 
-    ws.onerror = (error) => {
-      console.error("WebSocket error:", error);
-      setIsConnected(false);
-    };
+      ws.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        setIsConnected(false);
+      };
 
-    return () => {
-      ws.close();
-      setSocket(null);
-      setSubscriptions([]);
-    };
+      setSocket(ws);
+
+      return () => {
+        ws.close();
+      };
+    }
   }, [user]);
 
   const subscribe = (channels: string[]) => {
     if (socket && socket.readyState === WebSocket.OPEN) {
-      const newChannels = channels.filter((ch) => !subscriptions.includes(ch));
+      const newChannels = channels.filter(ch => !subscriptions.includes(ch));
       if (newChannels.length > 0) {
         socket.send(JSON.stringify({ type: "subscribe", channels: newChannels }));
-        setSubscriptions((prev) => [...prev, ...newChannels]);
+        setSubscriptions(prev => [...prev, ...newChannels]);
       }
     }
   };
@@ -154,7 +122,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const unsubscribe = (channels: string[]) => {
     if (socket && socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify({ type: "unsubscribe", channels }));
-      setSubscriptions((prev) => prev.filter((ch) => !channels.includes(ch)));
+      setSubscriptions(prev => prev.filter(ch => !channels.includes(ch)));
     }
   };
 

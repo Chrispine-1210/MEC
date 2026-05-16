@@ -8,13 +8,6 @@
       "when": 1765465696555,
       "tag": "0000_petite_drax",
       "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1778255021916,
-      "tag": "0001_real_misty_knight",
-      "breakpoints": true
     }
   ]
 }
