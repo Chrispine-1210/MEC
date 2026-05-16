@@ -24,6 +24,7 @@ import AiChat from "@/pages/admin/ai-chat";
 import Settings from "@/pages/admin/settings";
 import AuthPage from "@/pages/auth";
 import { AdminRealtimeProvider } from "@/hooks/use-admin-realtime";
+import { canAccessAdminPath, isAdminPortalRole, normalizeAdminPath } from "@/lib/admin-rbac";
 
 function AdminLoadingSkeleton() {
   return (
@@ -115,7 +116,7 @@ function AdminLoadingSkeleton() {
 }
 
 function AdminRouter() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const hasToken = typeof window !== "undefined" && Boolean(localStorage.getItem("token"));
   const { data: user, isLoading } = useQuery<User | null>({
     queryKey: ["/api/user"],
@@ -138,7 +139,7 @@ function AdminRouter() {
   if (!hasToken) return null;
   if (isLoading) return <AdminLoadingSkeleton />;
   if (!user) return null;
-  const hasAdminPortalRole = ["viewer", "editor", "admin", "super_admin"].includes(user.role);
+  const hasAdminPortalRole = isAdminPortalRole(user.role);
   if (!hasAdminPortalRole) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary/5 to-accent/10 flex items-center justify-center p-6">
@@ -157,6 +158,34 @@ function AdminRouter() {
           >
             Back to Sign In
           </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const normalizedLocation = normalizeAdminPath(location);
+  const canAccessCurrentPath = canAccessAdminPath(user.role, normalizedLocation);
+  if (!canAccessCurrentPath) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-primary/5 to-accent/10 flex items-center justify-center p-6">
+        <div className="max-w-lg w-full rounded-xl border border-border/60 bg-card p-8 text-center shadow-lg">
+          <h1 className="text-2xl font-semibold text-foreground">Permission required</h1>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Your <span className="font-medium text-foreground">{user.role}</span> role cannot access <span className="font-medium text-foreground">{normalizedLocation}</span>.
+          </p>
+          <div className="mt-6 flex items-center justify-center gap-3">
+            <Button onClick={() => setLocation("/admin")}>Go to Dashboard</Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                localStorage.removeItem("token");
+                queryClient.removeQueries({ queryKey: ["/api/user"] });
+                setLocation("/auth");
+              }}
+            >
+              Switch Account
+            </Button>
+          </div>
         </div>
       </div>
     );

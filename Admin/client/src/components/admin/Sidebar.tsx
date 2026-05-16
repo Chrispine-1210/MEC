@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { authFetch } from "@/lib/queryClient";
+import { canAccessAdminPath } from "@/lib/admin-rbac";
 import {
   LayoutDashboard,
   Users,
@@ -52,23 +53,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
 
   const canAccess = (item: any) => {
     if (!user) return false;
-    const role = user.role;
-    if (role === "admin" || role === "super_admin") return true;
-    const editorRoutes = [
-      "/admin",
-      "/admin/dashboard",
-      "/admin/analytics",
-      "/admin/activity",
-      "/admin/scholarships",
-      "/admin/jobs",
-      "/admin/partners",
-      "/admin/blog",
-      "/admin/team",
-    ];
-    if (role === "editor") return editorRoutes.includes(item.href);
-    const viewerRoutes = ["/admin", "/admin/dashboard", "/admin/analytics", "/admin/activity"];
-    if (role === "viewer") return viewerRoutes.includes(item.href);
-    return false;
+    return canAccessAdminPath(user.role, item.href);
   };
 
   const navigationItems = [

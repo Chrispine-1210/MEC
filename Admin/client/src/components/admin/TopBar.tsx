@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { type User } from "@shared/schema";
 import { authFetch, apiRequest, queryClient } from "@/lib/queryClient";
+import { canCreateContent, canManageUsers, canUseAiAssistant } from "@/lib/admin-rbac";
 import { useToast } from "@/hooks/use-toast";
 import { useAdminRealtime } from "@/hooks/use-admin-realtime";
 import { Button } from "@/components/ui/button";
@@ -81,9 +82,9 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
   const notifications = notifData?.notifications ?? [];
   const unreadCount = notifications.filter(n => !n.isRead).length;
   const role = user?.role ?? "viewer";
-  const canCreateContent = role === "editor" || role === "admin" || role === "super_admin";
-  const canManageUsers = role === "admin" || role === "super_admin";
-  const canUseAiAssistant = role === "admin" || role === "super_admin";
+  const canCreate = canCreateContent(role);
+  const canManage = canManageUsers(role);
+  const canUseAi = canUseAiAssistant(role);
 
   const markReadMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -179,7 +180,7 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
             {isConnected ? "Live sync" : "Reconnecting"}
           </Badge>
 
-          {canCreateContent && (
+          {canCreate && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="default" size="sm" className="hidden sm:flex bg-primary hover:bg-primary/90">
@@ -307,7 +308,7 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
             </PopoverContent>
           </Popover>
 
-          {canUseAiAssistant && (
+          {canUseAi && (
             <Button
               variant="ghost"
               size="sm"
@@ -343,7 +344,7 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {canManageUsers && (
+              {canManage && (
                 <DropdownMenuItem onClick={() => setLocation("/admin/users")} className="cursor-pointer">
                   <UserIcon className="h-4 w-4 mr-2" />
                   My Profile
