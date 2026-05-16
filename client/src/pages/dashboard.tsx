@@ -11,17 +11,15 @@ import ApplicationTracker from "@/components/user/application-tracker";
 import ReferralSystem from "@/components/user/referral-system";
 import ExpandingNav from "@/components/expanding-nav";
 import type { ApiApplication, ApiReferral } from "@/lib/api-types";
-import { 
-  User, 
-  FileText, 
-  GraduationCap, 
-  Briefcase, 
-  Star,
+import {
+  User,
+  FileText,
+  Briefcase,
   Plus,
   Search,
   Users,
   Award,
-  TrendingUp
+  TrendingUp,
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -40,29 +38,25 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
-    if (!isLoading && !user) {
-      setLocation("/login");
-    }
+    if (!isLoading && !user) setLocation("/login");
   }, [user, isLoading, setLocation]);
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-mtendere-gray flex items-center justify-center">
         <div className="text-center">
-          <div className="loading-spinner mx-auto mb-4"></div>
+          <div className="loading-spinner mx-auto mb-4" />
           <p className="text-muted-foreground">Loading your dashboard...</p>
         </div>
+      </div>
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
-  const completedApplications = applications?.filter(app => app.status === "approved").length || 0;
-  const pendingApplications = applications?.filter(app => app.status === "pending").length || 0;
+  const completedApplications = applications?.filter((app) => app.status === "approved").length || 0;
+  const pendingApplications = applications?.filter((app) => app.status === "pending").length || 0;
   const totalReferrals = referrals?.length || 0;
-  const completedReferrals = referrals?.filter(ref => ref.status === "completed").length || 0;
 
   // Calculate real profile completion from available user fields
   const profileFields = [
@@ -80,7 +74,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-mtendere-gray">
       <ExpandingNav />
-      
+
       {/* Header Section */}
       <section className="bg-gradient-to-r from-mtendere-blue to-mtendere-green text-white py-12">
         <div className="container mx-auto px-4">
@@ -89,10 +83,9 @@ export default function Dashboard() {
               <User className="w-10 h-10" />
             </div>
             <div className="text-center md:text-left">
-              <h1 className="text-3xl font-bold">
-                Welcome back, {user.firstName}!
-              </h1>
-              <p className="text-xl opacity-90 mt-1">{user.role === 'user' ? 'Student' : user.role}</p>
+              <h1 className="text-3xl font-bold">Welcome back, {user.firstName}!</h1>
+              <p className="text-xl opacity-90 mt-1">{user.role === "user" ? "Student" : user.role}</p>
+
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mt-3">
                 <Badge className="bg-white/20 text-white border-white/30 hover:bg-white/30">
                   Profile {profileCompletion}% Complete
@@ -101,7 +94,9 @@ export default function Dashboard() {
                   {applications?.length || 0} Applications
                 </Badge>
               </div>
+            </div>
           </div>
+        </div>
       </section>
 
       <div className="container mx-auto px-4 py-8">
@@ -115,9 +110,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">Total Applications</p>
-                      <p className="text-2xl font-bold text-mtendere-blue">
-                        {applications?.length || 0}
-                      </p>
+                      <p className="text-2xl font-bold text-mtendere-blue">{applications?.length || 0}</p>
                     </div>
                     <FileText className="w-8 h-8 text-mtendere-blue" />
                   </div>
@@ -129,9 +122,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">Approved</p>
-                      <p className="text-2xl font-bold text-mtendere-green">
-                        {completedApplications}
-                      </p>
+                      <p className="text-2xl font-bold text-mtendere-green">{completedApplications}</p>
                     </div>
                     <Award className="w-8 h-8 text-mtendere-green" />
                   </div>
@@ -143,9 +134,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">Pending</p>
-                      <p className="text-2xl font-bold text-mtendere-orange">
-                        {pendingApplications}
-                      </p>
+                      <p className="text-2xl font-bold text-mtendere-orange">{pendingApplications}</p>
                     </div>
                     <TrendingUp className="w-8 h-8 text-mtendere-orange" />
                   </div>
@@ -157,9 +146,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">Referrals</p>
-                      <p className="text-2xl font-bold text-mtendere-blue">
-                        {totalReferrals}
-                      </p>
+                      <p className="text-2xl font-bold text-mtendere-blue">{totalReferrals}</p>
                     </div>
                     <Users className="w-8 h-8 text-mtendere-blue" />
                   </div>
@@ -170,12 +157,8 @@ export default function Dashboard() {
             {/* Application Tracker */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-xl text-mtendere-blue">
-                  Application Status
-                </CardTitle>
-                <CardDescription>
-                  Track your scholarship and job applications
-                </CardDescription>
+                <CardTitle className="text-xl text-mtendere-blue">Application Status</CardTitle>
+                <CardDescription>Track your scholarship and job applications</CardDescription>
               </CardHeader>
               <CardContent>
                 <ApplicationTracker applications={applications || []} />
@@ -185,12 +168,8 @@ export default function Dashboard() {
             {/* Referral System */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-xl text-mtendere-blue">
-                  Referral Program
-                </CardTitle>
-                <CardDescription>
-                  Earn rewards by referring friends to Mtendere
-                </CardDescription>
+                <CardTitle className="text-xl text-mtendere-blue">Referral Program</CardTitle>
+                <CardDescription>Earn rewards by referring friends to Mtendere</CardDescription>
               </CardHeader>
               <CardContent>
                 <ReferralSystem referrals={referrals || []} />
@@ -203,9 +182,7 @@ export default function Dashboard() {
             {/* Profile Completion */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg text-mtendere-blue">
-                  Profile Completion
-                </CardTitle>
+                <CardTitle className="text-lg text-mtendere-blue">Profile Completion</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
@@ -216,16 +193,19 @@ export default function Dashboard() {
                     </div>
                     <Progress value={profileCompletion} className="h-3" />
                   </div>
+
                   <p className="text-sm text-muted-foreground">
                     Complete your profile to increase your chances of success
                   </p>
+
                   <Button
                     className="w-full"
                     variant="outline"
                     onClick={() =>
                       toast({
                         title: "Profile Settings",
-                        description: "Profile editing will be available in the next update. Fill in your phone, date of birth, and profile picture to reach 100%.",
+                        description:
+                          "Profile editing will be available in the next update. Fill in your phone, date of birth, and profile picture to reach 100%.",
                       })
                     }
                   >
@@ -238,9 +218,7 @@ export default function Dashboard() {
             {/* Quick Actions */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg text-mtendere-blue">
-                  Quick Actions
-                </CardTitle>
+                <CardTitle className="text-lg text-mtendere-blue">Quick Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <Button asChild className="w-full bg-mtendere-blue hover:bg-mtendere-blue/90">
@@ -249,22 +227,26 @@ export default function Dashboard() {
                     New Application
                   </Link>
                 </Button>
-                
+
                 <Button asChild className="w-full bg-mtendere-green hover:bg-mtendere-green/90">
                   <Link href="/scholarships">
                     <Search className="w-4 h-4 mr-2" />
                     Find Scholarships
                   </Link>
                 </Button>
-                
+
                 <Button asChild className="w-full bg-mtendere-orange hover:bg-mtendere-orange/90">
                   <Link href="/jobs">
                     <Briefcase className="w-4 h-4 mr-2" />
                     Browse Jobs
                   </Link>
                 </Button>
-                
-                <Button asChild variant="outline" className="w-full border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white">
+
+                <Button
+                  asChild
+                  variant="outline"
+                  className="w-full border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white"
+                >
                   <Link href="/referrals">
                     <Users className="w-4 h-4 mr-2" />
                     Refer a Friend
@@ -276,34 +258,30 @@ export default function Dashboard() {
             {/* Recent Activity */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg text-mtendere-blue">
-                  Recent Activity
-                </CardTitle>
+                <CardTitle className="text-lg text-mtendere-blue">Recent Activity</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   {applications?.slice(0, 3).map((application) => (
                     <div key={application.id} className="flex items-start space-x-3">
-                      <div className="w-2 h-2 bg-mtendere-blue rounded-full mt-2"></div>
+                      <div className="w-2 h-2 bg-mtendere-blue rounded-full mt-2" />
                       <div className="flex-1">
-                        <p className="text-sm font-medium">
-                          Applied for {application.type}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Status: {application.status}
-                        </p>
+                        <p className="text-sm font-medium">Applied for {application.type}</p>
+                        <p className="text-xs text-muted-foreground">Status: {application.status}</p>
                       </div>
+                    </div>
                   ))}
-                  
+
                   {(!applications || applications.length === 0) && (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      No recent activity
-                    </p>
+                    <p className="text-sm text-muted-foreground text-center py-4">No recent activity</p>
                   )}
                 </div>
               </CardContent>
             </Card>
           </div>
+        </div>
       </div>
+    </div>
   );
 }
+

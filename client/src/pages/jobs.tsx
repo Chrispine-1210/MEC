@@ -101,7 +101,7 @@ export default function Jobs() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+  return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -165,15 +165,17 @@ export default function Jobs() {
               {isSearching && (
                 <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
                   <div className="loading-spinner"></div>
+                </div>
               )}
             </div>
+          </div>
         </div>
       </section>
 
       <div className="container mx-auto px-4 py-12">
-        {/* Filters */}
-        <div className="mb-8">
-          <div className="flex flex-wrap items-center gap-4 mb-4">
+      {/* Filters */}
+      <div className="mb-8">
+        <div className="flex flex-wrap items-center gap-4 mb-4">
             <div className="flex items-center space-x-2">
               <Filter className="w-5 h-5 text-muted-foreground" />
               <span className="font-medium text-foreground/80">Filter by type:</span>
@@ -260,110 +262,125 @@ export default function Jobs() {
                 "https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&q=80&w=800",
                 "https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&q=80&w=800",
                 "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&q=80&w=800",
-                  <div className="absolute top-3 left-3 flex gap-2">
-                    <Badge className="bg-mtendere-green text-white font-bold text-xs">{job.jobType}</Badge>
-                    {job.isRemote && (
-                      <Badge className="bg-mtendere-blue text-white text-xs">
-                        <Wifi className="w-3 h-3 mr-1" />Remote
-                      </Badge>
-                    )}
-                    {job.deadline && isDeadlineApproaching(job.deadline) && (
-                      <Badge variant="destructive" className="animate-pulse text-xs">
-                        <Clock className="w-3 h-3 mr-1" />Urgent
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="absolute bottom-3 left-3">
-                    <span className="text-white text-sm font-bold drop-shadow flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5" />{job.location}
-                    </span>
-                  </div>
-                </div>
-                <CardHeader className="pt-4">
-                  <CardTitle className="text-lg text-mtendere-blue line-clamp-2 font-bold group-hover:text-mtendere-green transition-colors">
-                    {job.title}
-                  </CardTitle>
-                  <CardDescription className="flex items-center gap-2 text-sm">
-                    <Building className="w-3.5 h-3.5 text-mtendere-blue" />
-                    {job.company}
-                  </CardDescription>
-                </CardHeader>
-                
-                <CardContent>
-                  <p className="text-muted-foreground mb-4 line-clamp-3">
-                    {job.description}
-                  </p>
-                  
-                  <div className="space-y-3 mb-6">
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center text-sm text-muted-foreground">
-                        <DollarSign className="w-4 h-4 mr-1" />
-                        Salary
-                      </span>
-                      <span className="font-semibold text-mtendere-green">
-                        {job.salary ? formatCurrency(job.salary, job.currency || 'USD') : 'Competitive'}
+              ];
+
+              const heroImage = jobImages[0];
+
+              return (
+                <Card key={idx}>
+                  <div className="relative">
+                    {heroImage ? (
+                      <img
+                        src={heroImage}
+                        alt={job.title}
+                        className="w-full h-32 object-cover rounded-t-lg"
+                      />
+                    ) : null}
+                    <div className="absolute top-3 left-3 flex gap-2">
+                      <Badge className="bg-mtendere-green text-white font-bold text-xs">{job.jobType}</Badge>
+                      {job.isRemote && (
+                        <Badge className="bg-mtendere-blue text-white text-xs">
+                          <Wifi className="w-3 h-3 mr-1" />Remote
+                        </Badge>
+                      )}
+                      {job.deadline && isDeadlineApproaching(job.deadline) && (
+                        <Badge variant="destructive" className="animate-pulse text-xs">
+                          <Clock className="w-3 h-3 mr-1" />Urgent
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="absolute bottom-3 left-3">
+                      <span className="text-white text-sm font-bold drop-shadow flex items-center gap-1">
+                        <MapPin className="w-3.5 h-3.5" />{job.location}
                       </span>
                     </div>
-                    
-                    {job.deadline && (
+                  </div>
+
+                  <CardHeader className="pt-4">
+                    <CardTitle className="text-lg text-mtendere-blue line-clamp-2 font-bold group-hover:text-mtendere-green transition-colors">
+                      {job.title}
+                    </CardTitle>
+                    <CardDescription className="flex items-center gap-2 text-sm">
+                      <Building className="w-3.5 h-3.5 text-mtendere-blue" />
+                      {job.company}
+                    </CardDescription>
+                  </CardHeader>
+
+                  <CardContent>
+                    <p className="text-muted-foreground mb-4 line-clamp-3">
+                      {job.description}
+                    </p>
+
+                    <div className="space-y-3 mb-6">
                       <div className="flex items-center justify-between">
                         <span className="flex items-center text-sm text-muted-foreground">
-                          <Calendar className="w-4 h-4 mr-1" />
-                          Application Deadline
+                          <DollarSign className="w-4 h-4 mr-1" />
+                          Salary
                         </span>
-                        <span className={`font-semibold ${isDeadlineApproaching(job.deadline) ? 'text-destructive' : 'text-foreground/80'}`}>
-                          {formatDate(job.deadline)}
+                        <span className="font-semibold text-mtendere-green">
+                          {job.salary ? formatCurrency(job.salary, job.currency || 'USD') : 'Competitive'}
                         </span>
+                      </div>
+
+                      {job.deadline && (
+                        <div className="flex items-center justify-between">
+                          <span className="flex items-center text-sm text-muted-foreground">
+                            <Calendar className="w-4 h-4 mr-1" />
+                            Application Deadline
+                          </span>
+                          <span className={`font-semibold ${isDeadlineApproaching(job.deadline) ? 'text-destructive' : 'text-foreground/80'}`}>
+                            {formatDate(job.deadline)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Requirements Preview */}
+                    {job.requirements && (
+                      <div className="mb-4">
+                        <h4 className="text-sm font-semibold text-foreground/80 mb-2">Key Requirements:</h4>
+                        <div className="flex flex-wrap gap-1">
+                          {(Array.isArray(job.requirements) ? job.requirements : []).slice(0, 3).map((req, index) => (
+                            <Badge key={index} variant="outline" className="text-xs">
+                              {req}
+                            </Badge>
+                          ))}
+                          {(Array.isArray(job.requirements) ? job.requirements : []).length > 3 && (
+                            <Badge variant="outline" className="text-xs">
+                              +{(job.requirements as any[]).length - 3} more
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     )}
-                  </div>
 
-                  {/* Requirements Preview */}
-                  {job.requirements && (
-                    <div className="mb-4">
-                      <h4 className="text-sm font-semibold text-foreground/80 mb-2">Key Requirements:</h4>
-                      <div className="flex flex-wrap gap-1">
-                        {(Array.isArray(job.requirements) ? job.requirements : []).slice(0, 3).map((req, index) => (
-                          <Badge key={index} variant="outline" className="text-xs">
-                            {req}
-                          </Badge>
-                        ))}
-                        {(Array.isArray(job.requirements) ? job.requirements : []).length > 3 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{(job.requirements as any[]).length - 3} more
-                          </Badge>
+                    <div className="flex space-x-2">
+                      <Button
+                        className="flex-1 bg-mtendere-green hover:bg-mtendere-green/90"
+                        onClick={() => handleApply(job.id)}
+                        disabled={applyMutation.isPending}
+                      >
+                        {applyMutation.isPending ? (
+                          <>
+                            <div className="loading-spinner mr-2"></div>
+                            Applying...
+                          </>
+                        ) : (
+                          <>
+                            <Users className="w-4 h-4 mr-2" />
+                            Apply Now
+                          </>
                         )}
-                      </div>
-                    </div>
-                  )}
+                      </Button>
 
-                  <div className="flex space-x-2">
-                    <Button
-                      className="flex-1 bg-mtendere-green hover:bg-mtendere-green/90"
-                      onClick={() => handleApply(job.id)}
-                      disabled={applyMutation.isPending}
-                    >
-                      {applyMutation.isPending ? (
-                        <>
-                          <div className="loading-spinner mr-2"></div>
-                          Applying...
-                        </>
-                      ) : (
-                        <>
-                          <Users className="w-4 h-4 mr-2" />
-                          Apply Now
-                        </>
-                      )}
-                    </Button>
-                    
-                    <Button variant="outline" size="icon">
-                      <ExternalLink className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                      <Button variant="outline" size="icon">
+                        <ExternalLink className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
 
@@ -388,6 +405,7 @@ export default function Jobs() {
             </Button>
           </div>
         )}
+      </div>
       </div>
       <Footer />
     </div>
