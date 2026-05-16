@@ -98,6 +98,9 @@ export const partners = pgTable("partners", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const jobOpportunities = jobs;
+export const partnerInstitutions = partners;
+
 export const testimonials = pgTable("testimonials", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
@@ -368,6 +371,50 @@ export const messages = pgTable("messages", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const aiChatConversations = pgTable("ai_chat_conversations", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  userId: varchar("user_id", { length: 255 }).notNull(),
+  messages: jsonb("messages").notNull(),
+  summary: text("summary"),
+  isActive: boolean("is_active").default(true),
+  moderationFlags: jsonb("moderation_flags"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const adminNotifications = pgTable("admin_notifications", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  type: varchar("type", { length: 50 }).notNull().default("info"),
+  isRead: boolean("is_read").default(false),
+  targetUserId: varchar("target_user_id", { length: 255 }),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const auditLogs = pgTable("audit_logs", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  userId: varchar("user_id", { length: 255 }).notNull(),
+  action: text("action").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: varchar("entity_id", { length: 255 }),
+  oldData: jsonb("old_data"),
+  newData: jsonb("new_data"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const settings = pgTable("settings", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  platformName: text("platform_name").notNull().default("Mtendere Education Platform"),
+  supportEmail: text("support_email").notNull().default("support@mtendere.com"),
+  sessionTimeout: integer("session_timeout").notNull().default(30),
+  maxLoginAttempts: integer("max_login_attempts").notNull().default(5),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const usersRelations = relations(users, ({ many }) => ({
   applications: many(applications),
   testimonials: many(testimonials),
@@ -468,6 +515,8 @@ export const insertJobSchema = createInsertSchema(jobs).omit({
   updatedAt: true,
 });
 
+export const insertJobOpportunitySchema = insertJobSchema;
+
 export const insertApplicationSchema = createInsertSchema(applications).omit({
   id: true,
   submittedAt: true,
@@ -479,6 +528,8 @@ export const insertPartnerSchema = createInsertSchema(partners).omit({
   createdAt: true,
   updatedAt: true,
 });
+
+export const insertPartnerInstitutionSchema = insertPartnerSchema;
 
 export const insertTestimonialSchema = createInsertSchema(testimonials).omit({
   id: true,
@@ -527,16 +578,41 @@ export const insertMessageSchema = createInsertSchema(messages).omit({
   isRead: true,
 });
 
+export const insertAiChatConversationSchema = createInsertSchema(aiChatConversations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertAdminNotificationSchema = createInsertSchema(adminNotifications).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSettingsSchema = createInsertSchema(settings).omit({
+  id: true,
+  updatedAt: true,
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Scholarship = typeof scholarships.$inferSelect;
 export type InsertScholarship = z.infer<typeof insertScholarshipSchema>;
 export type Job = typeof jobs.$inferSelect;
 export type InsertJob = z.infer<typeof insertJobSchema>;
+export type JobOpportunity = Job;
+export type InsertJobOpportunity = InsertJob;
 export type Application = typeof applications.$inferSelect;
 export type InsertApplication = z.infer<typeof insertApplicationSchema>;
 export type Partner = typeof partners.$inferSelect;
 export type InsertPartner = z.infer<typeof insertPartnerSchema>;
+export type PartnerInstitution = Partner;
+export type InsertPartnerInstitution = InsertPartner;
 export type Testimonial = typeof testimonials.$inferSelect;
 export type InsertTestimonial = z.infer<typeof insertTestimonialSchema>;
 export type BlogPost = typeof blogPosts.$inferSelect;
@@ -553,3 +629,11 @@ export type SavedItem = typeof savedItems.$inferSelect;
 export type InsertSavedItem = z.infer<typeof insertSavedItemSchema>;
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
+export type AiChatConversation = typeof aiChatConversations.$inferSelect;
+export type InsertAiChatConversation = z.infer<typeof insertAiChatConversationSchema>;
+export type AdminNotification = typeof adminNotifications.$inferSelect;
+export type InsertAdminNotification = z.infer<typeof insertAdminNotificationSchema>;
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+export type Settings = typeof settings.$inferSelect;
+export type InsertSettings = z.infer<typeof insertSettingsSchema>;
