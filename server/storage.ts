@@ -1,637 +1,649 @@
-import {
-  users, scholarships, jobs, applications, partners, testimonials, blogPosts, teamMembers, referrals, analytics, blogComments, savedItems, messages,
-  type User, type InsertUser, type Scholarship, type InsertScholarship, type Job, type InsertJob,
-  type Application, type InsertApplication, type Partner, type InsertPartner, type Testimonial, type InsertTestimonial,
-  type BlogPost, type InsertBlogPost, type TeamMember, type InsertTeamMember, type Referral, type InsertReferral,
-  type Analytics, type InsertAnalytics, type BlogComment, type InsertBlogComment,
-  type SavedItem, type InsertSavedItem, type Message, type InsertMessage
-} from "@shared/schema";
-import { db } from "./db";
-import { eq, desc, asc, and, or, like, count, sql } from "drizzle-orm";
+import { type User, type InsertUser, type Scholarship, type InsertScholarship, type JobOpportunity, type InsertJobOpportunity, type PartnerInstitution, type InsertPartnerInstitution, type BlogPost, type InsertBlogPost, type TeamMember, type InsertTeamMember, type Application, type InsertApplication, type AiChatConversation, type InsertAiChatConversation, type AdminNotification, type InsertAdminNotification, type AuditLog, type InsertAuditLog, type Settings, type InsertSettings } from "@shared/schema";
+import { nanoid } from "nanoid";
+import bcrypt from "bcrypt";
 
-export interface IStorage {
-  // Users
-  getUser(id: number): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  getUserByEmail(email: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-  updateUser(id: number, user: Partial<InsertUser>): Promise<User>;
-  deleteUser(id: number): Promise<boolean>;
-  getAllUsers(): Promise<User[]>;
-
-  // Scholarships
-  getScholarship(id: number): Promise<Scholarship | undefined>;
-  getAllScholarships(): Promise<Scholarship[]>;
-  getActiveScholarships(): Promise<Scholarship[]>;
-  createScholarship(scholarship: InsertScholarship): Promise<Scholarship>;
-  updateScholarship(id: number, scholarship: Partial<InsertScholarship>): Promise<Scholarship>;
-  deleteScholarship(id: number): Promise<boolean>;
-  searchScholarships(query: string): Promise<Scholarship[]>;
-
-  // Jobs
-  getJob(id: number): Promise<Job | undefined>;
-  getAllJobs(): Promise<Job[]>;
-  getActiveJobs(): Promise<Job[]>;
-  createJob(job: InsertJob): Promise<Job>;
-  updateJob(id: number, job: Partial<InsertJob>): Promise<Job>;
-  deleteJob(id: number): Promise<boolean>;
-  searchJobs(query: string): Promise<Job[]>;
-
-  // Applications
-  getApplication(id: number): Promise<Application | undefined>;
-  getUserApplications(userId: number): Promise<Application[]>;
-  getAllApplications(): Promise<Application[]>;
-  createApplication(application: InsertApplication): Promise<Application>;
-  updateApplication(id: number, application: Partial<InsertApplication>): Promise<Application>;
-  deleteApplication(id: number): Promise<boolean>;
-
-  // Partners
-  getPartner(id: number): Promise<Partner | undefined>;
-  getAllPartners(): Promise<Partner[]>;
-  getActivePartners(): Promise<Partner[]>;
-  createPartner(partner: InsertPartner): Promise<Partner>;
-  updatePartner(id: number, partner: Partial<InsertPartner>): Promise<Partner>;
-  deletePartner(id: number): Promise<boolean>;
-
-  // Testimonials
-  getTestimonial(id: number): Promise<Testimonial | undefined>;
-  getAllTestimonials(): Promise<Testimonial[]>;
-  getApprovedTestimonials(): Promise<Testimonial[]>;
-  createTestimonial(testimonial: InsertTestimonial): Promise<Testimonial>;
-  updateTestimonial(id: number, testimonial: Partial<InsertTestimonial>): Promise<Testimonial>;
-  deleteTestimonial(id: number): Promise<boolean>;
-
-  // Blog Posts
-  getBlogPost(id: number): Promise<BlogPost | undefined>;
-  getAllBlogPosts(): Promise<BlogPost[]>;
-  getPublishedBlogPosts(): Promise<BlogPost[]>;
-  createBlogPost(blogPost: InsertBlogPost): Promise<BlogPost>;
-  updateBlogPost(id: number, blogPost: Partial<InsertBlogPost>): Promise<BlogPost>;
-  deleteBlogPost(id: number): Promise<boolean>;
-  searchBlogPosts(query: string): Promise<BlogPost[]>;
-  incrementBlogLikes(id: number): Promise<BlogPost>;
-  getBlogComments(blogPostId: number): Promise<BlogComment[]>;
-  createBlogComment(comment: InsertBlogComment): Promise<BlogComment>;
-
-  // Team Members
-  getTeamMember(id: number): Promise<TeamMember | undefined>;
-  getAllTeamMembers(): Promise<TeamMember[]>;
-  getActiveTeamMembers(): Promise<TeamMember[]>;
-  createTeamMember(teamMember: InsertTeamMember): Promise<TeamMember>;
-  updateTeamMember(id: number, teamMember: Partial<InsertTeamMember>): Promise<TeamMember>;
-  deleteTeamMember(id: number): Promise<boolean>;
-
-  // Referrals
-  getReferral(id: number): Promise<Referral | undefined>;
-  getUserReferrals(userId: number): Promise<Referral[]>;
-  getAllReferrals(): Promise<Referral[]>;
-  createReferral(referral: InsertReferral): Promise<Referral>;
-  updateReferral(id: number, referral: Partial<InsertReferral>): Promise<Referral>;
-  deleteReferral(id: number): Promise<boolean>;
-
-  // Analytics
-  logAnalytics(analytics: InsertAnalytics): Promise<Analytics>;
-  getAnalytics(startDate?: Date, endDate?: Date): Promise<Analytics[]>;
-  getAnalyticsSummary(): Promise<any>;
-
-  // Saved Items
-  getSavedItem(id: number): Promise<SavedItem | undefined>;
-  getUserSavedItems(userId: number): Promise<SavedItem[]>;
-  createSavedItem(savedItem: InsertSavedItem): Promise<SavedItem>;
-  deleteSavedItem(id: number): Promise<boolean>;
-  deleteUserSavedItem(id: number, userId: number): Promise<boolean>;
-  isItemSaved(userId: number, type: string, referenceId: number): Promise<boolean>;
-
-  // Messages
-  createMessage(message: InsertMessage): Promise<Message>;
-  getAllMessages(): Promise<Message[]>;
-  markMessageRead(id: number): Promise<Message>;
+export interface Role {
+  id: string;
+  name: string;
+  description: string;
+  permissions: string[];
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-export class DatabaseStorage implements IStorage {
-  // Users
-  async getUser(id: number): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user || undefined;
+export interface IStorage {
+  // User methods
+  getUser(id: string): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  getUsers(limit?: number, offset?: number, search?: string): Promise<{ users: User[], total: number }>;
+  createUser(user: InsertUser): Promise<User>;
+  updateUser(id: string, updates: Partial<InsertUser>): Promise<User>;
+  deleteUser(id: string): Promise<void>;
+
+  // Role methods
+  getRoles(): Promise<{ roles: Role[], total: number }>;
+  createRole(role: Omit<Role, 'id' | 'createdAt' | 'updatedAt'>): Promise<Role>;
+  updateRole(id: string, updates: Partial<Omit<Role, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Role>;
+  deleteRole(id: string): Promise<void>;
+
+  // Scholarship methods
+  getScholarships(limit?: number, offset?: number, search?: string, status?: string): Promise<{ scholarships: Scholarship[], total: number }>;
+  createScholarship(scholarship: InsertScholarship, userId: string): Promise<Scholarship>;
+  updateScholarship(id: string, updates: Partial<InsertScholarship>): Promise<Scholarship>;
+  deleteScholarship(id: string): Promise<void>;
+
+  // Job Opportunity methods
+  getJobOpportunities(limit?: number, offset?: number, search?: string, status?: string): Promise<{ jobs: JobOpportunity[], total: number }>;
+  createJobOpportunity(job: InsertJobOpportunity, userId: string): Promise<JobOpportunity>;
+  updateJobOpportunity(id: string, updates: Partial<InsertJobOpportunity>): Promise<JobOpportunity>;
+  deleteJobOpportunity(id: string): Promise<void>;
+
+  // Partner Institution methods
+  getPartnerInstitutions(limit?: number, offset?: number, search?: string): Promise<{ partners: PartnerInstitution[], total: number }>;
+  createPartnerInstitution(partner: InsertPartnerInstitution, userId: string): Promise<PartnerInstitution>;
+  updatePartnerInstitution(id: string, updates: Partial<InsertPartnerInstitution>): Promise<PartnerInstitution>;
+  deletePartnerInstitution(id: string): Promise<void>;
+
+  // Blog post methods
+  getBlogPosts(limit?: number, offset?: number, search?: string, status?: string): Promise<{ posts: BlogPost[], total: number }>;
+  createBlogPost(post: InsertBlogPost, userId: string): Promise<BlogPost>;
+  updateBlogPost(id: string, updates: Partial<InsertBlogPost>): Promise<BlogPost>;
+  deleteBlogPost(id: string): Promise<void>;
+
+  // Team member methods
+  getTeamMembers(limit?: number, offset?: number, search?: string): Promise<{ members: TeamMember[], total: number }>;
+  createTeamMember(member: InsertTeamMember, userId: string): Promise<TeamMember>;
+  updateTeamMember(id: string, updates: Partial<InsertTeamMember>): Promise<TeamMember>;
+  deleteTeamMember(id: string): Promise<void>;
+
+  // Application methods
+  getApplications(limit?: number, offset?: number, search?: string, status?: string): Promise<{ applications: Application[], total: number }>;
+  createApplication(application: InsertApplication): Promise<Application>;
+  updateApplication(id: string, updates: Partial<InsertApplication>): Promise<Application>;
+  deleteApplication(id: string): Promise<void>;
+
+  // AI Chat conversation methods
+  getChatConversations(limit?: number, offset?: number): Promise<{ conversations: AiChatConversation[], total: number }>;
+  getChatConversation(id: string): Promise<AiChatConversation | undefined>;
+  createChatConversation(conversation: InsertAiChatConversation): Promise<AiChatConversation>;
+  updateChatConversation(id: string, updates: Partial<InsertAiChatConversation>): Promise<AiChatConversation>;
+
+  // Admin notification methods
+  getAdminNotifications(limit?: number, offset?: number, targetUserId?: string): Promise<{ notifications: AdminNotification[], total: number }>;
+  createAdminNotification(notification: InsertAdminNotification): Promise<AdminNotification>;
+  markNotificationAsRead(id: string): Promise<void>;
+
+  // Platform settings methods
+  getSettings(): Promise<Settings>;
+  updateSettings(updates: Partial<InsertSettings>): Promise<Settings>;
+
+  // Audit log methods
+  getAuditLogs(limit?: number, offset?: number, userId?: string, entityType?: string): Promise<{ logs: AuditLog[], total: number }>;
+  createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
+
+  // Analytics methods
+  getDashboardStats(): Promise<{
+    totalUsers: number;
+    totalScholarships: number;
+    totalJobs: number;
+    totalPartners: number;
+    totalBlogPosts: number;
+    totalApplications: number;
+    totalActiveChats: number;
+    activeScholarships: number;
+    activeJobs: number;
+    pendingApplications: number;
+    publishedPosts: number;
+    applicationStats: Record<string, number>;
+    applicationStatusStats: Record<string, number>;
+    contentModerationStats: { flaggedCount: number; approvedCount: number };
+    userGrowth: { date: string; count: number }[];
+    regionalStats: { region: string; scholarshipCount: number; jobCount: number }[];
+    recentActivity: { id: string; action: string; entityType: string; details: string; createdAt: Date }[];
+  }>;
+}
+
+export class MemStorage implements IStorage {
+  private usersMap: Map<string, User>;
+  private rolesMap: Map<string, Role>;
+  private scholarshipsMap: Map<string, Scholarship>;
+  private jobsMap: Map<string, JobOpportunity>;
+  private partnersMap: Map<string, PartnerInstitution>;
+  private blogMap: Map<string, BlogPost>;
+  private teamMap: Map<string, TeamMember>;
+  private applicationsMap: Map<string, Application>;
+  private chatMap: Map<string, AiChatConversation>;
+  private notificationsMap: Map<string, AdminNotification>;
+  private auditLogsMap: Map<string, AuditLog>;
+  private settings: Settings;
+
+  constructor() {
+    this.usersMap = new Map();
+    this.rolesMap = new Map();
+    this.scholarshipsMap = new Map();
+    this.jobsMap = new Map();
+    this.partnersMap = new Map();
+    this.blogMap = new Map();
+    this.teamMap = new Map();
+    this.applicationsMap = new Map();
+    this.chatMap = new Map();
+    this.notificationsMap = new Map();
+    this.auditLogsMap = new Map();
+    
+    // Initialize default settings
+    this.settings = {
+      id: "default",
+      platformName: "Mtendere Education Platform",
+      supportEmail: "support@mtendere.com",
+      sessionTimeout: 30,
+      maxLoginAttempts: 5,
+      updatedAt: new Date()
+    };
+
+    // Add default admin user for testing
+    const defaultAdminId = "default-admin-id";
+    const hashedPassword = bcrypt.hashSync("admin123", 10);
+    this.usersMap.set(defaultAdminId, {
+      id: defaultAdminId,
+      username: "admin",
+      email: "admin@mtendere.com",
+      password: hashedPassword,
+      firstName: "Mtendere",
+      lastName: "Admin",
+      profileImage: null,
+      role: "super_admin",
+      region: "Global",
+      isActive: true,
+      lastLogin: null,
+
+      mfaEnabled: false,
+      totpSecret: null,
+      mfaConfirmedAt: null,
+
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    // Seed default roles
+    const now = new Date();
+    this.rolesMap.set("viewer", { id: "viewer", name: "Viewer", description: "Read-only access to public content", permissions: ["view_dashboard"], createdAt: now, updatedAt: now });
+    this.rolesMap.set("editor", { id: "editor", name: "Editor", description: "Can create and edit content", permissions: ["view_dashboard", "manage_scholarships", "manage_jobs", "manage_blog", "manage_partners", "manage_team"], createdAt: now, updatedAt: now });
+    this.rolesMap.set("admin", { id: "admin", name: "Administrator", description: "Full access to admin panel", permissions: ["view_dashboard", "manage_scholarships", "manage_jobs", "manage_partners", "manage_blog", "manage_team", "manage_users", "review_applications", "manage_roles", "view_analytics"], createdAt: now, updatedAt: now });
+    this.rolesMap.set("super_admin", { id: "super_admin", name: "Super Administrator", description: "Complete system access including settings", permissions: ["view_dashboard", "manage_scholarships", "manage_jobs", "manage_partners", "manage_blog", "manage_team", "manage_users", "review_applications", "manage_roles", "view_analytics", "manage_settings"], createdAt: now, updatedAt: now });
+  }
+
+  async getUser(id: string): Promise<User | undefined> {
+    return this.usersMap.get(id);
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
-    return user || undefined;
+    return Array.from(this.usersMap.values()).find(u => u.username === username);
   }
 
-  async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
-    return user || undefined;
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser).returning();
-    return user;
-  }
-
-  async updateUser(id: number, updateUser: Partial<InsertUser>): Promise<User> {
-    const [user] = await db
-      .update(users)
-      .set({ ...updateUser, updatedAt: new Date() })
-      .where(eq(users.id, id))
-      .returning();
-    return user;
-  }
-
-  async deleteUser(id: number): Promise<boolean> {
-    const result = await db.delete(users).where(eq(users.id, id));
-    return (result as any).rowCount > 0;
-  }
-
-  async getAllUsers(): Promise<User[]> {
-    return await db.select().from(users).orderBy(desc(users.createdAt));
-  }
-
-  // Scholarships
-  async getScholarship(id: number): Promise<Scholarship | undefined> {
-    const [scholarship] = await db.select().from(scholarships).where(eq(scholarships.id, id));
-    return scholarship || undefined;
-  }
-
-  async getAllScholarships(): Promise<Scholarship[]> {
-    return await db.select().from(scholarships).orderBy(desc(scholarships.createdAt));
-  }
-
-  async getActiveScholarships(): Promise<Scholarship[]> {
-    return await db
-      .select()
-      .from(scholarships)
-      .where(and(eq(scholarships.isActive, true), sql`${scholarships.deadline} > NOW()`))
-      .orderBy(desc(scholarships.createdAt));
-  }
-
-  async createScholarship(insertScholarship: InsertScholarship): Promise<Scholarship> {
-    const [scholarship] = await db.insert(scholarships).values(insertScholarship).returning();
-    return scholarship;
-  }
-
-  async updateScholarship(id: number, updateScholarship: Partial<InsertScholarship>): Promise<Scholarship> {
-    const [scholarship] = await db
-      .update(scholarships)
-      .set({ ...updateScholarship, updatedAt: new Date() })
-      .where(eq(scholarships.id, id))
-      .returning();
-    return scholarship;
-  }
-
-  async deleteScholarship(id: number): Promise<boolean> {
-    const result = await db.delete(scholarships).where(eq(scholarships.id, id));
-    return (result as any).rowCount > 0;
-  }
-
-  async searchScholarships(query: string): Promise<Scholarship[]> {
-    return await db
-      .select()
-      .from(scholarships)
-      .where(
-        and(
-          eq(scholarships.isActive, true),
-          or(
-            like(scholarships.title, `%${query}%`),
-            like(scholarships.description, `%${query}%`),
-            like(scholarships.institution, `%${query}%`),
-            like(scholarships.country, `%${query}%`)
-          )
-        )
-      )
-      .orderBy(desc(scholarships.createdAt));
-  }
-
-  // Jobs
-  async getJob(id: number): Promise<Job | undefined> {
-    const [job] = await db.select().from(jobs).where(eq(jobs.id, id));
-    return job || undefined;
-  }
-
-  async getAllJobs(): Promise<Job[]> {
-    return await db.select().from(jobs).orderBy(desc(jobs.createdAt));
-  }
-
-  async getActiveJobs(): Promise<Job[]> {
-    return await db
-      .select()
-      .from(jobs)
-      .where(eq(jobs.isActive, true))
-      .orderBy(desc(jobs.createdAt));
-  }
-
-  async createJob(insertJob: InsertJob): Promise<Job> {
-    const [job] = await db.insert(jobs).values(insertJob).returning();
-    return job;
-  }
-
-  async updateJob(id: number, updateJob: Partial<InsertJob>): Promise<Job> {
-    const [job] = await db
-      .update(jobs)
-      .set({ ...updateJob, updatedAt: new Date() })
-      .where(eq(jobs.id, id))
-      .returning();
-    return job;
-  }
-
-  async deleteJob(id: number): Promise<boolean> {
-    const result = await db.delete(jobs).where(eq(jobs.id, id));
-    return (result as any).rowCount > 0;
-  }
-
-  async searchJobs(query: string): Promise<Job[]> {
-    return await db
-      .select()
-      .from(jobs)
-      .where(
-        and(
-          eq(jobs.isActive, true),
-          or(
-            like(jobs.title, `%${query}%`),
-            like(jobs.description, `%${query}%`),
-            like(jobs.company, `%${query}%`),
-            like(jobs.location, `%${query}%`)
-          )
-        )
-      )
-      .orderBy(desc(jobs.createdAt));
-  }
-
-  // Applications
-  async getApplication(id: number): Promise<Application | undefined> {
-    const [application] = await db.select().from(applications).where(eq(applications.id, id));
-    return application || undefined;
-  }
-
-  async getUserApplications(userId: number): Promise<Application[]> {
-    return await db
-      .select()
-      .from(applications)
-      .where(eq(applications.userId, userId))
-      .orderBy(desc(applications.submittedAt));
-  }
-
-  async getAllApplications(): Promise<Application[]> {
-    return await db.select().from(applications).orderBy(desc(applications.submittedAt));
-  }
-
-  async createApplication(insertApplication: InsertApplication): Promise<Application> {
-    const [application] = await db.insert(applications).values(insertApplication).returning();
-    return application;
-  }
-
-  async updateApplication(id: number, updateApplication: Partial<InsertApplication>): Promise<Application> {
-    const [application] = await db
-      .update(applications)
-      .set({ ...updateApplication, updatedAt: new Date() })
-      .where(eq(applications.id, id))
-      .returning();
-    return application;
-  }
-
-  async deleteApplication(id: number): Promise<boolean> {
-    const result = await db.delete(applications).where(eq(applications.id, id));
-    return (result as any).rowCount > 0;
-  }
-
-  // Partners
-  async getPartner(id: number): Promise<Partner | undefined> {
-    const [partner] = await db.select().from(partners).where(eq(partners.id, id));
-    return partner || undefined;
-  }
-
-  async getAllPartners(): Promise<Partner[]> {
-    return await db.select().from(partners).orderBy(desc(partners.createdAt));
-  }
-
-  async getActivePartners(): Promise<Partner[]> {
-    return await db
-      .select()
-      .from(partners)
-      .where(eq(partners.isActive, true))
-      .orderBy(desc(partners.createdAt));
-  }
-
-  async createPartner(insertPartner: InsertPartner): Promise<Partner> {
-    const [partner] = await db.insert(partners).values(insertPartner).returning();
-    return partner;
-  }
-
-  async updatePartner(id: number, updatePartner: Partial<InsertPartner>): Promise<Partner> {
-    const [partner] = await db
-      .update(partners)
-      .set({ ...updatePartner, updatedAt: new Date() })
-      .where(eq(partners.id, id))
-      .returning();
-    return partner;
-  }
-
-  async deletePartner(id: number): Promise<boolean> {
-    const result = await db.delete(partners).where(eq(partners.id, id));
-    return (result as any).rowCount > 0;
-  }
-
-  // Testimonials
-  async getTestimonial(id: number): Promise<Testimonial | undefined> {
-    const [testimonial] = await db.select().from(testimonials).where(eq(testimonials.id, id));
-    return testimonial || undefined;
-  }
-
-  async getAllTestimonials(): Promise<Testimonial[]> {
-    return await db.select().from(testimonials).orderBy(desc(testimonials.createdAt));
-  }
-
-  async getApprovedTestimonials(): Promise<Testimonial[]> {
-    return await db
-      .select()
-      .from(testimonials)
-      .where(eq(testimonials.isApproved, true))
-      .orderBy(desc(testimonials.createdAt));
-  }
-
-  async createTestimonial(insertTestimonial: InsertTestimonial): Promise<Testimonial> {
-    const [testimonial] = await db.insert(testimonials).values(insertTestimonial).returning();
-    return testimonial;
-  }
-
-  async updateTestimonial(id: number, updateTestimonial: Partial<InsertTestimonial>): Promise<Testimonial> {
-    const [testimonial] = await db
-      .update(testimonials)
-      .set({ ...updateTestimonial, updatedAt: new Date() })
-      .where(eq(testimonials.id, id))
-      .returning();
-    return testimonial;
-  }
-
-  async deleteTestimonial(id: number): Promise<boolean> {
-    const result = await db.delete(testimonials).where(eq(testimonials.id, id));
-    return (result as any).rowCount > 0;
-  }
-
-  // Blog Posts
-  async getBlogPost(id: number): Promise<BlogPost | undefined> {
-    const [blogPost] = await db.select().from(blogPosts).where(eq(blogPosts.id, id));
-    return blogPost || undefined;
-  }
-
-  async getAllBlogPosts(): Promise<BlogPost[]> {
-    return await db.select().from(blogPosts).orderBy(desc(blogPosts.createdAt));
-  }
-
-  async getPublishedBlogPosts(): Promise<BlogPost[]> {
-    return await db
-      .select()
-      .from(blogPosts)
-      .where(eq(blogPosts.isPublished, true))
-      .orderBy(desc(blogPosts.createdAt));
-  }
-
-  async createBlogPost(insertBlogPost: InsertBlogPost): Promise<BlogPost> {
-    const [blogPost] = await db.insert(blogPosts).values(insertBlogPost).returning();
-    return blogPost;
-  }
-
-  async updateBlogPost(id: number, updateBlogPost: Partial<InsertBlogPost>): Promise<BlogPost> {
-    const [blogPost] = await db
-      .update(blogPosts)
-      .set({ ...updateBlogPost, updatedAt: new Date() })
-      .where(eq(blogPosts.id, id))
-      .returning();
-    return blogPost;
-  }
-
-  async deleteBlogPost(id: number): Promise<boolean> {
-    const result = await db.delete(blogPosts).where(eq(blogPosts.id, id));
-    return (result as any).rowCount > 0;
-  }
-
-  async searchBlogPosts(query: string): Promise<BlogPost[]> {
-    return await db
-      .select()
-      .from(blogPosts)
-      .where(
-        or(
-          like(blogPosts.title, `%${query}%`),
-          like(blogPosts.content, `%${query}%`),
-          like(blogPosts.category, `%${query}%`)
-        )
-      )
-      .orderBy(desc(blogPosts.createdAt));
-  }
-
-  async incrementBlogLikes(id: number): Promise<BlogPost> {
-    const [blogPost] = await db
-      .update(blogPosts)
-      .set({ likes: sql`${blogPosts.likes} + 1` })
-      .where(eq(blogPosts.id, id))
-      .returning();
-    return blogPost;
-  }
-
-  async getBlogComments(blogPostId: number): Promise<BlogComment[]> {
-    return await db
-      .select()
-      .from(blogComments)
-      .where(eq(blogComments.blogPostId, blogPostId))
-      .orderBy(blogComments.createdAt);
-  }
-
-  async createBlogComment(insertComment: InsertBlogComment): Promise<BlogComment> {
-    const [comment] = await db.insert(blogComments).values(insertComment).returning();
-    return comment;
-  }
-
-  // Team Members
-  async getTeamMember(id: number): Promise<TeamMember | undefined> {
-    const [teamMember] = await db.select().from(teamMembers).where(eq(teamMembers.id, id));
-    return teamMember || undefined;
-  }
-
-  async getAllTeamMembers(): Promise<TeamMember[]> {
-    return await db
-      .select()
-      .from(teamMembers)
-      .orderBy(asc(teamMembers.order), desc(teamMembers.createdAt));
-  }
-
-  async getActiveTeamMembers(): Promise<TeamMember[]> {
-    return await db
-      .select()
-      .from(teamMembers)
-      .where(eq(teamMembers.isActive, true))
-      .orderBy(asc(teamMembers.order), desc(teamMembers.createdAt));
-  }
-
-  async createTeamMember(insertTeamMember: InsertTeamMember): Promise<TeamMember> {
-    const [teamMember] = await db.insert(teamMembers).values(insertTeamMember).returning();
-    return teamMember;
-  }
-
-  async updateTeamMember(id: number, updateTeamMember: Partial<InsertTeamMember>): Promise<TeamMember> {
-    const [teamMember] = await db
-      .update(teamMembers)
-      .set({ ...updateTeamMember, updatedAt: new Date() })
-      .where(eq(teamMembers.id, id))
-      .returning();
-    return teamMember;
-  }
-
-  async deleteTeamMember(id: number): Promise<boolean> {
-    const result = await db.delete(teamMembers).where(eq(teamMembers.id, id));
-    return (result as any).rowCount > 0;
-  }
-
-  // Referrals
-  async getReferral(id: number): Promise<Referral | undefined> {
-    const [referral] = await db.select().from(referrals).where(eq(referrals.id, id));
-    return referral || undefined;
-  }
-
-  async getUserReferrals(userId: number): Promise<Referral[]> {
-    return await db
-      .select()
-      .from(referrals)
-      .where(eq(referrals.referrerId, userId))
-      .orderBy(desc(referrals.createdAt));
-  }
-
-  async getAllReferrals(): Promise<Referral[]> {
-    return await db.select().from(referrals).orderBy(desc(referrals.createdAt));
-  }
-
-  async createReferral(insertReferral: InsertReferral): Promise<Referral> {
-    const [referral] = await db.insert(referrals).values(insertReferral).returning();
-    return referral;
-  }
-
-  async updateReferral(id: number, updateReferral: Partial<InsertReferral>): Promise<Referral> {
-    const [referral] = await db
-      .update(referrals)
-      .set(updateReferral)
-      .where(eq(referrals.id, id))
-      .returning();
-    return referral;
-  }
-
-  async deleteReferral(id: number): Promise<boolean> {
-    const result = await db.delete(referrals).where(eq(referrals.id, id));
-    return (result as any).rowCount > 0;
-  }
-
-  // Analytics
-  async logAnalytics(insertAnalytics: InsertAnalytics): Promise<Analytics> {
-    const metadata = insertAnalytics.metadata;
-    const safeMetadata =
-      metadata === undefined
-        ? undefined
-        : metadata === null
-          ? null
-          : typeof metadata === "object" && !Array.isArray(metadata)
-            ? (metadata as Record<string, unknown>)
-            : null;
-
-    const [log] = await db
-      .insert(analytics)
-      .values({ ...insertAnalytics, metadata: safeMetadata })
-      .returning();
-    return log;
-  }
-
-  async getAnalytics(startDate?: Date, endDate?: Date): Promise<Analytics[]> {
-    if (startDate && endDate) {
-      return await db
-        .select()
-        .from(analytics)
-        .where(and(
-          sql`${analytics.timestamp} >= ${startDate}`,
-          sql`${analytics.timestamp} <= ${endDate}`
-        ))
-        .orderBy(desc(analytics.timestamp));
+  async getUsers(limit: number = 50, offset: number = 0, search: string = ""): Promise<{ users: User[], total: number }> {
+    let items = Array.from(this.usersMap.values());
+    if (search) {
+      items = items.filter(u => u.username.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()));
     }
-
-    return await db.select().from(analytics).orderBy(desc(analytics.timestamp));
+    const total = items.length;
+    return { users: items.slice(offset, offset + limit), total };
   }
 
-  async getAnalyticsSummary(): Promise<any> {
-    const totalUsers = await db.select({ count: count() }).from(users);
-    const totalScholarships = await db.select({ count: count() }).from(scholarships);
-    const totalJobs = await db.select({ count: count() }).from(jobs);
-    const totalApplications = await db.select({ count: count() }).from(applications);
-    const activeTestimonials = await db.select({ count: count() }).from(testimonials).where(eq(testimonials.isApproved, true));
-    const publishedBlogPosts = await db.select({ count: count() }).from(blogPosts).where(eq(blogPosts.isPublished, true));
+  async createUser(user: InsertUser): Promise<User> {
+    const id = nanoid();
+    const newUser: User = {
+      ...user,
+      id,
+      isActive: true,
+      profileImage: user.profileImage || null,
+      firstName: user.firstName || null,
+      lastName: user.lastName || null,
+      role: user.role || "viewer",
+      region: "Global",
+      lastLogin: null,
 
-    return {
-      totalUsers: totalUsers[0].count,
-      totalScholarships: totalScholarships[0].count,
-      totalJobs: totalJobs[0].count,
-      totalApplications: totalApplications[0].count,
-      activeTestimonials: activeTestimonials[0].count,
-      publishedBlogPosts: publishedBlogPosts[0].count,
+      mfaEnabled: user.mfaEnabled ?? false,
+      totpSecret: user.totpSecret ?? null,
+      mfaConfirmedAt: user.mfaConfirmedAt ?? null,
+
+      createdAt: new Date(),
+      updatedAt: new Date(),
     };
+    this.usersMap.set(id, newUser);
+    return newUser;
   }
 
-  // Saved Items
-  async getSavedItem(id: number): Promise<SavedItem | undefined> {
-    const [item] = await db.select().from(savedItems).where(eq(savedItems.id, id));
-    return item || undefined;
+  async updateUser(id: string, updates: Partial<InsertUser>): Promise<User> {
+    const user = await this.getUser(id);
+    if (!user) throw new Error("User not found");
+    const updatedUser = { ...user, ...updates, updatedAt: new Date() } as User;
+    this.usersMap.set(id, updatedUser);
+    return updatedUser;
   }
 
-  async getUserSavedItems(userId: number): Promise<SavedItem[]> {
-    return await db
-      .select()
-      .from(savedItems)
-      .where(eq(savedItems.userId, userId))
-      .orderBy(desc(savedItems.createdAt));
+  async deleteUser(id: string): Promise<void> {
+    this.usersMap.delete(id);
   }
 
-  async createSavedItem(insertSavedItem: InsertSavedItem): Promise<SavedItem> {
-    const [item] = await db.insert(savedItems).values(insertSavedItem).returning();
+  async getRoles(): Promise<{ roles: Role[], total: number }> {
+    const roles = Array.from(this.rolesMap.values()).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    return { roles, total: roles.length };
+  }
+
+  async createRole(role: Omit<Role, 'id' | 'createdAt' | 'updatedAt'>): Promise<Role> {
+    const id = nanoid();
+    const newRole: Role = { ...role, id, createdAt: new Date(), updatedAt: new Date() };
+    this.rolesMap.set(id, newRole);
+    return newRole;
+  }
+
+  async updateRole(id: string, updates: Partial<Omit<Role, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Role> {
+    const role = this.rolesMap.get(id);
+    if (!role) throw new Error("Role not found");
+    const updated = { ...role, ...updates, updatedAt: new Date() };
+    this.rolesMap.set(id, updated);
+    return updated;
+  }
+
+  async deleteRole(id: string): Promise<void> {
+    this.rolesMap.delete(id);
+  }
+
+  async getScholarships(limit: number = 50, offset: number = 0, search: string = "", status: string = ""): Promise<{ scholarships: Scholarship[], total: number }> {
+    let items = Array.from(this.scholarshipsMap.values());
+    if (search) {
+      items = items.filter(s => s.title.toLowerCase().includes(search.toLowerCase()) || s.description.toLowerCase().includes(search.toLowerCase()));
+    }
+    if (status) {
+      items = items.filter(s => s.status === status);
+    }
+    const total = items.length;
+    return { scholarships: items.slice(offset, offset + limit), total };
+  }
+
+  async createScholarship(scholarship: InsertScholarship, userId: string): Promise<Scholarship> {
+    const id = nanoid();
+    const item: Scholarship = {
+      ...scholarship,
+      id,
+      createdBy: userId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      region: scholarship.region || "Global",
+      isPremium: scholarship.isPremium || false,
+      paymentStatus: scholarship.paymentStatus || "unpaid",
+      status: scholarship.status || "draft",
+      amount: scholarship.amount || null,
+      requirements: scholarship.requirements || null,
+      featuredImage: scholarship.featuredImage || null,
+    };
+    this.scholarshipsMap.set(id, item);
     return item;
   }
 
-  async deleteSavedItem(id: number): Promise<boolean> {
-    const result = await db.delete(savedItems).where(eq(savedItems.id, id));
-    return (result as any).rowCount > 0;
+  async updateScholarship(id: string, updates: Partial<InsertScholarship>): Promise<Scholarship> {
+    const item = this.scholarshipsMap.get(id);
+    if (!item) throw new Error("Scholarship not found");
+    const updated = { ...item, ...updates, updatedAt: new Date() } as Scholarship;
+    this.scholarshipsMap.set(id, updated);
+    return updated;
   }
 
-  async deleteUserSavedItem(id: number, userId: number): Promise<boolean> {
-    const result = await db
-      .delete(savedItems)
-      .where(and(eq(savedItems.id, id), eq(savedItems.userId, userId)));
-    return (result as any).rowCount > 0;
+  async deleteScholarship(id: string): Promise<void> {
+    this.scholarshipsMap.delete(id);
   }
 
-  async isItemSaved(userId: number, type: string, referenceId: number): Promise<boolean> {
-    const [item] = await db
-      .select()
-      .from(savedItems)
-      .where(and(
-        eq(savedItems.userId, userId),
-        eq(savedItems.type, type),
-        eq(savedItems.referenceId, referenceId)
-      ));
-    return !!item;
+  async getJobOpportunities(limit: number = 50, offset: number = 0, search: string = "", status: string = ""): Promise<{ jobs: JobOpportunity[], total: number }> {
+    let items = Array.from(this.jobsMap.values());
+    if (search) {
+      items = items.filter(j => j.title.toLowerCase().includes(search.toLowerCase()) || j.company.toLowerCase().includes(search.toLowerCase()));
+    }
+    if (status) {
+      items = items.filter(j => j.status === status);
+    }
+    const total = items.length;
+    return { jobs: items.slice(offset, offset + limit), total };
   }
 
-  // Messages
-  async createMessage(insertMessage: InsertMessage): Promise<Message> {
-    const [message] = await db.insert(messages).values(insertMessage).returning();
-    return message;
+  async createJobOpportunity(job: InsertJobOpportunity, userId: string): Promise<JobOpportunity> {
+    const id = nanoid();
+    const item: JobOpportunity = {
+      ...job,
+      id,
+      createdBy: userId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      region: job.region || "Global",
+      isPremium: job.isPremium || false,
+      paymentStatus: job.paymentStatus || "unpaid",
+      status: job.status || "draft",
+      salaryRange: job.salaryRange || null,
+      requirements: job.requirements || null,
+      benefits: job.benefits || null,
+      applicationUrl: job.applicationUrl || null,
+      deadline: job.deadline || null,
+      price: job.price || null,
+      featuredImage: job.featuredImage || null,
+    };
+    this.jobsMap.set(id, item);
+    return item;
   }
 
-  async getAllMessages(): Promise<Message[]> {
-    return await db.select().from(messages).orderBy(desc(messages.createdAt));
+  async updateJobOpportunity(id: string, updates: Partial<InsertJobOpportunity>): Promise<JobOpportunity> {
+    const item = this.jobsMap.get(id);
+    if (!item) throw new Error("Job opportunity not found");
+    const updated = { ...item, ...updates, updatedAt: new Date() } as JobOpportunity;
+    this.jobsMap.set(id, updated);
+    return updated;
   }
 
-  async markMessageRead(id: number): Promise<Message> {
-    const [message] = await db
-      .update(messages)
-      .set({ isRead: true })
-      .where(eq(messages.id, id))
-      .returning();
-    return message;
+  async deleteJobOpportunity(id: string): Promise<void> {
+    this.jobsMap.delete(id);
+  }
+
+  async getPartnerInstitutions(limit: number = 50, offset: number = 0, search: string = ""): Promise<{ partners: PartnerInstitution[], total: number }> {
+    let items = Array.from(this.partnersMap.values());
+    if (search) {
+      items = items.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+    }
+    const total = items.length;
+    return { partners: items.slice(offset, offset + limit), total };
+  }
+
+  async createPartnerInstitution(partner: InsertPartnerInstitution, userId: string): Promise<PartnerInstitution> {
+    const id = nanoid();
+    const item: PartnerInstitution = {
+      ...partner,
+      id,
+      createdBy: userId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      region: partner.region || "Global",
+      isPremium: partner.isPremium || false,
+      paymentStatus: partner.paymentStatus || "unpaid",
+      isActive: partner.isActive ?? true,
+      logo: partner.logo || null,
+      website: partner.website || null,
+      contactEmail: partner.contactEmail || null,
+      contactPhone: partner.contactPhone || null,
+      address: partner.address || null,
+    };
+    this.partnersMap.set(id, item);
+    return item;
+  }
+
+  async updatePartnerInstitution(id: string, updates: Partial<InsertPartnerInstitution>): Promise<PartnerInstitution> {
+    const item = this.partnersMap.get(id);
+    if (!item) throw new Error("Partner institution not found");
+    const updated = { ...item, ...updates, updatedAt: new Date() } as PartnerInstitution;
+    this.partnersMap.set(id, updated);
+    return updated;
+  }
+
+  async deletePartnerInstitution(id: string): Promise<void> {
+    this.partnersMap.delete(id);
+  }
+
+  async getBlogPosts(limit: number = 50, offset: number = 0, search: string = "", status: string = ""): Promise<{ posts: BlogPost[], total: number }> {
+    let items = Array.from(this.blogMap.values());
+    if (search) {
+      items = items.filter(b => b.title.toLowerCase().includes(search.toLowerCase()));
+    }
+    if (status) {
+      items = items.filter(b => b.status === status);
+    }
+    const total = items.length;
+    return { posts: items.slice(offset, offset + limit), total };
+  }
+
+  async createBlogPost(post: InsertBlogPost, userId: string): Promise<BlogPost> {
+    const id = nanoid();
+    const item: BlogPost = {
+      ...post,
+      id,
+      createdBy: userId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      status: post.status || "draft",
+      featuredImage: post.featuredImage || null,
+      excerpt: post.excerpt || null,
+      tags: post.tags || null,
+      publishedAt: post.publishedAt || null,
+    };
+    this.blogMap.set(id, item);
+    return item;
+  }
+
+  async updateBlogPost(id: string, updates: Partial<InsertBlogPost>): Promise<BlogPost> {
+    const item = this.blogMap.get(id);
+    if (!item) throw new Error("Blog post not found");
+    const updated = { ...item, ...updates, updatedAt: new Date() } as BlogPost;
+    this.blogMap.set(id, updated);
+    return updated;
+  }
+
+  async deleteBlogPost(id: string): Promise<void> {
+    this.blogMap.delete(id);
+  }
+
+  async getTeamMembers(limit: number = 50, offset: number = 0, search: string = ""): Promise<{ members: TeamMember[], total: number }> {
+    let items = Array.from(this.teamMap.values());
+    if (search) {
+      items = items.filter(t => t.name.toLowerCase().includes(search.toLowerCase()));
+    }
+    const total = items.length;
+    return { members: items.slice(offset, offset + limit), total };
+  }
+
+  async createTeamMember(member: InsertTeamMember, userId: string): Promise<TeamMember> {
+    const id = nanoid();
+    const item: TeamMember = {
+      ...member,
+      id,
+      createdBy: userId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      isActive: member.isActive ?? true,
+      email: member.email || null,
+      profileImage: member.profileImage || null,
+      bio: member.bio || null,
+      linkedIn: member.linkedIn || null,
+      twitter: member.twitter || null,
+      department: member.department || null,
+      order: member.order || 0,
+    };
+    this.teamMap.set(id, item);
+    return item;
+  }
+
+  async updateTeamMember(id: string, updates: Partial<InsertTeamMember>): Promise<TeamMember> {
+    const item = this.teamMap.get(id);
+    if (!item) throw new Error("Team member not found");
+    const updated = { ...item, ...updates, updatedAt: new Date() } as TeamMember;
+    this.teamMap.set(id, updated);
+    return updated;
+  }
+
+  async deleteTeamMember(id: string): Promise<void> {
+    this.teamMap.delete(id);
+  }
+
+  async getApplications(limit: number = 50, offset: number = 0, search: string = "", status: string = ""): Promise<{ applications: Application[], total: number }> {
+    let items = Array.from(this.applicationsMap.values());
+    if (status) {
+      items = items.filter(a => a.status === status);
+    }
+    const total = items.length;
+    return { applications: items.slice(offset, offset + limit), total };
+  }
+
+  async createApplication(application: InsertApplication): Promise<Application> {
+    const id = nanoid();
+    const item: Application = {
+      ...application,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      status: application.status || "pending",
+      scholarshipId: application.scholarshipId || null,
+      jobId: application.jobId || null,
+      reviewNotes: application.reviewNotes || null,
+      reviewedBy: application.reviewedBy || null,
+      reviewedAt: application.reviewedAt || null,
+    };
+    this.applicationsMap.set(id, item);
+    return item;
+  }
+
+  async updateApplication(id: string, updates: Partial<InsertApplication>): Promise<Application> {
+    const item = this.applicationsMap.get(id);
+    if (!item) throw new Error("Application not found");
+    const updated = { ...item, ...updates, updatedAt: new Date() } as Application;
+    this.applicationsMap.set(id, updated);
+    return updated;
+  }
+
+  async deleteApplication(id: string): Promise<void> {
+    this.applicationsMap.delete(id);
+  }
+
+  async getChatConversations(limit: number = 50, offset: number = 0): Promise<{ conversations: AiChatConversation[], total: number }> {
+    const items = Array.from(this.chatMap.values());
+    const total = items.length;
+    return { conversations: items.slice(offset, offset + limit), total };
+  }
+
+  async getChatConversation(id: string): Promise<AiChatConversation | undefined> {
+    return this.chatMap.get(id);
+  }
+
+  async createChatConversation(conversation: InsertAiChatConversation): Promise<AiChatConversation> {
+    const id = nanoid();
+    const item: AiChatConversation = {
+      ...conversation,
+      id,
+      isActive: conversation.isActive ?? true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      summary: conversation.summary || null,
+      moderationFlags: conversation.moderationFlags || null,
+    };
+    this.chatMap.set(id, item);
+    return item;
+  }
+
+  async updateChatConversation(id: string, updates: Partial<InsertAiChatConversation>): Promise<AiChatConversation> {
+    const item = this.chatMap.get(id);
+    if (!item) throw new Error("Conversation not found");
+    const updated = { ...item, ...updates, updatedAt: new Date() } as AiChatConversation;
+    this.chatMap.set(id, updated);
+    return updated;
+  }
+
+  async getAdminNotifications(limit: number = 50, offset: number = 0, targetUserId?: string): Promise<{ notifications: AdminNotification[], total: number }> {
+    let items = Array.from(this.notificationsMap.values());
+    if (targetUserId) {
+      items = items.filter(n => n.targetUserId === targetUserId || !n.targetUserId);
+    }
+    const total = items.length;
+    return { notifications: items.slice(offset, offset + limit), total };
+  }
+
+  async createAdminNotification(notification: InsertAdminNotification): Promise<AdminNotification> {
+    const id = nanoid();
+    const item: AdminNotification = {
+      ...notification,
+      id,
+      isRead: false,
+      createdAt: new Date(),
+      targetUserId: notification.targetUserId || null,
+      metadata: notification.metadata || null,
+    };
+    this.notificationsMap.set(id, item);
+    return item;
+  }
+
+  async markNotificationAsRead(id: string): Promise<void> {
+    const item = this.notificationsMap.get(id);
+    if (item) {
+      this.notificationsMap.set(id, { ...item, isRead: true });
+    }
+  }
+
+  async getAuditLogs(limit: number = 50, offset: number = 0, userId?: string, entityType?: string): Promise<{ logs: AuditLog[], total: number }> {
+    let items = Array.from(this.auditLogsMap.values());
+    if (userId) items = items.filter(l => l.userId === userId);
+    if (entityType) items = items.filter(l => l.entityType === entityType);
+    const total = items.length;
+    return { logs: items.slice(offset, offset + limit), total };
+  }
+
+  async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
+    const id = nanoid();
+    const item: AuditLog = {
+      ...log,
+      id,
+      createdAt: new Date(),
+      entityId: log.entityId || null,
+      oldData: log.oldData || null,
+      newData: log.newData || null,
+      ipAddress: log.ipAddress || null,
+      userAgent: log.userAgent || null,
+    };
+    this.auditLogsMap.set(id, item);
+    return item;
+  }
+
+  async getSettings(): Promise<Settings> {
+    return this.settings;
+  }
+
+  async updateSettings(updates: Partial<InsertSettings>): Promise<Settings> {
+    this.settings = { ...this.settings, ...updates, updatedAt: new Date() };
+    return this.settings;
+  }
+
+  async getDashboardStats() {
+    const applicationStatusStats = Array.from(this.applicationsMap.values()).reduce((acc, app) => {
+      acc[app.status] = (acc[app.status] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    const activeScholarships = Array.from(this.scholarshipsMap.values()).filter(s => s.status === "published").length;
+    const activeJobs = Array.from(this.jobsMap.values()).filter(j => j.status === "published").length;
+    const pendingApplications = Array.from(this.applicationsMap.values()).filter(a => a.status === "pending").length;
+    const publishedPosts = Array.from(this.blogMap.values()).filter(b => b.status === "published").length;
+
+    const recentLogs = Array.from(this.auditLogsMap.values())
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, 10)
+      .map(l => ({ id: l.id, action: l.action, entityType: l.entityType, details: `${l.action} ${l.entityType}`, createdAt: l.createdAt }));
+
+    return {
+      totalUsers: this.usersMap.size,
+      totalScholarships: this.scholarshipsMap.size,
+      totalJobs: this.jobsMap.size,
+      totalPartners: this.partnersMap.size,
+      totalBlogPosts: this.blogMap.size,
+      totalApplications: this.applicationsMap.size,
+      totalActiveChats: Array.from(this.chatMap.values()).filter(c => c.isActive).length,
+      activeScholarships,
+      activeJobs,
+      pendingApplications,
+      publishedPosts,
+      applicationStats: applicationStatusStats,
+      applicationStatusStats,
+      contentModerationStats: { flaggedCount: 0, approvedCount: this.scholarshipsMap.size + this.jobsMap.size },
+      userGrowth: [{ date: new Date().toISOString().split('T')[0], count: this.usersMap.size }],
+      regionalStats: [{ region: "Global", scholarshipCount: this.scholarshipsMap.size, jobCount: this.jobsMap.size }],
+      recentActivity: recentLogs,
+    };
   }
 }
 
-export const storage = new DatabaseStorage();
+import { DatabaseStorage } from "./db-storage";
+
+export const storage: IStorage = new DatabaseStorage();
+
+// Seed default admin on startup
+(storage as DatabaseStorage).seed?.().catch(console.error);

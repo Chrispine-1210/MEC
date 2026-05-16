@@ -7,15 +7,38 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+const getAuthToken = () => {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("token");
+};
+
+export const authFetch = (input: RequestInfo | URL, init: RequestInit = {}) => {
+  const headers = new Headers(init.headers);
+  const token = getAuthToken();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  return fetch(input, {
+    ...init,
+    headers,
+    credentials: init.credentials ?? "include",
+  });
+};
+
 export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const token = localStorage.getItem("token");
-  const headers: Record<string, string> = {};
-  if (data) headers["Content-Type"] = "application/json";
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const token = getAuthToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
 
   const res = await fetch(url, {
     method,
@@ -24,7 +47,13 @@ export async function apiRequest(
     credentials: "include",
   });
 
-  await throwIfResNotOk(res);
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({ message: res.statusText }));
+    const error = new Error(payload.message || "Something went wrong");
+    Object.assign(error, { status: res.status, payload });
+    throw error;
+  }
+
   return res;
 }
 
@@ -34,33 +63,8 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const [url, ...params] = queryKey as unknown[];
-    const token = localStorage.getItem("token");
-    let finalUrl = String(url);
-
-    if (params.length > 0) {
-      const searchParams = new URLSearchParams();
-      params.forEach((param, index) => {
-        if (param === undefined || param === null) return;
-        if (typeof param === "object") {
-          Object.entries(param as Record<string, unknown>).forEach(([key, value]) => {
-            if (value === undefined || value === null) return;
-            searchParams.set(key, String(value));
-          });
-        } else {
-          searchParams.set(`p${index}`, String(param));
-        }
-      });
-      const queryString = searchParams.toString();
-      if (queryString) {
-        finalUrl = `${finalUrl}?${queryString}`;
-      }
-    }
-
-    const res = await fetch(finalUrl, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      credentials: "include",
-    });
+    const url = queryKey[0] as string;
+    const res = await authFetch(url);
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
       return null;
