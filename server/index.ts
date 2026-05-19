@@ -24,6 +24,16 @@ app.use(
         connectSrc: ["'self'", "https:", "ws:", "wss:"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         mediaSrc: ["'self'", "https:"],
+        frameSrc: [
+          "'self'",
+          "https://www.youtube.com",
+          "https://www.youtube-nocookie.com",
+        ],
+        childSrc: [
+          "'self'",
+          "https://www.youtube.com",
+          "https://www.youtube-nocookie.com",
+        ],
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"],
       },

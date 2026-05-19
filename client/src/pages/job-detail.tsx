@@ -5,6 +5,8 @@ import Footer from "@/components/footer";
 import ApplicationDialog from "@/components/application-dialog";
 import SaveItemButton from "@/components/save-item-button";
 import GovernedImage from "@/components/governed-image";
+import RichContent from "@/components/rich-content";
+import { publicContentQueryOptions } from "@/lib/realtime-content";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -62,10 +64,12 @@ export default function JobDetail() {
   const { data: job, isLoading: jobLoading } = useQuery<ApiJob>({
     queryKey: [`/api/jobs/${id}`],
     enabled: Number.isFinite(id) && id > 0,
+    ...publicContentQueryOptions,
   });
 
   const { data: jobs, isLoading: listLoading } = useQuery<ApiJob[]>({
     queryKey: ["/api/jobs"],
+    ...publicContentQueryOptions,
   });
 
   const resolved = job || jobs?.find((item) => item.id === id);
@@ -105,18 +109,12 @@ export default function JobDetail() {
   }
 
   const daysLeft = getDaysLeft(resolved.deadline);
-  const descriptionParagraphs =
-    resolved.description
-      ?.split(/\n+/)
-      .map((paragraph) => paragraph.trim())
-      .filter(Boolean) || [];
-  const overviewParagraphs =
-    descriptionParagraphs.length > 0
-      ? descriptionParagraphs
-      : [
-          "This role offers a focused opportunity to build experience, contribute value early, and grow with an employer that is actively hiring.",
-          "Use the details below to understand employer expectations, prepare the right materials, and approach the process with more confidence.",
-        ];
+  const overviewContent =
+    resolved.description ||
+    [
+      "This role offers a focused opportunity to build experience, contribute value early, and grow with an employer that is actively hiring.",
+      "Use the details below to understand employer expectations, prepare the right materials, and approach the process with more confidence.",
+    ].join("\n\n");
   const requirements =
     Array.isArray(resolved.requirements) && resolved.requirements.length > 0
       ? resolved.requirements
@@ -355,11 +353,7 @@ export default function JobDetail() {
               <h2 className="text-2xl font-bold text-mtendere-blue md:text-3xl">
                 What to understand before you apply
               </h2>
-              <div className="space-y-4 text-base leading-relaxed text-muted-foreground">
-                {overviewParagraphs.map((paragraph) => (
-                  <p key={paragraph}>{paragraph}</p>
-                ))}
-              </div>
+              <RichContent html={overviewContent} />
             </section>
 
             <section>

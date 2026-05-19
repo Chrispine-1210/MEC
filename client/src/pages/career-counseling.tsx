@@ -8,6 +8,7 @@ import { Link } from "wouter";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useQuery } from "@tanstack/react-query";
 import type { ApiTestimonial } from "@/lib/api-types";
+import { publicContentQueryOptions } from "@/lib/realtime-content";
 import {
   TrendingUp, Compass, Target, Star, Users, Briefcase, CheckCircle2,
   Clock, ArrowRight, Award, Globe, Lightbulb, PhoneCall, BookOpen
@@ -96,6 +97,7 @@ export default function CareerCounseling() {
   const { data: testimonials = [] } = useQuery<ApiTestimonial[]>({
     queryKey: ["/api/testimonials"],
     initialData: [],
+    ...publicContentQueryOptions,
   });
   const successStories = testimonials.filter((item) => item?.isApproved !== false).slice(0, 3);
 

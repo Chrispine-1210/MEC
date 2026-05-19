@@ -9,6 +9,8 @@ import Footer from "@/components/footer";
 import GovernedImage from "@/components/governed-image";
 import type { ApiPartner } from "@/lib/api-types";
 import { getGovernedBackgroundImage } from "@/lib/image-governance";
+import { publicContentQueryOptions } from "@/lib/realtime-content";
+import { truncateRichText } from "@/lib/rich-text";
 import { 
   Users, 
   Trophy, 
@@ -28,6 +30,7 @@ type Partner = ApiPartner;
 export default function Partners() {
   const { data: partners, isLoading } = useQuery<Partner[]>({
     queryKey: ["/api/partners"],
+    ...publicContentQueryOptions,
   });
 
   const featuredPartners = (partners || [])
@@ -118,7 +121,7 @@ export default function Partners() {
                       {partner.name}
                     </CardTitle>
                     <CardDescription className="text-base line-clamp-3">
-                      {partner.description}
+                      {truncateRichText(partner.description, 170)}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -223,7 +226,7 @@ export default function Partners() {
 
                   <CardContent className="pt-4 flex-1 flex flex-col">
                     <p className="text-muted-foreground mb-4 line-clamp-3 text-sm leading-relaxed flex-1">
-                      {partner.description}
+                      {truncateRichText(partner.description, 170)}
                     </p>
                     
                     {partner.studentCount && (

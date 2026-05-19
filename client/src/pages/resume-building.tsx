@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useQuery } from "@tanstack/react-query";
 import type { ApiTestimonial } from "@/lib/api-types";
+import { publicContentQueryOptions } from "@/lib/realtime-content";
 import { Link } from "wouter";
 import {
   User, Layout, CheckSquare, Linkedin, Star, FileText, Clock,
@@ -97,6 +98,7 @@ export default function ResumeBuilding() {
   const { data: testimonials = [] } = useQuery<ApiTestimonial[]>({
     queryKey: ["/api/testimonials"],
     initialData: [],
+    ...publicContentQueryOptions,
   });
   const approvedTestimonials = testimonials.filter((item) => item?.isApproved !== false).slice(0, 3);
 

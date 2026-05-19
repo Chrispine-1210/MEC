@@ -12,9 +12,12 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ApiBlogPost } from "@/lib/api-types";
 import { getGovernedBackgroundImage } from "@/lib/image-governance";
+import { publicContentQueryOptions } from "@/lib/realtime-content";
+import { richTextToPlainText, truncateRichText } from "@/lib/rich-text";
 import { Search, Calendar, Heart, ArrowRight, BookOpen } from "lucide-react";
 
-const getReadingTime = (content: string) => Math.max(1, Math.ceil(content.split(/\s+/).filter(Boolean).length / 200));
+const getReadingTime = (content: string) =>
+  Math.max(1, Math.ceil(richTextToPlainText(content).split(/\s+/).filter(Boolean).length / 200));
 
 export default function Blog() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -22,11 +25,13 @@ export default function Blog() {
 
   const { data: posts, isLoading } = useQuery<ApiBlogPost[]>({
     queryKey: ["/api/blog-posts"],
+    ...publicContentQueryOptions,
   });
 
   const { data: searchResults, isLoading: isSearching } = useQuery<ApiBlogPost[]>({
     queryKey: ["/api/blog-posts/search", { q: searchQuery }],
     enabled: searchQuery.length > 2,
+    ...publicContentQueryOptions,
   });
 
   const displayPosts = searchQuery.length > 2 ? searchResults : posts;
@@ -171,7 +176,7 @@ export default function Blog() {
                         {featured.title}
                       </h2>
                       <p className="text-muted-foreground leading-relaxed mb-6 line-clamp-3">
-                        {featured.excerpt || featured.content.substring(0, 200) + "..."}
+                        {featured.excerpt || truncateRichText(featured.content, 200)}
                       </p>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-sm font-semibold text-mtendere-blue group-hover:text-mtendere-green transition-colors">
@@ -226,7 +231,7 @@ export default function Blog() {
                       </CardHeader>
                       <CardContent className="flex-1 flex flex-col">
                         <CardDescription className="text-muted-foreground line-clamp-3 leading-relaxed mb-4">
-                          {post.excerpt || post.content.substring(0, 130) + "..."}
+                          {post.excerpt || truncateRichText(post.content, 130)}
                         </CardDescription>
                         <div className="mt-auto flex items-center justify-between pt-3 border-t border-border/40">
                           <span className="text-sm font-bold text-mtendere-blue flex items-center gap-1 group-hover:text-mtendere-green transition-colors">

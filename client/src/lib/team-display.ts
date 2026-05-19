@@ -1,4 +1,5 @@
 import type { ApiTeamMember } from "@/lib/api-types";
+import { richTextToPlainText } from "@/lib/rich-text";
 
 export type DisplayTeamMember = ApiTeamMember & {
   group: "Board" | "Leadership" | "Operations";
@@ -47,8 +48,9 @@ function getTeamGroup(position: string): DisplayTeamMember["group"] {
 }
 
 function extractQualification(bio?: string | null) {
-  if (!bio) return undefined;
-  const firstSentence = bio.split(". ")[0]?.trim();
+  const plainBio = richTextToPlainText(bio);
+  if (!plainBio) return undefined;
+  const firstSentence = plainBio.split(". ")[0]?.trim();
   if (!firstSentence) return undefined;
   return /\b(ba|bsc|msc|phd|mb\s*chb|accounting|diploma|degree|university)\b/i.test(firstSentence)
     ? firstSentence.replace(/\.$/, "")

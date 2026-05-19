@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import GovernedImage from "@/components/governed-image";
 import { ChevronLeft, ChevronRight, GraduationCap, Briefcase, Star, MapPin, Building } from "lucide-react";
 import { Link } from "wouter";
+import { truncateRichText } from "@/lib/rich-text";
 
 interface CarouselItem {
   id: number;
@@ -34,7 +35,7 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
       id: scholarship.id,
       type: 'scholarship' as const,
       title: scholarship.title,
-      description: scholarship.description,
+      description: truncateRichText(scholarship.description, 180),
       imageUrl: scholarship.imageUrl,
       metadata: {
         institution: scholarship.institution,
@@ -49,7 +50,7 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
       id: job.id,
       type: 'job' as const,
       title: job.title,
-      description: job.description,
+      description: truncateRichText(job.description, 180),
       imageUrl: job.imageUrl,
       metadata: {
         company: job.company,

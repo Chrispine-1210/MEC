@@ -12,6 +12,8 @@ import ApplicationDialog from "@/components/application-dialog";
 import GovernedImage from "@/components/governed-image";
 import type { ApiScholarship } from "@/lib/api-types";
 import { getGovernedBackgroundImage } from "@/lib/image-governance";
+import { publicContentQueryOptions } from "@/lib/realtime-content";
+import { truncateRichText } from "@/lib/rich-text";
 import { 
   Search, 
   Filter, 
@@ -53,11 +55,13 @@ export default function Scholarships() {
 
   const { data: scholarships, isLoading } = useQuery<Scholarship[]>({
     queryKey: ["/api/scholarships"],
+    ...publicContentQueryOptions,
   });
 
   const { data: searchResults, isLoading: isSearching } = useQuery<Scholarship[]>({
     queryKey: ["/api/scholarships/search", { q: searchQuery }],
     enabled: searchQuery.length > 2,
+    ...publicContentQueryOptions,
   });
 
   const handleNextVideo = () => {
@@ -284,7 +288,7 @@ export default function Scholarships() {
                 
                 <CardContent>
                   <p className="text-muted-foreground mb-4 line-clamp-3">
-                    {scholarship.description}
+                    {truncateRichText(scholarship.description, 180)}
                   </p>
                   
                   <div className="space-y-3 mb-6">

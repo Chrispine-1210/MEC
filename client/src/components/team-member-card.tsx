@@ -4,6 +4,7 @@ import TeamPortrait from "@/components/team-portrait";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { richTextToPlainText } from "@/lib/rich-text";
 import type { DisplayTeamMember } from "@/lib/team-display";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +15,8 @@ type TeamMemberCardProps = {
 };
 
 export default function TeamMemberCard({ member, featured = false, className }: TeamMemberCardProps) {
+  const bioSummary = richTextToPlainText(member.bio) || "Profile details for this team member will be shared soon.";
+
   if (featured) {
     return (
       <Card className={cn("overflow-hidden border border-border/60 shadow-sm", className)}>
@@ -40,7 +43,7 @@ export default function TeamMemberCard({ member, featured = false, className }: 
               </div>
             )}
 
-            <p className="text-sm leading-7 text-muted-foreground">{member.bio}</p>
+            <p className="text-sm leading-7 text-muted-foreground">{bioSummary}</p>
 
             {member.focusAreas?.length ? (
               <div className="flex flex-wrap gap-2">
@@ -94,7 +97,7 @@ export default function TeamMemberCard({ member, featured = false, className }: 
             <span>{member.qualification}</span>
           </div>
         )}
-        <p className="line-clamp-4 text-sm leading-relaxed text-muted-foreground">{member.bio}</p>
+        <p className="line-clamp-4 text-sm leading-relaxed text-muted-foreground">{bioSummary}</p>
         <TeamMemberDialog
           member={member}
           trigger={

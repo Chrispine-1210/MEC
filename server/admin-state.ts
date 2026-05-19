@@ -233,6 +233,14 @@ const ensureStateDirectory = () => {
   fs.mkdirSync(path.dirname(stateFilePath), { recursive: true });
 };
 
+const getStateFileMtime = () => {
+  try {
+    return fs.statSync(stateFilePath).mtimeMs;
+  } catch {
+    return 0;
+  }
+};
+
 const loadState = (): AdminState => {
   ensureStateDirectory();
 
@@ -268,10 +276,20 @@ const loadState = (): AdminState => {
 };
 
 let cachedState = loadState();
+let cachedStateMtime = getStateFileMtime();
+
+const refreshStateFromDiskIfChanged = () => {
+  const nextMtime = getStateFileMtime();
+  if (nextMtime > 0 && nextMtime !== cachedStateMtime) {
+    cachedState = loadState();
+    cachedStateMtime = nextMtime;
+  }
+};
 
 const saveState = () => {
   ensureStateDirectory();
   fs.writeFileSync(stateFilePath, JSON.stringify(cachedState, null, 2), "utf-8");
+  cachedStateMtime = getStateFileMtime();
 };
 
 const updateCollectionItem = <T extends Record<string, unknown>>(
@@ -282,6 +300,8 @@ const updateCollectionItem = <T extends Record<string, unknown>>(
   id: string | number,
   value: T,
 ) => {
+  refreshStateFromDiskIfChanged();
+
   cachedState = {
     ...cachedState,
     [collection]: {
@@ -303,6 +323,8 @@ const deleteCollectionItem = (
   >,
   id: string | number,
 ) => {
+  refreshStateFromDiskIfChanged();
+
   const nextCollection = { ...cachedState[collection] };
   delete nextCollection[String(id)];
 
@@ -314,48 +336,71 @@ const deleteCollectionItem = (
   saveState();
 };
 
-export const getAdminState = () => cachedState;
+export const getAdminState = () => {
+  refreshStateFromDiskIfChanged();
+  return cachedState;
+};
 
-export const getUserMeta = (id: string | number) => cachedState.users[String(id)] ?? {};
+export const getUserMeta = (id: string | number) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.users[String(id)] ?? {};
+};
 export const setUserMeta = (id: string | number, value: UserMeta) =>
   updateCollectionItem("users", id, value);
 export const deleteUserMeta = (id: string | number) => deleteCollectionItem("users", id);
 
-export const getScholarshipMeta = (id: string | number) =>
-  cachedState.scholarships[String(id)] ?? {};
+export const getScholarshipMeta = (id: string | number) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.scholarships[String(id)] ?? {};
+};
 export const setScholarshipMeta = (id: string | number, value: ScholarshipMeta) =>
   updateCollectionItem("scholarships", id, value);
 export const deleteScholarshipMeta = (id: string | number) =>
   deleteCollectionItem("scholarships", id);
 
-export const getJobMeta = (id: string | number) => cachedState.jobs[String(id)] ?? {};
+export const getJobMeta = (id: string | number) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.jobs[String(id)] ?? {};
+};
 export const setJobMeta = (id: string | number, value: JobMeta) =>
   updateCollectionItem("jobs", id, value);
 export const deleteJobMeta = (id: string | number) => deleteCollectionItem("jobs", id);
 
-export const getPartnerMeta = (id: string | number) =>
-  cachedState.partners[String(id)] ?? {};
+export const getPartnerMeta = (id: string | number) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.partners[String(id)] ?? {};
+};
 export const setPartnerMeta = (id: string | number, value: PartnerMeta) =>
   updateCollectionItem("partners", id, value);
 export const deletePartnerMeta = (id: string | number) =>
   deleteCollectionItem("partners", id);
 
-export const getBlogMeta = (id: string | number) => cachedState.blogPosts[String(id)] ?? {};
+export const getBlogMeta = (id: string | number) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.blogPosts[String(id)] ?? {};
+};
 export const setBlogMeta = (id: string | number, value: BlogMeta) =>
   updateCollectionItem("blogPosts", id, value);
 export const deleteBlogMeta = (id: string | number) => deleteCollectionItem("blogPosts", id);
 
-export const getTeamMeta = (id: string | number) =>
-  cachedState.teamMembers[String(id)] ?? {};
+export const getTeamMeta = (id: string | number) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.teamMembers[String(id)] ?? {};
+};
 export const setTeamMeta = (id: string | number, value: TeamMeta) =>
   updateCollectionItem("teamMembers", id, value);
 export const deleteTeamMeta = (id: string | number) => deleteCollectionItem("teamMembers", id);
 
-export const getAdminRoles = () => [...cachedState.roles];
+export const getAdminRoles = () => {
+  refreshStateFromDiskIfChanged();
+  return [...cachedState.roles];
+};
 
 export const upsertAdminRole = (
   role: Omit<AdminRole, "createdAt" | "updatedAt"> & Partial<Pick<AdminRole, "createdAt">>,
 ) => {
+  refreshStateFromDiskIfChanged();
+
   const existing = cachedState.roles.find((item) => item.id === role.id);
   const nextRole: AdminRole = {
     ...existing,
@@ -376,6 +421,8 @@ export const upsertAdminRole = (
 };
 
 export const deleteAdminRole = (id: string) => {
+  refreshStateFromDiskIfChanged();
+
   if (isCoreAdminRole(id)) {
     return false;
   }
@@ -394,9 +441,14 @@ export const deleteAdminRole = (id: string) => {
   return true;
 };
 
-export const getAdminSettings = () => ({ ...cachedState.settings });
+export const getAdminSettings = () => {
+  refreshStateFromDiskIfChanged();
+  return { ...cachedState.settings };
+};
 
 export const updateAdminSettings = (updates: Partial<AdminSettings>) => {
+  refreshStateFromDiskIfChanged();
+
   const cleanUpdates = Object.fromEntries(
     Object.entries(updates).filter(([, value]) => value !== undefined),
   ) as Partial<AdminSettings>;
@@ -414,10 +466,14 @@ export const updateAdminSettings = (updates: Partial<AdminSettings>) => {
   return cachedState.settings;
 };
 
-export const isNotificationRead = (id: string) =>
-  cachedState.readNotificationIds.includes(id);
+export const isNotificationRead = (id: string) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.readNotificationIds.includes(id);
+};
 
 export const markNotificationRead = (id: string) => {
+  refreshStateFromDiskIfChanged();
+
   if (cachedState.readNotificationIds.includes(id)) {
     return;
   }
@@ -431,6 +487,8 @@ export const markNotificationRead = (id: string) => {
 };
 
 export const markNotificationsRead = (ids: string[]) => {
+  refreshStateFromDiskIfChanged();
+
   const uniqueIds = Array.from(new Set([...cachedState.readNotificationIds, ...ids]));
 
   cachedState = {

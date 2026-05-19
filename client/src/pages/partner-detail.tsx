@@ -3,11 +3,14 @@ import { Link, useRoute } from "wouter";
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
 import GovernedImage from "@/components/governed-image";
+import RichContent from "@/components/rich-content";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ApiPartner } from "@/lib/api-types";
+import { publicContentQueryOptions } from "@/lib/realtime-content";
+import { richTextToPlainText } from "@/lib/rich-text";
 import {
   ArrowLeft,
   ArrowRight,
@@ -67,10 +70,12 @@ export default function PartnerDetail() {
   const { data: partner, isLoading: partnerLoading } = useQuery<ApiPartner>({
     queryKey: [`/api/partners/${id}`],
     enabled: Number.isFinite(id) && id > 0,
+    ...publicContentQueryOptions,
   });
 
   const { data: partners, isLoading: listLoading } = useQuery<ApiPartner[]>({
     queryKey: ["/api/partners"],
+    ...publicContentQueryOptions,
   });
 
   const resolved = partner || partners?.find((item) => item.id === id);
@@ -113,6 +118,9 @@ export default function PartnerDetail() {
     { label: "Campus signal", value: getCampusScale(resolved.studentCount), icon: Compass },
     { label: "Recognition", value: resolved.ranking || "Advisor review available", icon: Star },
   ];
+  const fallbackDescription =
+    "Use this page to understand how this institution fits into your wider education plan, what to compare carefully, and how Mtendere can help you move from interest to action.";
+  const descriptionSummary = richTextToPlainText(resolved.description) || fallbackDescription;
 
   const decisionFrames = [
     {
@@ -253,10 +261,7 @@ export default function PartnerDetail() {
               </div>
 
               <h1 className="mb-5 text-4xl font-bold md:text-6xl">{resolved.name}</h1>
-              <p className="max-w-3xl text-base leading-relaxed text-white/85 md:text-lg">
-                {resolved.description ||
-                  "Use this page to understand how this institution fits into your wider education plan, what to compare carefully, and how Mtendere can help you move from interest to action."}
-              </p>
+              <p className="max-w-3xl text-base leading-relaxed text-white/85 md:text-lg">{descriptionSummary}</p>
 
               <div className="mt-8 grid gap-4 sm:grid-cols-3">
                 {heroStats.slice(0, 3).map(({ label, value, icon: Icon }) => (
@@ -357,15 +362,16 @@ export default function PartnerDetail() {
               <h2 className="mt-4 text-2xl font-bold text-mtendere-blue md:text-3xl">
                 Use this institution as a decision point, not just a destination name
               </h2>
-              <div className="mt-4 space-y-4 text-base leading-relaxed text-muted-foreground">
-                <p>
-                  The strongest partner pages help students understand academic fit, cost, timing, and support before
-                  they spend money or energy on a full application. That is the lens we use here.
-                </p>
-                <p>
-                  {resolved.name} may be a compelling option, but the right next step is usually to compare it against
-                  alternatives, confirm the pathway, and understand what kind of application effort it will take.
-                </p>
+              <div className="mt-4">
+                <RichContent
+                  html={
+                    resolved.description ||
+                    [
+                      "The strongest partner pages help students understand academic fit, cost, timing, and support before they spend money or energy on a full application. That is the lens we use here.",
+                      `${resolved.name} may be a compelling option, but the right next step is usually to compare it against alternatives, confirm the pathway, and understand what kind of application effort it will take.`,
+                    ].join("\n\n")
+                  }
+                />
               </div>
             </section>
 

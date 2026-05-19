@@ -42,33 +42,41 @@ import type {
   ApiTeamMember,
 } from "@/lib/api-types";
 import { getGovernedBackgroundImage } from "@/lib/image-governance";
+import { publicContentQueryOptions } from "@/lib/realtime-content";
+import { truncateRichText } from "@/lib/rich-text";
 import { getTeamGroups } from "@/lib/team-display";
 
 export default function Home() {
   const { data: scholarships } = useQuery<ApiScholarship[]>({
     queryKey: ["/api/scholarships"],
+    ...publicContentQueryOptions,
   });
 
   const { data: jobs } = useQuery<ApiJob[]>({
     queryKey: ["/api/jobs"],
+    ...publicContentQueryOptions,
   });
 
   const { data: partners } = useQuery<ApiPartner[]>({
     queryKey: ["/api/partners"],
+    ...publicContentQueryOptions,
   });
 
   const { data: testimonials } = useQuery<ApiTestimonial[]>({
     queryKey: ["/api/testimonials"],
     initialData: [],
+    ...publicContentQueryOptions,
   });
 
   const { data: blogPosts } = useQuery<ApiBlogPost[]>({
     queryKey: ["/api/blog-posts"],
     initialData: [],
+    ...publicContentQueryOptions,
   });
 
   const { data: teamMembers = [] } = useQuery<ApiTeamMember[]>({
     queryKey: ["/api/team-members"],
+    ...publicContentQueryOptions,
   });
 
   const activeScholarships = (scholarships || []).filter(
@@ -210,7 +218,7 @@ export default function Home() {
                 </CardHeader>
                 <CardContent className="px-8 pt-6 pb-4 flex-1">
                   <CardDescription className="text-muted-foreground line-clamp-3 leading-relaxed text-base">
-                    {post.excerpt || (post.content ? post.content.substring(0, 150) + '...' : 'No content available')}
+                    {post.excerpt || (post.content ? truncateRichText(post.content, 150) : 'No content available')}
                   </CardDescription>
                 </CardContent>
                 <div className="px-8 pb-8 mt-auto">

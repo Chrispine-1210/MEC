@@ -12,7 +12,10 @@ import type { ApiBlogComment, ApiBlogPost } from "@/lib/api-types";
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
 import GovernedImage from "@/components/governed-image";
+import RichContent from "@/components/rich-content";
 import { getBlogInlineImages } from "@/lib/image-governance";
+import { publicContentQueryOptions } from "@/lib/realtime-content";
+import { extractRichTextHeadings, hasRichHtml, richTextToPlainText, truncateRichText } from "@/lib/rich-text";
 import {
   ArrowLeft,
   ArrowRight,
@@ -259,11 +262,16 @@ export default function BlogDetail() {
   const { data: post, isLoading: postLoading } = useQuery<ApiBlogPost>({
     queryKey: [`/api/blog-posts/${id}`],
     enabled: Number.isFinite(id) && id > 0,
+    ...publicContentQueryOptions,
   });
-  const { data: posts } = useQuery<ApiBlogPost[]>({ queryKey: ["/api/blog-posts"] });
+  const { data: posts } = useQuery<ApiBlogPost[]>({
+    queryKey: ["/api/blog-posts"],
+    ...publicContentQueryOptions,
+  });
   const { data: comments, isLoading: commentsLoading } = useQuery<ApiBlogComment[]>({
     queryKey: [`/api/blog-posts/${id}/comments`],
     enabled: Number.isFinite(id) && id > 0,
+    ...publicContentQueryOptions,
   });
 
   const likeMutation = useMutation({
@@ -313,20 +321,29 @@ export default function BlogDetail() {
     );
   }
 
-  const blocks = parseContent(post.content);
-  const headings = blocks.filter(
-    (block): block is Extract<ContentBlock, { type: "h2" | "h3" }> => block.type === "h2" || block.type === "h3",
-  );
+  const isRichArticle = hasRichHtml(post.content);
+  const blocks = isRichArticle ? [] : parseContent(post.content);
+  const markdownHeadings = blocks
+    .filter((block): block is Extract<ContentBlock, { type: "h2" | "h3" }> => block.type === "h2" || block.type === "h3")
+    .map(({ text, slug }) => ({ text, slug }));
+  const headings = isRichArticle ? extractRichTextHeadings(post.content) : markdownHeadings;
   const paragraphs = blocks.filter((block): block is Extract<ContentBlock, { type: "paragraph" }> => block.type === "paragraph");
   const callout = blocks.find((block): block is Extract<ContentBlock, { type: "callout" }> => block.type === "callout");
   const tags = Array.isArray(post.tags) ? post.tags : [];
-  const wordCount = post.content.split(/\s+/).filter(Boolean).length;
+  const articleText = richTextToPlainText(post.content);
+  const wordCount = articleText.split(/\s+/).filter(Boolean).length;
   const readingTime = Math.max(1, Math.ceil(wordCount / 200));
   const guide = ARTICLE_GUIDES[post.category] || DEFAULT_GUIDE;
   const excerpt =
     post.excerpt ||
+    (isRichArticle ? truncateRichText(post.content, 220) : "") ||
     paragraphs[0]?.text ||
     "A practical Mtendere insight designed to help you move from reading into better decisions.";
+  const thinkingParagraphs = isRichArticle
+    ? [{ text: post.excerpt || truncateRichText(post.content, 360) || excerpt }]
+    : paragraphs.slice(0, 2).length
+      ? paragraphs.slice(0, 2)
+      : [{ text: excerpt }];
   const relatedPosts = (posts || [])
     .filter((item) => item.id !== post.id)
     .sort((left, right) => Number(right.category === post.category) - Number(left.category === post.category))
@@ -548,7 +565,7 @@ export default function BlogDetail() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4 text-base leading-relaxed text-muted-foreground">
-                  {(paragraphs.slice(0, 2).length ? paragraphs.slice(0, 2) : [{ text: excerpt }]).map((paragraph) => (
+                  {thinkingParagraphs.map((paragraph) => (
                     <p key={paragraph.text}>{paragraph.text}</p>
                   ))}
                 </CardContent>
@@ -577,102 +594,106 @@ export default function BlogDetail() {
             )}
 
             <article className="rounded-3xl border border-border/60 bg-card p-6 shadow-sm md:p-10">
-              <div className="space-y-6">
-                {blocks.map((block, index) => {
-                  const inlineImage =
-                    (block.type === "h2" || block.type === "h3") && inlineImageCursor < inlineImages.length
-                      ? inlineImages[inlineImageCursor++]
-                      : null;
+              {isRichArticle ? (
+                <RichContent html={post.content} />
+              ) : (
+                <div className="space-y-6">
+                  {blocks.map((block, index) => {
+                    const inlineImage =
+                      (block.type === "h2" || block.type === "h3") && inlineImageCursor < inlineImages.length
+                        ? inlineImages[inlineImageCursor++]
+                        : null;
 
-                  if (block.type === "h1") {
+                    if (block.type === "h1") {
+                      return (
+                        <h2 key={`${block.slug}-${index}`} id={block.slug} className="text-3xl font-bold text-mtendere-blue">
+                          {block.text}
+                        </h2>
+                      );
+                    }
+
+                    if (block.type === "h2") {
+                      return (
+                        <div key={`${block.slug}-${index}`} className="space-y-5 border-t border-border/40 pt-8">
+                          <h3 id={block.slug} className="text-2xl font-bold text-mtendere-blue">
+                            {block.text}
+                          </h3>
+                          {inlineImage && (
+                            <GovernedImage
+                              module="blog"
+                              src={inlineImage.src}
+                              title={block.text}
+                              category={post.category}
+                              tags={tags}
+                              variant="inline"
+                              aspectRatio="16 / 9"
+                              wrapperClassName="rounded-xl"
+                              caption={inlineImage.caption}
+                              enableLightbox
+                            />
+                          )}
+                        </div>
+                      );
+                    }
+
+                    if (block.type === "h3") {
+                      return (
+                        <div key={`${block.slug}-${index}`} className="space-y-4">
+                          <h4 id={block.slug} className="text-xl font-bold text-mtendere-blue">
+                            {block.text}
+                          </h4>
+                          {inlineImage && (
+                            <GovernedImage
+                              module="blog"
+                              src={inlineImage.src}
+                              title={block.text}
+                              category={post.category}
+                              tags={tags}
+                              variant="inline"
+                              aspectRatio="16 / 9"
+                              wrapperClassName="rounded-xl"
+                              caption={inlineImage.caption}
+                              enableLightbox
+                            />
+                          )}
+                        </div>
+                      );
+                    }
+
+                    if (block.type === "callout") {
+                      return (
+                        <div key={`${block.text}-${index}`} className="rounded-2xl bg-mtendere-blue/5 p-5">
+                          <p className="font-semibold leading-relaxed text-foreground">{block.text}</p>
+                        </div>
+                      );
+                    }
+
+                    if (block.type === "list") {
+                      const ListTag = block.ordered ? "ol" : "ul";
+                      return (
+                        <ListTag
+                          key={`${block.items[0]}-${index}`}
+                          className={
+                            block.ordered
+                              ? "ml-5 list-decimal space-y-3 text-base leading-8 text-foreground/80"
+                              : "ml-5 list-disc space-y-3 text-base leading-8 text-foreground/80"
+                          }
+                        >
+                          {block.items.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ListTag>
+                      );
+                    }
+
                     return (
-                      <h2 key={`${block.slug}-${index}`} id={block.slug} className="text-3xl font-bold text-mtendere-blue">
+                      <p key={`${block.text}-${index}`} className="text-base leading-8 text-foreground/80 md:text-lg">
                         {block.text}
-                      </h2>
+                      </p>
                     );
-                  }
-
-                  if (block.type === "h2") {
-                    return (
-                      <div key={`${block.slug}-${index}`} className="space-y-5 border-t border-border/40 pt-8">
-                        <h3 id={block.slug} className="text-2xl font-bold text-mtendere-blue">
-                          {block.text}
-                        </h3>
-                        {inlineImage && (
-                          <GovernedImage
-                            module="blog"
-                            src={inlineImage.src}
-                            title={block.text}
-                            category={post.category}
-                            tags={tags}
-                            variant="inline"
-                            aspectRatio="16 / 9"
-                            wrapperClassName="rounded-xl"
-                            caption={inlineImage.caption}
-                            enableLightbox
-                          />
-                        )}
-                      </div>
-                    );
-                  }
-
-                  if (block.type === "h3") {
-                    return (
-                      <div key={`${block.slug}-${index}`} className="space-y-4">
-                        <h4 id={block.slug} className="text-xl font-bold text-mtendere-blue">
-                          {block.text}
-                        </h4>
-                        {inlineImage && (
-                          <GovernedImage
-                            module="blog"
-                            src={inlineImage.src}
-                            title={block.text}
-                            category={post.category}
-                            tags={tags}
-                            variant="inline"
-                            aspectRatio="16 / 9"
-                            wrapperClassName="rounded-xl"
-                            caption={inlineImage.caption}
-                            enableLightbox
-                          />
-                        )}
-                      </div>
-                    );
-                  }
-
-                  if (block.type === "callout") {
-                    return (
-                      <div key={`${block.text}-${index}`} className="rounded-2xl bg-mtendere-blue/5 p-5">
-                        <p className="font-semibold leading-relaxed text-foreground">{block.text}</p>
-                      </div>
-                    );
-                  }
-
-                  if (block.type === "list") {
-                    const ListTag = block.ordered ? "ol" : "ul";
-                    return (
-                      <ListTag
-                        key={`${block.items[0]}-${index}`}
-                        className={
-                          block.ordered
-                            ? "ml-5 list-decimal space-y-3 text-base leading-8 text-foreground/80"
-                            : "ml-5 list-disc space-y-3 text-base leading-8 text-foreground/80"
-                        }
-                      >
-                        {block.items.map((item) => (
-                          <li key={item}>{item}</li>
-                        ))}
-                      </ListTag>
-                    );
-                  }
-
-                  return (
-                    <p key={`${block.text}-${index}`} className="text-base leading-8 text-foreground/80 md:text-lg">
-                      {block.text}
-                    </p>
-                  );
-                })}
-              </div>
+                  })}
+                </div>
+              )}
             </article>
             <section className="grid gap-5 md:grid-cols-2">
               <Card className="border border-border/60">

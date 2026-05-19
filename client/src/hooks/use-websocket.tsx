@@ -26,28 +26,38 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    if (user) {
+    let reconnectTimer: number | null = null;
+    let isMounted = true;
+    let ws: WebSocket | null = null;
+
+    const defaultChannels = [
+      "scholarships",
+      "jobs",
+      "applications",
+      "partners",
+      "testimonials",
+      "blog-posts",
+      "team-members",
+      "events",
+      "user_activity",
+      "announcements",
+    ];
+
+    const connect = () => {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      const token = localStorage.getItem("token");
+      const wsUrl = `${protocol}//${window.location.host}/ws${token ? `?token=${encodeURIComponent(token)}` : ""}`;
       
-      const ws = new WebSocket(wsUrl);
+      ws = new WebSocket(wsUrl);
       
       ws.onopen = () => {
         console.log("WebSocket connected");
+        if (!isMounted || !ws) return;
+        if (reconnectTimer !== null) {
+          window.clearTimeout(reconnectTimer);
+          reconnectTimer = null;
+        }
         setIsConnected(true);
-        
-        // Subscribe to default channels
-        const defaultChannels = [
-          "scholarships",
-          "jobs",
-          "applications",
-          "partners",
-          "blog-posts",
-          "team-members",
-          "events",
-          "user_activity",
-          "announcements",
-        ];
         ws.send(JSON.stringify({ type: "subscribe", channels: defaultChannels }));
         setSubscriptions(defaultChannels);
       };
@@ -68,7 +78,10 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
               invalidateByPrefix(["/api/applications"]);
               break;
             case "partners":
-              invalidateByPrefix(["/api/partners"]);
+              invalidateByPrefix(["/api/partners", "/api/partner-videos"]);
+              break;
+            case "testimonials":
+              invalidateByPrefix(["/api/testimonials"]);
               break;
             case "blog-posts":
               invalidateByPrefix(["/api/blog-posts"]);
@@ -80,7 +93,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
               invalidateByPrefix(["/api/events", "/api/admin/events"]);
               break;
             case "user_activity":
-              if (user.role === "admin" || user.role === "super_admin") {
+              if (user?.role === "admin" || user?.role === "super_admin") {
                 invalidateByPrefix([
                   "/api/analytics",
                   "/api/admin/dashboard",
@@ -97,7 +110,9 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
       ws.onclose = () => {
         console.log("WebSocket disconnected");
+        if (!isMounted) return;
         setIsConnected(false);
+        reconnectTimer = window.setTimeout(connect, 3000);
       };
 
       ws.onerror = (error) => {
@@ -106,12 +121,20 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       };
 
       setSocket(ws);
+    };
 
-      return () => {
+    connect();
+
+    return () => {
+      isMounted = false;
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer);
+      }
+      if (ws) {
         ws.close();
-      };
-    }
-  }, [user]);
+      }
+    };
+  }, [user?.id, user?.role]);
 
   const subscribe = (channels: string[]) => {
     if (socket && socket.readyState === WebSocket.OPEN) {

@@ -3,15 +3,38 @@
   "scholarships": {},
   "jobs": {},
   "partners": {
-    "1": {
-      "partnershipType": "corporation",
-      "logo": "/uploads/DigitalArchitectAp-1776353461146-123658.png",
-      "contactEmail": "peterschrispine@gmail.com",
-      "contactPhone": "",
-      "address": "Railways street 1 house #D27",
+    "2": {
+      "partnershipType": "University Partner",
+      "logo": "partners/partners-default.jpg",
+      "region": "India",
+      "videoUrl": "https://youtu.be/xXPDde9pap4",
+      "videoTitle": "Chandigarh University Campus Tour",
+      "videoDescription": "A partner university campus preview for students comparing international study destinations and student life.",
+      "isFeatured": true,
+      "isPremium": false,
+      "paymentStatus": "unpaid"
+    },
+    "3": {
+      "partnershipType": "University Partner",
+      "logo": "partners/our-partners.jpg",
+      "region": "India",
+      "videoUrl": "https://www.youtube.com/watch?v=1-z5Rn5Y-mI",
+      "videoTitle": "Perul University Partner Preview",
+      "videoDescription": "A partner university video preview managed from Admin for the homepage hero rotation.",
+      "isFeatured": true,
+      "isPremium": false,
+      "paymentStatus": "unpaid"
+    },
+    "4": {
+      "partnershipType": "Global Education Partner",
+      "logo": "partners/partners-2.jpg",
       "region": "Global",
-      "isPremium": true,
-      "paymentStatus": "paid"
+      "videoUrl": "https://www.youtube.com/watch?v=fF8ysli2hAw",
+      "videoTitle": "GEDU Global Education Partner Network",
+      "videoDescription": "A global education partner preview for students considering international study routes through GEDU institutions.",
+      "isFeatured": true,
+      "isPremium": false,
+      "paymentStatus": "unpaid"
     }
   },
   "blogPosts": {},
@@ -38,7 +61,9 @@
         "manage_jobs",
         "manage_partners",
         "manage_blog",
-        "manage_team"
+        "manage_team",
+        "manage_events",
+        "manage_media"
       ],
       "isActive": true,
       "createdAt": "2026-04-02T12:07:01.829Z",
@@ -57,7 +82,9 @@
         "manage_team",
         "manage_users",
         "review_applications",
-        "view_analytics"
+        "view_analytics",
+        "manage_events",
+        "manage_media"
       ],
       "isActive": true,
       "createdAt": "2026-04-02T12:07:01.829Z",
@@ -78,7 +105,9 @@
         "review_applications",
         "view_analytics",
         "manage_roles",
-        "manage_settings"
+        "manage_settings",
+        "manage_events",
+        "manage_media"
       ],
       "isActive": true,
       "createdAt": "2026-04-02T12:07:01.829Z",
@@ -90,9 +119,17 @@
     "supportEmail": "support@mtendere.com",
     "sessionTimeout": 60,
     "maxLoginAttempts": 5,
+    "maintenanceMode": false,
+    "emailNotifications": true,
+    "twoFactorRequired": false,
+    "weeklySummary": false,
+    "contentPublishedNotifications": true,
+    "authTokenInvalidBefore": null,
+    "cacheVersion": 1,
     "updatedAt": "2026-04-09T12:03:59.310Z"
   },
   "readNotificationIds": [
-    "analytics-10"
+    "analytics-10",
+    "analytics-91"
   ]
 }

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { ArrowRight, ChevronDown, ExternalLink, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { getGovernedBackgroundImage } from "@/lib/image-governance";
+import { publicContentQueryOptions } from "@/lib/realtime-content";
 import type { ApiPartnerVideo } from "@/lib/api-types";
 
 const isDirectVideoUrl = (url: string) => /\.(mp4|webm|ogg)(\?.*)?$/i.test(url);
@@ -35,14 +36,16 @@ const getYouTubeId = (url: string) => {
   return null;
 };
 
-const buildEmbedUrl = (url: string) => {
+const buildEmbedUrl = (url: string, shouldAutoplay: boolean) => {
   const youtubeId = getYouTubeId(url);
   if (!youtubeId) return null;
 
   const params = new URLSearchParams({
-    autoplay: "1",
+    autoplay: shouldAutoplay ? "1" : "0",
     mute: "1",
     controls: "0",
+    disablekb: "1",
+    enablejsapi: "1",
     loop: "1",
     playlist: youtubeId,
     rel: "0",
@@ -56,7 +59,7 @@ const buildEmbedUrl = (url: string) => {
 export default function VideoHeader() {
   const { data: partnerVideos = [] } = useQuery<ApiPartnerVideo[]>({
     queryKey: ["/api/partner-videos"],
-    staleTime: 5 * 60 * 1000,
+    ...publicContentQueryOptions,
   });
 
   const [currentVideo, setCurrentVideo] = useState(0);
@@ -69,7 +72,7 @@ export default function VideoHeader() {
 
   const current = partnerVideos[currentVideo] ?? null;
   const directVideo = current && isDirectVideoUrl(current.videoUrl) ? current.videoUrl : null;
-  const embedUrl = current && !directVideo ? buildEmbedUrl(current.videoUrl) : null;
+  const embedUrl = current && !directVideo ? buildEmbedUrl(current.videoUrl, isPlaying) : null;
   const hasVideos = partnerVideos.length > 0;
 
   useEffect(() => {
@@ -95,6 +98,17 @@ export default function VideoHeader() {
       video.removeEventListener("ended", handleNextVideo);
     };
   }, [currentVideo, directVideo]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !directVideo) return;
+
+    if (isPlaying) {
+      void video.play().catch(() => undefined);
+    } else {
+      video.pause();
+    }
+  }, [directVideo, isPlaying, currentVideo]);
 
   useEffect(() => {
     if (!isPlaying || partnerVideos.length < 2) return;
@@ -178,7 +192,7 @@ export default function VideoHeader() {
           <video
             ref={videoRef}
             className="h-full w-full object-cover"
-            autoPlay
+            autoPlay={isPlaying}
             muted={isMuted}
             loop={partnerVideos.length < 2}
             playsInline
@@ -191,10 +205,11 @@ export default function VideoHeader() {
             key={embedUrl}
             title={current?.title || "Partner university video"}
             src={embedUrl}
-            className="h-full w-full scale-125 object-cover md:scale-110"
-            loading="lazy"
-            allow="autoplay; encrypted-media; picture-in-picture"
+            className="h-full w-full scale-125 border-0 object-cover md:scale-110"
+            loading="eager"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
           />
         ) : (
           <div

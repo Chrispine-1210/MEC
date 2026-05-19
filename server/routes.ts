@@ -909,6 +909,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return next();
   });
 
+  const realtimePublicApiPrefixes = [
+    "/api/scholarships",
+    "/api/jobs",
+    "/api/partners",
+    "/api/partner-videos",
+    "/api/testimonials",
+    "/api/blog-posts",
+    "/api/team-members",
+  ];
+
+  app.use((req, res, next) => {
+    if (req.method === "GET" && realtimePublicApiPrefixes.some((prefix) => req.path.startsWith(prefix))) {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+      res.setHeader("Surrogate-Control", "no-store");
+    }
+
+    next();
+  });
+
   // Broadcast function for real-time updates
   const broadcast = (channel: string, data: any) => {
     wss.clients.forEach((client) => {

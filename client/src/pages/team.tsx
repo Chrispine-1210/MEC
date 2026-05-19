@@ -8,12 +8,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 import { getTeamGroups } from "@/lib/team-display";
 import { getGovernedBackgroundImage } from "@/lib/image-governance";
+import { publicContentQueryOptions } from "@/lib/realtime-content";
 import type { ApiTeamMember } from "@/lib/api-types";
 import { ArrowRight, BriefcaseBusiness, GraduationCap, ShieldCheck, Users } from "lucide-react";
 
 export default function Team() {
   const { data: teamMembers = [], isLoading } = useQuery<ApiTeamMember[]>({
     queryKey: ["/api/team-members"],
+    ...publicContentQueryOptions,
   });
 
   const { all, board, leadership, operations } = getTeamGroups(teamMembers);

@@ -2,6 +2,7 @@ import { db } from "./db";
 import { users, scholarships, jobs, partners, blogPosts, teamMembers, events, testimonials } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import { eq, inArray, isNull } from "drizzle-orm";
+import { ensurePartnerHeroVideoSeeds } from "./partner-video-seeds";
 
 async function seed() {
   console.log("Seeding database...");
@@ -234,6 +235,8 @@ async function seed() {
       isActive: true,
     },
   ]).onConflictDoNothing();
+
+  await ensurePartnerHeroVideoSeeds();
 
   // Team Members
   await db.insert(teamMembers).values([

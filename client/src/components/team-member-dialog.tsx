@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { GraduationCap, Linkedin, Mail, Twitter } from "lucide-react";
+import RichContent from "@/components/rich-content";
 import TeamPortrait from "@/components/team-portrait";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -65,9 +66,11 @@ export default function TeamMemberDialog({ member, trigger }: TeamMemberDialogPr
         </DialogHeader>
 
         <div className="space-y-5">
-          <p className="text-sm leading-7 text-foreground/80">
-            {member.bio || "Profile details for this team member will be shared soon."}
-          </p>
+          <RichContent
+            html={member.bio}
+            fallback="Profile details for this team member will be shared soon."
+            compact
+          />
 
           {focusAreas.length > 0 && (
             <div className="grid gap-3 sm:grid-cols-3">

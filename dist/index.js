@@ -1917,6 +1917,13 @@ var stateFilePath = path2.resolve(
 var ensureStateDirectory = () => {
   fs2.mkdirSync(path2.dirname(stateFilePath), { recursive: true });
 };
+var getStateFileMtime = () => {
+  try {
+    return fs2.statSync(stateFilePath).mtimeMs;
+  } catch {
+    return 0;
+  }
+};
 var loadState = () => {
   ensureStateDirectory();
   if (!fs2.existsSync(stateFilePath)) {
@@ -1948,11 +1955,21 @@ var loadState = () => {
   }
 };
 var cachedState = loadState();
+var cachedStateMtime = getStateFileMtime();
+var refreshStateFromDiskIfChanged = () => {
+  const nextMtime = getStateFileMtime();
+  if (nextMtime > 0 && nextMtime !== cachedStateMtime) {
+    cachedState = loadState();
+    cachedStateMtime = nextMtime;
+  }
+};
 var saveState = () => {
   ensureStateDirectory();
   fs2.writeFileSync(stateFilePath, JSON.stringify(cachedState, null, 2), "utf-8");
+  cachedStateMtime = getStateFileMtime();
 };
 var updateCollectionItem = (collection, id, value) => {
+  refreshStateFromDiskIfChanged();
   cachedState = {
     ...cachedState,
     [collection]: {
@@ -1966,6 +1983,7 @@ var updateCollectionItem = (collection, id, value) => {
   saveState();
 };
 var deleteCollectionItem = (collection, id) => {
+  refreshStateFromDiskIfChanged();
   const nextCollection = { ...cachedState[collection] };
   delete nextCollection[String(id)];
   cachedState = {
@@ -1974,26 +1992,48 @@ var deleteCollectionItem = (collection, id) => {
   };
   saveState();
 };
-var getUserMeta = (id) => cachedState.users[String(id)] ?? {};
+var getUserMeta = (id) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.users[String(id)] ?? {};
+};
 var setUserMeta = (id, value) => updateCollectionItem("users", id, value);
 var deleteUserMeta = (id) => deleteCollectionItem("users", id);
-var getScholarshipMeta = (id) => cachedState.scholarships[String(id)] ?? {};
+var getScholarshipMeta = (id) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.scholarships[String(id)] ?? {};
+};
 var setScholarshipMeta = (id, value) => updateCollectionItem("scholarships", id, value);
 var deleteScholarshipMeta = (id) => deleteCollectionItem("scholarships", id);
-var getJobMeta = (id) => cachedState.jobs[String(id)] ?? {};
+var getJobMeta = (id) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.jobs[String(id)] ?? {};
+};
 var setJobMeta = (id, value) => updateCollectionItem("jobs", id, value);
 var deleteJobMeta = (id) => deleteCollectionItem("jobs", id);
-var getPartnerMeta = (id) => cachedState.partners[String(id)] ?? {};
+var getPartnerMeta = (id) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.partners[String(id)] ?? {};
+};
 var setPartnerMeta = (id, value) => updateCollectionItem("partners", id, value);
 var deletePartnerMeta = (id) => deleteCollectionItem("partners", id);
-var getBlogMeta = (id) => cachedState.blogPosts[String(id)] ?? {};
+var getBlogMeta = (id) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.blogPosts[String(id)] ?? {};
+};
 var setBlogMeta = (id, value) => updateCollectionItem("blogPosts", id, value);
 var deleteBlogMeta = (id) => deleteCollectionItem("blogPosts", id);
-var getTeamMeta = (id) => cachedState.teamMembers[String(id)] ?? {};
+var getTeamMeta = (id) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.teamMembers[String(id)] ?? {};
+};
 var setTeamMeta = (id, value) => updateCollectionItem("teamMembers", id, value);
 var deleteTeamMeta = (id) => deleteCollectionItem("teamMembers", id);
-var getAdminRoles = () => [...cachedState.roles];
+var getAdminRoles = () => {
+  refreshStateFromDiskIfChanged();
+  return [...cachedState.roles];
+};
 var upsertAdminRole = (role) => {
+  refreshStateFromDiskIfChanged();
   const existing = cachedState.roles.find((item) => item.id === role.id);
   const nextRole = {
     ...existing,
@@ -2009,6 +2049,7 @@ var upsertAdminRole = (role) => {
   return nextRole;
 };
 var deleteAdminRole = (id) => {
+  refreshStateFromDiskIfChanged();
   if (isCoreAdminRole(id)) {
     return false;
   }
@@ -2023,8 +2064,12 @@ var deleteAdminRole = (id) => {
   saveState();
   return true;
 };
-var getAdminSettings = () => ({ ...cachedState.settings });
+var getAdminSettings = () => {
+  refreshStateFromDiskIfChanged();
+  return { ...cachedState.settings };
+};
 var updateAdminSettings = (updates) => {
+  refreshStateFromDiskIfChanged();
   const cleanUpdates = Object.fromEntries(
     Object.entries(updates).filter(([, value]) => value !== void 0)
   );
@@ -2039,8 +2084,12 @@ var updateAdminSettings = (updates) => {
   saveState();
   return cachedState.settings;
 };
-var isNotificationRead = (id) => cachedState.readNotificationIds.includes(id);
+var isNotificationRead = (id) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.readNotificationIds.includes(id);
+};
 var markNotificationRead = (id) => {
+  refreshStateFromDiskIfChanged();
   if (cachedState.readNotificationIds.includes(id)) {
     return;
   }
@@ -2051,6 +2100,7 @@ var markNotificationRead = (id) => {
   saveState();
 };
 var markNotificationsRead = (ids) => {
+  refreshStateFromDiskIfChanged();
   const uniqueIds = Array.from(/* @__PURE__ */ new Set([...cachedState.readNotificationIds, ...ids]));
   cachedState = {
     ...cachedState,
@@ -3385,6 +3435,24 @@ async function registerRoutes(app2) {
       `);
     }
     return next();
+  });
+  const realtimePublicApiPrefixes = [
+    "/api/scholarships",
+    "/api/jobs",
+    "/api/partners",
+    "/api/partner-videos",
+    "/api/testimonials",
+    "/api/blog-posts",
+    "/api/team-members"
+  ];
+  app2.use((req, res, next) => {
+    if (req.method === "GET" && realtimePublicApiPrefixes.some((prefix) => req.path.startsWith(prefix))) {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+      res.setHeader("Surrogate-Control", "no-store");
+    }
+    next();
   });
   const broadcast = (channel, data) => {
     wss.clients.forEach((client) => {
@@ -6894,6 +6962,16 @@ app.use(
         connectSrc: ["'self'", "https:", "ws:", "wss:"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         mediaSrc: ["'self'", "https:"],
+        frameSrc: [
+          "'self'",
+          "https://www.youtube.com",
+          "https://www.youtube-nocookie.com"
+        ],
+        childSrc: [
+          "'self'",
+          "https://www.youtube.com",
+          "https://www.youtube-nocookie.com"
+        ],
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"]
       }

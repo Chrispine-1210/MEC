@@ -12,6 +12,8 @@ import ApplicationDialog from "@/components/application-dialog";
 import GovernedImage from "@/components/governed-image";
 import type { ApiJob } from "@/lib/api-types";
 import { getGovernedBackgroundImage } from "@/lib/image-governance";
+import { publicContentQueryOptions } from "@/lib/realtime-content";
+import { truncateRichText } from "@/lib/rich-text";
 import { 
   Search, 
   Filter, 
@@ -49,11 +51,13 @@ export default function Jobs() {
 
   const { data: jobs, isLoading } = useQuery<ApiJob[]>({
     queryKey: ["/api/jobs"],
+    ...publicContentQueryOptions,
   });
 
   const { data: searchResults, isLoading: isSearching } = useQuery<ApiJob[]>({
     queryKey: ["/api/jobs/search", { q: searchQuery }],
     enabled: searchQuery.length > 2,
+    ...publicContentQueryOptions,
   });
 
   const displayJobs = searchQuery.length > 2 ? searchResults : jobs;
@@ -269,9 +273,9 @@ export default function Jobs() {
                   </CardHeader>
 
                   <CardContent>
-                    <p className="text-muted-foreground mb-4 line-clamp-3">
-                      {job.description}
-                    </p>
+                  <p className="text-muted-foreground mb-4 line-clamp-3">
+                    {truncateRichText(job.description, 180)}
+                  </p>
 
                     <div className="space-y-3 mb-6">
                       <div className="flex items-center justify-between">

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { getTeamGroups } from "@/lib/team-display";
+import { publicContentQueryOptions } from "@/lib/realtime-content";
 import type { ApiTeamMember, ApiTestimonial } from "@/lib/api-types";
 import {
   ArrowRight,
@@ -146,10 +147,12 @@ const servicePrinciples = [
 export default function About() {
   const { data: testimonials } = useQuery<ApiTestimonial[]>({
     queryKey: ["/api/testimonials"],
+    ...publicContentQueryOptions,
   });
 
   const { data: teamMembers = [] } = useQuery<ApiTeamMember[]>({
     queryKey: ["/api/team-members"],
+    ...publicContentQueryOptions,
   });
 
   const sortedTeamMembers = getTeamGroups(teamMembers).all;
