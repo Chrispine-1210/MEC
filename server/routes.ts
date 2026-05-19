@@ -1,4 +1,4 @@
-import express, { type Express, NextFunction, Request, Response } from "express";
+import express, { type CookieOptions, type Express, NextFunction, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
@@ -402,6 +402,21 @@ const parseOptionalBoolean = (value: unknown): boolean | undefined => {
   return Boolean(value);
 };
 
+const parseOptionalUrl = (value: unknown): string | undefined => {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") return "";
+
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.toString() : "";
+  } catch {
+    return "";
+  }
+};
+
 const parseAnalyticsMeta = (metadata: unknown) => {
   if (!metadata || typeof metadata !== "object") {
     return {};
@@ -479,6 +494,10 @@ const toAdminPartner = (partner: any) => {
     address: meta.address ?? "",
     region: meta.region ?? partner.country ?? "Global",
     partnershipType: meta.partnershipType ?? "partner",
+    videoUrl: meta.videoUrl ?? "",
+    videoTitle: meta.videoTitle ?? "",
+    videoDescription: meta.videoDescription ?? "",
+    isFeatured: meta.isFeatured ?? false,
     isPremium: meta.isPremium ?? false,
     paymentStatus: meta.paymentStatus ?? "unpaid",
     isActive: partner.isActive ?? true,
@@ -523,6 +542,21 @@ const toAdminTeamMember = (member: any) => {
     createdBy: null,
     createdAt: member.createdAt ?? null,
     updatedAt: member.updatedAt ?? null,
+  };
+};
+
+const toPublicPartner = (partner: any) => {
+  const meta = getPartnerMeta(partner.id);
+
+  return {
+    ...partner,
+    logoUrl: meta.logo ?? partner.logoUrl ?? null,
+    country: meta.region ?? partner.country ?? null,
+    partnershipType: meta.partnershipType ?? "partner",
+    videoUrl: meta.videoUrl ?? null,
+    videoTitle: meta.videoTitle ?? null,
+    videoDescription: meta.videoDescription ?? null,
+    isFeatured: meta.isFeatured ?? false,
   };
 };
 
@@ -605,6 +639,51 @@ const signToken = (user: { id: number; email: string; role: string }) => {
   const timeoutMinutes = Math.max(5, Math.min(480, getAdminSettings().sessionTimeout || 30));
   return jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, {
     expiresIn: `${timeoutMinutes}m`,
+  });
+};
+
+const refreshTokenCookieName = "mec_refresh_token";
+const refreshTokenMaxAgeMs = 7 * 24 * 60 * 60 * 1000;
+
+const refreshCookieOptions: CookieOptions = {
+  httpOnly: true,
+  secure: env.NODE_ENV === "production",
+  sameSite: "lax",
+  maxAge: refreshTokenMaxAgeMs,
+  path: "/",
+};
+
+const signRefreshToken = (user: { id: number; email: string; role: string }) =>
+  jwt.sign({ id: user.id, email: user.email, role: user.role, type: "refresh" }, JWT_SECRET, {
+    expiresIn: "7d",
+  });
+
+const getCookieValue = (req: Request, name: string) => {
+  const cookieHeader = req.headers.cookie;
+  if (!cookieHeader) return null;
+
+  const cookies = cookieHeader.split(";").map((cookie) => cookie.trim());
+  const targetPrefix = `${name}=`;
+  const match = cookies.find((cookie) => cookie.startsWith(targetPrefix));
+  if (!match) return null;
+
+  try {
+    return decodeURIComponent(match.slice(targetPrefix.length));
+  } catch {
+    return match.slice(targetPrefix.length);
+  }
+};
+
+const setRefreshCookie = (res: Response, user: { id: number; email: string; role: string }) => {
+  res.cookie(refreshTokenCookieName, signRefreshToken(user), refreshCookieOptions);
+};
+
+const clearRefreshCookie = (res: Response) => {
+  res.clearCookie(refreshTokenCookieName, {
+    httpOnly: refreshCookieOptions.httpOnly,
+    secure: refreshCookieOptions.secure,
+    sameSite: refreshCookieOptions.sameSite,
+    path: refreshCookieOptions.path,
   });
 };
 
@@ -1170,6 +1249,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ? req.query.ref
             : null;
       const userData = insertUserSchema.parse(registrationBody);
+
+      const isAdminRegistration = req.path === "/auth/register";
+      const adminPortalRoles = new Set(["viewer", "editor", "admin"]);
+
+      if (isAdminRegistration) {
+        const requestedRole = userData.role && adminPortalRoles.has(userData.role) ? userData.role : "viewer";
+
+        if (env.NODE_ENV === "production" && requestedRole !== "viewer") {
+          return res.status(403).json({
+            message: "Editor and admin accounts must be provisioned by an existing administrator.",
+          });
+        }
+
+        userData.role = requestedRole;
+      } else {
+        userData.role = "user";
+      }
       
       // Check if user already exists
       const existingUser =
@@ -1205,6 +1301,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       broadcast('user_activity', { type: 'user_registered', user: buildPublicUser(user) });
+
+      setRefreshCookie(res, user);
 
       res.status(201).json({
         message: 'User created successfully',
@@ -1267,6 +1365,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       broadcast('user_activity', { type: 'user_logged_in', user: buildPublicUser(user) });
 
+      setRefreshCookie(res, user);
+
       res.json({
         message: 'Login successful',
         token: signToken(user),
@@ -1291,12 +1391,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin client aliases
   app.post('/auth/register', registerHandler);
   app.post('/auth/login', loginHandler);
-  app.post('/auth/logout', (_req, res) => {
+
+  const logoutHandler = (_req: Request, res: Response) => {
+    clearRefreshCookie(res);
     res.json({ message: 'Logged out successfully' });
-  });
-  app.post('/auth/refresh', (_req, res) => {
-    res.status(401).json({ message: 'Refresh token not available' });
-  });
+  };
+
+  const refreshHandler = async (req: Request, res: Response) => {
+    try {
+      const refreshToken = getCookieValue(req, refreshTokenCookieName);
+      if (!refreshToken) {
+        return res.status(401).json({ message: "Refresh token missing" });
+      }
+
+      const decoded = jwt.verify(refreshToken, JWT_SECRET) as JwtUser & { type?: string };
+      if (decoded.type !== "refresh" || !decoded.id) {
+        clearRefreshCookie(res);
+        return res.status(401).json({ message: "Invalid refresh token" });
+      }
+
+      const user = await storage.getUser(Number(decoded.id));
+      if (!user || user.isActive === false) {
+        clearRefreshCookie(res);
+        return res.status(401).json({ message: "Invalid refresh token" });
+      }
+
+      setRefreshCookie(res, user);
+      res.json({
+        token: signToken(user),
+        user: buildPublicUser(user),
+      });
+    } catch (error) {
+      clearRefreshCookie(res);
+      res.status(401).json({ message: "Invalid refresh token" });
+    }
+  };
+
+  app.post('/api/auth/logout', logoutHandler);
+  app.post('/auth/logout', logoutHandler);
+  app.post('/api/auth/refresh', refreshHandler);
+  app.post('/auth/refresh', refreshHandler);
+
+  const mfaStatusHandler = (req: Request, res: Response) => {
+    const user = getAuthenticatedUser(req);
+    res.json({
+      mfaSupported: false,
+      mfaEnabled: false,
+      mfaRequiredForRole: false,
+      role: user.role,
+      message: "MFA enforcement is not enabled for this backend.",
+    });
+  };
+
+  app.get('/api/auth/mfa/status', authenticateToken, mfaStatusHandler);
+  app.get('/auth/mfa/status', authenticateToken, mfaStatusHandler);
 
   // User profile route
   const sendUserProfile = async (req: Request, res: Response) => {
@@ -1738,7 +1886,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const partners = isAdmin(requester)
         ? await storage.getAllPartners()
         : await storage.getActivePartners();
-      res.json(partners);
+      res.json(partners.map(toPublicPartner));
     } catch (error) {
       console.error('Partners fetch error:', error);
       res.status(500).json({ message: 'Failed to fetch partners' });
@@ -1755,10 +1903,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isVisible = partner && (isAdmin(requester) || partner.isActive !== false);
 
       if (!isVisible) return res.status(404).json({ message: 'Partner not found' });
-      res.json(partner);
+      res.json(toPublicPartner(partner));
     } catch (error) {
       console.error('Partner detail fetch error:', error);
       res.status(500).json({ message: 'Failed to fetch partner' });
+    }
+  });
+
+  app.get('/api/partner-videos', async (_req, res) => {
+    try {
+      const partners = await storage.getActivePartners();
+      const videos = partners
+        .map(toPublicPartner)
+        .filter((partner) => typeof partner.videoUrl === "string" && partner.videoUrl.trim().length > 0)
+        .sort((a, b) => Number(Boolean(b.isFeatured)) - Number(Boolean(a.isFeatured)))
+        .map((partner) => ({
+          id: partner.id,
+          partnerId: partner.id,
+          partnerName: partner.name,
+          title: partner.videoTitle || partner.name,
+          description: partner.videoDescription || partner.description,
+          videoUrl: partner.videoUrl,
+          logoUrl: partner.logoUrl,
+          website: partner.website,
+          country: partner.country,
+          isFeatured: partner.isFeatured,
+        }));
+
+      res.json(videos);
+    } catch (error) {
+      console.error('Partner videos fetch error:', error);
+      res.status(500).json({ message: 'Failed to fetch partner videos' });
     }
   });
 
@@ -3334,6 +3509,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         contactPhone: req.body.contactPhone ?? "",
         address: req.body.address ?? "",
         region: req.body.region ?? "Global",
+        videoUrl: parseOptionalUrl(req.body.videoUrl) ?? "",
+        videoTitle: req.body.videoTitle ?? "",
+        videoDescription: req.body.videoDescription ?? "",
+        isFeatured: Boolean(req.body.isFeatured),
         isPremium: Boolean(req.body.isPremium),
         paymentStatus: req.body.paymentStatus ?? "unpaid",
       });
@@ -3380,6 +3559,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         contactPhone: req.body.contactPhone,
         address: req.body.address,
         region: req.body.region,
+        videoUrl: parseOptionalUrl(req.body.videoUrl),
+        videoTitle: req.body.videoTitle,
+        videoDescription: req.body.videoDescription,
+        isFeatured: parseOptionalBoolean(req.body.isFeatured),
         isPremium: parseOptionalBoolean(req.body.isPremium),
         paymentStatus: req.body.paymentStatus,
       });
@@ -3989,6 +4172,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updateData: Partial<z.infer<typeof insertApplicationSchema>> = {};
       if (payload.status) {
         updateData.status = payload.status;
+      }
+      if (payload.reviewNotes !== undefined) {
+        const existingDocuments =
+          existingApplication.documents && typeof existingApplication.documents === "object"
+            ? (existingApplication.documents as Record<string, unknown>)
+            : {};
+
+        updateData.documents = {
+          ...existingDocuments,
+          adminReview: {
+            notes: payload.reviewNotes,
+            reviewedBy: getAuthenticatedUser(req).id,
+            reviewedAt: new Date().toISOString(),
+          },
+        };
       }
 
       const application =

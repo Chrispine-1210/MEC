@@ -30,6 +30,11 @@ export default function Partners() {
     queryKey: ["/api/partners"],
   });
 
+  const featuredPartners = (partners || [])
+    .filter((partner) => partner.isActive !== false)
+    .sort((a, b) => Number(Boolean(b.isFeatured)) - Number(Boolean(a.isFeatured)))
+    .slice(0, 3);
+
   const formatStudentCount = (count: number) => {
     if (count >= 1000) {
       return `${(count / 1000).toFixed(0)}K+`;
@@ -83,170 +88,77 @@ export default function Partners() {
       </section>
 
       <div className="container mx-auto px-4 py-12">
-        {/* Featured Partners */}
-        <section className="mb-16">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-mtendere-blue mb-4">
-              Featured Partners
-            </h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Our flagship partnerships with world-renowned institutions
-            </p>
-          </div>
+        {featuredPartners.length > 0 && (
+          <section className="mb-16">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl font-bold text-mtendere-blue mb-4">
+                Featured Partners
+              </h2>
+              <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+                Highlighted institutions and organizations managed directly from Admin
+              </p>
+            </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-            {/* GBS */}
-            <Card className="text-center hover:shadow-xl transition-shadow duration-300 border-2 border-mtendere-blue">
-              <CardHeader className="pb-4">
-                <GovernedImage
-                  module="partner"
-                  src="partners/gbs-dubai.webp"
-                  title="Global Business School"
-                  variant="logo"
-                  aspectRatio="1 / 1"
-                  fit="contain"
-                  className="mx-auto mb-4 h-24 w-24"
-                  wrapperClassName="h-full rounded-full bg-mtendere-blue p-3 shadow-none"
-                />
-                <CardTitle className="text-2xl text-mtendere-blue">
-                  Global Business School
-                </CardTitle>
-                <CardDescription className="text-base">
-                  Premier business education with international recognition and industry connections
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="text-center">
-                    <div className="flex items-center justify-center mb-2">
-                      <Users className="w-5 h-5 text-mtendere-blue mr-1" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+              {featuredPartners.map((partner, idx) => (
+                <Card key={partner.id} className="text-center hover:shadow-xl transition-shadow duration-300 border-2 border-mtendere-blue/20">
+                  <CardHeader className="pb-4">
+                    <GovernedImage
+                      module="partner"
+                      src={partner.logoUrl}
+                      title={partner.name}
+                      variant="logo"
+                      aspectRatio="1 / 1"
+                      fit="contain"
+                      index={idx}
+                      className="mx-auto mb-4 h-24 w-24"
+                      wrapperClassName="h-full rounded-full bg-mtendere-blue p-3 shadow-none"
+                    />
+                    <CardTitle className="text-2xl text-mtendere-blue">
+                      {partner.name}
+                    </CardTitle>
+                    <CardDescription className="text-base line-clamp-3">
+                      {partner.description}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 gap-4 mb-6">
+                      <div className="text-center">
+                        <div className="flex items-center justify-center mb-2">
+                          <Users className="w-5 h-5 text-mtendere-blue mr-1" />
+                        </div>
+                        <div className="text-2xl font-bold text-mtendere-blue">
+                          {partner.studentCount ? formatStudentCount(partner.studentCount) : "-"}
+                        </div>
+                        <div className="text-sm text-muted-foreground">Students</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="flex items-center justify-center mb-2">
+                          <Trophy className="w-5 h-5 text-mtendere-orange mr-1" />
+                        </div>
+                        <div className="text-2xl font-bold text-mtendere-orange">
+                          {partner.ranking || partner.partnershipType || "Partner"}
+                        </div>
+                        <div className="text-sm text-muted-foreground">Profile</div>
+                      </div>
                     </div>
-                    <div className="text-2xl font-bold text-mtendere-blue">5K+</div>
-                    <div className="text-sm text-muted-foreground">Students</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center mb-2">
-                      <Trophy className="w-5 h-5 text-mtendere-orange mr-1" />
+                    <div className="space-y-2 mb-6">
+                      {partner.country && <Badge className="bg-mtendere-blue text-white">{partner.country}</Badge>}
+                      {partner.videoUrl && <Badge className="bg-mtendere-green text-white">Video</Badge>}
+                      {partner.isFeatured && <Badge className="bg-mtendere-orange text-white">Featured</Badge>}
                     </div>
-                    <div className="text-2xl font-bold text-mtendere-orange">Top 50</div>
-                    <div className="text-sm text-muted-foreground">Global Ranking</div>
-                  </div>
-                </div>
-                <div className="space-y-2 mb-6">
-                  <Badge className="bg-mtendere-blue text-white">MBA Programs</Badge>
-                  <Badge className="bg-mtendere-green text-white">Executive Education</Badge>
-                  <Badge className="bg-mtendere-orange text-white">Research Programs</Badge>
-                </div>
-                <Button asChild className="w-full bg-mtendere-blue hover:bg-mtendere-blue/90">
-                  <Link href="/partners">
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    Learn More
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Chandigarh University */}
-            <Card className="text-center hover:shadow-xl transition-shadow duration-300 border-2 border-mtendere-green">
-              <CardHeader className="pb-4">
-                <GovernedImage
-                  module="partner"
-                  src="partners/cu-logo-white.webp"
-                  title="Chandigarh University"
-                  variant="logo"
-                  aspectRatio="1 / 1"
-                  fit="contain"
-                  className="mx-auto mb-4 h-24 w-24"
-                  wrapperClassName="h-full rounded-full bg-mtendere-green p-3 shadow-none"
-                />
-                <CardTitle className="text-2xl text-mtendere-blue">
-                  Chandigarh University
-                </CardTitle>
-                <CardDescription className="text-base">
-                  Leading university offering diverse programs with excellent placement records
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="text-center">
-                    <div className="flex items-center justify-center mb-2">
-                      <Users className="w-5 h-5 text-mtendere-green mr-1" />
-                    </div>
-                    <div className="text-2xl font-bold text-mtendere-green">30K+</div>
-                    <div className="text-sm text-muted-foreground">Students</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center mb-2">
-                      <Award className="w-5 h-5 text-mtendere-orange mr-1" />
-                    </div>
-                    <div className="text-2xl font-bold text-mtendere-orange">NAAC A+</div>
-                    <div className="text-sm text-muted-foreground">Accreditation</div>
-                  </div>
-                </div>
-                <div className="space-y-2 mb-6">
-                  <Badge className="bg-mtendere-green text-white">Engineering</Badge>
-                  <Badge className="bg-mtendere-blue text-white">Management</Badge>
-                  <Badge className="bg-mtendere-orange text-white">Technology</Badge>
-                </div>
-                <Button asChild className="w-full bg-mtendere-green hover:bg-mtendere-green/90">
-                  <Link href="/partners">
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    Learn More
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* International Partners */}
-            <Card className="text-center hover:shadow-xl transition-shadow duration-300 border-2 border-mtendere-orange">
-              <CardHeader className="pb-4">
-                <GovernedImage
-                  module="partner"
-                  title="International Network"
-                  variant="logo"
-                  aspectRatio="1 / 1"
-                  className="mx-auto mb-4 h-24 w-24"
-                  wrapperClassName="h-full rounded-full shadow-none"
-                />
-                <CardTitle className="text-2xl text-mtendere-blue">
-                  International Network
-                </CardTitle>
-                <CardDescription className="text-base">
-                  Global network of universities and institutions for diverse educational opportunities
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="text-center">
-                    <div className="flex items-center justify-center mb-2">
-                      <Globe className="w-5 h-5 text-mtendere-orange mr-1" />
-                    </div>
-                    <div className="text-2xl font-bold text-mtendere-orange">50+</div>
-                    <div className="text-sm text-muted-foreground">Countries</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center mb-2">
-                      <GraduationCap className="w-5 h-5 text-mtendere-blue mr-1" />
-                    </div>
-                    <div className="text-2xl font-bold text-mtendere-blue">200+</div>
-                    <div className="text-sm text-muted-foreground">Universities</div>
-                  </div>
-                </div>
-                <div className="space-y-2 mb-6">
-                  <Badge className="bg-mtendere-orange text-white">Study Abroad</Badge>
-                  <Badge className="bg-mtendere-blue text-white">Exchange Programs</Badge>
-                  <Badge className="bg-mtendere-green text-white">Joint Degrees</Badge>
-                </div>
-                <Button asChild className="w-full bg-mtendere-orange hover:bg-mtendere-orange/90">
-                  <Link href="/partners">
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    Explore Network
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </section>
+                    <Button asChild className="w-full bg-mtendere-blue hover:bg-mtendere-blue/90">
+                      <Link href={`/partners/${partner.id}`}>
+                        <ExternalLink className="w-4 h-4 mr-2" />
+                        Learn More
+                      </Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* All Partners */}
         <section>

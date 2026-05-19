@@ -44,131 +44,6 @@ import type {
 import { getGovernedBackgroundImage } from "@/lib/image-governance";
 import { getTeamGroups } from "@/lib/team-display";
 
-import logoImg from "@assets/mtendere-logo.svg";
-
-const daysFromNow = (days: number) =>
-  new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
-
-const fallbackScholarships: ApiScholarship[] = [
-  {
-    id: 9001,
-    title: "Global STEM Excellence Scholarship",
-    description:
-      "Full tuition and living stipend for high-achieving STEM students with leadership potential.",
-    institution: "University of Global Tech",
-    country: "United Kingdom",
-    amount: null,
-    currency: "USD",
-    deadline: daysFromNow(45),
-    requirements: ["GPA 3.5+ or equivalent", "Leadership experience", "Personal statement"],
-    category: "STEM",
-    imageUrl: "scholarships/graduates-default.jpg",
-    isActive: true,
-    createdBy: 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 9002,
-    title: "Women in Tech Scholarship",
-    description:
-      "Dedicated support for women pursuing computer science, data, or engineering programs.",
-    institution: "International Institute of Innovation",
-    country: "Canada",
-    amount: 12000,
-    currency: "USD",
-    deadline: daysFromNow(60),
-    requirements: ["Female applicants", "STEM focus", "Academic merit"],
-    category: "Technology",
-    imageUrl: "scholarships/application-guidance.jpg",
-    isActive: true,
-    createdBy: 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 9003,
-    title: "Future Leaders Fellowship",
-    description:
-      "Leadership-focused funding for students committed to community impact and innovation.",
-    institution: "Global Leadership Academy",
-    country: "United States",
-    amount: 15000,
-    currency: "USD",
-    deadline: daysFromNow(75),
-    requirements: ["Leadership portfolio", "Community service", "Two references"],
-    category: "Leadership",
-    imageUrl: "scholarships/students.jpg",
-    isActive: true,
-    createdBy: 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
-
-const fallbackJobs: ApiJob[] = [
-  {
-    id: 9101,
-    title: "Graduate Data Analyst",
-    description:
-      "Entry-level analyst role supporting education program insights and reporting.",
-    company: "Mtendere Partner Labs",
-    location: "Lilongwe, Malawi",
-    salary: 1200,
-    currency: "USD",
-    jobType: "Full-time",
-    requirements: ["Excel or SQL basics", "Data storytelling", "Detail-oriented"],
-    benefits: ["Mentorship", "Training budget", "Hybrid work option"],
-    isRemote: false,
-    deadline: daysFromNow(30),
-    isActive: true,
-    createdBy: 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    imageUrl: "jobs/jobs-default.jpg",
-  },
-  {
-    id: 9102,
-    title: "Program Operations Coordinator",
-    description:
-      "Support scholarship and admissions workflows for global university partners.",
-    company: "Global Education Network",
-    location: "Blantyre, Malawi",
-    salary: 950,
-    currency: "USD",
-    jobType: "Full-time",
-    requirements: ["Project coordination", "Client communication", "Documentation"],
-    benefits: ["Health cover", "Learning stipend", "Career coaching"],
-    isRemote: true,
-    deadline: daysFromNow(40),
-    isActive: true,
-    createdBy: 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    imageUrl: "jobs/corporate.jpg",
-  },
-  {
-    id: 9103,
-    title: "Campus Outreach Ambassador",
-    description:
-      "Lead on-campus engagements and build awareness for Mtendere programs.",
-    company: "Mtendere Education Consult",
-    location: "Zomba, Malawi",
-    salary: 600,
-    currency: "USD",
-    jobType: "Part-time",
-    requirements: ["Student leadership", "Event coordination", "Public speaking"],
-    benefits: ["Performance bonus", "Leadership training", "Travel support"],
-    isRemote: false,
-    deadline: daysFromNow(20),
-    isActive: true,
-    createdBy: 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    imageUrl: "jobs/computer-repair.jpg",
-  },
-];
-
 export default function Home() {
   const { data: scholarships } = useQuery<ApiScholarship[]>({
     queryKey: ["/api/scholarships"],
@@ -204,9 +79,8 @@ export default function Home() {
     (item) => item && item.isApproved !== false
   );
 
-  const featuredScholarships =
-    activeScholarships.length > 0 ? activeScholarships : fallbackScholarships;
-  const featuredJobs = activeJobs.length > 0 ? activeJobs : fallbackJobs;
+  const featuredScholarships = activeScholarships;
+  const featuredJobs = activeJobs;
   const featuredTestimonials = approvedTestimonials;
   const testimonialHighlights = featuredTestimonials.slice(0, 3);
 

@@ -23,6 +23,12 @@ var envSchema = z.object({
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(6e4),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
   PUBLIC_APP_URL: optionalEnvString,
+  FRONTEND_URL: optionalEnvString,
+  ADMIN_APP_URL: optionalEnvString,
+  CORS_ORIGIN: optionalEnvString,
+  CORS_ORIGINS: optionalEnvString,
+  VITE_SITE_URL: optionalEnvString,
+  VITE_API_URL: optionalEnvString,
   EMAIL_FROM: optionalEnvString,
   EMAIL_API_URL: optionalEnvString,
   EMAIL_API_KEY: optionalEnvString,
@@ -2997,6 +3003,18 @@ var parseOptionalBoolean = (value) => {
   if (value === void 0 || value === null) return void 0;
   return Boolean(value);
 };
+var parseOptionalUrl = (value) => {
+  if (value === void 0 || value === null) return void 0;
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.toString() : "";
+  } catch {
+    return "";
+  }
+};
 var parseAnalyticsMeta = (metadata) => {
   if (!metadata || typeof metadata !== "object") {
     return {};
@@ -3066,6 +3084,10 @@ var toAdminPartner = (partner) => {
     address: meta.address ?? "",
     region: meta.region ?? partner.country ?? "Global",
     partnershipType: meta.partnershipType ?? "partner",
+    videoUrl: meta.videoUrl ?? "",
+    videoTitle: meta.videoTitle ?? "",
+    videoDescription: meta.videoDescription ?? "",
+    isFeatured: meta.isFeatured ?? false,
     isPremium: meta.isPremium ?? false,
     paymentStatus: meta.paymentStatus ?? "unpaid",
     isActive: partner.isActive ?? true,
@@ -3108,6 +3130,19 @@ var toAdminTeamMember = (member) => {
     createdBy: null,
     createdAt: member.createdAt ?? null,
     updatedAt: member.updatedAt ?? null
+  };
+};
+var toPublicPartner = (partner) => {
+  const meta = getPartnerMeta(partner.id);
+  return {
+    ...partner,
+    logoUrl: meta.logo ?? partner.logoUrl ?? null,
+    country: meta.region ?? partner.country ?? null,
+    partnershipType: meta.partnershipType ?? "partner",
+    videoUrl: meta.videoUrl ?? null,
+    videoTitle: meta.videoTitle ?? null,
+    videoDescription: meta.videoDescription ?? null,
+    isFeatured: meta.isFeatured ?? false
   };
 };
 var slugify = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 160) || `event-${Date.now()}`;
@@ -3165,6 +3200,42 @@ var signToken = (user) => {
   const timeoutMinutes = Math.max(5, Math.min(480, getAdminSettings().sessionTimeout || 30));
   return jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, {
     expiresIn: `${timeoutMinutes}m`
+  });
+};
+var refreshTokenCookieName = "mec_refresh_token";
+var refreshTokenMaxAgeMs = 7 * 24 * 60 * 60 * 1e3;
+var refreshCookieOptions = {
+  httpOnly: true,
+  secure: env.NODE_ENV === "production",
+  sameSite: "lax",
+  maxAge: refreshTokenMaxAgeMs,
+  path: "/"
+};
+var signRefreshToken = (user) => jwt.sign({ id: user.id, email: user.email, role: user.role, type: "refresh" }, JWT_SECRET, {
+  expiresIn: "7d"
+});
+var getCookieValue = (req, name) => {
+  const cookieHeader = req.headers.cookie;
+  if (!cookieHeader) return null;
+  const cookies = cookieHeader.split(";").map((cookie) => cookie.trim());
+  const targetPrefix = `${name}=`;
+  const match = cookies.find((cookie) => cookie.startsWith(targetPrefix));
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match.slice(targetPrefix.length));
+  } catch {
+    return match.slice(targetPrefix.length);
+  }
+};
+var setRefreshCookie = (res, user) => {
+  res.cookie(refreshTokenCookieName, signRefreshToken(user), refreshCookieOptions);
+};
+var clearRefreshCookie = (res) => {
+  res.clearCookie(refreshTokenCookieName, {
+    httpOnly: refreshCookieOptions.httpOnly,
+    secure: refreshCookieOptions.secure,
+    sameSite: refreshCookieOptions.sameSite,
+    path: refreshCookieOptions.path
   });
 };
 var getAuthenticatedUser = (req) => req.user;
@@ -3576,6 +3647,19 @@ async function registerRoutes(app2) {
       const { referralCode: bodyReferralCode, ...registrationBody } = req.body && typeof req.body === "object" ? req.body : {};
       const referralCode = typeof bodyReferralCode === "string" ? bodyReferralCode : typeof req.query.ref === "string" ? req.query.ref : null;
       const userData = insertUserSchema.parse(registrationBody);
+      const isAdminRegistration = req.path === "/auth/register";
+      const adminPortalRoles = /* @__PURE__ */ new Set(["viewer", "editor", "admin"]);
+      if (isAdminRegistration) {
+        const requestedRole = userData.role && adminPortalRoles.has(userData.role) ? userData.role : "viewer";
+        if (env.NODE_ENV === "production" && requestedRole !== "viewer") {
+          return res.status(403).json({
+            message: "Editor and admin accounts must be provisioned by an existing administrator."
+          });
+        }
+        userData.role = requestedRole;
+      } else {
+        userData.role = "user";
+      }
       const existingUser = await storage.getUserByEmail(userData.email) || await storage.getUserByUsername(userData.username);
       if (existingUser) {
         return res.status(400).json({ message: "A user with that email or username already exists" });
@@ -3599,6 +3683,7 @@ async function registerRoutes(app2) {
         userAgent: req.get("user-agent")
       });
       broadcast("user_activity", { type: "user_registered", user: buildPublicUser(user) });
+      setRefreshCookie(res, user);
       res.status(201).json({
         message: "User created successfully",
         token: signToken(user),
@@ -3646,6 +3731,7 @@ async function registerRoutes(app2) {
         userAgent: req.get("user-agent")
       });
       broadcast("user_activity", { type: "user_logged_in", user: buildPublicUser(user) });
+      setRefreshCookie(res, user);
       res.json({
         message: "Login successful",
         token: signToken(user),
@@ -3666,12 +3752,52 @@ async function registerRoutes(app2) {
   app2.post("/api/auth/login", loginHandler);
   app2.post("/auth/register", registerHandler);
   app2.post("/auth/login", loginHandler);
-  app2.post("/auth/logout", (_req, res) => {
+  const logoutHandler = (_req, res) => {
+    clearRefreshCookie(res);
     res.json({ message: "Logged out successfully" });
-  });
-  app2.post("/auth/refresh", (_req, res) => {
-    res.status(401).json({ message: "Refresh token not available" });
-  });
+  };
+  const refreshHandler = async (req, res) => {
+    try {
+      const refreshToken = getCookieValue(req, refreshTokenCookieName);
+      if (!refreshToken) {
+        return res.status(401).json({ message: "Refresh token missing" });
+      }
+      const decoded = jwt.verify(refreshToken, JWT_SECRET);
+      if (decoded.type !== "refresh" || !decoded.id) {
+        clearRefreshCookie(res);
+        return res.status(401).json({ message: "Invalid refresh token" });
+      }
+      const user = await storage.getUser(Number(decoded.id));
+      if (!user || user.isActive === false) {
+        clearRefreshCookie(res);
+        return res.status(401).json({ message: "Invalid refresh token" });
+      }
+      setRefreshCookie(res, user);
+      res.json({
+        token: signToken(user),
+        user: buildPublicUser(user)
+      });
+    } catch (error) {
+      clearRefreshCookie(res);
+      res.status(401).json({ message: "Invalid refresh token" });
+    }
+  };
+  app2.post("/api/auth/logout", logoutHandler);
+  app2.post("/auth/logout", logoutHandler);
+  app2.post("/api/auth/refresh", refreshHandler);
+  app2.post("/auth/refresh", refreshHandler);
+  const mfaStatusHandler = (req, res) => {
+    const user = getAuthenticatedUser(req);
+    res.json({
+      mfaSupported: false,
+      mfaEnabled: false,
+      mfaRequiredForRole: false,
+      role: user.role,
+      message: "MFA enforcement is not enabled for this backend."
+    });
+  };
+  app2.get("/api/auth/mfa/status", authenticateToken, mfaStatusHandler);
+  app2.get("/auth/mfa/status", authenticateToken, mfaStatusHandler);
   const sendUserProfile = async (req, res) => {
     try {
       const user = await storage.getUser(getAuthenticatedUser(req).id);
@@ -4023,7 +4149,7 @@ async function registerRoutes(app2) {
     try {
       const requester = getOptionalAuthenticatedUser(req);
       const partners2 = isAdmin(requester) ? await storage.getAllPartners() : await storage.getActivePartners();
-      res.json(partners2);
+      res.json(partners2.map(toPublicPartner));
     } catch (error) {
       console.error("Partners fetch error:", error);
       res.status(500).json({ message: "Failed to fetch partners" });
@@ -4037,10 +4163,31 @@ async function registerRoutes(app2) {
       const requester = getOptionalAuthenticatedUser(req);
       const isVisible = partner && (isAdmin(requester) || partner.isActive !== false);
       if (!isVisible) return res.status(404).json({ message: "Partner not found" });
-      res.json(partner);
+      res.json(toPublicPartner(partner));
     } catch (error) {
       console.error("Partner detail fetch error:", error);
       res.status(500).json({ message: "Failed to fetch partner" });
+    }
+  });
+  app2.get("/api/partner-videos", async (_req, res) => {
+    try {
+      const partners2 = await storage.getActivePartners();
+      const videos = partners2.map(toPublicPartner).filter((partner) => typeof partner.videoUrl === "string" && partner.videoUrl.trim().length > 0).sort((a, b) => Number(Boolean(b.isFeatured)) - Number(Boolean(a.isFeatured))).map((partner) => ({
+        id: partner.id,
+        partnerId: partner.id,
+        partnerName: partner.name,
+        title: partner.videoTitle || partner.name,
+        description: partner.videoDescription || partner.description,
+        videoUrl: partner.videoUrl,
+        logoUrl: partner.logoUrl,
+        website: partner.website,
+        country: partner.country,
+        isFeatured: partner.isFeatured
+      }));
+      res.json(videos);
+    } catch (error) {
+      console.error("Partner videos fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch partner videos" });
     }
   });
   app2.post("/api/partners", authenticateToken, requireAdmin, async (req, res) => {
@@ -5399,6 +5546,10 @@ async function registerRoutes(app2) {
         contactPhone: req.body.contactPhone ?? "",
         address: req.body.address ?? "",
         region: req.body.region ?? "Global",
+        videoUrl: parseOptionalUrl(req.body.videoUrl) ?? "",
+        videoTitle: req.body.videoTitle ?? "",
+        videoDescription: req.body.videoDescription ?? "",
+        isFeatured: Boolean(req.body.isFeatured),
         isPremium: Boolean(req.body.isPremium),
         paymentStatus: req.body.paymentStatus ?? "unpaid"
       });
@@ -5439,6 +5590,10 @@ async function registerRoutes(app2) {
         contactPhone: req.body.contactPhone,
         address: req.body.address,
         region: req.body.region,
+        videoUrl: parseOptionalUrl(req.body.videoUrl),
+        videoTitle: req.body.videoTitle,
+        videoDescription: req.body.videoDescription,
+        isFeatured: parseOptionalBoolean(req.body.isFeatured),
         isPremium: parseOptionalBoolean(req.body.isPremium),
         paymentStatus: req.body.paymentStatus
       });
@@ -5959,6 +6114,17 @@ async function registerRoutes(app2) {
       const updateData = {};
       if (payload.status) {
         updateData.status = payload.status;
+      }
+      if (payload.reviewNotes !== void 0) {
+        const existingDocuments = existingApplication.documents && typeof existingApplication.documents === "object" ? existingApplication.documents : {};
+        updateData.documents = {
+          ...existingDocuments,
+          adminReview: {
+            notes: payload.reviewNotes,
+            reviewedBy: getAuthenticatedUser(req).id,
+            reviewedAt: (/* @__PURE__ */ new Date()).toISOString()
+          }
+        };
       }
       const application = Object.keys(updateData).length > 0 ? await storage.updateApplication(id, updateData) : existingApplication;
       const [user, scholarship, job] = await Promise.all([
@@ -6735,24 +6901,78 @@ app.use(
   })
 );
 app.set("trust proxy", true);
+var splitOriginList = (value) => (value ?? "").split(",").map((item) => item.trim()).filter(Boolean);
+var normalizeOrigin = (value) => {
+  if (!value) return null;
+  try {
+    return new URL(value).origin;
+  } catch {
+    return value.replace(/\/+$/, "");
+  }
+};
+var configuredOrigins = [
+  env.PUBLIC_APP_URL,
+  env.FRONTEND_URL,
+  env.ADMIN_APP_URL,
+  env.VITE_SITE_URL,
+  env.VITE_API_URL,
+  ...splitOriginList(env.CORS_ORIGIN),
+  ...splitOriginList(env.CORS_ORIGINS)
+];
+var developmentOrigins = isProduction ? [] : [
+  "http://localhost:3000",
+  "http://localhost:5000",
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:5000",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
+  "http://0.0.0.0:5000",
+  "http://0.0.0.0:5173",
+  "http://0.0.0.0:5174"
+];
 var allowedOrigins = new Set(
   [
-    env.PUBLIC_APP_URL,
+    ...configuredOrigins,
+    ...developmentOrigins,
     `http://localhost:${port}`,
     `http://127.0.0.1:${port}`,
     `http://0.0.0.0:${port}`
-  ].filter(Boolean)
+  ].map(normalizeOrigin).filter(Boolean)
 );
+var isAllowedOrigin = (origin, req) => {
+  if (!origin) return true;
+  const normalizedOrigin = normalizeOrigin(origin);
+  const hostOrigin = normalizeOrigin(`${req.protocol}://${req.get("host")}`);
+  return Boolean(
+    normalizedOrigin && (normalizedOrigin === hostOrigin || allowedOrigins.has(normalizedOrigin))
+  );
+};
 app.use((req, res, next) => {
-  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+  const origin = req.get("origin");
+  const originAllowed = isAllowedOrigin(origin, req);
+  if (origin && originAllowed) {
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      req.get("access-control-request-headers") || "Content-Type,Authorization,X-CSRF-Token,X-Requested-With"
+    );
+    res.setHeader("Access-Control-Max-Age", "86400");
+  }
+  if (req.method === "OPTIONS") {
+    return originAllowed ? res.sendStatus(204) : res.status(403).json({ message: "Request origin is not allowed" });
+  }
+  if (["GET", "HEAD"].includes(req.method)) {
     return next();
   }
-  const origin = req.get("origin");
   if (!origin) {
     return next();
   }
-  const hostOrigin = `${req.protocol}://${req.get("host")}`;
-  if (origin === hostOrigin || allowedOrigins.has(origin)) {
+  if (originAllowed) {
     return next();
   }
   return res.status(403).json({ message: "Request origin is not allowed" });

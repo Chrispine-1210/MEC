@@ -31,6 +31,10 @@ export type PartnerMeta = {
   contactPhone?: string;
   address?: string;
   region?: string;
+  videoUrl?: string;
+  videoTitle?: string;
+  videoDescription?: string;
+  isFeatured?: boolean;
   isPremium?: boolean;
   paymentStatus?: string;
 };

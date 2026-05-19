@@ -33,27 +33,103 @@ app.use(
 
 app.set("trust proxy", true);
 
+const splitOriginList = (value?: string) =>
+  (value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const normalizeOrigin = (value?: string) => {
+  if (!value) return null;
+
+  try {
+    return new URL(value).origin;
+  } catch {
+    return value.replace(/\/+$/, "");
+  }
+};
+
+const configuredOrigins = [
+  env.PUBLIC_APP_URL,
+  env.FRONTEND_URL,
+  env.ADMIN_APP_URL,
+  env.VITE_SITE_URL,
+  env.VITE_API_URL,
+  ...splitOriginList(env.CORS_ORIGIN),
+  ...splitOriginList(env.CORS_ORIGINS),
+];
+
+const developmentOrigins = isProduction
+  ? []
+  : [
+      "http://localhost:3000",
+      "http://localhost:5000",
+      "http://localhost:5173",
+      "http://localhost:5174",
+      "http://127.0.0.1:3000",
+      "http://127.0.0.1:5000",
+      "http://127.0.0.1:5173",
+      "http://127.0.0.1:5174",
+      "http://0.0.0.0:5000",
+      "http://0.0.0.0:5173",
+      "http://0.0.0.0:5174",
+    ];
+
 const allowedOrigins = new Set(
   [
-    env.PUBLIC_APP_URL,
+    ...configuredOrigins,
+    ...developmentOrigins,
     `http://localhost:${port}`,
     `http://127.0.0.1:${port}`,
     `http://0.0.0.0:${port}`,
-  ].filter(Boolean) as string[],
+  ]
+    .map(normalizeOrigin)
+    .filter(Boolean) as string[],
 );
 
+const isAllowedOrigin = (origin: string | undefined, req: Request) => {
+  if (!origin) return true;
+
+  const normalizedOrigin = normalizeOrigin(origin);
+  const hostOrigin = normalizeOrigin(`${req.protocol}://${req.get("host")}`);
+
+  return Boolean(
+    normalizedOrigin &&
+      (normalizedOrigin === hostOrigin || allowedOrigins.has(normalizedOrigin)),
+  );
+};
+
 app.use((req: Request, res: Response, next: NextFunction) => {
-  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+  const origin = req.get("origin");
+  const originAllowed = isAllowedOrigin(origin, req);
+
+  if (origin && originAllowed) {
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      req.get("access-control-request-headers") || "Content-Type,Authorization,X-CSRF-Token,X-Requested-With",
+    );
+    res.setHeader("Access-Control-Max-Age", "86400");
+  }
+
+  if (req.method === "OPTIONS") {
+    return originAllowed
+      ? res.sendStatus(204)
+      : res.status(403).json({ message: "Request origin is not allowed" });
+  }
+
+  if (["GET", "HEAD"].includes(req.method)) {
     return next();
   }
 
-  const origin = req.get("origin");
   if (!origin) {
     return next();
   }
 
-  const hostOrigin = `${req.protocol}://${req.get("host")}`;
-  if (origin === hostOrigin || allowedOrigins.has(origin)) {
+  if (originAllowed) {
     return next();
   }
 

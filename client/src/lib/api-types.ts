@@ -70,9 +70,27 @@ export interface ApiPartner {
   country: string | null;
   studentCount?: number | null;
   ranking?: string | null;
+  partnershipType?: string | null;
+  videoUrl?: string | null;
+  videoTitle?: string | null;
+  videoDescription?: string | null;
+  isFeatured?: boolean | null;
   isActive: boolean | null;
   createdAt: string | null;
   updatedAt: string | null;
+}
+
+export interface ApiPartnerVideo {
+  id: number;
+  partnerId: number;
+  partnerName: string;
+  title: string;
+  description?: string | null;
+  videoUrl: string;
+  logoUrl?: string | null;
+  website?: string | null;
+  country?: string | null;
+  isFeatured?: boolean | null;
 }
 
 export interface ApiTestimonial {
