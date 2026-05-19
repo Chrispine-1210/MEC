@@ -271,21 +271,27 @@ export default function ApplicationTracker({ applications }: ApplicationTrackerP
               {/* Actions */}
               <div className="flex items-center justify-between pt-4 border-t">
                 <div className="flex space-x-2">
-                  <Button size="sm" variant="outline">
-                    <Eye className="w-4 h-4 mr-2" />
-                    View Details
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={`/${application.type === "scholarship" ? "scholarships" : "jobs"}/${application.referenceId}`}>
+                      <Eye className="w-4 h-4 mr-2" />
+                      View Details
+                    </Link>
                   </Button>
                   
                   {application.status.toLowerCase().includes('documents') && (
-                    <Button size="sm" className="bg-mtendere-orange hover:bg-mtendere-orange/90">
-                      <FileText className="w-4 h-4 mr-2" />
-                      Upload Documents
+                    <Button asChild size="sm" className="bg-mtendere-orange hover:bg-mtendere-orange/90">
+                      <Link href={`/${application.type === "scholarship" ? "scholarships" : "jobs"}/${application.referenceId}`}>
+                        <FileText className="w-4 h-4 mr-2" />
+                        Upload Documents
+                      </Link>
                     </Button>
                   )}
                 </div>
 
-                <Button size="sm" variant="ghost">
-                  <ExternalLink className="w-4 h-4" />
+                <Button asChild size="sm" variant="ghost" aria-label="Open opportunity">
+                  <Link href={`/${application.type === "scholarship" ? "scholarships" : "jobs"}/${application.referenceId}`}>
+                    <ExternalLink className="w-4 h-4" />
+                  </Link>
                 </Button>
               </div>
             </CardContent>

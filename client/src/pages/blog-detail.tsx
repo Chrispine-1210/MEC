@@ -11,6 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import type { ApiBlogComment, ApiBlogPost } from "@/lib/api-types";
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
+import GovernedImage from "@/components/governed-image";
+import { getBlogInlineImages } from "@/lib/image-governance";
 import {
   ArrowLeft,
   ArrowRight,
@@ -34,6 +36,7 @@ import {
 type ContentBlock =
   | { type: "h1"; text: string; slug: string }
   | { type: "h2"; text: string; slug: string }
+  | { type: "h3"; text: string; slug: string }
   | { type: "paragraph"; text: string }
   | { type: "callout"; text: string }
   | { type: "list"; items: string[]; ordered: boolean };
@@ -48,9 +51,6 @@ type ArticleGuide = {
   keyQuestions: string[];
   resources: { label: string; href: string }[];
 };
-
-const FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1499750310107-5fef28a66643?q=80&w=2070&auto=format&fit=crop";
 
 const DEFAULT_GUIDE: ArticleGuide = {
   audience: "Readers looking for practical guidance they can turn into action.",
@@ -138,6 +138,48 @@ const ARTICLE_GUIDES: Record<string, ArticleGuide> = {
       { label: "Browse jobs", href: "/jobs" },
     ],
   },
+  Events: {
+    audience: "Students, parents, and partners who want to understand what happened at a Mtendere event and why it matters.",
+    purpose: "Use the story to see the opportunities, relationships, and next steps created through the event.",
+    timing: "Best read when you are deciding whether to attend, partner, or prepare for a similar opportunity.",
+    nextStepLabel: "View upcoming events",
+    nextStepHref: "/events",
+    actionNotes: [
+      "Note the institutions, guests, and student groups involved.",
+      "Turn event highlights into questions for your own study plan.",
+      "Follow up with Mtendere if the opportunity matches your goals.",
+    ],
+    keyQuestions: [
+      "Which opportunity from the event is relevant to me?",
+      "What should I prepare before the next expo or consultation?",
+      "Who can help me turn this interest into an application plan?",
+    ],
+    resources: [
+      { label: "View upcoming events", href: "/events" },
+      { label: "Talk to an advisor", href: "/contact" },
+    ],
+  },
+  Partnerships: {
+    audience: "Schools, institutions, parents, and students following Mtendere's international education partnerships.",
+    purpose: "Use the article to understand how partnerships create stronger study-abroad pathways for Malawian students.",
+    timing: "Best read when comparing international destinations or looking for credible institutional connections.",
+    nextStepLabel: "Explore partners",
+    nextStepHref: "/partners",
+    actionNotes: [
+      "Identify which destination or institution type fits your goals.",
+      "Prepare questions about admissions, scholarships, visas, and student support.",
+      "Use partnership events as a starting point for a clearer application pathway.",
+    ],
+    keyQuestions: [
+      "What makes this partnership useful for students in Malawi?",
+      "Which academic route should I explore next?",
+      "What support would I need before applying?",
+    ],
+    resources: [
+      { label: "Explore partners", href: "/partners" },
+      { label: "Explore study abroad", href: "/study-abroad" },
+    ],
+  },
   Visa: {
     audience: "Students preparing for documentation, embassy steps, and compliance-sensitive parts of the journey.",
     purpose: "Focus on timing, document quality, and avoiding preventable omissions.",
@@ -192,6 +234,7 @@ function parseContent(content: string): ContentBlock[] {
     }
 
     flushList();
+    if (trimmed.startsWith("### ")) return blocks.push({ type: "h3", text: trimmed.slice(4), slug: slugify(trimmed.slice(4)) });
     if (trimmed.startsWith("## ")) return blocks.push({ type: "h2", text: trimmed.slice(3), slug: slugify(trimmed.slice(3)) });
     if (trimmed.startsWith("# ")) return blocks.push({ type: "h1", text: trimmed.slice(2), slug: slugify(trimmed.slice(2)) });
     if (trimmed.startsWith("**") && trimmed.endsWith("**")) return blocks.push({ type: "callout", text: trimmed.replace(/\*\*/g, "") });
@@ -271,7 +314,9 @@ export default function BlogDetail() {
   }
 
   const blocks = parseContent(post.content);
-  const headings = blocks.filter((block): block is Extract<ContentBlock, { type: "h2" }> => block.type === "h2");
+  const headings = blocks.filter(
+    (block): block is Extract<ContentBlock, { type: "h2" | "h3" }> => block.type === "h2" || block.type === "h3",
+  );
   const paragraphs = blocks.filter((block): block is Extract<ContentBlock, { type: "paragraph" }> => block.type === "paragraph");
   const callout = blocks.find((block): block is Extract<ContentBlock, { type: "callout" }> => block.type === "callout");
   const tags = Array.isArray(post.tags) ? post.tags : [];
@@ -286,6 +331,13 @@ export default function BlogDetail() {
     .filter((item) => item.id !== post.id)
     .sort((left, right) => Number(right.category === post.category) - Number(left.category === post.category))
     .slice(0, 3);
+  const inlineImages = getBlogInlineImages({
+    title: post.title,
+    content: post.content,
+    category: post.category,
+    tags,
+  });
+  let inlineImageCursor = 0;
 
   const openShareWindow = (platform: "facebook" | "twitter" | "linkedin") => {
     if (typeof window === "undefined") return;
@@ -318,7 +370,18 @@ export default function BlogDetail() {
 
       <section className="relative mt-16 overflow-hidden py-20 text-white">
         <div className="absolute inset-0">
-          <img src={post.imageUrl || FALLBACK_IMAGE} alt={post.title} className="h-full w-full object-cover" />
+          <GovernedImage
+            module="blog"
+            src={post.imageUrl}
+            title={post.title}
+            category={post.category}
+            tags={tags}
+            variant="hero"
+            priority
+            aspectRatio="auto"
+            className="h-full"
+            wrapperClassName="h-full rounded-none shadow-none"
+          />
         </div>
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/95 via-mtendere-blue/88 to-mtendere-green/82" />
         <div className="container relative z-10 mx-auto max-w-6xl px-4">
@@ -516,6 +579,11 @@ export default function BlogDetail() {
             <article className="rounded-3xl border border-border/60 bg-card p-6 shadow-sm md:p-10">
               <div className="space-y-6">
                 {blocks.map((block, index) => {
+                  const inlineImage =
+                    (block.type === "h2" || block.type === "h3") && inlineImageCursor < inlineImages.length
+                      ? inlineImages[inlineImageCursor++]
+                      : null;
+
                   if (block.type === "h1") {
                     return (
                       <h2 key={`${block.slug}-${index}`} id={block.slug} className="text-3xl font-bold text-mtendere-blue">
@@ -526,13 +594,49 @@ export default function BlogDetail() {
 
                   if (block.type === "h2") {
                     return (
-                      <h3
-                        key={`${block.slug}-${index}`}
-                        id={block.slug}
-                        className="border-t border-border/40 pt-8 text-2xl font-bold text-mtendere-blue"
-                      >
-                        {block.text}
-                      </h3>
+                      <div key={`${block.slug}-${index}`} className="space-y-5 border-t border-border/40 pt-8">
+                        <h3 id={block.slug} className="text-2xl font-bold text-mtendere-blue">
+                          {block.text}
+                        </h3>
+                        {inlineImage && (
+                          <GovernedImage
+                            module="blog"
+                            src={inlineImage.src}
+                            title={block.text}
+                            category={post.category}
+                            tags={tags}
+                            variant="inline"
+                            aspectRatio="16 / 9"
+                            wrapperClassName="rounded-xl"
+                            caption={inlineImage.caption}
+                            enableLightbox
+                          />
+                        )}
+                      </div>
+                    );
+                  }
+
+                  if (block.type === "h3") {
+                    return (
+                      <div key={`${block.slug}-${index}`} className="space-y-4">
+                        <h4 id={block.slug} className="text-xl font-bold text-mtendere-blue">
+                          {block.text}
+                        </h4>
+                        {inlineImage && (
+                          <GovernedImage
+                            module="blog"
+                            src={inlineImage.src}
+                            title={block.text}
+                            category={post.category}
+                            tags={tags}
+                            variant="inline"
+                            aspectRatio="16 / 9"
+                            wrapperClassName="rounded-xl"
+                            caption={inlineImage.caption}
+                            enableLightbox
+                          />
+                        )}
+                      </div>
                     );
                   }
 
@@ -787,12 +891,24 @@ export default function BlogDetail() {
                 <CardContent className="space-y-3">
                   {relatedPosts.map((item) => (
                     <Link key={item.id} href={`/blog/${item.id}`}>
-                      <div className="rounded-xl border border-border/60 p-3 transition-colors hover:bg-muted/40">
-                        <Badge variant="outline" className="mb-2 border-mtendere-blue/20 text-mtendere-blue">
-                          {item.category}
-                        </Badge>
-                        <p className="line-clamp-2 text-sm font-semibold text-foreground">{item.title}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">{formatDate(item.createdAt)}</p>
+                      <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-3 rounded-xl border border-border/60 p-3 transition-colors hover:bg-muted/40">
+                        <GovernedImage
+                          module="blog"
+                          src={item.imageUrl}
+                          title={item.title}
+                          category={item.category}
+                          tags={Array.isArray(item.tags) ? item.tags : []}
+                          variant="card"
+                          aspectRatio="1 / 1"
+                          wrapperClassName="rounded-lg shadow-none"
+                        />
+                        <div>
+                          <Badge variant="outline" className="mb-2 border-mtendere-blue/20 text-mtendere-blue">
+                            {item.category}
+                          </Badge>
+                          <p className="line-clamp-2 text-sm font-semibold text-foreground">{item.title}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">{formatDate(item.createdAt)}</p>
+                        </div>
                       </div>
                     </Link>
                   ))}

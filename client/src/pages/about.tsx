@@ -1,10 +1,13 @@
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
+import GovernedImage from "@/components/governed-image";
+import TeamMemberCard from "@/components/team-member-card";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { getTeamGroups } from "@/lib/team-display";
 import type { ApiTeamMember, ApiTestimonial } from "@/lib/api-types";
 import {
   ArrowRight,
@@ -15,8 +18,6 @@ import {
   Globe,
   GraduationCap,
   Heart,
-  Linkedin,
-  Mail,
   MessageSquare,
   Quote,
   ShieldCheck,
@@ -24,7 +25,6 @@ import {
   Star,
   Target,
   TrendingUp,
-  Twitter,
   Users,
 } from "lucide-react";
 
@@ -144,17 +144,15 @@ const servicePrinciples = [
 ];
 
 export default function About() {
-  const { data: teamMembers } = useQuery<ApiTeamMember[]>({
-    queryKey: ["/api/team-members"],
-  });
-
   const { data: testimonials } = useQuery<ApiTestimonial[]>({
     queryKey: ["/api/testimonials"],
   });
 
-  const sortedTeamMembers = [...(teamMembers || [])].sort((left, right) => {
-    return (left.order ?? Number.MAX_SAFE_INTEGER) - (right.order ?? Number.MAX_SAFE_INTEGER);
+  const { data: teamMembers = [] } = useQuery<ApiTeamMember[]>({
+    queryKey: ["/api/team-members"],
   });
+
+  const sortedTeamMembers = getTeamGroups(teamMembers).all;
   const featuredTeamMembers = sortedTeamMembers.slice(0, 2);
   const remainingTeamMembers = sortedTeamMembers.slice(2);
 
@@ -168,10 +166,15 @@ export default function About() {
 
       <section className="relative mt-16 overflow-hidden py-24 text-white">
         <div className="absolute inset-0">
-          <img
-            src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&q=80&w=2000"
-            alt="Mtendere team and students"
-            className="h-full w-full object-cover"
+          <GovernedImage
+            module="misc"
+            title="Mtendere team and students"
+            category="education"
+            variant="hero"
+            priority
+            aspectRatio="auto"
+            className="h-full"
+            wrapperClassName="h-full rounded-none shadow-none"
           />
         </div>
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/95 via-mtendere-blue/88 to-mtendere-green/82" />
@@ -199,10 +202,11 @@ export default function About() {
                   </Link>
                 </Button>
                 <Button
+                  asChild
                   variant="outline"
                   className="border-white/30 bg-white/10 text-white hover:bg-white hover:text-mtendere-blue"
                 >
-                  <a href="#team">Meet the team</a>
+                  <Link href="/team">Meet the team</Link>
                 </Button>
               </div>
             </div>
@@ -431,7 +435,7 @@ export default function About() {
               </p>
             </div>
             <Button asChild variant="outline" className="border-mtendere-blue/20 text-mtendere-blue hover:bg-mtendere-blue hover:text-white">
-              <Link href="/contact">Talk to the team</Link>
+              <Link href="/team">View full team</Link>
             </Button>
           </div>
 
@@ -439,113 +443,20 @@ export default function About() {
             <div className="space-y-6">
               <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                 {featuredTeamMembers.map((member) => (
-                  <Card key={member.id} className="overflow-hidden border border-border/60 shadow-sm">
-                    <CardContent className="grid gap-6 p-6 md:grid-cols-[120px_minmax(0,1fr)] md:items-start">
-                      <div className="h-28 w-28 overflow-hidden rounded-3xl bg-mtendere-gray">
-                        {member.imageUrl ? (
-                          <img src={member.imageUrl} alt={member.name} className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center">
-                            <Users className="h-10 w-10 text-mtendere-blue/30" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="space-y-4">
-                        <div>
-                          <CardTitle className="text-2xl text-foreground">{member.name}</CardTitle>
-                          <CardDescription className="mt-1 text-mtendere-orange">{member.position}</CardDescription>
-                        </div>
-                        <p className="text-sm leading-7 text-muted-foreground">
-                          {member.bio || "Profile details for this team member will be shared soon."}
-                        </p>
-                        <div className="flex gap-3">
-                          {member.linkedin && (
-                            <a href={member.linkedin} target="_blank" rel="noopener noreferrer">
-                              <Button variant="outline" size="icon">
-                                <Linkedin className="h-4 w-4" />
-                              </Button>
-                            </a>
-                          )}
-                          {member.twitter && (
-                            <a href={member.twitter} target="_blank" rel="noopener noreferrer">
-                              <Button variant="outline" size="icon">
-                                <Twitter className="h-4 w-4" />
-                              </Button>
-                            </a>
-                          )}
-                          {member.email && (
-                            <a href={`mailto:${member.email}`}>
-                              <Button variant="outline" size="icon">
-                                <Mail className="h-4 w-4" />
-                              </Button>
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <TeamMemberCard key={member.id} member={member} featured />
                 ))}
               </div>
 
-              {remainingTeamMembers.length > 0 && (
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-                  {remainingTeamMembers.map((member) => (
-                    <Card key={member.id} className="overflow-hidden border border-border/60 shadow-sm">
-                      <CardHeader className="pb-4">
-                        <div className="mb-5 flex items-center gap-4">
-                          <div className="h-20 w-20 overflow-hidden rounded-2xl bg-mtendere-gray">
-                            {member.imageUrl ? (
-                              <img src={member.imageUrl} alt={member.name} className="h-full w-full object-cover" />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center">
-                                <Users className="h-8 w-8 text-mtendere-blue/30" />
-                              </div>
-                            )}
-                          </div>
-                          <div>
-                            <CardTitle className="text-xl text-foreground">{member.name}</CardTitle>
-                            <CardDescription className="mt-1 text-mtendere-orange">{member.position}</CardDescription>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-5">
-                        <p className="line-clamp-4 text-sm leading-relaxed text-muted-foreground">
-                          {member.bio || "Profile details for this team member will be shared soon."}
-                        </p>
-                        <div className="flex gap-3">
-                          {member.linkedin && (
-                            <a href={member.linkedin} target="_blank" rel="noopener noreferrer">
-                              <Button variant="outline" size="icon">
-                                <Linkedin className="h-4 w-4" />
-                              </Button>
-                            </a>
-                          )}
-                          {member.twitter && (
-                            <a href={member.twitter} target="_blank" rel="noopener noreferrer">
-                              <Button variant="outline" size="icon">
-                                <Twitter className="h-4 w-4" />
-                              </Button>
-                            </a>
-                          )}
-                          {member.email && (
-                            <a href={`mailto:${member.email}`}>
-                              <Button variant="outline" size="icon">
-                                <Mail className="h-4 w-4" />
-                              </Button>
-                            </a>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                {remainingTeamMembers.map((member) => (
+                  <TeamMemberCard key={member.id} member={member} />
+                ))}
+              </div>
             </div>
           ) : (
-            <Card className="border border-dashed border-border/60">
-              <CardContent className="py-12 text-center">
-                <Users className="mx-auto mb-4 h-12 w-12 text-muted-foreground/40" />
-                <p className="text-muted-foreground">Team information will be available soon.</p>
+            <Card className="border border-dashed border-border/70">
+              <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                Team profiles will appear here after they are published in Admin.
               </CardContent>
             </Card>
           )}
@@ -575,18 +486,23 @@ export default function About() {
                   <p className="text-lg leading-8 text-foreground/85">"{featuredTestimonial.content}"</p>
                   <div className="mt-6 flex items-center gap-4">
                     <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-mtendere-blue to-mtendere-green text-white">
-                      {featuredTestimonial.imageUrl ? (
-                        <img
-                          src={featuredTestimonial.imageUrl}
-                          alt="Featured testimonial"
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <Users className="h-6 w-6" />
-                      )}
+                      <GovernedImage
+                        module="testimonial"
+                        src={featuredTestimonial.imageUrl}
+                        title={featuredTestimonial.authorName || "Featured testimonial"}
+                        variant="profile"
+                        aspectRatio="auto"
+                        className="h-full w-full"
+                        wrapperClassName="h-full rounded-full shadow-none"
+                      />
                     </div>
                     <div>
-                      <p className="font-semibold text-mtendere-blue">Mtendere Student</p>
+                      <p className="font-semibold text-mtendere-blue">
+                        {featuredTestimonial.authorName || "Mtendere Student"}
+                      </p>
+                      {featuredTestimonial.credential && (
+                        <p className="text-sm text-muted-foreground">{featuredTestimonial.credential}</p>
+                      )}
                       <div className="mt-1 flex items-center gap-1">
                         {[...Array(5)].map((_, index) => (
                           <Star
@@ -630,6 +546,14 @@ export default function About() {
                         ))}
                       </div>
                       <p className="text-sm leading-7 text-foreground/80">"{testimonial.content}"</p>
+                      <div className="mt-4 border-t border-border/60 pt-3">
+                        <p className="font-semibold text-mtendere-blue">
+                          {testimonial.authorName || "Mtendere Student"}
+                        </p>
+                        {testimonial.credential && (
+                          <p className="text-xs text-muted-foreground">{testimonial.credential}</p>
+                        )}
+                      </div>
                     </CardContent>
                   </Card>
                 ))}
@@ -648,10 +572,14 @@ export default function About() {
 
       <section className="relative overflow-hidden py-24 text-white">
         <div className="absolute inset-0">
-          <img
-            src="https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?auto=format&fit=crop&q=80&w=2000"
-            alt="Students taking the next step"
-            className="h-full w-full object-cover"
+          <GovernedImage
+            module="misc"
+            title="Students taking the next step"
+            category="education"
+            variant="hero"
+            aspectRatio="auto"
+            className="h-full"
+            wrapperClassName="h-full rounded-none shadow-none"
           />
         </div>
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/92 to-mtendere-green/90" />

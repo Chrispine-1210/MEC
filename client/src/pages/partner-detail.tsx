@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useRoute } from "wouter";
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
+import GovernedImage from "@/components/governed-image";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,9 +25,6 @@ import {
   Target,
   Users,
 } from "lucide-react";
-
-const FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&q=80&w=1600";
 
 const formatStudentCount = (count?: number | null) => {
   if (!count) return "Flexible cohort sizes";
@@ -212,14 +210,20 @@ export default function PartnerDetail() {
     <div className="min-h-screen bg-background">
       <ExpandingNav />
 
-      <section
-        className="relative mt-16 overflow-hidden py-20 text-white"
-        style={{
-          backgroundImage: `url(${resolved.logoUrl || FALLBACK_IMAGE})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        }}
-      >
+      <section className="relative mt-16 overflow-hidden py-20 text-white">
+        <div className="absolute inset-0">
+          <GovernedImage
+            module="partner"
+            src={resolved.logoUrl}
+            title={resolved.name}
+            category={resolved.country}
+            variant="hero"
+            priority
+            aspectRatio="auto"
+            className="h-full"
+            wrapperClassName="h-full rounded-none shadow-none"
+          />
+        </div>
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/95 via-mtendere-blue/88 to-mtendere-green/84" />
         <div className="absolute -left-20 top-10 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
         <div className="absolute bottom-0 right-0 h-72 w-72 rounded-full bg-mtendere-orange/20 blur-3xl" />

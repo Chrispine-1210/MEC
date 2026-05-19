@@ -6,6 +6,7 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Eye, EyeOff, GraduationCap, Globe, Award, ArrowRight } from "lucide-react";
 import logoImg from "@assets/mtendere-logo.svg";
+import { getGovernedBackgroundImage } from "@/lib/image-governance";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -36,7 +37,12 @@ export default function Login() {
       <div
         className="hidden lg:flex lg:w-1/2 relative flex-col justify-between p-12 text-white overflow-hidden"
         style={{
-          backgroundImage: "url('https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&q=80&w=1200')",
+          backgroundImage: getGovernedBackgroundImage({
+            module: "misc",
+            title: "Mtendere account access",
+            category: "education",
+            variant: "hero",
+          }),
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}

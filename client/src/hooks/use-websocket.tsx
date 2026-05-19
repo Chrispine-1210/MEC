@@ -44,6 +44,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
           "partners",
           "blog-posts",
           "team-members",
+          "events",
           "user_activity",
           "announcements",
         ];
@@ -74,6 +75,9 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
               break;
             case "team-members":
               invalidateByPrefix(["/api/team-members"]);
+              break;
+            case "events":
+              invalidateByPrefix(["/api/events", "/api/admin/events"]);
               break;
             case "user_activity":
               if (user.role === "admin" || user.role === "super_admin") {

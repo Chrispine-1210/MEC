@@ -1,5 +1,6 @@
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
+import GovernedImage from "@/components/governed-image";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import {
   Globe, MapPin, CheckCircle2, Plane, BookOpen, Shield, ArrowRight,
   Clock, Star, Users, Award, FileText, PhoneCall
 } from "lucide-react";
+import { getGovernedBackgroundImage } from "@/lib/image-governance";
 
 const DESTINATIONS = [
   {
@@ -16,42 +18,42 @@ const DESTINATIONS = [
     country: "United Kingdom",
     highlights: "Oxford, Cambridge, LSE, Imperial College",
     desc: "World-class research universities with strong scholarship programs for African students, including Chevening and Commonwealth scholarships.",
-    img: "https://images.unsplash.com/photo-1486299267070-83823f5448dd?auto=format&fit=crop&q=80&w=800",
+    img: "programs/international-studies.jpg",
   },
   {
     flag: "🇩🇪",
     country: "Germany",
     highlights: "TU Munich, Heidelberg, RWTH Aachen",
     desc: "Tuition-free education at world-class technical universities with DAAD scholarships available for African students across all disciplines.",
-    img: "https://images.unsplash.com/photo-1467269204594-9661b134dd2b?auto=format&fit=crop&q=80&w=800",
+    img: "programs/students-campus.jpg",
   },
   {
     flag: "🇨🇦",
     country: "Canada",
     highlights: "University of Toronto, McGill, UBC",
     desc: "Multicultural, safe, and welcoming environment with strong post-graduation work permit opportunities and immigration pathways.",
-    img: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&q=80&w=800",
+    img: "programs/students-campus.jpg",
   },
   {
     flag: "🇺🇸",
     country: "United States",
     highlights: "Harvard, MIT, Stanford, Yale",
     desc: "Home to 8 of the world's top 10 universities with full scholarships available through programs like Fulbright and Mastercard Foundation.",
-    img: "https://images.unsplash.com/photo-1501426026826-31c667bdf23d?auto=format&fit=crop&q=80&w=800",
+    img: "programs/students-campus.jpg",
   },
   {
     flag: "🇦🇺",
     country: "Australia",
     highlights: "Melbourne, Sydney, ANU, Monash",
     desc: "High quality of life, stunning natural environment, and strong academic institutions with generous Endeavour Scholarships for African students.",
-    img: "https://images.unsplash.com/photo-1523482580672-f109ba8cb9be?auto=format&fit=crop&q=80&w=800",
+    img: "programs/abroad-students.jpg",
   },
   {
     flag: "🇿🇦",
     country: "South Africa",
     highlights: "UCT, Stellenbosch, Witwatersrand",
     desc: "Africa's top-ranked universities within the continent. Affordable tuition and cost of living with excellent academic standards.",
-    img: "https://images.unsplash.com/photo-1607237138185-eedd9c632b0b?auto=format&fit=crop&q=80&w=800",
+    img: "programs/students-campus.jpg",
   },
 ];
 
@@ -81,7 +83,12 @@ export default function StudyAbroad() {
       <section
         className="relative pt-28 pb-28 text-white overflow-hidden"
         style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&q=80&w=2000')`,
+          backgroundImage: getGovernedBackgroundImage({
+            module: "program",
+            title: "Study abroad guidance",
+            category: "study abroad",
+            variant: "hero",
+          }),
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}
@@ -169,7 +176,17 @@ export default function StudyAbroad() {
             {DESTINATIONS.map((d) => (
               <Card key={d.country} className="overflow-hidden group hover:shadow-2xl transition-all duration-500 border-none">
                 <div className="relative h-48 overflow-hidden">
-                  <img src={d.img} alt={d.country} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                  <GovernedImage
+                    module="program"
+                    src={d.img}
+                    title={d.country}
+                    category="study abroad"
+                    variant="card"
+                    aspectRatio="auto"
+                    className="h-full"
+                    wrapperClassName="h-full rounded-none shadow-none"
+                    imageClassName="group-hover:scale-110"
+                  />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
                   <div className="absolute bottom-4 left-4">
                     <span className="text-3xl mr-2">{d.flag}</span>
@@ -240,7 +257,12 @@ export default function StudyAbroad() {
       <section
         className="py-24 text-white text-center relative overflow-hidden"
         style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1530521954074-e64f6810b32d?auto=format&fit=crop&q=80&w=2000')`,
+          backgroundImage: getGovernedBackgroundImage({
+            module: "program",
+            title: "Study abroad consultation",
+            category: "study abroad",
+            variant: "hero",
+          }),
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}

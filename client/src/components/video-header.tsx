@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Play, Pause, Volume2, VolumeX, ChevronDown, ArrowRight } from "lucide-react";
+import { getGovernedBackgroundImage } from "@/lib/image-governance";
 
 const videoSources = [
   {
@@ -123,7 +124,12 @@ export default function VideoHeader() {
           <div
             className="w-full h-full bg-cover bg-center"
             style={{
-              backgroundImage: "url('https://images.unsplash.com/photo-1523240795612-9a054b0db644?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080')"
+              backgroundImage: getGovernedBackgroundImage({
+                module: "program",
+                title: "Mtendere global education",
+                category: "education",
+                variant: "hero",
+              })
             }}
           />
         </video>

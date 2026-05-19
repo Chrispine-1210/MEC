@@ -18,7 +18,9 @@ import {
   Menu,
   X,
   Activity,
-  Home
+  Home,
+  Mail,
+  CalendarDays
 } from "lucide-react";
 
 interface AdminSidebarProps {
@@ -44,6 +46,12 @@ export default function AdminSidebar({ activeView, onViewChange, isOpen, onToggl
       label: 'Analytics',
       icon: BarChart3,
       color: 'text-mtendere-green',
+    },
+    {
+      id: 'events',
+      label: 'Events',
+      icon: CalendarDays,
+      color: 'text-mtendere-blue',
     },
     {
       id: 'scholarships',
@@ -86,6 +94,12 @@ export default function AdminSidebar({ activeView, onViewChange, isOpen, onToggl
       label: 'Team Members',
       icon: UserCheck,
       color: 'text-mtendere-orange',
+    },
+    {
+      id: 'subscribers',
+      label: 'Subscribers',
+      icon: Mail,
+      color: 'text-mtendere-blue',
     },
   ];
 

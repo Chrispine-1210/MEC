@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import NewsletterSignup from "@/components/newsletter-signup";
 import {
   MapPin,
   Phone,
@@ -17,6 +17,7 @@ import {
   MessageCircle,
   ArrowRight,
   FileText,
+  CalendarDays,
 } from "lucide-react";
 import logoImg from "@assets/mtendere-logo.svg";
 
@@ -31,17 +32,7 @@ export default function Footer() {
               <h3 className="text-xl font-bold mb-1">Stay Updated with Opportunities</h3>
               <p className="text-white/80 text-sm">Get the latest scholarships, jobs, and tips delivered to your inbox.</p>
             </div>
-            <div className="flex w-full md:w-auto gap-2 max-w-md">
-              <Input
-                type="email"
-                placeholder="Enter your email address"
-                className="flex-1 border-white/30 bg-white/10 text-white placeholder:text-white/60 focus-visible:ring-white"
-              />
-              <Button className="bg-mtendere-orange hover:bg-mtendere-orange/90 text-white font-bold shrink-0">
-                Subscribe
-                <ArrowRight className="ml-2 w-4 h-4" />
-              </Button>
-            </div>
+            <NewsletterSignup source="footer" compact inverse className="md:w-auto" />
           </div>
         </div>
       </div>
@@ -64,15 +55,19 @@ export default function Footer() {
             <div className="mb-6 space-y-3 text-sm text-muted-foreground">
               <div className="flex items-start gap-3">
                 <MapPin className="w-4 h-4 text-mtendere-orange mt-0.5 shrink-0" />
-                <span>Off Mandala Road, Area 3, Behind NBS Bank, Lilongwe, Malawi</span>
+                <span>Lilongwe, Malawi</span>
               </div>
               <div className="flex items-center gap-3">
                 <Phone className="w-4 h-4 text-mtendere-orange shrink-0" />
-                <a href="tel:+265998882786" className="hover:text-mtendere-blue transition-colors">+265 998 882 786</a>
+                <a href="tel:+265999360325" className="hover:text-mtendere-blue transition-colors">+265 999 360 325</a>
               </div>
               <div className="flex items-center gap-3">
                 <Mail className="w-4 h-4 text-mtendere-orange shrink-0" />
-                <a href="mailto:mtendereeducationconsult@gmail.com" className="hover:text-mtendere-blue transition-colors">mtendereeducationconsult@gmail.com</a>
+                <a href="mailto:mtendereeducation@gmail.com" className="hover:text-mtendere-blue transition-colors">mtendereeducation@gmail.com</a>
+              </div>
+              <div className="flex items-start gap-3">
+                <MessageCircle className="w-4 h-4 text-mtendere-orange mt-0.5 shrink-0" />
+                <span>Monday - Friday: 8:00 AM - 5:00 PM<br />Saturday: 9:00 AM - 1:00 PM</span>
               </div>
             </div>
             <Button asChild className="bg-mtendere-orange hover:bg-mtendere-orange/90 text-white font-bold text-sm">
@@ -89,8 +84,9 @@ export default function Footer() {
             <ul className="space-y-3 text-sm text-muted-foreground">
               {[
                 { href: "/about", label: "About Us" },
-                { href: "/about#team", label: "Our Team" },
+                { href: "/team", label: "Our Team" },
                 { href: "/partners", label: "Our Partners" },
+                { href: "/events", label: "Events" },
                 { href: "/blog", label: "Blog & News" },
                 { href: "/contact", label: "Contact Us" },
                 { href: "/register", label: "Create Account" },
@@ -111,6 +107,7 @@ export default function Footer() {
             <ul className="space-y-3 text-sm text-muted-foreground">
               {[
                 { href: "/scholarships", label: "Scholarships", icon: GraduationCap },
+                { href: "/events", label: "Events", icon: CalendarDays },
                 { href: "/jobs", label: "Job Portal", icon: Briefcase },
                 { href: "/study-abroad", label: "Study Abroad", icon: Globe },
                 { href: "/university-applications", label: "University Applications", icon: BookOpen },

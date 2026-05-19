@@ -1,5 +1,6 @@
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
+import GovernedImage from "@/components/governed-image";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,14 +10,15 @@ import {
   BookOpen, FileText, Send, CheckCircle2, Clock, ArrowRight, Star,
   Search, Edit3, Award, Calendar, PhoneCall, Globe, Lightbulb
 } from "lucide-react";
+import { getGovernedBackgroundImage } from "@/lib/image-governance";
 
 const TOP_UNIVERSITIES = [
-  { name: "University of Oxford", country: "🇬🇧 UK", ranking: "#1", field: "All Programs", img: "https://images.unsplash.com/photo-1569447891824-5c7b02f5ef54?auto=format&fit=crop&q=80&w=400" },
-  { name: "ETH Zurich", country: "🇨🇭 Switzerland", ranking: "#7", field: "Engineering & Science", img: "https://images.unsplash.com/photo-1580582932707-520aed937b7b?auto=format&fit=crop&q=80&w=400" },
-  { name: "University of Toronto", country: "🇨🇦 Canada", ranking: "#34", field: "Medicine & Business", img: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&q=80&w=400" },
-  { name: "University of Cape Town", country: "🇿🇦 South Africa", ranking: "#1 Africa", field: "Law & Social Sciences", img: "https://images.unsplash.com/photo-1607237138185-eedd9c632b0b?auto=format&fit=crop&q=80&w=400" },
-  { name: "National University Singapore", country: "🇸🇬 Singapore", ranking: "#8", field: "Business & Technology", img: "https://images.unsplash.com/photo-1564981797816-1043664bf78d?auto=format&fit=crop&q=80&w=400" },
-  { name: "Technical University Munich", country: "🇩🇪 Germany", ranking: "#50", field: "Engineering", img: "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?auto=format&fit=crop&q=80&w=400" },
+  { name: "University of Oxford", country: "🇬🇧 UK", ranking: "#1", field: "All Programs", img: "partners/partners-default.jpg" },
+  { name: "ETH Zurich", country: "🇨🇭 Switzerland", ranking: "#7", field: "Engineering & Science", img: "partners/partners-2.jpg" },
+  { name: "University of Toronto", country: "🇨🇦 Canada", ranking: "#34", field: "Medicine & Business", img: "partners/our-partners.jpg" },
+  { name: "University of Cape Town", country: "🇿🇦 South Africa", ranking: "#1 Africa", field: "Law & Social Sciences", img: "partners/partners-default.jpg" },
+  { name: "National University Singapore", country: "🇸🇬 Singapore", ranking: "#8", field: "Business & Technology", img: "programs/students-campus.jpg" },
+  { name: "Technical University Munich", country: "🇩🇪 Germany", ranking: "#50", field: "Engineering", img: "scholarships/students.jpg" },
 ];
 
 const SERVICES = [
@@ -97,7 +99,12 @@ export default function UniversityApplications() {
       <section
         className="relative pt-28 pb-28 text-white overflow-hidden"
         style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1541339907198-e08756ebafe3?auto=format&fit=crop&q=80&w=2000')`,
+          backgroundImage: getGovernedBackgroundImage({
+            module: "program",
+            title: "University applications",
+            category: "education",
+            variant: "hero",
+          }),
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}
@@ -178,7 +185,17 @@ export default function UniversityApplications() {
             {TOP_UNIVERSITIES.map((u) => (
               <Card key={u.name} className="overflow-hidden group hover:shadow-2xl transition-all duration-500 border-none">
                 <div className="relative h-40 overflow-hidden">
-                  <img src={u.img} alt={u.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                  <GovernedImage
+                    module="partner"
+                    src={u.img}
+                    title={u.name}
+                    category={u.field}
+                    variant="card"
+                    aspectRatio="auto"
+                    className="h-full"
+                    wrapperClassName="h-full rounded-none shadow-none"
+                    imageClassName="group-hover:scale-110"
+                  />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
                   <Badge className="absolute top-3 right-3 bg-mtendere-orange text-white text-xs font-bold">{u.ranking}</Badge>
                 </div>
@@ -244,7 +261,12 @@ export default function UniversityApplications() {
       <section
         className="py-24 text-white text-center relative overflow-hidden"
         style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1523580494863-6f3031224c94?auto=format&fit=crop&q=80&w=2000')`,
+          backgroundImage: getGovernedBackgroundImage({
+            module: "program",
+            title: "Application consultation",
+            category: "education",
+            variant: "hero",
+          }),
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}

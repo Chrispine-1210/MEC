@@ -1,14 +1,18 @@
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
+import GovernedImage from "@/components/governed-image";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { useQuery } from "@tanstack/react-query";
+import type { ApiTestimonial } from "@/lib/api-types";
 import {
   TrendingUp, Compass, Target, Star, Users, Briefcase, CheckCircle2,
   Clock, ArrowRight, Award, Globe, Lightbulb, PhoneCall, BookOpen
 } from "lucide-react";
+import { getGovernedBackgroundImage } from "@/lib/image-governance";
 
 const COUNSELING_SERVICES = [
   {
@@ -80,27 +84,6 @@ const SESSIONS = [
   },
 ];
 
-const SUCCESS_STORIES = [
-  {
-    name: "Mwawi Tembo",
-    role: "From Teacher → UN Programme Officer",
-    img: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200",
-    text: "I had been teaching for 7 years and wanted to transition to international development. Mtendere's counselors helped me identify transferable skills, craft a strategic career plan, and within 18 months I was working for UNDP in Malawi.",
-  },
-  {
-    name: "Blessings Chavula",
-    role: "From NGO Worker → World Bank Consultant",
-    img: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200",
-    text: "The career counseling sessions completely reframed how I presented my experience. I learned to highlight my impact metrics and leadership story. I'm now consulting for the World Bank Education team — a dream come true.",
-  },
-  {
-    name: "Chisomo Phiri",
-    role: "From Graduate → McKinsey Analyst",
-    img: "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=200",
-    text: "As a fresh graduate from Chancellor College, I had no idea how to break into management consulting. Mtendere's counselors guided me through the case interview process and connected me with an alumnus at McKinsey who became my mentor.",
-  },
-];
-
 const FAQS = [
   { q: "Who can benefit from career counseling?", a: "Anyone! Whether you're a student choosing your first career, a professional seeking advancement, or someone looking to change fields, career counseling provides valuable clarity and strategy." },
   { q: "How many sessions do I need?", a: "This depends on your situation. We recommend at least 3-4 sessions for meaningful progress. Our packages are designed to provide the right level of support for different needs." },
@@ -110,6 +93,12 @@ const FAQS = [
 ];
 
 export default function CareerCounseling() {
+  const { data: testimonials = [] } = useQuery<ApiTestimonial[]>({
+    queryKey: ["/api/testimonials"],
+    initialData: [],
+  });
+  const successStories = testimonials.filter((item) => item?.isApproved !== false).slice(0, 3);
+
   return (
     <div className="min-h-screen bg-background">
       <ExpandingNav />
@@ -118,7 +107,12 @@ export default function CareerCounseling() {
       <section
         className="relative pt-28 pb-28 text-white overflow-hidden"
         style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&q=80&w=2000')`,
+          backgroundImage: getGovernedBackgroundImage({
+            module: "job",
+            title: "Career counseling",
+            category: "career",
+            variant: "hero",
+          }),
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}
@@ -246,21 +240,53 @@ export default function CareerCounseling() {
             <p className="mx-auto max-w-xl text-muted-foreground">Real people, real transformations.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {SUCCESS_STORIES.map((s) => (
-              <div key={s.name} className="rounded-2xl border border-border/70 bg-card p-8 shadow-lg">
-                <div className="flex items-center gap-1 mb-5">
-                  {[...Array(5)].map((_, i) => <Star key={i} className="w-4 h-4 fill-mtendere-orange text-mtendere-orange" />)}
-                </div>
-                <p className="mb-6 text-sm italic leading-relaxed text-muted-foreground">"{s.text}"</p>
-                <div className="flex items-center gap-3 border-t border-border/60 pt-4">
-                  <img src={s.img} alt={s.name} className="w-12 h-12 rounded-full object-cover border-2 border-mtendere-orange" />
-                  <div>
-                    <div className="font-bold text-foreground">{s.name}</div>
-                    <div className="text-xs text-mtendere-orange font-semibold">{s.role}</div>
+            {successStories.length > 0 ? (
+              successStories.map((testimonial) => {
+                const rating = Math.max(1, Math.min(5, testimonial.rating || 5));
+                const name = testimonial.authorName || "Mtendere Student";
+
+                return (
+                  <div key={testimonial.id} className="rounded-2xl border border-border/70 bg-card p-8 shadow-lg">
+                    <div className="flex items-center gap-1 mb-5">
+                      {[...Array(5)].map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`w-4 h-4 ${
+                            i < rating
+                              ? "fill-mtendere-orange text-mtendere-orange"
+                              : "text-muted-foreground/30"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <p className="mb-6 text-sm italic leading-relaxed text-muted-foreground">"{testimonial.content}"</p>
+                    <div className="flex items-center gap-3 border-t border-border/60 pt-4">
+                      <GovernedImage
+                        module="testimonial"
+                        src={testimonial.imageUrl}
+                        title={name}
+                        variant="profile"
+                        aspectRatio="auto"
+                        className="h-12 w-12"
+                        wrapperClassName="h-full rounded-full border-2 border-mtendere-orange shadow-none"
+                      />
+                      <div>
+                        <div className="font-bold text-foreground">{name}</div>
+                        <div className="text-xs text-mtendere-orange font-semibold">
+                          {testimonial.credential || "Mtendere Graduate"}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
+                );
+              })
+            ) : (
+              <Card className="md:col-span-3 border border-dashed border-border/70">
+                <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                  Approved testimonials will appear here after they are published in Admin.
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       </section>
@@ -286,7 +312,12 @@ export default function CareerCounseling() {
       <section
         className="py-24 text-white text-center relative overflow-hidden"
         style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&q=80&w=2000')`,
+          backgroundImage: getGovernedBackgroundImage({
+            module: "job",
+            title: "Career planning",
+            category: "career",
+            variant: "hero",
+          }),
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}

@@ -14,6 +14,7 @@ import {
   Award,
   Building,
   ChevronDown,
+  CalendarDays,
   User,
   Settings,
   LogOut
@@ -83,6 +84,7 @@ export default function ExpandingNav() {
               { label: "Scholarships", href: "/scholarships", icon: Award },
               { label: "Study Abroad", href: "/study-abroad", icon: Globe },
               { label: "University Applications", href: "/university-applications", icon: BookOpen },
+              { label: "Events", href: "/events", icon: CalendarDays },
             ]
           },
           {
@@ -103,14 +105,19 @@ export default function ExpandingNav() {
       active: location === "/partners",
     },
     {
+      label: "Events",
+      href: "/events",
+      active: location === "/events" || location.startsWith("/events/"),
+    },
+    {
       label: "Blog",
       href: "/blog",
       active: location === "/blog",
     },
     {
       label: "Team",
-      href: "/about#team",
-      active: false,
+      href: "/team",
+      active: location === "/team",
     },
     {
       label: "About",

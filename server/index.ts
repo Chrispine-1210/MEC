@@ -11,6 +11,7 @@ import { log, setupVite } from "./vite";
 const app = express();
 const isProduction = env.NODE_ENV === "production";
 const port = env.PORT;
+app.disable("x-powered-by");
 
 app.use(
   helmet({
@@ -31,7 +32,44 @@ app.use(
 );
 
 app.set("trust proxy", true);
-app.use(express.json({ limit: "1mb" }));
+
+const allowedOrigins = new Set(
+  [
+    env.PUBLIC_APP_URL,
+    `http://localhost:${port}`,
+    `http://127.0.0.1:${port}`,
+    `http://0.0.0.0:${port}`,
+  ].filter(Boolean) as string[],
+);
+
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+    return next();
+  }
+
+  const origin = req.get("origin");
+  if (!origin) {
+    return next();
+  }
+
+  const hostOrigin = `${req.protocol}://${req.get("host")}`;
+  if (origin === hostOrigin || allowedOrigins.has(origin)) {
+    return next();
+  }
+
+  return res.status(403).json({ message: "Request origin is not allowed" });
+});
+
+app.use(
+  express.json({
+    limit: "1mb",
+    verify: (req, _res, buf) => {
+      if ((req as Request).originalUrl === "/api/stripe/webhook") {
+        (req as Request & { rawBody?: Buffer }).rawBody = Buffer.from(buf);
+      }
+    },
+  }),
+);
 app.use(express.urlencoded({ extended: false }));
 
 const rateLimitWindowMs = env.RATE_LIMIT_WINDOW_MS;

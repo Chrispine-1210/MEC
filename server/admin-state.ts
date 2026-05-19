@@ -65,6 +65,13 @@ export type AdminSettings = {
   supportEmail: string;
   sessionTimeout: number;
   maxLoginAttempts: number;
+  maintenanceMode: boolean;
+  emailNotifications: boolean;
+  twoFactorRequired: boolean;
+  weeklySummary: boolean;
+  contentPublishedNotifications: boolean;
+  authTokenInvalidBefore: string | null;
+  cacheVersion: number;
   updatedAt: string;
 };
 
@@ -82,6 +89,12 @@ type AdminState = {
 
 const nowIso = () => new Date().toISOString();
 
+export const CORE_ADMIN_ROLE_IDS = ["viewer", "editor", "admin", "super_admin"] as const;
+
+const coreAdminRoleSet = new Set<string>(CORE_ADMIN_ROLE_IDS);
+
+export const isCoreAdminRole = (id: string) => coreAdminRoleSet.has(id);
+
 const DEFAULT_ROLES: AdminRole[] = [
   {
     id: "viewer",
@@ -98,11 +111,13 @@ const DEFAULT_ROLES: AdminRole[] = [
     description: "Can create and update platform content.",
     permissions: [
       "view_dashboard",
+      "manage_events",
       "manage_scholarships",
       "manage_jobs",
       "manage_partners",
       "manage_blog",
       "manage_team",
+      "manage_media",
     ],
     isActive: true,
     createdAt: nowIso(),
@@ -114,11 +129,13 @@ const DEFAULT_ROLES: AdminRole[] = [
     description: "Can manage content, users, and applications.",
     permissions: [
       "view_dashboard",
+      "manage_events",
       "manage_scholarships",
       "manage_jobs",
       "manage_partners",
       "manage_blog",
       "manage_team",
+      "manage_media",
       "manage_users",
       "review_applications",
       "view_analytics",
@@ -133,11 +150,13 @@ const DEFAULT_ROLES: AdminRole[] = [
     description: "Full system access including settings and roles.",
     permissions: [
       "view_dashboard",
+      "manage_events",
       "manage_scholarships",
       "manage_jobs",
       "manage_partners",
       "manage_blog",
       "manage_team",
+      "manage_media",
       "manage_users",
       "review_applications",
       "view_analytics",
@@ -150,6 +169,30 @@ const DEFAULT_ROLES: AdminRole[] = [
   },
 ];
 
+const normalizeAdminRoles = (roles?: AdminRole[]) => {
+  if (!roles?.length) return DEFAULT_ROLES;
+
+  const provided = new Map(roles.map((role) => [role.id, role]));
+  const normalizedCoreRoles = DEFAULT_ROLES.map((defaultRole) => {
+    const existing = provided.get(defaultRole.id);
+    if (!existing) return defaultRole;
+
+    return {
+      ...defaultRole,
+      ...existing,
+      permissions: Array.from(
+        new Set([...(existing.permissions ?? []), ...defaultRole.permissions]),
+      ),
+      isActive: true,
+      createdAt: existing.createdAt ?? defaultRole.createdAt,
+      updatedAt: existing.updatedAt ?? defaultRole.updatedAt,
+    };
+  });
+
+  const customRoles = roles.filter((role) => !isCoreAdminRole(role.id));
+  return [...normalizedCoreRoles, ...customRoles];
+};
+
 const createDefaultState = (): AdminState => ({
   users: {},
   scholarships: {},
@@ -160,9 +203,16 @@ const createDefaultState = (): AdminState => ({
   roles: DEFAULT_ROLES,
   settings: {
     platformName: "Mtendere Education Platform",
-    supportEmail: "support@mtendere.com",
+    supportEmail: "mtendereeducation@gmail.com",
     sessionTimeout: 30,
     maxLoginAttempts: 5,
+    maintenanceMode: false,
+    emailNotifications: true,
+    twoFactorRequired: false,
+    weeklySummary: false,
+    contentPublishedNotifications: true,
+    authTokenInvalidBefore: null,
+    cacheVersion: 1,
     updatedAt: nowIso(),
   },
   readNotificationIds: [],
@@ -201,7 +251,7 @@ const loadState = (): AdminState => {
       partners: parsed.partners ?? {},
       blogPosts: parsed.blogPosts ?? {},
       teamMembers: parsed.teamMembers ?? {},
-      roles: parsed.roles?.length ? parsed.roles : DEFAULT_ROLES,
+      roles: normalizeAdminRoles(parsed.roles),
       settings: {
         ...createDefaultState().settings,
         ...(parsed.settings ?? {}),
@@ -322,22 +372,36 @@ export const upsertAdminRole = (
 };
 
 export const deleteAdminRole = (id: string) => {
+  if (isCoreAdminRole(id)) {
+    return false;
+  }
+
+  const existed = cachedState.roles.some((role) => role.id === id);
+  if (!existed) {
+    return false;
+  }
+
   cachedState = {
     ...cachedState,
     roles: cachedState.roles.filter((role) => role.id !== id),
   };
 
   saveState();
+  return true;
 };
 
 export const getAdminSettings = () => ({ ...cachedState.settings });
 
 export const updateAdminSettings = (updates: Partial<AdminSettings>) => {
+  const cleanUpdates = Object.fromEntries(
+    Object.entries(updates).filter(([, value]) => value !== undefined),
+  ) as Partial<AdminSettings>;
+
   cachedState = {
     ...cachedState,
     settings: {
       ...cachedState.settings,
-      ...updates,
+      ...cleanUpdates,
       updatedAt: nowIso(),
     },
   };

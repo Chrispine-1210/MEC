@@ -1,11 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
+import GovernedImage from "@/components/governed-image";
 import type { ApiPartner } from "@/lib/api-types";
+import { getGovernedBackgroundImage } from "@/lib/image-governance";
 import { 
   Users, 
   Trophy, 
@@ -42,7 +45,12 @@ export default function Partners() {
       <section 
         className="relative py-24 text-white overflow-hidden"
         style={ {
-          backgroundImage: `url(${'https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&q=80&w=2000'})`,
+          backgroundImage: getGovernedBackgroundImage({
+            module: "partner",
+            title: "Education partners",
+            category: "business",
+            variant: "hero",
+          }),
           backgroundSize: 'cover',
           backgroundPosition: 'center'
         } }
@@ -90,9 +98,16 @@ export default function Partners() {
             {/* GBS */}
             <Card className="text-center hover:shadow-xl transition-shadow duration-300 border-2 border-mtendere-blue">
               <CardHeader className="pb-4">
-                <div className="w-24 h-24 bg-mtendere-blue rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-white text-3xl font-bold">GBS</span>
-                </div>
+                <GovernedImage
+                  module="partner"
+                  src="partners/gbs-dubai.webp"
+                  title="Global Business School"
+                  variant="logo"
+                  aspectRatio="1 / 1"
+                  fit="contain"
+                  className="mx-auto mb-4 h-24 w-24"
+                  wrapperClassName="h-full rounded-full bg-mtendere-blue p-3 shadow-none"
+                />
                 <CardTitle className="text-2xl text-mtendere-blue">
                   Global Business School
                 </CardTitle>
@@ -122,9 +137,11 @@ export default function Partners() {
                   <Badge className="bg-mtendere-green text-white">Executive Education</Badge>
                   <Badge className="bg-mtendere-orange text-white">Research Programs</Badge>
                 </div>
-                <Button className="w-full bg-mtendere-blue hover:bg-mtendere-blue/90">
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Learn More
+                <Button asChild className="w-full bg-mtendere-blue hover:bg-mtendere-blue/90">
+                  <Link href="/partners">
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Learn More
+                  </Link>
                 </Button>
               </CardContent>
             </Card>
@@ -132,9 +149,16 @@ export default function Partners() {
             {/* Chandigarh University */}
             <Card className="text-center hover:shadow-xl transition-shadow duration-300 border-2 border-mtendere-green">
               <CardHeader className="pb-4">
-                <div className="w-24 h-24 bg-mtendere-green rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-white text-2xl font-bold">CU</span>
-                </div>
+                <GovernedImage
+                  module="partner"
+                  src="partners/cu-logo-white.webp"
+                  title="Chandigarh University"
+                  variant="logo"
+                  aspectRatio="1 / 1"
+                  fit="contain"
+                  className="mx-auto mb-4 h-24 w-24"
+                  wrapperClassName="h-full rounded-full bg-mtendere-green p-3 shadow-none"
+                />
                 <CardTitle className="text-2xl text-mtendere-blue">
                   Chandigarh University
                 </CardTitle>
@@ -164,9 +188,11 @@ export default function Partners() {
                   <Badge className="bg-mtendere-blue text-white">Management</Badge>
                   <Badge className="bg-mtendere-orange text-white">Technology</Badge>
                 </div>
-                <Button className="w-full bg-mtendere-green hover:bg-mtendere-green/90">
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Learn More
+                <Button asChild className="w-full bg-mtendere-green hover:bg-mtendere-green/90">
+                  <Link href="/partners">
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Learn More
+                  </Link>
                 </Button>
               </CardContent>
             </Card>
@@ -174,9 +200,14 @@ export default function Partners() {
             {/* International Partners */}
             <Card className="text-center hover:shadow-xl transition-shadow duration-300 border-2 border-mtendere-orange">
               <CardHeader className="pb-4">
-                <div className="w-24 h-24 bg-mtendere-orange rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Globe className="w-12 h-12 text-white" />
-                </div>
+                <GovernedImage
+                  module="partner"
+                  title="International Network"
+                  variant="logo"
+                  aspectRatio="1 / 1"
+                  className="mx-auto mb-4 h-24 w-24"
+                  wrapperClassName="h-full rounded-full shadow-none"
+                />
                 <CardTitle className="text-2xl text-mtendere-blue">
                   International Network
                 </CardTitle>
@@ -206,9 +237,11 @@ export default function Partners() {
                   <Badge className="bg-mtendere-blue text-white">Exchange Programs</Badge>
                   <Badge className="bg-mtendere-green text-white">Joint Degrees</Badge>
                 </div>
-                <Button className="w-full bg-mtendere-orange hover:bg-mtendere-orange/90">
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Explore Network
+                <Button asChild className="w-full bg-mtendere-orange hover:bg-mtendere-orange/90">
+                  <Link href="/partners">
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Explore Network
+                  </Link>
                 </Button>
               </CardContent>
             </Card>
@@ -245,22 +278,20 @@ export default function Partners() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {partners?.map((partner, idx) => {
-                const universityImages = [
-                  "https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&q=80&w=800",
-                  "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?auto=format&fit=crop&q=80&w=800",
-                  "https://images.unsplash.com/photo-1607237138185-eedd9c632b0b?auto=format&fit=crop&q=80&w=800",
-                  "https://images.unsplash.com/photo-1571260899304-425eee4c7efc?auto=format&fit=crop&q=80&w=800",
-                  "https://images.unsplash.com/photo-1580582932707-520aed937b7b?auto=format&fit=crop&q=80&w=800",
-                  "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&q=80&w=800",
-                ];
-                const coverImg = partner.logoUrl || universityImages[idx % universityImages.length];
                 return (
                 <Card key={partner.id} className="hover:shadow-2xl transition-all duration-500 overflow-hidden group border-none bg-card shadow-md flex flex-col">
                   <div className="relative h-44 overflow-hidden">
-                    <img
-                      src={coverImg}
-                      alt={partner.name}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                    <GovernedImage
+                      module="partner"
+                      src={partner.logoUrl}
+                      title={partner.name}
+                      category={partner.country}
+                      index={idx}
+                      variant="card"
+                      aspectRatio="auto"
+                      className="h-full"
+                      wrapperClassName="h-full rounded-none shadow-none"
+                      imageClassName="group-hover:scale-110"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
                     <div className="absolute bottom-3 left-3 right-3">
@@ -292,9 +323,11 @@ export default function Partners() {
                     )}
 
                     <div className="flex gap-2">
-                      <Button className="flex-1 bg-mtendere-blue hover:bg-mtendere-blue/90 text-white font-bold" size="sm">
-                        <BookOpen className="w-4 h-4 mr-2" />
-                        View Programs
+                      <Button asChild className="flex-1 bg-mtendere-blue hover:bg-mtendere-blue/90 text-white font-bold" size="sm">
+                        <Link href={`/partners/${partner.id}`}>
+                          <BookOpen className="w-4 h-4 mr-2" />
+                          View Programs
+                        </Link>
                       </Button>
                       {partner.website && (
                         <a href={partner.website} target="_blank" rel="noopener noreferrer">

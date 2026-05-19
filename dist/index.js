@@ -5,19 +5,33 @@ var __export = (target, all) => {
 };
 
 // server/index.ts
-import fs4 from "fs";
-import path5 from "path";
-import { randomUUID } from "crypto";
+import fs5 from "fs";
+import path6 from "path";
+import { randomUUID as randomUUID2 } from "crypto";
 
 // server/env.ts
 import "dotenv/config";
 import { z } from "zod";
+var optionalEnvString = z.preprocess(
+  (value) => typeof value === "string" && value.trim() === "" ? void 0 : value,
+  z.string().optional()
+);
 var envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.coerce.number().int().positive().default(5e3),
   JWT_SECRET: z.string().min(1, "JWT_SECRET is required"),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(6e4),
-  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120)
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
+  PUBLIC_APP_URL: optionalEnvString,
+  EMAIL_FROM: optionalEnvString,
+  EMAIL_API_URL: optionalEnvString,
+  EMAIL_API_KEY: optionalEnvString,
+  ADMIN_NOTIFICATION_EMAIL: optionalEnvString,
+  STRIPE_SECRET_KEY: optionalEnvString,
+  STRIPE_WEBHOOK_SECRET: optionalEnvString,
+  STRIPE_DEFAULT_CURRENCY: z.string().length(3).default("USD"),
+  REFERRAL_PAYOUT_MIN_AMOUNT: z.coerce.number().int().positive().default(2500),
+  REFERRAL_RELEASE_WORKER_MS: z.coerce.number().int().positive().default(9e5)
 });
 var env = envSchema.parse(process.env);
 
@@ -41,47 +55,100 @@ __export(schema_exports, {
   blogCommentsRelations: () => blogCommentsRelations,
   blogPosts: () => blogPosts,
   blogPostsRelations: () => blogPostsRelations,
+  commissionRules: () => commissionRules,
+  commissionRulesRelations: () => commissionRulesRelations,
+  commissions: () => commissions,
+  commissionsRelations: () => commissionsRelations,
+  eventComments: () => eventComments,
+  eventCommentsRelations: () => eventCommentsRelations,
+  eventReactions: () => eventReactions,
+  eventReactionsRelations: () => eventReactionsRelations,
+  eventRegistrations: () => eventRegistrations,
+  eventRegistrationsRelations: () => eventRegistrationsRelations,
+  events: () => events,
+  eventsRelations: () => eventsRelations,
+  fraudSignals: () => fraudSignals,
   insertAnalyticsSchema: () => insertAnalyticsSchema,
   insertApplicationSchema: () => insertApplicationSchema,
   insertBlogCommentSchema: () => insertBlogCommentSchema,
   insertBlogPostSchema: () => insertBlogPostSchema,
+  insertCommissionRuleSchema: () => insertCommissionRuleSchema,
+  insertCommissionSchema: () => insertCommissionSchema,
+  insertEventCommentSchema: () => insertEventCommentSchema,
+  insertEventReactionSchema: () => insertEventReactionSchema,
+  insertEventRegistrationSchema: () => insertEventRegistrationSchema,
+  insertEventSchema: () => insertEventSchema,
+  insertFraudSignalSchema: () => insertFraudSignalSchema,
   insertJobSchema: () => insertJobSchema,
+  insertLedgerEntrySchema: () => insertLedgerEntrySchema,
   insertMessageSchema: () => insertMessageSchema,
   insertPartnerSchema: () => insertPartnerSchema,
+  insertPaymentSchema: () => insertPaymentSchema,
+  insertPayoutRequestSchema: () => insertPayoutRequestSchema,
+  insertReferralCampaignSchema: () => insertReferralCampaignSchema,
+  insertReferralClickSchema: () => insertReferralClickSchema,
+  insertReferralCodeSchema: () => insertReferralCodeSchema,
+  insertReferralDisputeSchema: () => insertReferralDisputeSchema,
+  insertReferralRelationshipSchema: () => insertReferralRelationshipSchema,
   insertReferralSchema: () => insertReferralSchema,
   insertSavedItemSchema: () => insertSavedItemSchema,
   insertScholarshipSchema: () => insertScholarshipSchema,
+  insertStripeEventSchema: () => insertStripeEventSchema,
+  insertSubscriberSchema: () => insertSubscriberSchema,
   insertTeamMemberSchema: () => insertTeamMemberSchema,
   insertTestimonialSchema: () => insertTestimonialSchema,
   insertUserSchema: () => insertUserSchema,
+  insertWalletAccountSchema: () => insertWalletAccountSchema,
   jobs: () => jobs,
   jobsRelations: () => jobsRelations,
+  ledgerEntries: () => ledgerEntries,
+  ledgerEntriesRelations: () => ledgerEntriesRelations,
   messages: () => messages,
   partners: () => partners,
+  payments: () => payments,
+  paymentsRelations: () => paymentsRelations,
+  payoutRequests: () => payoutRequests,
+  payoutRequestsRelations: () => payoutRequestsRelations,
+  referralCampaigns: () => referralCampaigns,
+  referralCampaignsRelations: () => referralCampaignsRelations,
+  referralClicks: () => referralClicks,
+  referralClicksRelations: () => referralClicksRelations,
+  referralCodes: () => referralCodes,
+  referralCodesRelations: () => referralCodesRelations,
+  referralDisputes: () => referralDisputes,
+  referralRelationships: () => referralRelationships,
+  referralRelationshipsRelations: () => referralRelationshipsRelations,
   referrals: () => referrals,
   referralsRelations: () => referralsRelations,
   savedItems: () => savedItems,
   savedItemsRelations: () => savedItemsRelations,
   scholarships: () => scholarships,
   scholarshipsRelations: () => scholarshipsRelations,
+  stripeEvents: () => stripeEvents,
+  subscribers: () => subscribers,
   teamMembers: () => teamMembers,
   testimonials: () => testimonials,
   testimonialsRelations: () => testimonialsRelations,
   users: () => users,
-  usersRelations: () => usersRelations
+  usersRelations: () => usersRelations,
+  walletAccounts: () => walletAccounts,
+  walletAccountsRelations: () => walletAccountsRelations
 });
 import {
   boolean,
+  index,
   integer,
   jsonb,
   pgTable,
   serial,
   text,
   timestamp,
-  varchar
+  varchar,
+  uniqueIndex
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
+import { z as z2 } from "zod";
 var users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: varchar("username", { length: 255 }).notNull().unique(),
@@ -93,6 +160,9 @@ var users = pgTable("users", {
   profilePicture: text("profile_picture"),
   phone: varchar("phone", { length: 20 }),
   dateOfBirth: timestamp("date_of_birth"),
+  referralCode: varchar("referral_code", { length: 24 }).unique(),
+  stripeCustomerId: text("stripe_customer_id").unique(),
+  defaultCurrency: varchar("default_currency", { length: 3 }).default("USD"),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow()
@@ -160,6 +230,8 @@ var partners = pgTable("partners", {
 var testimonials = pgTable("testimonials", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
+  authorName: text("author_name"),
+  credential: text("credential"),
   content: text("content").notNull(),
   rating: integer("rating").notNull(),
   imageUrl: text("image_url"),
@@ -203,6 +275,118 @@ var teamMembers = pgTable("team_members", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow()
 });
+var events = pgTable(
+  "events",
+  {
+    id: serial("id").primaryKey(),
+    title: text("title").notNull(),
+    slug: varchar("slug", { length: 180 }).notNull().unique(),
+    summary: text("summary"),
+    description: text("description").notNull(),
+    category: varchar("category", { length: 100 }).notNull().default("General"),
+    eventType: varchar("event_type", { length: 80 }).notNull().default("Information Session"),
+    location: text("location").notNull().default("Lilongwe, Malawi"),
+    venueName: text("venue_name"),
+    address: text("address"),
+    mapUrl: text("map_url"),
+    isVirtual: boolean("is_virtual").default(false),
+    virtualUrl: text("virtual_url"),
+    livestreamUrl: text("livestream_url"),
+    isPaid: boolean("is_paid").default(false),
+    priceAmount: integer("price_amount").default(0),
+    currency: varchar("currency", { length: 10 }).default("MWK"),
+    capacity: integer("capacity"),
+    startAt: timestamp("start_at").notNull(),
+    endAt: timestamp("end_at").notNull(),
+    registrationDeadline: timestamp("registration_deadline"),
+    coverImage: text("cover_image"),
+    videoUrl: text("video_url"),
+    tags: text("tags").array(),
+    agenda: jsonb("agenda").$type(),
+    speakers: jsonb("speakers").$type(),
+    sponsors: jsonb("sponsors").$type(),
+    faqs: jsonb("faqs").$type(),
+    resources: jsonb("resources").$type(),
+    gallery: jsonb("gallery").$type(),
+    status: varchar("status", { length: 40 }).notNull().default("draft"),
+    isFeatured: boolean("is_featured").default(false),
+    isRecommended: boolean("is_recommended").default(false),
+    isTrending: boolean("is_trending").default(false),
+    allowComments: boolean("allow_comments").default(true),
+    requiresApproval: boolean("requires_approval").default(false),
+    viewCount: integer("view_count").default(0),
+    shareCount: integer("share_count").default(0),
+    likeCount: integer("like_count").default(0),
+    createdBy: integer("created_by").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow()
+  },
+  (table) => ({
+    slugIdx: uniqueIndex("events_slug_idx").on(table.slug),
+    statusIdx: index("events_status_idx").on(table.status),
+    startIdx: index("events_start_at_idx").on(table.startAt),
+    categoryIdx: index("events_category_idx").on(table.category)
+  })
+);
+var eventRegistrations = pgTable(
+  "event_registrations",
+  {
+    id: serial("id").primaryKey(),
+    eventId: integer("event_id").notNull(),
+    userId: integer("user_id"),
+    fullName: text("full_name").notNull(),
+    email: varchar("email", { length: 255 }).notNull(),
+    phone: varchar("phone", { length: 40 }),
+    organization: text("organization"),
+    status: varchar("status", { length: 40 }).notNull().default("pending"),
+    ticketCode: varchar("ticket_code", { length: 80 }).notNull().unique(),
+    attendanceStatus: varchar("attendance_status", { length: 40 }).notNull().default("registered"),
+    answers: jsonb("answers").$type(),
+    reminderOptIn: boolean("reminder_opt_in").default(true),
+    checkedInAt: timestamp("checked_in_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow()
+  },
+  (table) => ({
+    eventIdx: index("event_registrations_event_idx").on(table.eventId),
+    emailIdx: index("event_registrations_email_idx").on(table.email),
+    statusIdx: index("event_registrations_status_idx").on(table.status)
+  })
+);
+var eventComments = pgTable(
+  "event_comments",
+  {
+    id: serial("id").primaryKey(),
+    eventId: integer("event_id").notNull(),
+    userId: integer("user_id"),
+    parentId: integer("parent_id"),
+    authorName: text("author_name").notNull(),
+    authorEmail: varchar("author_email", { length: 255 }),
+    content: text("content").notNull(),
+    status: varchar("status", { length: 40 }).notNull().default("approved"),
+    reportCount: integer("report_count").default(0),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow()
+  },
+  (table) => ({
+    eventIdx: index("event_comments_event_idx").on(table.eventId),
+    statusIdx: index("event_comments_status_idx").on(table.status)
+  })
+);
+var eventReactions = pgTable(
+  "event_reactions",
+  {
+    id: serial("id").primaryKey(),
+    eventId: integer("event_id").notNull(),
+    userId: integer("user_id"),
+    visitorId: varchar("visitor_id", { length: 120 }),
+    reaction: varchar("reaction", { length: 40 }).notNull().default("like"),
+    createdAt: timestamp("created_at").defaultNow()
+  },
+  (table) => ({
+    eventIdx: index("event_reactions_event_idx").on(table.eventId)
+  })
+);
 var referrals = pgTable("referrals", {
   id: serial("id").primaryKey(),
   referrerId: integer("referrer_id").notNull(),
@@ -212,6 +396,180 @@ var referrals = pgTable("referrals", {
   rewardAmount: integer("reward_amount").default(0),
   createdAt: timestamp("created_at").defaultNow(),
   completedAt: timestamp("completed_at")
+});
+var referralCampaigns = pgTable("referral_campaigns", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  codePrefix: varchar("code_prefix", { length: 20 }),
+  startsAt: timestamp("starts_at").notNull(),
+  endsAt: timestamp("ends_at"),
+  status: varchar("status", { length: 30 }).notNull().default("draft"),
+  boostBps: integer("boost_bps").notNull().default(1e4),
+  maxRewardsPerReferrer: integer("max_rewards_per_referrer"),
+  attributionModel: varchar("attribution_model", { length: 30 }).notNull().default("last_click"),
+  createdBy: integer("created_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow()
+});
+var referralCodes = pgTable("referral_codes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  campaignId: integer("campaign_id"),
+  code: varchar("code", { length: 32 }).notNull().unique(),
+  expiresAt: timestamp("expires_at"),
+  maxUses: integer("max_uses"),
+  useCount: integer("use_count").notNull().default(0),
+  status: varchar("status", { length: 30 }).notNull().default("active"),
+  createdAt: timestamp("created_at").defaultNow()
+});
+var referralClicks = pgTable("referral_clicks", {
+  id: serial("id").primaryKey(),
+  referralCodeId: integer("referral_code_id"),
+  campaignId: integer("campaign_id"),
+  referrerId: integer("referrer_id"),
+  visitorId: varchar("visitor_id", { length: 64 }).notNull(),
+  ipHash: text("ip_hash"),
+  userAgentHash: text("user_agent_hash"),
+  deviceFingerprintHash: text("device_fingerprint_hash"),
+  landingUrl: text("landing_url"),
+  utm: jsonb("utm").$type(),
+  riskScore: integer("risk_score").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow()
+});
+var referralRelationships = pgTable("referral_relationships", {
+  id: serial("id").primaryKey(),
+  referrerId: integer("referrer_id").notNull(),
+  referredUserId: integer("referred_user_id").notNull().unique(),
+  referralCodeId: integer("referral_code_id"),
+  campaignId: integer("campaign_id"),
+  level: integer("level").notNull().default(1),
+  attributionModel: varchar("attribution_model", { length: 30 }).notNull().default("last_click"),
+  status: varchar("status", { length: 40 }).notNull().default("signup_pending"),
+  fraudStatus: varchar("fraud_status", { length: 40 }).notNull().default("clear"),
+  firstPaymentId: integer("first_payment_id"),
+  activatedAt: timestamp("activated_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow()
+});
+var payments = pgTable("payments", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeCheckoutSessionId: text("stripe_checkout_session_id").unique(),
+  stripePaymentIntentId: text("stripe_payment_intent_id").unique(),
+  stripeInvoiceId: text("stripe_invoice_id").unique(),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  amountTotal: integer("amount_total").notNull(),
+  amountNet: integer("amount_net"),
+  currency: varchar("currency", { length: 3 }).notNull(),
+  status: varchar("status", { length: 40 }).notNull(),
+  productType: varchar("product_type", { length: 60 }).notNull(),
+  metadata: jsonb("metadata").$type(),
+  paidAt: timestamp("paid_at"),
+  refundedAt: timestamp("refunded_at"),
+  createdAt: timestamp("created_at").defaultNow()
+});
+var commissionRules = pgTable("commission_rules", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id"),
+  productType: varchar("product_type", { length: 60 }),
+  level: integer("level").notNull().default(1),
+  calculationType: varchar("calculation_type", { length: 30 }).notNull(),
+  percentBps: integer("percent_bps").notNull().default(0),
+  flatAmount: integer("flat_amount").notNull().default(0),
+  currency: varchar("currency", { length: 3 }).notNull().default("USD"),
+  releaseDelayDays: integer("release_delay_days").notNull().default(14),
+  minPaymentAmount: integer("min_payment_amount").default(0),
+  maxCommissionAmount: integer("max_commission_amount"),
+  status: varchar("status", { length: 30 }).notNull().default("active"),
+  createdAt: timestamp("created_at").defaultNow()
+});
+var commissions = pgTable("commissions", {
+  id: serial("id").primaryKey(),
+  paymentId: integer("payment_id").notNull(),
+  referralRelationshipId: integer("referral_relationship_id").notNull(),
+  beneficiaryUserId: integer("beneficiary_user_id").notNull(),
+  ruleId: integer("rule_id"),
+  level: integer("level").notNull(),
+  grossPaymentAmount: integer("gross_payment_amount").notNull(),
+  commissionAmount: integer("commission_amount").notNull(),
+  currency: varchar("currency", { length: 3 }).notNull(),
+  status: varchar("status", { length: 40 }).notNull().default("pending_release"),
+  releaseAt: timestamp("release_at").notNull(),
+  releasedAt: timestamp("released_at"),
+  reversedAt: timestamp("reversed_at"),
+  riskScore: integer("risk_score").notNull().default(0),
+  idempotencyKey: text("idempotency_key").notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow()
+});
+var walletAccounts = pgTable("wallet_accounts", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().unique(),
+  currency: varchar("currency", { length: 3 }).notNull().default("USD"),
+  availableBalance: integer("available_balance").notNull().default(0),
+  pendingBalance: integer("pending_balance").notNull().default(0),
+  lifetimeEarned: integer("lifetime_earned").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow()
+});
+var ledgerEntries = pgTable("ledger_entries", {
+  id: serial("id").primaryKey(),
+  walletAccountId: integer("wallet_account_id"),
+  userId: integer("user_id"),
+  commissionId: integer("commission_id"),
+  payoutRequestId: integer("payout_request_id"),
+  direction: varchar("direction", { length: 10 }).notNull(),
+  balanceType: varchar("balance_type", { length: 20 }).notNull(),
+  amount: integer("amount").notNull(),
+  currency: varchar("currency", { length: 3 }).notNull(),
+  entryType: varchar("entry_type", { length: 60 }).notNull(),
+  idempotencyKey: text("idempotency_key").notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow()
+});
+var stripeEvents = pgTable("stripe_events", {
+  id: serial("id").primaryKey(),
+  stripeEventId: text("stripe_event_id").notNull().unique(),
+  eventType: text("event_type").notNull(),
+  objectId: text("object_id").notNull(),
+  payload: jsonb("payload").$type().notNull(),
+  processingStatus: varchar("processing_status", { length: 30 }).notNull().default("received"),
+  processedAt: timestamp("processed_at"),
+  error: text("error"),
+  createdAt: timestamp("created_at").defaultNow()
+});
+var payoutRequests = pgTable("payout_requests", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  amount: integer("amount").notNull(),
+  currency: varchar("currency", { length: 3 }).notNull(),
+  method: varchar("method", { length: 40 }).notNull(),
+  destination: jsonb("destination").$type(),
+  status: varchar("status", { length: 40 }).notNull().default("requested"),
+  requestedAt: timestamp("requested_at").defaultNow(),
+  approvedBy: integer("approved_by"),
+  approvedAt: timestamp("approved_at"),
+  paidAt: timestamp("paid_at"),
+  failureReason: text("failure_reason")
+});
+var fraudSignals = pgTable("fraud_signals", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id"),
+  referralRelationshipId: integer("referral_relationship_id"),
+  paymentId: integer("payment_id"),
+  signalType: varchar("signal_type", { length: 80 }).notNull(),
+  severity: varchar("severity", { length: 20 }).notNull(),
+  score: integer("score").notNull(),
+  metadata: jsonb("metadata").$type(),
+  createdAt: timestamp("created_at").defaultNow()
+});
+var referralDisputes = pgTable("referral_disputes", {
+  id: serial("id").primaryKey(),
+  referralRelationshipId: integer("referral_relationship_id"),
+  openedBy: integer("opened_by").notNull(),
+  assignedTo: integer("assigned_to"),
+  status: varchar("status", { length: 40 }).notNull().default("open"),
+  reason: text("reason").notNull(),
+  resolution: text("resolution"),
+  createdAt: timestamp("created_at").defaultNow(),
+  resolvedAt: timestamp("resolved_at")
 });
 var analytics = pgTable("analytics", {
   id: serial("id").primaryKey(),
@@ -240,12 +598,37 @@ var messages = pgTable("messages", {
   isRead: boolean("is_read").default(false),
   createdAt: timestamp("created_at").defaultNow()
 });
+var subscribers = pgTable("subscribers", {
+  id: serial("id").primaryKey(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  name: text("name"),
+  status: varchar("status", { length: 40 }).notNull().default("pending"),
+  preferences: jsonb("preferences").$type(),
+  source: varchar("source", { length: 80 }).default("website"),
+  verificationToken: text("verification_token"),
+  unsubscribeToken: text("unsubscribe_token"),
+  verifiedAt: timestamp("verified_at"),
+  unsubscribedAt: timestamp("unsubscribed_at"),
+  lastEmailAt: timestamp("last_email_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow()
+});
 var usersRelations = relations(users, ({ many }) => ({
   applications: many(applications),
   testimonials: many(testimonials),
   blogPosts: many(blogPosts),
   blogComments: many(blogComments),
+  events: many(events),
+  eventRegistrations: many(eventRegistrations),
+  eventComments: many(eventComments),
+  eventReactions: many(eventReactions),
   referrals: many(referrals),
+  referralCodes: many(referralCodes),
+  referralRelationships: many(referralRelationships),
+  payments: many(payments),
+  commissions: many(commissions),
+  ledgerEntries: many(ledgerEntries),
+  payoutRequests: many(payoutRequests),
   analytics: many(analytics),
   savedItems: many(savedItems)
 }));
@@ -290,6 +673,45 @@ var blogCommentsRelations = relations(blogComments, ({ one }) => ({
     references: [users.id]
   })
 }));
+var eventsRelations = relations(events, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [events.createdBy],
+    references: [users.id]
+  }),
+  registrations: many(eventRegistrations),
+  comments: many(eventComments),
+  reactions: many(eventReactions)
+}));
+var eventRegistrationsRelations = relations(eventRegistrations, ({ one }) => ({
+  event: one(events, {
+    fields: [eventRegistrations.eventId],
+    references: [events.id]
+  }),
+  user: one(users, {
+    fields: [eventRegistrations.userId],
+    references: [users.id]
+  })
+}));
+var eventCommentsRelations = relations(eventComments, ({ one }) => ({
+  event: one(events, {
+    fields: [eventComments.eventId],
+    references: [events.id]
+  }),
+  user: one(users, {
+    fields: [eventComments.userId],
+    references: [users.id]
+  })
+}));
+var eventReactionsRelations = relations(eventReactions, ({ one }) => ({
+  event: one(events, {
+    fields: [eventReactions.eventId],
+    references: [events.id]
+  }),
+  user: one(users, {
+    fields: [eventReactions.userId],
+    references: [users.id]
+  })
+}));
 var referralsRelations = relations(referrals, ({ one }) => ({
   referrer: one(users, {
     fields: [referrals.referrerId],
@@ -297,6 +719,125 @@ var referralsRelations = relations(referrals, ({ one }) => ({
   }),
   referredUser: one(users, {
     fields: [referrals.referredUserId],
+    references: [users.id]
+  })
+}));
+var referralCampaignsRelations = relations(referralCampaigns, ({ one, many }) => ({
+  createdBy: one(users, {
+    fields: [referralCampaigns.createdBy],
+    references: [users.id]
+  }),
+  codes: many(referralCodes),
+  clicks: many(referralClicks),
+  relationships: many(referralRelationships),
+  commissionRules: many(commissionRules)
+}));
+var referralCodesRelations = relations(referralCodes, ({ one, many }) => ({
+  user: one(users, {
+    fields: [referralCodes.userId],
+    references: [users.id]
+  }),
+  campaign: one(referralCampaigns, {
+    fields: [referralCodes.campaignId],
+    references: [referralCampaigns.id]
+  }),
+  clicks: many(referralClicks),
+  relationships: many(referralRelationships)
+}));
+var referralClicksRelations = relations(referralClicks, ({ one }) => ({
+  referralCode: one(referralCodes, {
+    fields: [referralClicks.referralCodeId],
+    references: [referralCodes.id]
+  }),
+  campaign: one(referralCampaigns, {
+    fields: [referralClicks.campaignId],
+    references: [referralCampaigns.id]
+  }),
+  referrer: one(users, {
+    fields: [referralClicks.referrerId],
+    references: [users.id]
+  })
+}));
+var referralRelationshipsRelations = relations(referralRelationships, ({ one, many }) => ({
+  referrer: one(users, {
+    fields: [referralRelationships.referrerId],
+    references: [users.id]
+  }),
+  referredUser: one(users, {
+    fields: [referralRelationships.referredUserId],
+    references: [users.id]
+  }),
+  referralCode: one(referralCodes, {
+    fields: [referralRelationships.referralCodeId],
+    references: [referralCodes.id]
+  }),
+  campaign: one(referralCampaigns, {
+    fields: [referralRelationships.campaignId],
+    references: [referralCampaigns.id]
+  }),
+  commissions: many(commissions)
+}));
+var paymentsRelations = relations(payments, ({ one, many }) => ({
+  user: one(users, {
+    fields: [payments.userId],
+    references: [users.id]
+  }),
+  commissions: many(commissions)
+}));
+var commissionRulesRelations = relations(commissionRules, ({ one, many }) => ({
+  campaign: one(referralCampaigns, {
+    fields: [commissionRules.campaignId],
+    references: [referralCampaigns.id]
+  }),
+  commissions: many(commissions)
+}));
+var commissionsRelations = relations(commissions, ({ one, many }) => ({
+  payment: one(payments, {
+    fields: [commissions.paymentId],
+    references: [payments.id]
+  }),
+  relationship: one(referralRelationships, {
+    fields: [commissions.referralRelationshipId],
+    references: [referralRelationships.id]
+  }),
+  beneficiary: one(users, {
+    fields: [commissions.beneficiaryUserId],
+    references: [users.id]
+  }),
+  rule: one(commissionRules, {
+    fields: [commissions.ruleId],
+    references: [commissionRules.id]
+  }),
+  ledgerEntries: many(ledgerEntries)
+}));
+var walletAccountsRelations = relations(walletAccounts, ({ one, many }) => ({
+  user: one(users, {
+    fields: [walletAccounts.userId],
+    references: [users.id]
+  }),
+  ledgerEntries: many(ledgerEntries)
+}));
+var ledgerEntriesRelations = relations(ledgerEntries, ({ one }) => ({
+  walletAccount: one(walletAccounts, {
+    fields: [ledgerEntries.walletAccountId],
+    references: [walletAccounts.id]
+  }),
+  user: one(users, {
+    fields: [ledgerEntries.userId],
+    references: [users.id]
+  }),
+  commission: one(commissions, {
+    fields: [ledgerEntries.commissionId],
+    references: [commissions.id]
+  })
+}));
+var payoutRequestsRelations = relations(payoutRequests, ({ one }) => ({
+  user: one(users, {
+    fields: [payoutRequests.userId],
+    references: [users.id]
+  }),
+  approver: one(users, {
+    fields: [payoutRequests.approvedBy],
     references: [users.id]
   })
 }));
@@ -358,10 +899,89 @@ var insertTeamMemberSchema = createInsertSchema(teamMembers).omit({
   createdAt: true,
   updatedAt: true
 });
+var insertEventSchema = createInsertSchema(events).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  viewCount: true,
+  shareCount: true,
+  likeCount: true
+});
+var insertEventRegistrationSchema = createInsertSchema(eventRegistrations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  checkedInAt: true
+});
+var insertEventCommentSchema = createInsertSchema(eventComments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  reportCount: true
+});
+var insertEventReactionSchema = createInsertSchema(eventReactions).omit({
+  id: true,
+  createdAt: true
+});
 var insertReferralSchema = createInsertSchema(referrals).omit({
   id: true,
   createdAt: true,
   completedAt: true
+});
+var insertReferralCampaignSchema = createInsertSchema(referralCampaigns).omit({
+  id: true,
+  createdAt: true
+});
+var insertReferralCodeSchema = createInsertSchema(referralCodes).omit({
+  id: true,
+  createdAt: true
+});
+var insertReferralClickSchema = createInsertSchema(referralClicks).omit({
+  id: true,
+  createdAt: true
+});
+var insertReferralRelationshipSchema = createInsertSchema(referralRelationships).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+var insertPaymentSchema = createInsertSchema(payments).omit({
+  id: true,
+  createdAt: true
+});
+var insertCommissionRuleSchema = createInsertSchema(commissionRules).omit({
+  id: true,
+  createdAt: true
+});
+var insertCommissionSchema = createInsertSchema(commissions).omit({
+  id: true,
+  createdAt: true
+});
+var insertWalletAccountSchema = createInsertSchema(walletAccounts).omit({
+  id: true,
+  createdAt: true
+});
+var insertLedgerEntrySchema = createInsertSchema(ledgerEntries).omit({
+  id: true,
+  createdAt: true
+});
+var insertStripeEventSchema = createInsertSchema(stripeEvents).omit({
+  createdAt: true
+});
+var insertPayoutRequestSchema = createInsertSchema(payoutRequests).omit({
+  id: true,
+  requestedAt: true,
+  approvedAt: true,
+  paidAt: true
+});
+var insertFraudSignalSchema = createInsertSchema(fraudSignals).omit({
+  id: true,
+  createdAt: true
+});
+var insertReferralDisputeSchema = createInsertSchema(referralDisputes).omit({
+  id: true,
+  createdAt: true,
+  resolvedAt: true
 });
 var insertAnalyticsSchema = createInsertSchema(analytics).omit({
   id: true,
@@ -375,6 +995,13 @@ var insertMessageSchema = createInsertSchema(messages).omit({
   id: true,
   createdAt: true,
   isRead: true
+});
+var insertSubscriberSchema = createInsertSchema(subscribers, {
+  preferences: z2.array(z2.string()).nullable().optional()
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
 });
 
 // server/db.ts
@@ -634,6 +1261,92 @@ var DatabaseStorage = class {
     const result = await db.delete(teamMembers).where(eq(teamMembers.id, id));
     return result.rowCount > 0;
   }
+  // Events
+  async getEvent(id) {
+    const [event] = await db.select().from(events).where(eq(events.id, id));
+    return event || void 0;
+  }
+  async getEventBySlug(slug) {
+    const [event] = await db.select().from(events).where(eq(events.slug, slug));
+    return event || void 0;
+  }
+  async getAllEvents() {
+    return await db.select().from(events).orderBy(desc(events.startAt), desc(events.createdAt));
+  }
+  async getPublishedEvents() {
+    return await db.select().from(events).where(eq(events.status, "published")).orderBy(asc(events.startAt), desc(events.createdAt));
+  }
+  async createEvent(insertEvent) {
+    const [event] = await db.insert(events).values(insertEvent).returning();
+    return event;
+  }
+  async updateEvent(id, updateEvent) {
+    const [event] = await db.update(events).set({ ...updateEvent, updatedAt: /* @__PURE__ */ new Date() }).where(eq(events.id, id)).returning();
+    return event;
+  }
+  async deleteEvent(id) {
+    await db.delete(eventReactions).where(eq(eventReactions.eventId, id));
+    await db.delete(eventComments).where(eq(eventComments.eventId, id));
+    await db.delete(eventRegistrations).where(eq(eventRegistrations.eventId, id));
+    const result = await db.delete(events).where(eq(events.id, id));
+    return result.rowCount > 0;
+  }
+  async searchEvents(query) {
+    return await db.select().from(events).where(
+      and(
+        eq(events.status, "published"),
+        or(
+          like(events.title, `%${query}%`),
+          like(events.description, `%${query}%`),
+          like(events.category, `%${query}%`),
+          like(events.location, `%${query}%`)
+        )
+      )
+    ).orderBy(asc(events.startAt));
+  }
+  async incrementEventView(id) {
+    const [event] = await db.update(events).set({ viewCount: sql`${events.viewCount} + 1` }).where(eq(events.id, id)).returning();
+    return event;
+  }
+  async incrementEventShare(id) {
+    const [event] = await db.update(events).set({ shareCount: sql`${events.shareCount} + 1` }).where(eq(events.id, id)).returning();
+    return event;
+  }
+  async incrementEventLike(id) {
+    const [event] = await db.update(events).set({ likeCount: sql`${events.likeCount} + 1` }).where(eq(events.id, id)).returning();
+    return event;
+  }
+  async getEventRegistrations(eventId) {
+    return await db.select().from(eventRegistrations).where(eq(eventRegistrations.eventId, eventId)).orderBy(desc(eventRegistrations.createdAt));
+  }
+  async getAllEventRegistrations() {
+    return await db.select().from(eventRegistrations).orderBy(desc(eventRegistrations.createdAt));
+  }
+  async createEventRegistration(insertRegistration) {
+    const [registration] = await db.insert(eventRegistrations).values(insertRegistration).returning();
+    return registration;
+  }
+  async updateEventRegistration(id, updateRegistration) {
+    const [registration] = await db.update(eventRegistrations).set({ ...updateRegistration, updatedAt: /* @__PURE__ */ new Date() }).where(eq(eventRegistrations.id, id)).returning();
+    return registration;
+  }
+  async getEventComments(eventId, includeModerated = false) {
+    return await db.select().from(eventComments).where(
+      includeModerated ? eq(eventComments.eventId, eventId) : and(eq(eventComments.eventId, eventId), eq(eventComments.status, "approved"))
+    ).orderBy(asc(eventComments.createdAt));
+  }
+  async createEventComment(insertComment) {
+    const [comment] = await db.insert(eventComments).values(insertComment).returning();
+    return comment;
+  }
+  async updateEventComment(id, updateComment) {
+    const [comment] = await db.update(eventComments).set({ ...updateComment, updatedAt: /* @__PURE__ */ new Date() }).where(eq(eventComments.id, id)).returning();
+    return comment;
+  }
+  async createEventReaction(insertReaction) {
+    const [reaction] = await db.insert(eventReactions).values(insertReaction).returning();
+    return reaction;
+  }
   // Referrals
   async getReferral(id) {
     const [referral] = await db.select().from(referrals).where(eq(referrals.id, id));
@@ -680,13 +1393,21 @@ var DatabaseStorage = class {
     const totalApplications = await db.select({ count: count() }).from(applications);
     const activeTestimonials = await db.select({ count: count() }).from(testimonials).where(eq(testimonials.isApproved, true));
     const publishedBlogPosts = await db.select({ count: count() }).from(blogPosts).where(eq(blogPosts.isPublished, true));
+    const totalSubscribers = await db.select({ count: count() }).from(subscribers);
+    const totalEvents = await db.select({ count: count() }).from(events);
+    const publishedEvents = await db.select({ count: count() }).from(events).where(eq(events.status, "published"));
+    const eventRegistrationsCount = await db.select({ count: count() }).from(eventRegistrations);
     return {
       totalUsers: totalUsers[0].count,
       totalScholarships: totalScholarships[0].count,
       totalJobs: totalJobs[0].count,
       totalApplications: totalApplications[0].count,
       activeTestimonials: activeTestimonials[0].count,
-      publishedBlogPosts: publishedBlogPosts[0].count
+      publishedBlogPosts: publishedBlogPosts[0].count,
+      totalSubscribers: totalSubscribers[0].count,
+      totalEvents: totalEvents[0].count,
+      publishedEvents: publishedEvents[0].count,
+      eventRegistrations: eventRegistrationsCount[0].count
     };
   }
   // Saved Items
@@ -725,16 +1446,41 @@ var DatabaseStorage = class {
     const [message] = await db.update(messages).set({ isRead: true }).where(eq(messages.id, id)).returning();
     return message;
   }
+  async getSubscriberByEmail(email) {
+    const [subscriber] = await db.select().from(subscribers).where(eq(subscribers.email, email.toLowerCase()));
+    return subscriber || void 0;
+  }
+  async getSubscriberByVerificationToken(token) {
+    const [subscriber] = await db.select().from(subscribers).where(eq(subscribers.verificationToken, token));
+    return subscriber || void 0;
+  }
+  async getSubscriberByUnsubscribeToken(token) {
+    const [subscriber] = await db.select().from(subscribers).where(eq(subscribers.unsubscribeToken, token));
+    return subscriber || void 0;
+  }
+  async getAllSubscribers() {
+    return await db.select().from(subscribers).orderBy(desc(subscribers.createdAt));
+  }
+  async createSubscriber(insertSubscriber) {
+    const [subscriber] = await db.insert(subscribers).values(insertSubscriber).returning();
+    return subscriber;
+  }
+  async updateSubscriber(id, updateSubscriber) {
+    const [subscriber] = await db.update(subscribers).set({ ...updateSubscriber, updatedAt: /* @__PURE__ */ new Date() }).where(eq(subscribers.id, id)).returning();
+    return subscriber;
+  }
 };
 var storage = new DatabaseStorage();
 
 // server/routes.ts
 import bcrypt from "bcryptjs";
-import fs2 from "fs";
+import { randomBytes } from "crypto";
+import fs3 from "fs";
 import jwt from "jsonwebtoken";
 import multer from "multer";
-import path2 from "path";
-import { z as z2 } from "zod";
+import path3 from "path";
+import QRCode from "qrcode";
+import { z as z3 } from "zod";
 
 // server/ai.ts
 import OpenAI from "openai";
@@ -778,10 +1524,267 @@ async function getChatResponse(message) {
   }
 }
 
-// server/admin-state.ts
+// server/email.ts
 import fs from "fs";
 import path from "path";
+import { randomUUID } from "crypto";
+var dataDir = path.resolve(import.meta.dirname, "..", "data");
+var emailLogPath = path.join(dataDir, "email-events.jsonl");
+var queue = [];
+var sentTimestamps = [];
+var isProcessing = false;
+fs.mkdirSync(dataDir, { recursive: true });
+var fromAddress = env.EMAIL_FROM || "Mtendere Education Consult <no-reply@mtendere.local>";
+var maxAttempts = 3;
+var maxEmailsPerMinute = 60;
+var escapeHtml = (value) => String(value || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+var appendEmailEvent = (event) => {
+  fs.appendFileSync(emailLogPath, `${JSON.stringify({ ...event, at: (/* @__PURE__ */ new Date()).toISOString() })}
+`);
+};
+var canSendNow = () => {
+  const now = Date.now();
+  while (sentTimestamps.length > 0 && now - sentTimestamps[0] > 6e4) {
+    sentTimestamps.shift();
+  }
+  return sentTimestamps.length < maxEmailsPerMinute;
+};
+var deliverEmail = async (job) => {
+  if (env.EMAIL_API_URL) {
+    const response = await fetch(env.EMAIL_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...env.EMAIL_API_KEY ? { Authorization: `Bearer ${env.EMAIL_API_KEY}` } : {}
+      },
+      body: JSON.stringify({
+        from: fromAddress,
+        to: job.to,
+        subject: job.subject,
+        html: job.html,
+        text: job.text,
+        category: job.category,
+        metadata: job.metadata
+      })
+    });
+    if (!response.ok) {
+      throw new Error(`Email API returned ${response.status}`);
+    }
+  } else {
+    console.info(`[email:${job.category}] ${job.subject} -> ${job.to}`);
+  }
+  sentTimestamps.push(Date.now());
+};
+var processEmailQueue = async () => {
+  if (isProcessing) return;
+  isProcessing = true;
+  try {
+    while (queue.length > 0) {
+      if (!canSendNow()) {
+        setTimeout(() => void processEmailQueue(), 5e3);
+        return;
+      }
+      const job = queue.shift();
+      if (!job) continue;
+      job.status = "processing";
+      job.attempts += 1;
+      appendEmailEvent({ id: job.id, status: "processing", category: job.category, to: job.to });
+      try {
+        await deliverEmail(job);
+        job.status = "sent";
+        appendEmailEvent({ id: job.id, status: "sent", category: job.category, to: job.to });
+      } catch (error) {
+        job.status = "failed";
+        job.lastError = error instanceof Error ? error.message : "Unknown email delivery error";
+        appendEmailEvent({
+          id: job.id,
+          status: "failed",
+          category: job.category,
+          to: job.to,
+          attempts: job.attempts,
+          error: job.lastError
+        });
+        if (job.attempts < maxAttempts) {
+          queue.push(job);
+        }
+      }
+    }
+  } finally {
+    isProcessing = false;
+  }
+};
+var enqueueEmail = (payload) => {
+  const job = {
+    ...payload,
+    id: randomUUID(),
+    status: "queued",
+    attempts: 0,
+    queuedAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  queue.push(job);
+  appendEmailEvent({ id: job.id, status: "queued", category: job.category, to: job.to });
+  void processEmailQueue();
+  return { id: job.id, status: job.status };
+};
+var ctaButton = (href, label) => `
+  <table role="presentation" cellspacing="0" cellpadding="0" style="margin: 28px 0;">
+    <tr>
+      <td style="border-radius: 8px; background: #f97316;">
+        <a href="${href}" style="display: inline-block; padding: 13px 20px; color: #ffffff; font-weight: 700; text-decoration: none; font-family: Arial, sans-serif;">
+          ${label}
+        </a>
+      </td>
+    </tr>
+  </table>
+`;
+var renderMtendereEmail = ({
+  title,
+  preheader,
+  body,
+  cta
+}) => `
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${escapeHtml(title)}</title>
+  </head>
+  <body style="margin:0; padding:0; background:#f5f7fb;">
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f5f7fb; padding:24px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px; background:#ffffff; border-radius:12px; overflow:hidden; border:1px solid #e5e7eb;">
+            <tr>
+              <td style="background:#0f4c81; padding:28px 32px; color:#ffffff; font-family:Arial, sans-serif;">
+                <div style="font-size:13px; letter-spacing:1.8px; text-transform:uppercase; color:#bfdbfe; font-weight:700;">Mtendere Education Consult</div>
+                <h1 style="margin:10px 0 0; font-size:28px; line-height:1.2; color:#ffffff;">${escapeHtml(title)}</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px; color:#1f2937; font-family:Arial, sans-serif; font-size:16px; line-height:1.7;">
+                ${body}
+                ${cta ? ctaButton(cta.href, cta.label) : ""}
+              </td>
+            </tr>
+            <tr>
+              <td style="background:#0b2f4f; padding:24px 32px; color:#dbeafe; font-family:Arial, sans-serif; font-size:13px; line-height:1.6;">
+                <strong style="color:#ffffff;">Mtendere Education Consult</strong><br>
+                Lilongwe, Malawi<br>
+                mtendereeducation@gmail.com | +265 999 360 325<br>
+                Monday - Friday: 8:00 AM - 5:00 PM | Saturday: 9:00 AM - 1:00 PM<br>
+                <span style="color:#93c5fd;">Scholarships | Study abroad | Career support | Jobs</span>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+var sendSubscriptionConfirmation = (input) => enqueueEmail({
+  to: input.email,
+  subject: "Confirm your Mtendere updates subscription",
+  category: "subscription_confirmation",
+  text: `Confirm your subscription: ${input.verificationUrl}
+Unsubscribe: ${input.unsubscribeUrl}`,
+  html: renderMtendereEmail({
+    title: "Confirm your subscription",
+    preheader: "Please confirm that you want to receive Mtendere opportunities and updates.",
+    body: `
+        <p>Hello ${escapeHtml(input.name || "there")},</p>
+        <p>Thanks for subscribing to Mtendere updates. Please confirm your email so we can send scholarship, career, study abroad, and education opportunity alerts to the right inbox.</p>
+        <p>If you did not request this, you can ignore this email or use the unsubscribe link below.</p>
+        <p style="font-size:13px; color:#6b7280;">Unsubscribe link: <a href="${input.unsubscribeUrl}" style="color:#0f4c81;">${input.unsubscribeUrl}</a></p>
+      `,
+    cta: { href: input.verificationUrl, label: "Confirm subscription" }
+  }),
+  metadata: { flow: "double_opt_in" }
+});
+var sendApplicationConfirmation = (input) => enqueueEmail({
+  to: input.email,
+  subject: `Application received: ${input.opportunityTitle}`,
+  category: "application_confirmation",
+  text: `We received your ${input.opportunityType} application for ${input.opportunityTitle}. Track it here: ${input.dashboardUrl}`,
+  html: renderMtendereEmail({
+    title: "Application received",
+    preheader: `Your ${input.opportunityType} application has been received.`,
+    body: `
+        <p>Hello ${escapeHtml(input.name || "there")},</p>
+        <p>We received your application for <strong>${escapeHtml(input.opportunityTitle)}</strong>.</p>
+        <p>Your submission is now in the Mtendere dashboard, where our team can review the opportunity, documents, notes, and next-step readiness.</p>
+        <p>You will receive updates as your application moves through review.</p>
+      `,
+    cta: { href: input.dashboardUrl, label: "View application status" }
+  }),
+  metadata: { opportunityType: input.opportunityType, opportunityTitle: input.opportunityTitle }
+});
+var sendApplicationStatusUpdate = (input) => {
+  const readableStatus = input.status.replace(/_/g, " ");
+  return enqueueEmail({
+    to: input.email,
+    subject: `Application update: ${input.opportunityTitle}`,
+    category: "application_status_update",
+    text: `Your ${input.opportunityType} application for ${input.opportunityTitle} is now ${readableStatus}. Track it here: ${input.dashboardUrl}`,
+    html: renderMtendereEmail({
+      title: "Application status updated",
+      preheader: `Your application is now ${readableStatus}.`,
+      body: `
+        <p>Hello ${escapeHtml(input.name || "there")},</p>
+        <p>Your ${escapeHtml(input.opportunityType)} application for <strong>${escapeHtml(input.opportunityTitle)}</strong> is now <strong style="text-transform: capitalize;">${escapeHtml(readableStatus)}</strong>.</p>
+        ${input.reviewNotes ? `<p><strong>Review note:</strong> ${escapeHtml(input.reviewNotes)}</p>` : "<p>The Mtendere team will keep your dashboard updated as the next step becomes available.</p>"}
+      `,
+      cta: { href: input.dashboardUrl, label: "View application status" }
+    }),
+    metadata: {
+      opportunityType: input.opportunityType,
+      opportunityTitle: input.opportunityTitle,
+      status: input.status
+    }
+  });
+};
+var sendContactAcknowledgement = (input) => enqueueEmail({
+  to: input.email,
+  subject: "We received your Mtendere message",
+  category: "contact_acknowledgement",
+  text: `Hello ${input.name}, we received your message${input.subject ? ` about ${input.subject}` : ""}.`,
+  html: renderMtendereEmail({
+    title: "We received your message",
+    preheader: "The Mtendere team will respond as soon as possible.",
+    body: `
+        <p>Hello ${escapeHtml(input.name)},</p>
+        <p>Thank you for contacting Mtendere Education Consult${input.subject ? ` about <strong>${escapeHtml(input.subject)}</strong>` : ""}.</p>
+        <p>Our team will review your message and respond with the right next step.</p>
+      `,
+    cta: { href: `${env.PUBLIC_APP_URL || ""}/contact`, label: "Visit contact page" }
+  }),
+  metadata: { subject: input.subject }
+});
+var sendAdminNotification = (input) => {
+  const to = env.ADMIN_NOTIFICATION_EMAIL || env.EMAIL_FROM;
+  if (!to) return null;
+  return enqueueEmail({
+    to,
+    subject: input.subject,
+    category: "admin_notification",
+    text: input.message,
+    html: renderMtendereEmail({
+      title: input.subject,
+      preheader: "Administrative platform notification.",
+      body: `<p>${escapeHtml(input.message)}</p>`
+    }),
+    metadata: input.metadata
+  });
+};
+
+// server/admin-state.ts
+import fs2 from "fs";
+import path2 from "path";
 var nowIso = () => (/* @__PURE__ */ new Date()).toISOString();
+var CORE_ADMIN_ROLE_IDS = ["viewer", "editor", "admin", "super_admin"];
+var coreAdminRoleSet = new Set(CORE_ADMIN_ROLE_IDS);
+var isCoreAdminRole = (id) => coreAdminRoleSet.has(id);
 var DEFAULT_ROLES = [
   {
     id: "viewer",
@@ -798,11 +1801,13 @@ var DEFAULT_ROLES = [
     description: "Can create and update platform content.",
     permissions: [
       "view_dashboard",
+      "manage_events",
       "manage_scholarships",
       "manage_jobs",
       "manage_partners",
       "manage_blog",
-      "manage_team"
+      "manage_team",
+      "manage_media"
     ],
     isActive: true,
     createdAt: nowIso(),
@@ -814,11 +1819,13 @@ var DEFAULT_ROLES = [
     description: "Can manage content, users, and applications.",
     permissions: [
       "view_dashboard",
+      "manage_events",
       "manage_scholarships",
       "manage_jobs",
       "manage_partners",
       "manage_blog",
       "manage_team",
+      "manage_media",
       "manage_users",
       "review_applications",
       "view_analytics"
@@ -833,11 +1840,13 @@ var DEFAULT_ROLES = [
     description: "Full system access including settings and roles.",
     permissions: [
       "view_dashboard",
+      "manage_events",
       "manage_scholarships",
       "manage_jobs",
       "manage_partners",
       "manage_blog",
       "manage_team",
+      "manage_media",
       "manage_users",
       "review_applications",
       "view_analytics",
@@ -849,6 +1858,26 @@ var DEFAULT_ROLES = [
     updatedAt: nowIso()
   }
 ];
+var normalizeAdminRoles = (roles) => {
+  if (!roles?.length) return DEFAULT_ROLES;
+  const provided = new Map(roles.map((role) => [role.id, role]));
+  const normalizedCoreRoles = DEFAULT_ROLES.map((defaultRole) => {
+    const existing = provided.get(defaultRole.id);
+    if (!existing) return defaultRole;
+    return {
+      ...defaultRole,
+      ...existing,
+      permissions: Array.from(
+        /* @__PURE__ */ new Set([...existing.permissions ?? [], ...defaultRole.permissions])
+      ),
+      isActive: true,
+      createdAt: existing.createdAt ?? defaultRole.createdAt,
+      updatedAt: existing.updatedAt ?? defaultRole.updatedAt
+    };
+  });
+  const customRoles = roles.filter((role) => !isCoreAdminRole(role.id));
+  return [...normalizedCoreRoles, ...customRoles];
+};
 var createDefaultState = () => ({
   users: {},
   scholarships: {},
@@ -859,31 +1888,38 @@ var createDefaultState = () => ({
   roles: DEFAULT_ROLES,
   settings: {
     platformName: "Mtendere Education Platform",
-    supportEmail: "support@mtendere.com",
+    supportEmail: "mtendereeducation@gmail.com",
     sessionTimeout: 30,
     maxLoginAttempts: 5,
+    maintenanceMode: false,
+    emailNotifications: true,
+    twoFactorRequired: false,
+    weeklySummary: false,
+    contentPublishedNotifications: true,
+    authTokenInvalidBefore: null,
+    cacheVersion: 1,
     updatedAt: nowIso()
   },
   readNotificationIds: []
 });
-var stateFilePath = path.resolve(
+var stateFilePath = path2.resolve(
   import.meta.dirname,
   "..",
   "data",
   "admin-state.json"
 );
 var ensureStateDirectory = () => {
-  fs.mkdirSync(path.dirname(stateFilePath), { recursive: true });
+  fs2.mkdirSync(path2.dirname(stateFilePath), { recursive: true });
 };
 var loadState = () => {
   ensureStateDirectory();
-  if (!fs.existsSync(stateFilePath)) {
+  if (!fs2.existsSync(stateFilePath)) {
     const initialState = createDefaultState();
-    fs.writeFileSync(stateFilePath, JSON.stringify(initialState, null, 2), "utf-8");
+    fs2.writeFileSync(stateFilePath, JSON.stringify(initialState, null, 2), "utf-8");
     return initialState;
   }
   try {
-    const raw = fs.readFileSync(stateFilePath, "utf-8");
+    const raw = fs2.readFileSync(stateFilePath, "utf-8");
     const parsed = JSON.parse(raw);
     return {
       ...createDefaultState(),
@@ -894,7 +1930,7 @@ var loadState = () => {
       partners: parsed.partners ?? {},
       blogPosts: parsed.blogPosts ?? {},
       teamMembers: parsed.teamMembers ?? {},
-      roles: parsed.roles?.length ? parsed.roles : DEFAULT_ROLES,
+      roles: normalizeAdminRoles(parsed.roles),
       settings: {
         ...createDefaultState().settings,
         ...parsed.settings ?? {}
@@ -908,7 +1944,7 @@ var loadState = () => {
 var cachedState = loadState();
 var saveState = () => {
   ensureStateDirectory();
-  fs.writeFileSync(stateFilePath, JSON.stringify(cachedState, null, 2), "utf-8");
+  fs2.writeFileSync(stateFilePath, JSON.stringify(cachedState, null, 2), "utf-8");
 };
 var updateCollectionItem = (collection, id, value) => {
   cachedState = {
@@ -967,19 +2003,30 @@ var upsertAdminRole = (role) => {
   return nextRole;
 };
 var deleteAdminRole = (id) => {
+  if (isCoreAdminRole(id)) {
+    return false;
+  }
+  const existed = cachedState.roles.some((role) => role.id === id);
+  if (!existed) {
+    return false;
+  }
   cachedState = {
     ...cachedState,
     roles: cachedState.roles.filter((role) => role.id !== id)
   };
   saveState();
+  return true;
 };
 var getAdminSettings = () => ({ ...cachedState.settings });
 var updateAdminSettings = (updates) => {
+  const cleanUpdates = Object.fromEntries(
+    Object.entries(updates).filter(([, value]) => value !== void 0)
+  );
   cachedState = {
     ...cachedState,
     settings: {
       ...cachedState.settings,
-      ...updates,
+      ...cleanUpdates,
       updatedAt: nowIso()
     }
   };
@@ -1006,10 +2053,882 @@ var markNotificationsRead = (ids) => {
   saveState();
 };
 
+// server/referral-payments.ts
+import crypto from "crypto";
+import Stripe from "stripe";
+import { and as and2, desc as desc2, eq as eq2, inArray, isNull, lte, or as or2, sql as sql2 } from "drizzle-orm";
+var REFERRAL_COOKIE = "mec_referral";
+var VISITOR_COOKIE = "mec_visitor";
+var ATTRIBUTION_DAYS = 30;
+var stripeApiVersion = "2025-10-29.clover";
+var getOrigin = (req) => {
+  if (env.PUBLIC_APP_URL) return env.PUBLIC_APP_URL.replace(/\/$/, "");
+  const protocol = req.get("x-forwarded-proto") || req.protocol || "http";
+  return `${protocol}://${req.get("host")}`;
+};
+var normalizeCode = (code) => code.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+var randomCodeSuffix = () => crypto.randomBytes(3).toString("hex").toUpperCase();
+var hashValue = (value) => {
+  if (!value) return null;
+  return crypto.createHmac("sha256", env.JWT_SECRET).update(value).digest("hex");
+};
+var parseCookies = (cookieHeader) => {
+  const cookies = /* @__PURE__ */ new Map();
+  if (!cookieHeader) return cookies;
+  cookieHeader.split(";").forEach((part) => {
+    const [name, ...rest] = part.trim().split("=");
+    if (!name || rest.length === 0) return;
+    cookies.set(name, decodeURIComponent(rest.join("=")));
+  });
+  return cookies;
+};
+var setTrackingCookie = (res, name, value, maxAgeDays) => {
+  const maxAge = maxAgeDays * 24 * 60 * 60;
+  const encoded = encodeURIComponent(value);
+  res.append(
+    "Set-Cookie",
+    `${name}=${encoded}; Path=/; Max-Age=${maxAge}; SameSite=Lax; HttpOnly`
+  );
+};
+var getVisitorId = (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const existing = cookies.get(VISITOR_COOKIE);
+  if (existing) return existing;
+  const visitorId = crypto.randomUUID();
+  setTrackingCookie(res, VISITOR_COOKIE, visitorId, 365);
+  return visitorId;
+};
+var getStripe = () => {
+  if (!env.STRIPE_SECRET_KEY) return null;
+  return new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: stripeApiVersion });
+};
+var toStripeId = (value) => {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  if (typeof value === "object" && "id" in value && typeof value.id === "string") {
+    return value.id;
+  }
+  return null;
+};
+var getReferralCookieCode = (req) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const code = cookies.get(REFERRAL_COOKIE);
+  return code ? normalizeCode(code) : null;
+};
+var ensureUserGrowthRecords = async (userId, requestedCurrency = "USD") => {
+  const [user] = await db.select().from(users).where(eq2(users.id, userId)).limit(1);
+  if (!user) throw new Error("User not found");
+  let code = user.referralCode ? normalizeCode(user.referralCode) : "";
+  if (!code) {
+    code = `MEC${userId}${randomCodeSuffix()}`;
+    await db.update(users).set({ referralCode: code, updatedAt: /* @__PURE__ */ new Date() }).where(eq2(users.id, userId));
+  }
+  await db.insert(referralCodes).values({ userId, code, status: "active" }).onConflictDoNothing({ target: referralCodes.code });
+  await db.insert(walletAccounts).values({
+    userId,
+    currency: (requestedCurrency || user.defaultCurrency || env.STRIPE_DEFAULT_CURRENCY).toUpperCase()
+  }).onConflictDoNothing({ target: walletAccounts.userId });
+  return code;
+};
+var trackReferralClick = async (req, res, codeParam) => {
+  const code = normalizeCode(codeParam);
+  if (!code) return null;
+  const [record] = await db.select().from(referralCodes).where(eq2(referralCodes.code, code)).limit(1);
+  if (!record || record.status !== "active") return null;
+  const now = /* @__PURE__ */ new Date();
+  if (record.expiresAt && record.expiresAt <= now) return null;
+  if (record.maxUses !== null && record.useCount >= record.maxUses) return null;
+  const visitorId = getVisitorId(req, res);
+  const utm = Object.fromEntries(
+    ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"].map((key) => [key, req.query[key]]).filter(([, value]) => typeof value === "string" && value.length > 0)
+  );
+  await db.insert(referralClicks).values({
+    referralCodeId: record.id,
+    campaignId: record.campaignId,
+    referrerId: record.userId,
+    visitorId,
+    ipHash: hashValue(req.ip || req.socket.remoteAddress),
+    userAgentHash: hashValue(req.get("user-agent")),
+    deviceFingerprintHash: hashValue(req.get("x-device-fingerprint")),
+    landingUrl: req.originalUrl,
+    utm: Object.keys(utm).length ? utm : null,
+    riskScore: 0
+  });
+  setTrackingCookie(res, REFERRAL_COOKIE, code, ATTRIBUTION_DAYS);
+  return record;
+};
+var createFraudSignal = async (relationshipId, userId, signalType, score, metadata) => {
+  await db.insert(fraudSignals).values({
+    userId,
+    referralRelationshipId: relationshipId,
+    signalType,
+    severity: score >= 70 ? "high" : score >= 40 ? "medium" : "low",
+    score,
+    metadata: metadata ?? null
+  });
+};
+var attachReferralToNewUser = async (user, req, explicitCode) => {
+  const code = explicitCode ? normalizeCode(explicitCode) : getReferralCookieCode(req);
+  if (!code) return null;
+  const [record] = await db.select().from(referralCodes).where(eq2(referralCodes.code, code)).limit(1);
+  if (!record || record.status !== "active" || record.userId === user.id) return null;
+  const now = /* @__PURE__ */ new Date();
+  if (record.expiresAt && record.expiresAt <= now) return null;
+  if (record.maxUses !== null && record.useCount >= record.maxUses) return null;
+  let fraudScore = 0;
+  const emailDomain = user.email.split("@")[1]?.toLowerCase() || "";
+  const disposableDomains = /* @__PURE__ */ new Set(["mailinator.com", "10minutemail.com", "tempmail.com", "guerrillamail.com"]);
+  if (disposableDomains.has(emailDomain)) fraudScore += 25;
+  const [{ count: pendingCount }] = await db.select({ count: sql2`count(*)::int` }).from(referralRelationships).where(and2(eq2(referralRelationships.referrerId, record.userId), eq2(referralRelationships.status, "signup_pending")));
+  if ((pendingCount ?? 0) >= 10) fraudScore += 20;
+  const fraudStatus = fraudScore >= 70 ? "review" : fraudScore >= 40 ? "hold" : "clear";
+  const [relationship] = await db.insert(referralRelationships).values({
+    referrerId: record.userId,
+    referredUserId: user.id,
+    referralCodeId: record.id,
+    campaignId: record.campaignId,
+    attributionModel: "last_click",
+    status: "signup_pending",
+    fraudStatus
+  }).onConflictDoNothing({ target: referralRelationships.referredUserId }).returning();
+  if (!relationship) return null;
+  await db.update(referralCodes).set({ useCount: sql2`${referralCodes.useCount} + 1` }).where(eq2(referralCodes.id, record.id));
+  if (fraudScore > 0) {
+    await createFraudSignal(relationship.id, user.id, "signup_risk_score", fraudScore, { emailDomain });
+  }
+  await db.update(referrals).set({
+    referredUserId: user.id,
+    status: "signup_pending",
+    completedAt: /* @__PURE__ */ new Date()
+  }).where(and2(eq2(referrals.referrerId, record.userId), eq2(referrals.referredEmail, user.email)));
+  return relationship;
+};
+var ensureWallet = async (userId, currency) => {
+  await db.insert(walletAccounts).values({ userId, currency: currency.toUpperCase() }).onConflictDoNothing({ target: walletAccounts.userId });
+  const [wallet] = await db.select().from(walletAccounts).where(eq2(walletAccounts.userId, userId)).limit(1);
+  if (!wallet) throw new Error("Wallet account could not be created");
+  return wallet;
+};
+var getRuleForPayment = async (relationship, payment) => {
+  const rules = await db.select().from(commissionRules).where(and2(eq2(commissionRules.status, "active"), eq2(commissionRules.level, relationship.level))).orderBy(desc2(commissionRules.createdAt));
+  return rules.find((rule) => rule.campaignId === relationship.campaignId && rule.productType === payment.productType) ?? rules.find((rule) => rule.productType === payment.productType && rule.campaignId === null) ?? rules.find((rule) => rule.campaignId === relationship.campaignId && rule.productType === null) ?? rules.find((rule) => rule.productType === null && rule.campaignId === null) ?? null;
+};
+var calculateCommissionAmount = async (relationship, payment) => {
+  const rule = await getRuleForPayment(relationship, payment);
+  if (!rule) return null;
+  const baseAmount = payment.amountNet ?? payment.amountTotal;
+  if (rule.minPaymentAmount !== null && baseAmount < rule.minPaymentAmount) return null;
+  let amount = 0;
+  if (rule.calculationType === "percent" || rule.calculationType === "hybrid") {
+    amount += Math.floor(baseAmount * rule.percentBps / 1e4);
+  }
+  if (rule.calculationType === "flat" || rule.calculationType === "hybrid") {
+    amount += rule.flatAmount;
+  }
+  if (relationship.campaignId) {
+    const [campaign] = await db.select().from(referralCampaigns).where(eq2(referralCampaigns.id, relationship.campaignId)).limit(1);
+    if (campaign) {
+      amount = Math.floor(amount * campaign.boostBps / 1e4);
+    }
+  }
+  if (rule.maxCommissionAmount !== null) {
+    amount = Math.min(amount, rule.maxCommissionAmount);
+  }
+  return amount > 0 ? {
+    amount,
+    ruleId: rule.id,
+    releaseDelayDays: rule.releaseDelayDays
+  } : null;
+};
+var recordPendingCommission = async (payment, relationship, riskScore) => {
+  const calculated = await calculateCommissionAmount(relationship, payment);
+  if (!calculated) return null;
+  if (relationship.fraudStatus === "review" || riskScore >= 70) {
+    await createFraudSignal(relationship.id, payment.userId, "commission_manual_review", riskScore || 70, {
+      paymentId: payment.id
+    });
+    return null;
+  }
+  const releaseAt = new Date(Date.now() + calculated.releaseDelayDays * 24 * 60 * 60 * 1e3);
+  const idempotencyKey = `commission:${payment.id}:${relationship.id}:${relationship.level}:${calculated.ruleId}`;
+  const [commission] = await db.insert(commissions).values({
+    paymentId: payment.id,
+    referralRelationshipId: relationship.id,
+    beneficiaryUserId: relationship.referrerId,
+    ruleId: calculated.ruleId,
+    level: relationship.level,
+    grossPaymentAmount: payment.amountTotal,
+    commissionAmount: calculated.amount,
+    currency: payment.currency,
+    status: relationship.fraudStatus === "hold" || riskScore >= 40 ? "pending_review" : "pending_release",
+    releaseAt,
+    riskScore,
+    idempotencyKey
+  }).onConflictDoNothing({ target: commissions.idempotencyKey }).returning();
+  if (!commission || commission.status !== "pending_release") return commission ?? null;
+  const wallet = await ensureWallet(relationship.referrerId, payment.currency);
+  const ledgerKey = `ledger:pending-credit:${commission.id}`;
+  await db.transaction(async (tx) => {
+    await tx.insert(ledgerEntries).values({
+      walletAccountId: wallet.id,
+      userId: relationship.referrerId,
+      commissionId: commission.id,
+      direction: "credit",
+      balanceType: "pending",
+      amount: commission.commissionAmount,
+      currency: commission.currency,
+      entryType: "commission_pending",
+      idempotencyKey: ledgerKey
+    }).onConflictDoNothing({ target: ledgerEntries.idempotencyKey });
+    await tx.update(walletAccounts).set({ pendingBalance: sql2`${walletAccounts.pendingBalance} + ${commission.commissionAmount}` }).where(eq2(walletAccounts.id, wallet.id));
+  });
+  return commission;
+};
+var findPaymentByStripeIdentifiers = async (identifiers) => {
+  if (identifiers.checkoutSessionId) {
+    const [payment] = await db.select().from(payments).where(eq2(payments.stripeCheckoutSessionId, identifiers.checkoutSessionId)).limit(1);
+    if (payment) return payment;
+  }
+  if (identifiers.paymentIntentId) {
+    const [payment] = await db.select().from(payments).where(eq2(payments.stripePaymentIntentId, identifiers.paymentIntentId)).limit(1);
+    if (payment) return payment;
+  }
+  if (identifiers.invoiceId) {
+    const [payment] = await db.select().from(payments).where(eq2(payments.stripeInvoiceId, identifiers.invoiceId)).limit(1);
+    if (payment) return payment;
+  }
+  return null;
+};
+var upsertPaidPayment = async (data) => {
+  const existing = await findPaymentByStripeIdentifiers({
+    checkoutSessionId: data.stripeCheckoutSessionId,
+    paymentIntentId: data.stripePaymentIntentId,
+    invoiceId: data.stripeInvoiceId
+  });
+  if (existing) {
+    const [updated] = await db.update(payments).set({
+      stripeCustomerId: data.stripeCustomerId ?? existing.stripeCustomerId,
+      stripePaymentIntentId: data.stripePaymentIntentId ?? existing.stripePaymentIntentId,
+      stripeInvoiceId: data.stripeInvoiceId ?? existing.stripeInvoiceId,
+      stripeSubscriptionId: data.stripeSubscriptionId ?? existing.stripeSubscriptionId,
+      amountTotal: data.amountTotal || existing.amountTotal,
+      amountNet: data.amountNet ?? existing.amountNet,
+      currency: data.currency || existing.currency,
+      status: data.status,
+      productType: data.productType || existing.productType,
+      metadata: { ...existing.metadata ?? {}, ...data.metadata ?? {} },
+      paidAt: data.paidAt ?? existing.paidAt ?? /* @__PURE__ */ new Date()
+    }).where(eq2(payments.id, existing.id)).returning();
+    return updated;
+  }
+  const [payment] = await db.insert(payments).values({
+    userId: data.userId,
+    stripeCustomerId: data.stripeCustomerId,
+    stripeCheckoutSessionId: data.stripeCheckoutSessionId,
+    stripePaymentIntentId: data.stripePaymentIntentId,
+    stripeInvoiceId: data.stripeInvoiceId,
+    stripeSubscriptionId: data.stripeSubscriptionId,
+    amountTotal: data.amountTotal,
+    amountNet: data.amountNet ?? data.amountTotal,
+    currency: data.currency.toUpperCase(),
+    status: data.status,
+    productType: data.productType,
+    metadata: data.metadata ?? null,
+    paidAt: data.paidAt ?? /* @__PURE__ */ new Date()
+  }).returning();
+  return payment;
+};
+var finalizePaymentCommission = async (payment) => {
+  const [relationship] = await db.select().from(referralRelationships).where(eq2(referralRelationships.referredUserId, payment.userId)).limit(1);
+  if (!relationship || relationship.status === "blocked") return null;
+  const riskScore = relationship.fraudStatus === "hold" ? 45 : relationship.fraudStatus === "review" ? 75 : 0;
+  await db.update(referralRelationships).set({
+    firstPaymentId: relationship.firstPaymentId ?? payment.id,
+    status: "activated",
+    activatedAt: relationship.activatedAt ?? /* @__PURE__ */ new Date(),
+    updatedAt: /* @__PURE__ */ new Date()
+  }).where(eq2(referralRelationships.id, relationship.id));
+  await db.update(referrals).set({
+    status: "completed",
+    completedAt: /* @__PURE__ */ new Date()
+  }).where(and2(eq2(referrals.referrerId, relationship.referrerId), eq2(referrals.referredUserId, payment.userId)));
+  return recordPendingCommission(payment, relationship, riskScore);
+};
+var createCheckoutSession = async (userId, params, req) => {
+  const stripe = getStripe();
+  if (!stripe) {
+    const error = new Error("Stripe is not configured. Set STRIPE_SECRET_KEY to enable checkout.");
+    error.status = 503;
+    throw error;
+  }
+  const [user] = await db.select().from(users).where(eq2(users.id, userId)).limit(1);
+  if (!user) throw new Error("User not found");
+  let stripeCustomerId = user.stripeCustomerId;
+  if (!stripeCustomerId) {
+    const customer = await stripe.customers.create(
+      {
+        email: user.email,
+        name: `${user.firstName} ${user.lastName}`.trim(),
+        metadata: { user_id: String(user.id) }
+      },
+      { idempotencyKey: `customer:user:${user.id}` }
+    );
+    stripeCustomerId = customer.id;
+    await db.update(users).set({ stripeCustomerId, updatedAt: /* @__PURE__ */ new Date() }).where(eq2(users.id, user.id));
+  }
+  const currency = (params.currency || user.defaultCurrency || env.STRIPE_DEFAULT_CURRENCY).toLowerCase();
+  const quantity = params.quantity && params.quantity > 0 ? params.quantity : 1;
+  const productType = params.productType || (params.mode === "subscription" ? "subscription" : "application");
+  const origin = getOrigin(req);
+  const [relationship] = await db.select().from(referralRelationships).where(eq2(referralRelationships.referredUserId, user.id)).limit(1);
+  if (!params.priceId && (!params.amount || params.amount < 50)) {
+    const error = new Error("Checkout amount must be at least 50 minor currency units.");
+    error.status = 400;
+    throw error;
+  }
+  const lineItem = params.priceId ? { price: params.priceId, quantity } : {
+    price_data: {
+      currency,
+      unit_amount: params.amount,
+      product_data: {
+        name: params.productName || "Mtendere service"
+      }
+    },
+    quantity
+  };
+  const clientReferenceId = params.clientReferenceId || crypto.randomUUID();
+  const session = await stripe.checkout.sessions.create(
+    {
+      mode: params.mode || "payment",
+      customer: stripeCustomerId,
+      client_reference_id: String(user.id),
+      line_items: [lineItem],
+      allow_promotion_codes: true,
+      billing_address_collection: "auto",
+      phone_number_collection: { enabled: true },
+      success_url: params.successUrl || `${origin}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: params.cancelUrl || `${origin}/payment/cancelled`,
+      metadata: {
+        user_id: String(user.id),
+        product_type: productType,
+        referral_relationship_id: relationship ? String(relationship.id) : "",
+        client_reference_id: clientReferenceId
+      },
+      payment_intent_data: (params.mode || "payment") === "payment" ? {
+        metadata: {
+          user_id: String(user.id),
+          product_type: productType,
+          referral_relationship_id: relationship ? String(relationship.id) : ""
+        }
+      } : void 0,
+      subscription_data: params.mode === "subscription" ? {
+        metadata: {
+          user_id: String(user.id),
+          product_type: productType,
+          referral_relationship_id: relationship ? String(relationship.id) : ""
+        }
+      } : void 0
+    },
+    { idempotencyKey: `checkout:${user.id}:${productType}:${clientReferenceId}` }
+  );
+  return { id: session.id, url: session.url };
+};
+var processCheckoutCompleted = async (session) => {
+  const userId = Number(session.metadata?.user_id ?? session.client_reference_id);
+  if (!Number.isFinite(userId) || userId <= 0) return;
+  if (session.payment_status !== "paid" && session.mode !== "subscription") return;
+  const payment = await upsertPaidPayment({
+    userId,
+    stripeCustomerId: toStripeId(session.customer),
+    stripeCheckoutSessionId: session.id,
+    stripePaymentIntentId: toStripeId(session.payment_intent),
+    stripeSubscriptionId: toStripeId(session.subscription),
+    amountTotal: session.amount_total ?? 0,
+    amountNet: session.amount_total ?? 0,
+    currency: (session.currency || env.STRIPE_DEFAULT_CURRENCY).toUpperCase(),
+    status: session.payment_status === "paid" ? "paid" : "open",
+    productType: session.metadata?.product_type || (session.mode === "subscription" ? "subscription" : "application"),
+    metadata: session.metadata ?? null,
+    paidAt: /* @__PURE__ */ new Date()
+  });
+  if (payment.status === "paid") {
+    await finalizePaymentCommission(payment);
+  }
+};
+var processInvoicePaid = async (invoice) => {
+  const userId = Number(invoice.metadata?.user_id);
+  if (!Number.isFinite(userId) || userId <= 0) return;
+  const legacyInvoiceFields = invoice;
+  const paymentIntentId = typeof legacyInvoiceFields.payment_intent === "string" ? legacyInvoiceFields.payment_intent : toStripeId(legacyInvoiceFields.payment_intent);
+  const subscriptionId = typeof legacyInvoiceFields.subscription === "string" ? legacyInvoiceFields.subscription : toStripeId(legacyInvoiceFields.subscription);
+  const payment = await upsertPaidPayment({
+    userId,
+    stripeCustomerId: toStripeId(invoice.customer),
+    stripePaymentIntentId: paymentIntentId ?? null,
+    stripeInvoiceId: invoice.id,
+    stripeSubscriptionId: subscriptionId ?? null,
+    amountTotal: invoice.amount_paid,
+    amountNet: invoice.amount_paid,
+    currency: invoice.currency.toUpperCase(),
+    status: "paid",
+    productType: invoice.metadata?.product_type || "subscription",
+    metadata: invoice.metadata ?? null,
+    paidAt: invoice.status_transitions.paid_at ? new Date(invoice.status_transitions.paid_at * 1e3) : /* @__PURE__ */ new Date()
+  });
+  await finalizePaymentCommission(payment);
+};
+var reversePaymentCommissions = async (payment, reason) => {
+  const paymentCommissions = await db.select().from(commissions).where(and2(eq2(commissions.paymentId, payment.id), or2(isNull(commissions.reversedAt), eq2(commissions.status, "released"))));
+  for (const commission of paymentCommissions) {
+    if (commission.reversedAt) continue;
+    const wallet = await ensureWallet(commission.beneficiaryUserId, commission.currency);
+    const wasReleased = commission.status === "released";
+    const keyBase = `ledger:reverse:${commission.id}`;
+    await db.transaction(async (tx) => {
+      await tx.update(commissions).set({ status: "reversed", reversedAt: /* @__PURE__ */ new Date() }).where(eq2(commissions.id, commission.id));
+      await tx.insert(ledgerEntries).values({
+        walletAccountId: wallet.id,
+        userId: commission.beneficiaryUserId,
+        commissionId: commission.id,
+        direction: "debit",
+        balanceType: wasReleased ? "available" : "pending",
+        amount: commission.commissionAmount,
+        currency: commission.currency,
+        entryType: reason,
+        idempotencyKey: keyBase
+      }).onConflictDoNothing({ target: ledgerEntries.idempotencyKey });
+      await tx.update(walletAccounts).set(
+        wasReleased ? { availableBalance: sql2`greatest(${walletAccounts.availableBalance} - ${commission.commissionAmount}, 0)` } : { pendingBalance: sql2`greatest(${walletAccounts.pendingBalance} - ${commission.commissionAmount}, 0)` }
+      ).where(eq2(walletAccounts.id, wallet.id));
+    });
+  }
+};
+var processRefundOrDispute = async (object, reason) => {
+  const chargeCandidate = "charge" in object && typeof object.charge !== "undefined" ? object.charge : object;
+  if (typeof chargeCandidate === "string") return;
+  const charge = chargeCandidate;
+  const paymentIntentId = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
+  if (!paymentIntentId) return;
+  const payment = await findPaymentByStripeIdentifiers({ paymentIntentId });
+  if (!payment) return;
+  const [updated] = await db.update(payments).set({ status: reason, refundedAt: /* @__PURE__ */ new Date() }).where(eq2(payments.id, payment.id)).returning();
+  await reversePaymentCommissions(updated, reason);
+};
+var persistStripeEvent = async (event) => {
+  const object = event.data.object;
+  const [saved] = await db.insert(stripeEvents).values({
+    stripeEventId: event.id,
+    eventType: event.type,
+    objectId: object.id || "unknown",
+    payload: event,
+    processingStatus: "received"
+  }).onConflictDoNothing({ target: stripeEvents.stripeEventId }).returning();
+  return saved ?? null;
+};
+var verifyStripeWebhookEvent = (req) => {
+  const stripe = getStripe();
+  if (!stripe) throw new Error("Stripe is not configured");
+  if (!env.STRIPE_WEBHOOK_SECRET) throw new Error("STRIPE_WEBHOOK_SECRET is not configured");
+  const rawBody = req.rawBody;
+  if (!rawBody) throw new Error("Raw webhook body was not captured");
+  const signature = req.headers["stripe-signature"];
+  if (!signature || Array.isArray(signature)) throw new Error("Missing Stripe signature");
+  return stripe.webhooks.constructEvent(rawBody, signature, env.STRIPE_WEBHOOK_SECRET);
+};
+var processStripeEvent = async (event) => {
+  try {
+    await db.update(stripeEvents).set({ processingStatus: "processing", error: null }).where(eq2(stripeEvents.stripeEventId, event.id));
+    switch (event.type) {
+      case "checkout.session.completed":
+        await processCheckoutCompleted(event.data.object);
+        break;
+      case "invoice.paid":
+      case "invoice.payment_succeeded":
+        await processInvoicePaid(event.data.object);
+        break;
+      case "charge.refunded":
+        await processRefundOrDispute(event.data.object, "refunded");
+        break;
+      case "charge.dispute.created":
+        await processRefundOrDispute(event.data.object, "disputed");
+        break;
+      default:
+        break;
+    }
+    await db.update(stripeEvents).set({ processingStatus: "processed", processedAt: /* @__PURE__ */ new Date(), error: null }).where(eq2(stripeEvents.stripeEventId, event.id));
+  } catch (error) {
+    await db.update(stripeEvents).set({
+      processingStatus: "failed",
+      error: error instanceof Error ? error.message : String(error)
+    }).where(eq2(stripeEvents.stripeEventId, event.id));
+    throw error;
+  }
+};
+var releaseEligibleCommissions = async () => {
+  const eligible = await db.select().from(commissions).where(and2(eq2(commissions.status, "pending_release"), lte(commissions.releaseAt, /* @__PURE__ */ new Date()))).limit(100);
+  let released = 0;
+  for (const commission of eligible) {
+    const wallet = await ensureWallet(commission.beneficiaryUserId, commission.currency);
+    await db.transaction(async (tx) => {
+      const [updated] = await tx.update(commissions).set({ status: "released", releasedAt: /* @__PURE__ */ new Date() }).where(and2(eq2(commissions.id, commission.id), eq2(commissions.status, "pending_release"))).returning();
+      if (!updated) return;
+      await tx.insert(ledgerEntries).values([
+        {
+          walletAccountId: wallet.id,
+          userId: commission.beneficiaryUserId,
+          commissionId: commission.id,
+          direction: "debit",
+          balanceType: "pending",
+          amount: commission.commissionAmount,
+          currency: commission.currency,
+          entryType: "commission_released_pending_debit",
+          idempotencyKey: `ledger:release-pending:${commission.id}`
+        },
+        {
+          walletAccountId: wallet.id,
+          userId: commission.beneficiaryUserId,
+          commissionId: commission.id,
+          direction: "credit",
+          balanceType: "available",
+          amount: commission.commissionAmount,
+          currency: commission.currency,
+          entryType: "commission_released_available_credit",
+          idempotencyKey: `ledger:release-available:${commission.id}`
+        }
+      ]).onConflictDoNothing({ target: ledgerEntries.idempotencyKey });
+      await tx.update(walletAccounts).set({
+        pendingBalance: sql2`greatest(${walletAccounts.pendingBalance} - ${commission.commissionAmount}, 0)`,
+        availableBalance: sql2`${walletAccounts.availableBalance} + ${commission.commissionAmount}`,
+        lifetimeEarned: sql2`${walletAccounts.lifetimeEarned} + ${commission.commissionAmount}`
+      }).where(eq2(walletAccounts.id, wallet.id));
+      released += 1;
+    });
+  }
+  return released;
+};
+var getReferralDashboard = async (userId, origin) => {
+  const code = await ensureUserGrowthRecords(userId);
+  const [codeRecord] = await db.select().from(referralCodes).where(eq2(referralCodes.code, code)).limit(1);
+  const [wallet] = await db.select().from(walletAccounts).where(eq2(walletAccounts.userId, userId)).limit(1);
+  const userClicks = await db.select().from(referralClicks).where(eq2(referralClicks.referrerId, userId));
+  const relationships = await db.select().from(referralRelationships).where(eq2(referralRelationships.referrerId, userId)).orderBy(desc2(referralRelationships.createdAt));
+  const beneficiaryCommissions = await db.select().from(commissions).where(eq2(commissions.beneficiaryUserId, userId)).orderBy(desc2(commissions.createdAt));
+  const ledger = await db.select().from(ledgerEntries).where(eq2(ledgerEntries.userId, userId)).orderBy(desc2(ledgerEntries.createdAt)).limit(50);
+  const referredUsers = relationships.length ? await db.select({
+    id: users.id,
+    email: users.email
+  }).from(users).where(inArray(users.id, relationships.map((relationship) => relationship.referredUserId))) : [];
+  const emailByUserId = new Map(referredUsers.map((item) => [item.id, item.email]));
+  const commissionsByRelationshipId = /* @__PURE__ */ new Map();
+  beneficiaryCommissions.forEach((commission) => {
+    const list = commissionsByRelationshipId.get(commission.referralRelationshipId) ?? [];
+    list.push(commission);
+    commissionsByRelationshipId.set(commission.referralRelationshipId, list);
+  });
+  const referralsList = relationships.map((relationship) => {
+    const relationshipCommissions = commissionsByRelationshipId.get(relationship.id) ?? [];
+    const total = relationshipCommissions.reduce((sum, item) => sum + item.commissionAmount, 0);
+    const latest = relationshipCommissions[0];
+    return {
+      id: relationship.id,
+      referredUserId: relationship.referredUserId,
+      referredEmail: emailByUserId.get(relationship.referredUserId) ?? "Unknown user",
+      status: relationship.status,
+      fraudStatus: relationship.fraudStatus,
+      createdAt: relationship.createdAt,
+      activatedAt: relationship.activatedAt,
+      commissionAmount: total,
+      commissionStatus: latest?.status ?? null,
+      releaseAt: latest?.releaseAt ?? null
+    };
+  });
+  const paidConversions = relationships.filter((relationship) => relationship.status === "activated").length;
+  const signups = relationships.length;
+  return {
+    referralCode: code,
+    referralLink: codeRecord ? `${origin}/r/${codeRecord.code}` : null,
+    stats: {
+      clicks: userClicks.length,
+      signups,
+      paidConversions,
+      conversionRate: userClicks.length > 0 ? Math.round(paidConversions / userClicks.length * 1e3) / 10 : 0,
+      pendingEarnings: wallet?.pendingBalance ?? 0,
+      availableEarnings: wallet?.availableBalance ?? 0,
+      lifetimeEarned: wallet?.lifetimeEarned ?? 0
+    },
+    wallet: wallet ?? null,
+    referrals: referralsList,
+    ledger
+  };
+};
+var requestPayout = async (userId, amount, method, destination) => {
+  const [wallet] = await db.select().from(walletAccounts).where(eq2(walletAccounts.userId, userId)).limit(1);
+  if (!wallet) throw new Error("Wallet account not found");
+  if (amount < env.REFERRAL_PAYOUT_MIN_AMOUNT) {
+    const error = new Error(`Minimum payout is ${env.REFERRAL_PAYOUT_MIN_AMOUNT} minor currency units.`);
+    error.status = 400;
+    throw error;
+  }
+  if (wallet.availableBalance < amount) {
+    const error = new Error("Insufficient available balance.");
+    error.status = 400;
+    throw error;
+  }
+  return db.transaction(async (tx) => {
+    const [request] = await tx.insert(payoutRequests).values({
+      userId,
+      amount,
+      currency: wallet.currency,
+      method,
+      destination: destination ?? null,
+      status: "requested"
+    }).returning();
+    await tx.insert(ledgerEntries).values({
+      walletAccountId: wallet.id,
+      userId,
+      payoutRequestId: request.id,
+      direction: "debit",
+      balanceType: "available",
+      amount,
+      currency: wallet.currency,
+      entryType: "payout_requested",
+      idempotencyKey: `ledger:payout-request:${request.id}`
+    });
+    await tx.update(walletAccounts).set({ availableBalance: sql2`${walletAccounts.availableBalance} - ${amount}` }).where(eq2(walletAccounts.id, wallet.id));
+    return request;
+  });
+};
+var getUserPayouts = async (userId) => db.select().from(payoutRequests).where(eq2(payoutRequests.userId, userId)).orderBy(desc2(payoutRequests.requestedAt));
+var listAdminReferralAnalytics = async () => {
+  const [{ totalRevenue }] = await db.select({ totalRevenue: sql2`coalesce(sum(${payments.amountTotal}), 0)::int` }).from(payments).where(eq2(payments.status, "paid"));
+  const [{ totalCommission }] = await db.select({ totalCommission: sql2`coalesce(sum(${commissions.commissionAmount}), 0)::int` }).from(commissions).where(or2(eq2(commissions.status, "pending_release"), eq2(commissions.status, "released")));
+  const [{ totalRelationships }] = await db.select({ totalRelationships: sql2`count(*)::int` }).from(referralRelationships);
+  const [{ paidRelationships }] = await db.select({ paidRelationships: sql2`count(*)::int` }).from(referralRelationships).where(eq2(referralRelationships.status, "activated"));
+  return {
+    totalRevenue: totalRevenue ?? 0,
+    totalCommission: totalCommission ?? 0,
+    totalRelationships: totalRelationships ?? 0,
+    paidRelationships: paidRelationships ?? 0,
+    referralConversionRate: totalRelationships > 0 ? Math.round((paidRelationships ?? 0) / totalRelationships * 1e3) / 10 : 0
+  };
+};
+var listPayoutRequests = async () => db.select().from(payoutRequests).orderBy(desc2(payoutRequests.requestedAt)).limit(200);
+var listReferralCampaigns = async () => db.select().from(referralCampaigns).orderBy(desc2(referralCampaigns.createdAt));
+var createReferralCampaign = async (payload) => {
+  const [campaign] = await db.insert(referralCampaigns).values(payload).returning();
+  return campaign;
+};
+var updateReferralCampaign = async (campaignId, payload) => {
+  const [campaign] = await db.update(referralCampaigns).set(payload).where(eq2(referralCampaigns.id, campaignId)).returning();
+  if (!campaign) throw new Error("Referral campaign not found");
+  return campaign;
+};
+var listCommissionRules = async () => db.select().from(commissionRules).orderBy(desc2(commissionRules.createdAt));
+var createCommissionRule = async (payload) => {
+  const [rule] = await db.insert(commissionRules).values(payload).returning();
+  return rule;
+};
+var updateCommissionRule = async (ruleId, payload) => {
+  const [rule] = await db.update(commissionRules).set(payload).where(eq2(commissionRules.id, ruleId)).returning();
+  if (!rule) throw new Error("Commission rule not found");
+  return rule;
+};
+var approvePayoutRequest = async (payoutId, approverId) => {
+  const [request] = await db.update(payoutRequests).set({ status: "approved", approvedBy: approverId, approvedAt: /* @__PURE__ */ new Date() }).where(eq2(payoutRequests.id, payoutId)).returning();
+  if (!request) throw new Error("Payout request not found");
+  return request;
+};
+var rejectPayoutRequest = async (payoutId, reason) => {
+  const [request] = await db.select().from(payoutRequests).where(eq2(payoutRequests.id, payoutId)).limit(1);
+  if (!request) throw new Error("Payout request not found");
+  if (request.status !== "requested") {
+    const error = new Error("Only requested payouts can be rejected.");
+    error.status = 400;
+    throw error;
+  }
+  const [wallet] = await db.select().from(walletAccounts).where(eq2(walletAccounts.userId, request.userId)).limit(1);
+  if (!wallet) throw new Error("Wallet account not found");
+  return db.transaction(async (tx) => {
+    const [updated] = await tx.update(payoutRequests).set({ status: "rejected", failureReason: reason }).where(eq2(payoutRequests.id, payoutId)).returning();
+    await tx.insert(ledgerEntries).values({
+      walletAccountId: wallet.id,
+      userId: request.userId,
+      payoutRequestId: request.id,
+      direction: "credit",
+      balanceType: "available",
+      amount: request.amount,
+      currency: request.currency,
+      entryType: "payout_rejected_return",
+      idempotencyKey: `ledger:payout-reject:${request.id}`
+    }).onConflictDoNothing({ target: ledgerEntries.idempotencyKey });
+    await tx.update(walletAccounts).set({ availableBalance: sql2`${walletAccounts.availableBalance} + ${request.amount}` }).where(eq2(walletAccounts.id, wallet.id));
+    return updated;
+  });
+};
+var logReferralAnalytics = async (event, userId, req, metadata) => {
+  await db.insert(analytics).values({
+    event,
+    userId,
+    metadata: metadata ?? null,
+    ipAddress: req.ip,
+    userAgent: req.get("user-agent")
+  });
+};
+
 // server/routes.ts
 var JWT_SECRET = env.JWT_SECRET;
+var checkoutRequestSchema = z3.object({
+  mode: z3.enum(["payment", "subscription"]).optional(),
+  priceId: z3.string().min(1).optional(),
+  amount: z3.coerce.number().int().positive().optional(),
+  currency: z3.string().length(3).optional(),
+  productName: z3.string().min(1).max(120).optional(),
+  productType: z3.string().min(1).max(60).optional(),
+  quantity: z3.coerce.number().int().positive().max(99).optional(),
+  successUrl: z3.string().url().optional(),
+  cancelUrl: z3.string().url().optional(),
+  clientReferenceId: z3.string().min(1).max(120).optional()
+});
+var payoutRequestSchema = z3.object({
+  amount: z3.coerce.number().int().positive(),
+  method: z3.enum(["stripe_connect", "bank", "mobile_money", "manual"]),
+  destination: z3.record(z3.unknown()).optional()
+});
+var referralCampaignRequestSchema = z3.object({
+  name: z3.string().min(2).max(160),
+  codePrefix: z3.string().max(20).nullable().optional(),
+  startsAt: z3.coerce.date(),
+  endsAt: z3.coerce.date().nullable().optional(),
+  status: z3.enum(["draft", "active", "paused", "ended"]).default("draft"),
+  boostBps: z3.coerce.number().int().positive().default(1e4),
+  maxRewardsPerReferrer: z3.coerce.number().int().positive().nullable().optional(),
+  attributionModel: z3.enum(["last_click", "multi_touch"]).default("last_click")
+});
+var commissionRuleRequestSchema = z3.object({
+  campaignId: z3.coerce.number().int().positive().nullable().optional(),
+  productType: z3.string().max(60).nullable().optional(),
+  level: z3.coerce.number().int().positive().default(1),
+  calculationType: z3.enum(["percent", "flat", "hybrid"]),
+  percentBps: z3.coerce.number().int().min(0).max(1e4).default(0),
+  flatAmount: z3.coerce.number().int().min(0).default(0),
+  currency: z3.string().length(3).default("USD"),
+  releaseDelayDays: z3.coerce.number().int().min(0).max(365).default(14),
+  minPaymentAmount: z3.coerce.number().int().min(0).nullable().optional(),
+  maxCommissionAmount: z3.coerce.number().int().positive().nullable().optional(),
+  status: z3.enum(["active", "paused", "archived"]).default("active")
+});
+var subscriberRequestSchema = z3.object({
+  email: z3.string().trim().email().transform((value) => value.toLowerCase()),
+  name: z3.string().trim().max(160).optional(),
+  preferences: z3.array(z3.string().trim().min(1).max(80)).max(12).optional(),
+  source: z3.string().trim().max(80).default("website"),
+  website: z3.string().optional()
+});
+var publicApplicationRequestSchema = z3.object({
+  type: z3.enum(["job", "scholarship"]),
+  referenceId: z3.coerce.number().int().positive(),
+  status: z3.enum(["pending", "submitted", "in_review"]).default("pending"),
+  documents: z3.record(z3.unknown()).optional(),
+  notes: z3.string().trim().max(4e3).optional()
+});
+var eventPayloadSchema = z3.object({
+  title: z3.string().trim().min(3).max(220),
+  slug: z3.string().trim().max(180).optional(),
+  summary: z3.string().trim().max(500).optional().nullable(),
+  description: z3.string().trim().min(10),
+  category: z3.string().trim().min(1).max(100).default("General"),
+  eventType: z3.string().trim().min(1).max(80).default("Information Session"),
+  location: z3.string().trim().min(1).max(220).default("Lilongwe, Malawi"),
+  venueName: z3.string().trim().max(220).optional().nullable(),
+  address: z3.string().trim().max(400).optional().nullable(),
+  mapUrl: z3.string().trim().max(1e3).optional().nullable(),
+  isVirtual: z3.boolean().optional().default(false),
+  virtualUrl: z3.string().trim().max(1e3).optional().nullable(),
+  livestreamUrl: z3.string().trim().max(1e3).optional().nullable(),
+  isPaid: z3.boolean().optional().default(false),
+  priceAmount: z3.coerce.number().int().min(0).optional().default(0),
+  currency: z3.string().trim().min(3).max(10).optional().default("MWK"),
+  capacity: z3.coerce.number().int().positive().nullable().optional(),
+  startAt: z3.coerce.date(),
+  endAt: z3.coerce.date(),
+  registrationDeadline: z3.coerce.date().nullable().optional(),
+  coverImage: z3.string().trim().max(1e3).optional().nullable(),
+  videoUrl: z3.string().trim().max(1e3).optional().nullable(),
+  tags: z3.union([z3.array(z3.string()), z3.string()]).optional(),
+  agenda: z3.array(z3.record(z3.unknown())).optional().nullable(),
+  speakers: z3.array(z3.record(z3.unknown())).optional().nullable(),
+  sponsors: z3.array(z3.record(z3.unknown())).optional().nullable(),
+  faqs: z3.array(z3.record(z3.unknown())).optional().nullable(),
+  resources: z3.array(z3.record(z3.unknown())).optional().nullable(),
+  gallery: z3.array(z3.record(z3.unknown())).optional().nullable(),
+  status: z3.enum(["draft", "published", "archived", "cancelled"]).default("draft"),
+  isFeatured: z3.boolean().optional().default(false),
+  isRecommended: z3.boolean().optional().default(false),
+  isTrending: z3.boolean().optional().default(false),
+  allowComments: z3.boolean().optional().default(true),
+  requiresApproval: z3.boolean().optional().default(false)
+});
+var eventRegistrationRequestSchema = z3.object({
+  fullName: z3.string().trim().min(2).max(180),
+  email: z3.string().trim().email().max(255).transform((value) => value.toLowerCase()),
+  phone: z3.string().trim().max(40).optional().nullable(),
+  organization: z3.string().trim().max(180).optional().nullable(),
+  answers: z3.record(z3.unknown()).optional().nullable(),
+  reminderOptIn: z3.boolean().optional().default(true)
+});
+var eventCommentRequestSchema = z3.object({
+  authorName: z3.string().trim().min(2).max(180),
+  authorEmail: z3.string().trim().email().max(255).optional().nullable(),
+  content: z3.string().trim().min(2).max(2e3),
+  parentId: z3.coerce.number().int().positive().optional().nullable()
+});
+var eventRegistrationReviewSchema = z3.object({
+  status: z3.enum(["pending", "approved", "rejected", "waitlisted", "checked_in", "cancelled"]).optional(),
+  attendanceStatus: z3.enum(["registered", "attended", "no_show", "checked_in", "cancelled"]).optional()
+});
+var adminApplicationReviewSchema = z3.object({
+  status: z3.enum(["pending", "under_review", "approved", "rejected", "waitlisted"]).optional(),
+  reviewNotes: z3.string().trim().max(4e3).optional()
+});
+var adminSettingsUpdateSchema = z3.object({
+  platformName: z3.string().trim().min(2).max(160).optional(),
+  supportEmail: z3.string().trim().email().optional(),
+  sessionTimeout: z3.coerce.number().int().min(5).max(480).optional(),
+  maxLoginAttempts: z3.coerce.number().int().min(3).max(20).optional(),
+  maintenanceMode: z3.boolean().optional(),
+  emailNotifications: z3.boolean().optional(),
+  twoFactorRequired: z3.boolean().optional(),
+  weeklySummary: z3.boolean().optional(),
+  contentPublishedNotifications: z3.boolean().optional()
+});
+var adminRoleInputSchema = z3.object({
+  name: z3.string().trim().min(2).max(80),
+  description: z3.string().trim().max(500).optional().default(""),
+  permissions: z3.array(z3.string().trim().min(1).max(80)).max(40).optional().default([]),
+  isActive: z3.boolean().optional().default(true)
+});
+var adminPermissionIds = /* @__PURE__ */ new Set([
+  "view_dashboard",
+  "manage_events",
+  "manage_scholarships",
+  "manage_jobs",
+  "manage_partners",
+  "manage_blog",
+  "manage_team",
+  "manage_media",
+  "manage_users",
+  "review_applications",
+  "manage_roles",
+  "view_analytics",
+  "manage_settings"
+]);
+var normalizeRoleId = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
+var escapeCsvValue = (value) => {
+  const text2 = value instanceof Date ? value.toISOString() : String(value ?? "");
+  return /[",\n\r]/.test(text2) ? `"${text2.replace(/"/g, '""')}"` : text2;
+};
 var getErrorMessage = (error) => {
-  if (error instanceof z2.ZodError) {
+  if (error instanceof z3.ZodError) {
     return error.flatten();
   }
   if (error instanceof Error) {
@@ -1030,7 +2949,8 @@ var buildPublicUser = (user) => ({
   role: user.role,
   profilePicture: user.profilePicture,
   phone: user.phone,
-  dateOfBirth: user.dateOfBirth
+  dateOfBirth: user.dateOfBirth,
+  referralCode: user.referralCode
 });
 var toAdminUser = (user) => {
   const meta = getUserMeta(user.id);
@@ -1190,10 +3110,72 @@ var toAdminTeamMember = (member) => {
     updatedAt: member.updatedAt ?? null
   };
 };
-var signToken = (user) => jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, {
-  expiresIn: "24h"
-});
+var slugify = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 160) || `event-${Date.now()}`;
+var normalizeEventTags = (value) => parseStringArray(value) ?? [];
+var deriveEventRuntimeStatus = (event) => {
+  if (event.status === "draft" || event.status === "archived" || event.status === "cancelled") {
+    return event.status;
+  }
+  const now = Date.now();
+  const start = event.startAt ? new Date(event.startAt).getTime() : 0;
+  const end = event.endAt ? new Date(event.endAt).getTime() : 0;
+  if (start <= now && end >= now) return "live";
+  if (start > now) return "upcoming";
+  return "past";
+};
+var getEventStats = async (eventId) => {
+  const [registrations, comments] = await Promise.all([
+    storage.getEventRegistrations(eventId),
+    storage.getEventComments(eventId, true)
+  ]);
+  const approved = registrations.filter((item) => item.status === "approved" || item.status === "checked_in").length;
+  const attended = registrations.filter(
+    (item) => item.attendanceStatus === "attended" || item.attendanceStatus === "checked_in"
+  ).length;
+  return {
+    registrations: registrations.length,
+    approvedRegistrations: approved,
+    attended,
+    comments: comments.length,
+    pendingRegistrations: registrations.filter((item) => item.status === "pending").length
+  };
+};
+var toPublicEvent = async (event) => {
+  const stats = await getEventStats(event.id);
+  const capacity = typeof event.capacity === "number" ? event.capacity : null;
+  return {
+    ...event,
+    runtimeStatus: deriveEventRuntimeStatus(event),
+    registrationCount: stats.registrations,
+    approvedRegistrationCount: stats.approvedRegistrations,
+    commentCount: stats.comments,
+    remainingSeats: capacity === null ? null : Math.max(0, capacity - stats.approvedRegistrations)
+  };
+};
+var toAdminEvent = async (event) => {
+  const publicEvent = await toPublicEvent(event);
+  return {
+    ...publicEvent,
+    status: event.status,
+    conversionRate: Number(event.viewCount || 0) > 0 ? Math.round(publicEvent.registrationCount / Number(event.viewCount || 1) * 100) : 0
+  };
+};
+var createTicketCode = (eventId) => `MEC-${eventId}-${randomBytes(4).toString("hex").toUpperCase()}`;
+var signToken = (user) => {
+  const timeoutMinutes = Math.max(5, Math.min(480, getAdminSettings().sessionTimeout || 30));
+  return jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, {
+    expiresIn: `${timeoutMinutes}m`
+  });
+};
 var getAuthenticatedUser = (req) => req.user;
+var isJwtUserInvalidated = (jwtUser) => {
+  const invalidBefore = getAdminSettings().authTokenInvalidBefore;
+  if (!invalidBefore) return false;
+  const invalidBeforeMs = Date.parse(invalidBefore);
+  const invalidBeforeSeconds = Math.floor(invalidBeforeMs / 1e3);
+  const issuedAtSeconds = typeof jwtUser.iat === "number" ? jwtUser.iat : 0;
+  return !Number.isNaN(invalidBeforeMs) && issuedAtSeconds < invalidBeforeSeconds;
+};
 var getOptionalAuthenticatedUser = (req) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
@@ -1201,12 +3183,14 @@ var getOptionalAuthenticatedUser = (req) => {
     return null;
   }
   try {
-    return jwt.verify(token, JWT_SECRET);
+    const jwtUser = jwt.verify(token, JWT_SECRET);
+    return isJwtUserInvalidated(jwtUser) ? null : jwtUser;
   } catch {
     return null;
   }
 };
 var isAdmin = (user) => user?.role === "admin" || user?.role === "super_admin";
+var isAdminPortalUser = (user) => user?.role === "viewer" || user?.role === "editor" || user?.role === "admin" || user?.role === "super_admin";
 var authenticateToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
@@ -1217,7 +3201,11 @@ var authenticateToken = (req, res, next) => {
     if (error || !user) {
       return res.status(403).json({ message: "Invalid or expired token" });
     }
-    req.user = user;
+    const jwtUser = user;
+    if (isJwtUserInvalidated(jwtUser)) {
+      return res.status(401).json({ message: "Session was invalidated by an administrator" });
+    }
+    req.user = jwtUser;
     next();
   });
 };
@@ -1227,12 +3215,52 @@ var requireAdmin = (req, res, next) => {
   }
   next();
 };
+var requireAdminPortal = (req, res, next) => {
+  if (!isAdminPortalUser(getAuthenticatedUser(req))) {
+    return res.status(403).json({ message: "Admin portal access required" });
+  }
+  next();
+};
+var requireSuperAdmin = (req, res, next) => {
+  if (getAuthenticatedUser(req)?.role !== "super_admin") {
+    return res.status(403).json({ message: "Super administrator access required" });
+  }
+  next();
+};
 var isEditor = (user) => user?.role === "editor" || user?.role === "admin" || user?.role === "super_admin";
 var requireEditor = (req, res, next) => {
   if (!isEditor(getAuthenticatedUser(req))) {
     return res.status(403).json({ message: "Editor access required" });
   }
   next();
+};
+var loginFailures = /* @__PURE__ */ new Map();
+var loginLockoutMs = 15 * 60 * 1e3;
+var getLoginFailure = (identifier) => {
+  const key = identifier.toLowerCase();
+  const record = loginFailures.get(key);
+  if (!record) return null;
+  if (record.lockedUntil && record.lockedUntil <= Date.now()) {
+    loginFailures.delete(key);
+    return null;
+  }
+  return record;
+};
+var registerLoginFailure = (identifier) => {
+  const key = identifier.toLowerCase();
+  const settings = getAdminSettings();
+  const maxAttempts2 = Math.max(3, Math.min(20, settings.maxLoginAttempts || 5));
+  const current = getLoginFailure(key) ?? { count: 0 };
+  const nextCount = current.count + 1;
+  const next = {
+    count: nextCount,
+    lockedUntil: nextCount >= maxAttempts2 ? Date.now() + loginLockoutMs : void 0
+  };
+  loginFailures.set(key, next);
+  return next;
+};
+var clearLoginFailure = (identifier) => {
+  loginFailures.delete(identifier.toLowerCase());
 };
 async function registerRoutes(app2) {
   const httpServer = createServer(app2);
@@ -1256,6 +3284,37 @@ async function registerRoutes(app2) {
       }
     });
   });
+  app2.use((req, res, next) => {
+    const settings = getAdminSettings();
+    if (!settings.maintenanceMode) {
+      return next();
+    }
+    const requestPath = req.path;
+    const isAdminOrSystemPath = requestPath.startsWith("/admin") || requestPath.startsWith("/api/admin") || requestPath.startsWith("/api/auth") || requestPath.startsWith("/auth") || requestPath.startsWith("/media-assets") || requestPath.startsWith("/uploads") || requestPath.startsWith("/assets") || requestPath.startsWith("/src") || requestPath.startsWith("/@vite") || requestPath.startsWith("/@react-refresh") || requestPath.startsWith("/node_modules") || requestPath === "/api/health" || /\.[a-z0-9]+$/i.test(requestPath) || requestPath === "/ws";
+    if (isAdminOrSystemPath) {
+      return next();
+    }
+    if (requestPath.startsWith("/api")) {
+      return res.status(503).json({
+        message: "The public platform is temporarily in maintenance mode."
+      });
+    }
+    if (req.method === "GET") {
+      return res.status(503).send(`
+        <!doctype html>
+        <html>
+          <head><title>Maintenance | Mtendere Education Consult</title></head>
+          <body style="font-family: Arial, sans-serif; margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f5f7fb; color: #1f2937;">
+            <main style="max-width: 560px; padding: 32px; text-align: center;">
+              <h1 style="margin: 0 0 12px; color: #0f4c81;">Scheduled maintenance</h1>
+              <p style="font-size: 16px; line-height: 1.6;">Mtendere Education Consult is temporarily updating the platform. Please check back shortly.</p>
+            </main>
+          </body>
+        </html>
+      `);
+    }
+    return next();
+  });
   const broadcast = (channel, data) => {
     wss.clients.forEach((client) => {
       const socket = client;
@@ -1267,6 +3326,22 @@ async function registerRoutes(app2) {
       }
     });
   };
+  app2.get("/r/:code", async (req, res) => {
+    try {
+      const referralCode = await trackReferralClick(req, res, req.params.code);
+      if (!referralCode) {
+        return res.redirect(302, "/register");
+      }
+      await logReferralAnalytics("referral_click", referralCode.userId, req, {
+        referralCode: referralCode.code,
+        campaignId: referralCode.campaignId
+      });
+      res.redirect(302, `/register?ref=${encodeURIComponent(referralCode.code)}`);
+    } catch (error) {
+      console.error("Referral redirect error:", error);
+      res.redirect(302, "/register");
+    }
+  });
   const emitAdminRealtimeEvent = async (req, {
     event,
     channel,
@@ -1295,35 +3370,227 @@ async function registerRoutes(app2) {
       console.error("Admin realtime event error:", error);
     }
   };
-  const uploadsDir = path2.resolve(import.meta.dirname, "..", "uploads");
-  fs2.mkdirSync(uploadsDir, { recursive: true });
+  const uploadsDir = path3.resolve(import.meta.dirname, "..", "uploads");
+  fs3.mkdirSync(uploadsDir, { recursive: true });
   app2.use("/uploads", express.static(uploadsDir));
+  const allowedUploadMimeTypes = /* @__PURE__ */ new Set([
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "image/jpeg",
+    "image/png",
+    "image/webp"
+  ]);
   const upload = multer({
     storage: multer.diskStorage({
       destination: uploadsDir,
       filename: (_req, file, cb) => {
-        const ext = path2.extname(file.originalname);
-        const base = path2.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, "");
+        const ext = path3.extname(file.originalname);
+        const base = path3.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, "") || "upload";
         cb(null, `${base}-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`);
       }
     }),
-    limits: { fileSize: 10 * 1024 * 1024 }
+    fileFilter: (_req, file, cb) => {
+      if (!allowedUploadMimeTypes.has(file.mimetype)) {
+        cb(new Error("Unsupported file type. Upload PDF, DOC, DOCX, JPG, PNG, or WEBP files."));
+        return;
+      }
+      cb(null, true);
+    },
+    limits: { fileSize: 10 * 1024 * 1024, files: 10 }
+  });
+  const mediaAssetRoot = path3.resolve(import.meta.dirname, "..", "client", "src", "assets", "imgs");
+  const mediaAssetModules = /* @__PURE__ */ new Set([
+    "blogs",
+    "team",
+    "teams",
+    "partners",
+    "scholarships",
+    "jobs",
+    "events",
+    "opportunities",
+    "projects",
+    "programs",
+    "news",
+    "testimonials",
+    "students",
+    "misc",
+    "defaults"
+  ]);
+  const mediaImageMimeTypes = /* @__PURE__ */ new Set(["image/jpeg", "image/png", "image/webp"]);
+  const mediaDefaultReferences = {
+    blogs: "blogs/application-guidance.jpg",
+    teams: "teams/ms-brenda.jpg",
+    partners: "partners/partners-default.jpg",
+    scholarships: "scholarships/graduates-default.jpg",
+    jobs: "jobs/jobs-default.jpg",
+    events: "events/events-default.jpg",
+    opportunities: "scholarships/application-guidance.jpg",
+    projects: "projects/foundation.jpg",
+    programs: "programs/international-studies.jpg",
+    news: "events/events-default.jpg",
+    testimonials: "students/Janet Kandulu.jpg",
+    misc: "misc/mtendere.jpg",
+    defaults: "defaults/mtendere-default.png"
+  };
+  for (const moduleName of mediaAssetModules) {
+    fs3.mkdirSync(path3.join(mediaAssetRoot, moduleName), { recursive: true });
+  }
+  const mediaAssetUpload = multer({
+    storage: multer.diskStorage({
+      destination: (req, _file, cb) => {
+        const moduleName = String(req.params.module || "").toLowerCase();
+        if (!mediaAssetModules.has(moduleName)) {
+          cb(new Error("Unsupported media module."), mediaAssetRoot);
+          return;
+        }
+        const destination = path3.join(mediaAssetRoot, moduleName);
+        fs3.mkdirSync(destination, { recursive: true });
+        cb(null, destination);
+      },
+      filename: (_req, file, cb) => {
+        const ext = path3.extname(file.originalname).toLowerCase();
+        const base = path3.basename(file.originalname, ext).toLowerCase().replace(/[^a-z0-9-_]+/g, "-").replace(/^-+|-+$/g, "") || "image";
+        cb(null, `${base}-${Date.now()}${ext}`);
+      }
+    }),
+    fileFilter: (_req, file, cb) => {
+      const ext = path3.extname(file.originalname).toLowerCase();
+      if (!mediaImageMimeTypes.has(file.mimetype) || ![".jpg", ".jpeg", ".png", ".webp"].includes(ext)) {
+        cb(new Error("Unsupported image type. Upload JPG, PNG, or WEBP files."));
+        return;
+      }
+      cb(null, true);
+    },
+    limits: { fileSize: 8 * 1024 * 1024, files: 10 }
+  });
+  const isValidImageFile = (filePath) => {
+    try {
+      const descriptor = fs3.openSync(filePath, "r");
+      try {
+        const header = Buffer.alloc(12);
+        const bytesRead = fs3.readSync(descriptor, header, 0, header.length, 0);
+        const ext = path3.extname(filePath).toLowerCase();
+        if ((ext === ".jpg" || ext === ".jpeg") && bytesRead >= 3) {
+          return header[0] === 255 && header[1] === 216;
+        }
+        if (ext === ".png" && bytesRead >= 8) {
+          return header[0] === 137 && header[1] === 80 && header[2] === 78 && header[3] === 71;
+        }
+        if (ext === ".webp" && bytesRead >= 12) {
+          return header.toString("ascii", 0, 4) === "RIFF" && header.toString("ascii", 8, 12) === "WEBP";
+        }
+        return false;
+      } finally {
+        fs3.closeSync(descriptor);
+      }
+    } catch {
+      return false;
+    }
+  };
+  const toMediaAssetUrl = (relative) => `/media-assets/${relative.split("/").map((segment) => encodeURIComponent(segment)).join("/")}`;
+  const normalizeMediaAssetReference = (value) => {
+    if (!value || /^https?:\/\//i.test(value) || value.startsWith("/uploads/")) return "";
+    const normalized = value.replace(/\\/g, "/").replace(/^\/+/, "").replace(/^assets\/imgs\//i, "").replace(/^media-assets\//i, "").trim();
+    if (!normalized || normalized.includes("..") || !/\.(jpe?g|png|webp)$/i.test(normalized)) return "";
+    const moduleName = (normalized.split("/")[0] || "").toLowerCase();
+    if (!mediaAssetModules.has(moduleName)) return "";
+    return normalized;
+  };
+  const listMediaAssets = () => {
+    const files = [];
+    const walk = (directory) => {
+      if (!fs3.existsSync(directory)) return;
+      for (const entry of fs3.readdirSync(directory, { withFileTypes: true })) {
+        const fullPath = path3.join(directory, entry.name);
+        if (entry.isDirectory()) {
+          if (directory === mediaAssetRoot && !mediaAssetModules.has(entry.name.toLowerCase())) continue;
+          walk(fullPath);
+          continue;
+        }
+        if (entry.name.startsWith(".") || !/\.(jpe?g|png|webp)$/i.test(entry.name)) continue;
+        const stat = fs3.statSync(fullPath);
+        const relative = path3.relative(mediaAssetRoot, fullPath).replace(/\\/g, "/");
+        const moduleName = (relative.split("/")[0] || "misc").toLowerCase();
+        if (!mediaAssetModules.has(moduleName)) continue;
+        files.push({
+          module: moduleName,
+          path: `assets/imgs/${relative}`,
+          reference: relative,
+          previewUrl: toMediaAssetUrl(relative),
+          size: stat.size,
+          updatedAt: stat.mtime,
+          valid: isValidImageFile(fullPath)
+        });
+      }
+    };
+    walk(mediaAssetRoot);
+    return files.sort((left, right) => left.path.localeCompare(right.path));
+  };
+  const isValidMediaReference = (value) => {
+    const normalized = normalizeMediaAssetReference(value);
+    if (!normalized) return false;
+    const normalizedPath = normalized.toLowerCase();
+    return listMediaAssets().some((asset) => {
+      const assetPath = asset.reference.toLowerCase();
+      return asset.valid && assetPath === normalizedPath;
+    });
+  };
+  const resolveMediaAssetFullPath = (reference) => {
+    const segments = reference.split("/").filter(Boolean);
+    let current = mediaAssetRoot;
+    for (const segment of segments) {
+      if (!fs3.existsSync(current)) return null;
+      const match = fs3.readdirSync(current, { withFileTypes: true }).find((entry) => entry.name.toLowerCase() === segment.toLowerCase());
+      if (!match) return null;
+      current = path3.join(current, match.name);
+    }
+    const resolved = path3.resolve(current);
+    return resolved.startsWith(mediaAssetRoot) ? resolved : null;
+  };
+  const ensureMediaReference = (value, moduleName) => {
+    const candidate = typeof value === "string" ? normalizeMediaAssetReference(value) : "";
+    if (candidate && isValidMediaReference(candidate)) return candidate;
+    return mediaDefaultReferences[moduleName] || mediaDefaultReferences.defaults;
+  };
+  app2.get("/media-assets/*", (req, res) => {
+    try {
+      const requestedPath = normalizeMediaAssetReference(req.params["0"]);
+      if (!requestedPath) return res.status(404).send("Not found");
+      const fullPath = resolveMediaAssetFullPath(requestedPath);
+      if (!fullPath || !fullPath.startsWith(mediaAssetRoot) || !fs3.existsSync(fullPath) || !isValidImageFile(fullPath)) {
+        return res.status(404).send("Not found");
+      }
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      res.sendFile(fullPath);
+    } catch (error) {
+      console.error("Media asset delivery error:", error);
+      res.status(404).send("Not found");
+    }
   });
   app2.get("/api/health", (_req, res) => {
     res.json({ status: "ok" });
   });
   const registerHandler = async (req, res) => {
     try {
-      const userData = insertUserSchema.parse(req.body);
+      const { referralCode: bodyReferralCode, ...registrationBody } = req.body && typeof req.body === "object" ? req.body : {};
+      const referralCode = typeof bodyReferralCode === "string" ? bodyReferralCode : typeof req.query.ref === "string" ? req.query.ref : null;
+      const userData = insertUserSchema.parse(registrationBody);
       const existingUser = await storage.getUserByEmail(userData.email) || await storage.getUserByUsername(userData.username);
       if (existingUser) {
         return res.status(400).json({ message: "A user with that email or username already exists" });
       }
       const hashedPassword = await bcrypt.hash(userData.password, 10);
-      const user = await storage.createUser({
+      const createdUser = await storage.createUser({
         ...userData,
         password: hashedPassword
       });
+      const generatedReferralCode = await ensureUserGrowthRecords(
+        createdUser.id,
+        createdUser.defaultCurrency || env.STRIPE_DEFAULT_CURRENCY
+      );
+      const user = { ...createdUser, referralCode: generatedReferralCode };
+      await attachReferralToNewUser(user, req, referralCode);
       await storage.logAnalytics({
         event: "user_registered",
         userId: user.id,
@@ -1351,14 +3618,26 @@ async function registerRoutes(app2) {
       }
       const normalizedIdentifier = String(identifier).trim();
       const looksLikeEmail = normalizedIdentifier.includes("@");
+      const existingFailure = getLoginFailure(normalizedIdentifier);
+      if (existingFailure?.lockedUntil && existingFailure.lockedUntil > Date.now()) {
+        const retryAfterSeconds = Math.ceil((existingFailure.lockedUntil - Date.now()) / 1e3);
+        res.setHeader("Retry-After", String(retryAfterSeconds));
+        return res.status(429).json({
+          message: "Too many failed login attempts. Please try again later.",
+          retryAfterSeconds
+        });
+      }
       const user = looksLikeEmail ? await storage.getUserByEmail(normalizedIdentifier) : await storage.getUserByUsername(normalizedIdentifier);
       if (!user) {
+        registerLoginFailure(normalizedIdentifier);
         return res.status(401).json({ message: "Invalid credentials" });
       }
       const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) {
+        registerLoginFailure(normalizedIdentifier);
         return res.status(401).json({ message: "Invalid credentials" });
       }
+      clearLoginFailure(normalizedIdentifier);
       await storage.logAnalytics({
         event: "user_logged_in",
         userId: user.id,
@@ -1475,7 +3754,7 @@ async function registerRoutes(app2) {
   });
   app2.get("/api/scholarships/search", async (req, res) => {
     try {
-      const { q } = req.query;
+      const q = req.query.q ?? req.query.p0;
       if (!q || typeof q !== "string") {
         return res.status(400).json({ message: "Search query is required" });
       }
@@ -1484,6 +3763,20 @@ async function registerRoutes(app2) {
     } catch (error) {
       console.error("Scholarship search error:", error);
       res.status(500).json({ message: "Failed to search scholarships" });
+    }
+  });
+  app2.get("/api/scholarships/:id", async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const scholarship = await storage.getScholarship(id);
+      const requester = getOptionalAuthenticatedUser(req);
+      const isVisible = scholarship && (isAdmin(requester) || scholarship.isActive !== false && new Date(scholarship.deadline).getTime() > Date.now());
+      if (!isVisible) return res.status(404).json({ message: "Scholarship not found" });
+      res.json(scholarship);
+    } catch (error) {
+      console.error("Scholarship detail fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch scholarship" });
     }
   });
   app2.post("/api/scholarships", authenticateToken, requireAdmin, async (req, res) => {
@@ -1541,7 +3834,7 @@ async function registerRoutes(app2) {
   });
   app2.get("/api/jobs/search", async (req, res) => {
     try {
-      const { q } = req.query;
+      const q = req.query.q ?? req.query.p0;
       if (!q || typeof q !== "string") {
         return res.status(400).json({ message: "Search query is required" });
       }
@@ -1550,6 +3843,20 @@ async function registerRoutes(app2) {
     } catch (error) {
       console.error("Job search error:", error);
       res.status(500).json({ message: "Failed to search jobs" });
+    }
+  });
+  app2.get("/api/jobs/:id", async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const job = await storage.getJob(id);
+      const requester = getOptionalAuthenticatedUser(req);
+      const isVisible = job && (isAdmin(requester) || job.isActive !== false);
+      if (!isVisible) return res.status(404).json({ message: "Job not found" });
+      res.json(job);
+    } catch (error) {
+      console.error("Job detail fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch job" });
     }
   });
   app2.post("/api/jobs", authenticateToken, requireAdmin, async (req, res) => {
@@ -1605,15 +3912,76 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to fetch applications" });
     }
   });
+  app2.post(
+    "/api/application-assets",
+    authenticateToken,
+    upload.fields([
+      { name: "cv", maxCount: 1 },
+      { name: "coverLetter", maxCount: 1 },
+      { name: "portfolio", maxCount: 1 }
+    ]),
+    (req, res) => {
+      const filesPayload = req.files;
+      const fileGroups = !Array.isArray(filesPayload) && filesPayload ? filesPayload : {};
+      const documents = Object.entries(fileGroups).reduce((acc, [field, files]) => {
+        const [file] = files;
+        if (!file) return acc;
+        acc[field] = {
+          url: `/uploads/${file.filename}`,
+          originalName: file.originalname,
+          size: file.size,
+          type: file.mimetype
+        };
+        return acc;
+      }, {});
+      res.status(201).json({ documents });
+    }
+  );
   app2.post("/api/applications", authenticateToken, async (req, res) => {
     try {
       const authUser = getAuthenticatedUser(req);
+      const payload = publicApplicationRequestSchema.parse(req.body);
+      const userApplications = await storage.getUserApplications(authUser.id);
+      const duplicate = userApplications.find(
+        (application2) => application2.type === payload.type && application2.referenceId === payload.referenceId
+      );
+      if (duplicate) {
+        return res.status(409).json({
+          message: "You have already applied for this opportunity",
+          application: duplicate
+        });
+      }
+      const target = payload.type === "job" ? await storage.getJob(payload.referenceId) : await storage.getScholarship(payload.referenceId);
+      if (!target || target.isActive === false) {
+        return res.status(404).json({ message: "Opportunity not found" });
+      }
       const applicationData = insertApplicationSchema.parse({
-        ...req.body,
+        ...payload,
         userId: authUser.id
       });
       const application = await storage.createApplication(applicationData);
       broadcast("applications", { type: "application_created", application });
+      const opportunityTitle = "title" in target ? target.title : "Opportunity";
+      const dashboardUrl = `${env.PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`}/dashboard`;
+      const applicant = await storage.getUser(authUser.id);
+      void sendApplicationConfirmation({
+        email: authUser.email,
+        name: applicant ? `${applicant.firstName} ${applicant.lastName}`.trim() : void 0,
+        opportunityTitle,
+        opportunityType: payload.type,
+        dashboardUrl
+      });
+      if (getAdminSettings().emailNotifications) {
+        void sendAdminNotification({
+          subject: "New Mtendere application submitted",
+          message: `${applicant ? `${applicant.firstName} ${applicant.lastName}`.trim() : authUser.email} submitted a ${payload.type} application for ${opportunityTitle}.`,
+          metadata: {
+            applicationId: application.id,
+            opportunityType: payload.type,
+            referenceId: payload.referenceId
+          }
+        });
+      }
       await storage.logAnalytics({
         event: "application_submitted",
         userId: authUser.id,
@@ -1661,6 +4029,20 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to fetch partners" });
     }
   });
+  app2.get("/api/partners/:id", async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const partner = await storage.getPartner(id);
+      const requester = getOptionalAuthenticatedUser(req);
+      const isVisible = partner && (isAdmin(requester) || partner.isActive !== false);
+      if (!isVisible) return res.status(404).json({ message: "Partner not found" });
+      res.json(partner);
+    } catch (error) {
+      console.error("Partner detail fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch partner" });
+    }
+  });
   app2.post("/api/partners", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const partnerData = insertPartnerSchema.parse(req.body);
@@ -1684,9 +4066,11 @@ async function registerRoutes(app2) {
   });
   app2.post("/api/testimonials", authenticateToken, async (req, res) => {
     try {
+      const authUser = getAuthenticatedUser(req);
       const testimonialData = insertTestimonialSchema.parse({
         ...req.body,
-        userId: getAuthenticatedUser(req).id
+        userId: authUser.id,
+        isApproved: isAdmin(authUser) ? req.body.isApproved ?? false : false
       });
       const testimonial = await storage.createTestimonial(testimonialData);
       broadcast("testimonials", { type: "testimonial_created", testimonial });
@@ -1694,6 +4078,42 @@ async function registerRoutes(app2) {
     } catch (error) {
       console.error("Testimonial creation error:", error);
       res.status(400).json({ message: "Failed to create testimonial", error: getErrorMessage(error) });
+    }
+  });
+  app2.put("/api/testimonials/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) {
+        return res.status(400).json({ message: "Invalid testimonial id" });
+      }
+      const existing = await storage.getTestimonial(id);
+      if (!existing) {
+        return res.status(404).json({ message: "Testimonial not found" });
+      }
+      const testimonialData = insertTestimonialSchema.partial().parse(req.body);
+      const testimonial = await storage.updateTestimonial(id, testimonialData);
+      broadcast("testimonials", { type: "testimonial_updated", testimonial });
+      res.json(testimonial);
+    } catch (error) {
+      console.error("Testimonial update error:", error);
+      res.status(400).json({ message: "Failed to update testimonial", error: getErrorMessage(error) });
+    }
+  });
+  app2.delete("/api/testimonials/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) {
+        return res.status(400).json({ message: "Invalid testimonial id" });
+      }
+      const deleted = await storage.deleteTestimonial(id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Testimonial not found" });
+      }
+      broadcast("testimonials", { type: "testimonial_deleted", id });
+      res.json({ message: "Testimonial deleted successfully" });
+    } catch (error) {
+      console.error("Testimonial deletion error:", error);
+      res.status(500).json({ message: "Failed to delete testimonial", error: getErrorMessage(error) });
     }
   });
   app2.get("/api/blog-posts", async (req, res) => {
@@ -1708,12 +4128,13 @@ async function registerRoutes(app2) {
   });
   app2.get("/api/blog-posts/search", async (req, res) => {
     try {
-      const { q } = req.query;
+      const q = req.query.q ?? req.query.p0;
       if (!q || typeof q !== "string") {
         return res.status(400).json({ message: "Search query is required" });
       }
+      const requester = getOptionalAuthenticatedUser(req);
       const blogPosts2 = await storage.searchBlogPosts(q);
-      res.json(blogPosts2);
+      res.json(isAdmin(requester) ? blogPosts2 : blogPosts2.filter((post) => post.isPublished));
     } catch (error) {
       console.error("Blog search error:", error);
       res.status(500).json({ message: "Failed to search blog posts" });
@@ -1723,7 +4144,8 @@ async function registerRoutes(app2) {
     try {
       const id = parseInt(req.params.id);
       const post = await storage.getBlogPost(id);
-      if (!post) {
+      const requester = getOptionalAuthenticatedUser(req);
+      if (!post || !isAdmin(requester) && !post.isPublished) {
         return res.status(404).json({ message: "Blog post not found" });
       }
       res.json(post);
@@ -1835,6 +4257,20 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to fetch team members" });
     }
   });
+  app2.get("/api/team-members/:id", async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const teamMember = await storage.getTeamMember(id);
+      const requester = getOptionalAuthenticatedUser(req);
+      const isVisible = teamMember && (isAdmin(requester) || teamMember.isActive !== false);
+      if (!isVisible) return res.status(404).json({ message: "Team member not found" });
+      res.json(teamMember);
+    } catch (error) {
+      console.error("Team member detail fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch team member" });
+    }
+  });
   app2.post("/api/team-members", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const teamMemberData = insertTeamMemberSchema.parse(req.body);
@@ -1882,20 +4318,399 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to delete team member" });
     }
   });
+  app2.get("/api/events", async (req, res) => {
+    try {
+      const requester = getOptionalAuthenticatedUser(req);
+      const allEvents = isAdmin(requester) ? await storage.getAllEvents() : await storage.getPublishedEvents();
+      const search = String(req.query.search ?? req.query.q ?? "").toLowerCase();
+      const category = String(req.query.category ?? "").toLowerCase();
+      const location = String(req.query.location ?? "").toLowerCase();
+      const type = String(req.query.type ?? "").toLowerCase();
+      const format = String(req.query.format ?? "").toLowerCase();
+      const price = String(req.query.price ?? "").toLowerCase();
+      const status = String(req.query.status ?? "").toLowerCase();
+      const date = String(req.query.date ?? "").toLowerCase();
+      const enriched = await Promise.all(allEvents.map(toPublicEvent));
+      const filtered = enriched.filter((event) => {
+        const runtimeStatus = String(event.runtimeStatus ?? "").toLowerCase();
+        const startsAt = new Date(event.startAt).getTime();
+        const matchesSearch = !search || event.title.toLowerCase().includes(search) || event.description.toLowerCase().includes(search) || event.category.toLowerCase().includes(search) || event.location.toLowerCase().includes(search);
+        const matchesCategory = !category || event.category.toLowerCase() === category;
+        const matchesLocation = !location || event.location.toLowerCase().includes(location);
+        const matchesType = !type || event.eventType.toLowerCase().includes(type);
+        const matchesFormat = !format || format === "virtual" && event.isVirtual || format === "physical" && !event.isVirtual || format === "hybrid" && event.isVirtual && event.location;
+        const matchesPrice = !price || price === "free" && !event.isPaid || price === "paid" && event.isPaid;
+        const matchesStatus = !status || runtimeStatus === status || status === "featured" && event.isFeatured || status === "recommended" && event.isRecommended || status === "trending" && event.isTrending;
+        const matchesDate = !date || date === "today" && new Date(event.startAt).toDateString() === (/* @__PURE__ */ new Date()).toDateString() || date === "week" && startsAt <= Date.now() + 7 * 24 * 60 * 60 * 1e3 || date === "month" && startsAt <= Date.now() + 30 * 24 * 60 * 60 * 1e3;
+        return matchesSearch && matchesCategory && matchesLocation && matchesType && matchesFormat && matchesPrice && matchesStatus && matchesDate;
+      });
+      res.json(filtered);
+    } catch (error) {
+      console.error("Events fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch events" });
+    }
+  });
+  app2.get("/api/events/search", async (req, res) => {
+    try {
+      const q = req.query.q ?? req.query.p0;
+      if (!q || typeof q !== "string") {
+        return res.status(400).json({ message: "Search query is required" });
+      }
+      const events2 = await storage.searchEvents(q);
+      res.json(await Promise.all(events2.map(toPublicEvent)));
+    } catch (error) {
+      console.error("Event search error:", error);
+      res.status(500).json({ message: "Failed to search events" });
+    }
+  });
+  app2.get("/api/events/registrations/:ticketCode/ticket", async (req, res) => {
+    try {
+      const registrations = await storage.getAllEventRegistrations();
+      const registration = registrations.find((item) => item.ticketCode === req.params.ticketCode);
+      if (!registration) return res.status(404).send("Ticket not found");
+      const event = await storage.getEvent(registration.eventId);
+      if (!event) return res.status(404).send("Event not found");
+      const ticketPayload = {
+        ticketCode: registration.ticketCode,
+        eventId: event.id,
+        eventTitle: event.title,
+        attendee: registration.fullName,
+        status: registration.status
+      };
+      const qrCode = await QRCode.toDataURL(JSON.stringify(ticketPayload), {
+        errorCorrectionLevel: "M",
+        margin: 1,
+        width: 220
+      });
+      res.setHeader("Content-Type", "text/html");
+      res.send(`
+        <!doctype html>
+        <html>
+          <head><title>${event.title} Ticket</title></head>
+          <body style="font-family: Arial, sans-serif; margin: 0; padding: 32px; background: #f5f7fb; color: #111827;">
+            <main style="max-width: 720px; margin: 0 auto; background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 28px;">
+              <p style="margin: 0 0 8px; color: #0f766e; font-weight: 700;">Mtendere Event Confirmation</p>
+              <h1 style="margin: 0 0 16px; color: #0f4c81;">${event.title}</h1>
+              <p><strong>Attendee:</strong> ${registration.fullName}</p>
+              <p><strong>Date:</strong> ${new Date(event.startAt).toLocaleString()}</p>
+              <p><strong>Location:</strong> ${event.isVirtual ? "Virtual event" : event.location}</p>
+              <div style="margin-top: 24px; display: grid; gap: 16px; justify-items: center; padding: 18px; border: 2px dashed #f59e0b; text-align: center;">
+                <img src="${qrCode}" alt="QR code for ${registration.ticketCode}" width="220" height="220" style="display:block;">
+                <div style="font-size: 24px; font-weight: 800;">${registration.ticketCode}</div>
+              </div>
+            </main>
+          </body>
+        </html>
+      `);
+    } catch (error) {
+      console.error("Event ticket error:", error);
+      res.status(500).send("Failed to generate ticket");
+    }
+  });
+  app2.get("/api/events/:identifier", async (req, res) => {
+    try {
+      const identifier = req.params.identifier;
+      const event = /^\d+$/.test(identifier) ? await storage.getEvent(Number(identifier)) : await storage.getEventBySlug(identifier);
+      const requester = getOptionalAuthenticatedUser(req);
+      const isVisible = event && (isAdmin(requester) || event.status === "published");
+      if (!isVisible) return res.status(404).json({ message: "Event not found" });
+      const [comments, registrations] = await Promise.all([
+        storage.getEventComments(event.id, isAdmin(requester)),
+        storage.getEventRegistrations(event.id)
+      ]);
+      res.json({
+        ...await toPublicEvent(event),
+        comments,
+        registrations: isAdmin(requester) ? registrations : void 0
+      });
+    } catch (error) {
+      console.error("Event detail fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch event" });
+    }
+  });
+  app2.post("/api/events/:id/view", async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const event = await storage.incrementEventView(id);
+      await storage.logAnalytics({
+        event: "event_viewed",
+        userId: getOptionalAuthenticatedUser(req)?.id ?? null,
+        metadata: { type: "event", referenceId: id },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent")
+      });
+      res.json(await toPublicEvent(event));
+    } catch (error) {
+      console.error("Event view tracking error:", error);
+      res.status(400).json({ message: "Failed to track event view" });
+    }
+  });
+  app2.post("/api/events/:id/share", async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const event = await storage.incrementEventShare(id);
+      await storage.logAnalytics({
+        event: "event_shared",
+        userId: getOptionalAuthenticatedUser(req)?.id ?? null,
+        metadata: { type: "event", referenceId: id, channel: req.body?.channel ?? "native" },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent")
+      });
+      broadcast("events", { type: "event_shared", eventId: id, shareCount: event.shareCount });
+      res.json(await toPublicEvent(event));
+    } catch (error) {
+      console.error("Event share tracking error:", error);
+      res.status(400).json({ message: "Failed to track event share" });
+    }
+  });
+  app2.post("/api/events/:id/like", async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const user = getOptionalAuthenticatedUser(req);
+      await storage.createEventReaction(insertEventReactionSchema.parse({
+        eventId: id,
+        userId: user?.id ?? null,
+        visitorId: user ? null : String(req.body?.visitorId ?? req.ip ?? "anonymous").slice(0, 120),
+        reaction: String(req.body?.reaction ?? "like").slice(0, 40)
+      }));
+      const event = await storage.incrementEventLike(id);
+      broadcast("events", { type: "event_liked", eventId: id, likeCount: event.likeCount });
+      res.json(await toPublicEvent(event));
+    } catch (error) {
+      console.error("Event like error:", error);
+      res.status(400).json({ message: "Failed to like event", error: getErrorMessage(error) });
+    }
+  });
+  app2.get("/api/events/:id/comments", async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const requester = getOptionalAuthenticatedUser(req);
+      const comments = await storage.getEventComments(id, isAdmin(requester));
+      res.json(comments);
+    } catch (error) {
+      console.error("Event comments fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch comments" });
+    }
+  });
+  app2.post("/api/events/:id/comments", async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const event = await storage.getEvent(id);
+      if (!event || event.status !== "published" || event.allowComments === false) {
+        return res.status(404).json({ message: "Event discussion is not available" });
+      }
+      const user = getOptionalAuthenticatedUser(req);
+      const payload = eventCommentRequestSchema.parse(req.body);
+      const comment = await storage.createEventComment(insertEventCommentSchema.parse({
+        eventId: id,
+        userId: user?.id ?? null,
+        parentId: payload.parentId ?? null,
+        authorName: payload.authorName,
+        authorEmail: user?.email ?? payload.authorEmail ?? null,
+        content: payload.content,
+        status: "approved"
+      }));
+      broadcast("events", { type: "event_comment_created", eventId: id, comment });
+      res.status(201).json(comment);
+    } catch (error) {
+      console.error("Event comment creation error:", error);
+      res.status(400).json({ message: "Failed to comment on event", error: getErrorMessage(error) });
+    }
+  });
+  app2.post("/api/events/:id/registrations", async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const event = await storage.getEvent(id);
+      if (!event || event.status !== "published") {
+        return res.status(404).json({ message: "Event not found" });
+      }
+      const now = Date.now();
+      if (event.registrationDeadline && new Date(event.registrationDeadline).getTime() < now) {
+        return res.status(400).json({ message: "Registration is closed for this event" });
+      }
+      if (new Date(event.endAt).getTime() < now) {
+        return res.status(400).json({ message: "This event has already ended" });
+      }
+      const payload = eventRegistrationRequestSchema.parse(req.body);
+      const existing = (await storage.getEventRegistrations(id)).find(
+        (registration2) => registration2.email.toLowerCase() === payload.email
+      );
+      if (existing) {
+        return res.status(409).json({ message: "This email is already registered for the event", registration: existing });
+      }
+      const publicEvent = await toPublicEvent(event);
+      const isFull = publicEvent.remainingSeats !== null && publicEvent.remainingSeats <= 0;
+      const status = isFull ? "waitlisted" : event.requiresApproval ? "pending" : "approved";
+      const user = getOptionalAuthenticatedUser(req);
+      const registration = await storage.createEventRegistration(insertEventRegistrationSchema.parse({
+        eventId: id,
+        userId: user?.id ?? null,
+        fullName: payload.fullName,
+        email: payload.email,
+        phone: payload.phone ?? null,
+        organization: payload.organization ?? null,
+        status,
+        ticketCode: createTicketCode(id),
+        attendanceStatus: "registered",
+        answers: payload.answers ?? null,
+        reminderOptIn: payload.reminderOptIn
+      }));
+      await storage.logAnalytics({
+        event: "event_registered",
+        userId: user?.id ?? null,
+        metadata: { type: "event", referenceId: id, status },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent")
+      });
+      broadcast("events", { type: "event_registration_created", eventId: id, registration });
+      res.status(201).json({ registration, ticketUrl: `/api/events/registrations/${registration.ticketCode}/ticket` });
+    } catch (error) {
+      console.error("Event registration error:", error);
+      res.status(400).json({ message: "Failed to register for event", error: getErrorMessage(error) });
+    }
+  });
+  app2.post("/api/events", authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const payload = eventPayloadSchema.parse(req.body);
+      if (payload.endAt <= payload.startAt) {
+        return res.status(400).json({ message: "Event end date must be after start date" });
+      }
+      const coverImage = ensureMediaReference(payload.coverImage, "events");
+      const baseSlug = slugify(payload.slug || payload.title);
+      const existing = await storage.getEventBySlug(baseSlug);
+      const slug = existing ? `${baseSlug}-${randomBytes(2).toString("hex")}` : baseSlug;
+      const eventData = insertEventSchema.parse({
+        ...payload,
+        slug,
+        coverImage,
+        tags: normalizeEventTags(payload.tags),
+        createdBy: getAuthenticatedUser(req).id
+      });
+      const event = await storage.createEvent(eventData);
+      await emitAdminRealtimeEvent(req, {
+        event: "event_created",
+        channel: "events",
+        entityType: "event",
+        referenceId: event.id,
+        payload: { event: await toAdminEvent(event) }
+      });
+      res.status(201).json(await toAdminEvent(event));
+    } catch (error) {
+      console.error("Event creation error:", error);
+      res.status(400).json({ message: "Failed to create event", error: getErrorMessage(error) });
+    }
+  });
+  app2.put("/api/events/:id", authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const payload = eventPayloadSchema.partial().parse(req.body);
+      if (payload.startAt && payload.endAt && payload.endAt <= payload.startAt) {
+        return res.status(400).json({ message: "Event end date must be after start date" });
+      }
+      const updatePayload = { ...payload };
+      if (payload.slug) updatePayload.slug = slugify(payload.slug);
+      if (payload.coverImage !== void 0) updatePayload.coverImage = ensureMediaReference(payload.coverImage, "events");
+      if (payload.tags !== void 0) updatePayload.tags = normalizeEventTags(payload.tags);
+      const updateData = insertEventSchema.partial().parse(updatePayload);
+      const event = await storage.updateEvent(id, updateData);
+      if (!event) return res.status(404).json({ message: "Event not found" });
+      await emitAdminRealtimeEvent(req, {
+        event: "event_updated",
+        channel: "events",
+        entityType: "event",
+        referenceId: event.id,
+        payload: { event: await toAdminEvent(event) }
+      });
+      res.json(await toAdminEvent(event));
+    } catch (error) {
+      console.error("Event update error:", error);
+      res.status(400).json({ message: "Failed to update event", error: getErrorMessage(error) });
+    }
+  });
+  app2.delete("/api/events/:id", authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const success = await storage.deleteEvent(id);
+      if (!success) return res.status(404).json({ message: "Event not found" });
+      await emitAdminRealtimeEvent(req, {
+        event: "event_deleted",
+        channel: "events",
+        entityType: "event",
+        referenceId: id,
+        payload: { id: String(id) }
+      });
+      res.status(204).send();
+    } catch (error) {
+      console.error("Event deletion error:", error);
+      res.status(500).json({ message: "Failed to delete event" });
+    }
+  });
+  app2.get("/api/referrals/me", authenticateToken, async (req, res) => {
+    try {
+      const protocol = req.get("x-forwarded-proto") || req.protocol || "http";
+      const origin = env.PUBLIC_APP_URL || `${protocol}://${req.get("host")}`;
+      const dashboard = await getReferralDashboard(getAuthenticatedUser(req).id, origin.replace(/\/$/, ""));
+      res.json(dashboard);
+    } catch (error) {
+      console.error("Referral dashboard fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch referral dashboard" });
+    }
+  });
   app2.get("/api/referrals", authenticateToken, async (req, res) => {
     try {
-      const referrals2 = await storage.getUserReferrals(getAuthenticatedUser(req).id);
-      res.json(referrals2);
+      const protocol = req.get("x-forwarded-proto") || req.protocol || "http";
+      const origin = env.PUBLIC_APP_URL || `${protocol}://${req.get("host")}`;
+      const dashboard = await getReferralDashboard(getAuthenticatedUser(req).id, origin.replace(/\/$/, ""));
+      res.json(dashboard.referrals);
     } catch (error) {
       console.error("Referrals fetch error:", error);
       res.status(500).json({ message: "Failed to fetch referrals" });
+    }
+  });
+  app2.get("/api/referrals/ledger", authenticateToken, async (req, res) => {
+    try {
+      const protocol = req.get("x-forwarded-proto") || req.protocol || "http";
+      const origin = env.PUBLIC_APP_URL || `${protocol}://${req.get("host")}`;
+      const dashboard = await getReferralDashboard(getAuthenticatedUser(req).id, origin.replace(/\/$/, ""));
+      res.json(dashboard.ledger);
+    } catch (error) {
+      console.error("Referral ledger fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch referral ledger" });
+    }
+  });
+  app2.post("/api/referrals/invites", authenticateToken, async (req, res) => {
+    try {
+      const referralData = insertReferralSchema.parse({
+        referrerId: getAuthenticatedUser(req).id,
+        referredEmail: req.body.referredEmail,
+        status: "pending",
+        rewardAmount: 0
+      });
+      const referral = await storage.createReferral(referralData);
+      broadcast("referrals", { type: "referral_created", referral });
+      res.status(201).json(referral);
+    } catch (error) {
+      console.error("Referral invite creation error:", error);
+      res.status(400).json({
+        message: "Failed to create referral invite",
+        error: getErrorMessage(error)
+      });
     }
   });
   app2.post("/api/referrals", authenticateToken, async (req, res) => {
     try {
       const referralData = insertReferralSchema.parse({
         ...req.body,
-        referrerId: getAuthenticatedUser(req).id
+        referrerId: getAuthenticatedUser(req).id,
+        rewardAmount: 0
       });
       const referral = await storage.createReferral(referralData);
       broadcast("referrals", { type: "referral_created", referral });
@@ -1908,12 +4723,189 @@ async function registerRoutes(app2) {
       });
     }
   });
+  app2.post("/api/payments/checkout", authenticateToken, async (req, res) => {
+    try {
+      const payload = checkoutRequestSchema.parse(req.body);
+      const session = await createCheckoutSession(getAuthenticatedUser(req).id, payload, req);
+      res.status(201).json(session);
+    } catch (error) {
+      console.error("Checkout session error:", error);
+      const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) || 500 : 500;
+      res.status(status).json({ message: "Failed to create checkout session", error: getErrorMessage(error) });
+    }
+  });
+  app2.post("/api/stripe/webhook", async (req, res) => {
+    let event;
+    try {
+      event = verifyStripeWebhookEvent(req);
+    } catch (error) {
+      console.error("Stripe webhook verification error:", error);
+      return res.status(400).json({ message: "Invalid Stripe webhook signature" });
+    }
+    try {
+      const saved = await persistStripeEvent(event);
+      res.json({ received: true, duplicate: !saved });
+      if (saved) {
+        setImmediate(() => {
+          processStripeEvent(event).catch((error) => {
+            console.error("Stripe event processing error:", error);
+          });
+        });
+      }
+    } catch (error) {
+      console.error("Stripe webhook persistence error:", error);
+      res.status(500).json({ message: "Failed to persist Stripe event" });
+    }
+  });
+  app2.get("/api/payouts", authenticateToken, async (req, res) => {
+    try {
+      const payouts = await getUserPayouts(getAuthenticatedUser(req).id);
+      res.json(payouts);
+    } catch (error) {
+      console.error("Payout fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch payouts" });
+    }
+  });
+  app2.post("/api/payouts", authenticateToken, async (req, res) => {
+    try {
+      const payload = payoutRequestSchema.parse(req.body);
+      const payout = await requestPayout(
+        getAuthenticatedUser(req).id,
+        payload.amount,
+        payload.method,
+        payload.destination
+      );
+      res.status(201).json(payout);
+    } catch (error) {
+      console.error("Payout request error:", error);
+      const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) || 500 : 400;
+      res.status(status).json({ message: "Failed to request payout", error: getErrorMessage(error) });
+    }
+  });
+  app2.post("/api/admin/commissions/release", authenticateToken, requireAdmin, async (_req, res) => {
+    try {
+      const released = await releaseEligibleCommissions();
+      res.json({ released });
+    } catch (error) {
+      console.error("Commission release error:", error);
+      res.status(500).json({ message: "Failed to release commissions", error: getErrorMessage(error) });
+    }
+  });
+  app2.get("/api/admin/revenue/referrals", authenticateToken, requireAdmin, async (_req, res) => {
+    try {
+      const analytics2 = await listAdminReferralAnalytics();
+      res.json(analytics2);
+    } catch (error) {
+      console.error("Referral revenue analytics error:", error);
+      res.status(500).json({ message: "Failed to fetch referral revenue analytics" });
+    }
+  });
+  app2.get("/api/admin/referral-campaigns", authenticateToken, requireAdmin, async (_req, res) => {
+    try {
+      const campaigns = await listReferralCampaigns();
+      res.json(campaigns);
+    } catch (error) {
+      console.error("Referral campaign fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch referral campaigns" });
+    }
+  });
+  app2.post("/api/admin/referral-campaigns", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const payload = referralCampaignRequestSchema.parse(req.body);
+      const campaign = await createReferralCampaign({
+        ...payload,
+        createdBy: getAuthenticatedUser(req).id
+      });
+      res.status(201).json(campaign);
+    } catch (error) {
+      console.error("Referral campaign creation error:", error);
+      res.status(400).json({ message: "Failed to create referral campaign", error: getErrorMessage(error) });
+    }
+  });
+  app2.put("/api/admin/referral-campaigns/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const payload = referralCampaignRequestSchema.partial().parse(req.body);
+      const campaign = await updateReferralCampaign(Number(req.params.id), payload);
+      res.json(campaign);
+    } catch (error) {
+      console.error("Referral campaign update error:", error);
+      res.status(400).json({ message: "Failed to update referral campaign", error: getErrorMessage(error) });
+    }
+  });
+  app2.get("/api/admin/commission-rules", authenticateToken, requireAdmin, async (_req, res) => {
+    try {
+      const rules = await listCommissionRules();
+      res.json(rules);
+    } catch (error) {
+      console.error("Commission rule fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch commission rules" });
+    }
+  });
+  app2.post("/api/admin/commission-rules", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const payload = commissionRuleRequestSchema.parse(req.body);
+      const rule = await createCommissionRule({
+        ...payload,
+        currency: payload.currency.toUpperCase()
+      });
+      res.status(201).json(rule);
+    } catch (error) {
+      console.error("Commission rule creation error:", error);
+      res.status(400).json({ message: "Failed to create commission rule", error: getErrorMessage(error) });
+    }
+  });
+  app2.put("/api/admin/commission-rules/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const payload = commissionRuleRequestSchema.partial().parse(req.body);
+      const rule = await updateCommissionRule(Number(req.params.id), {
+        ...payload,
+        currency: payload.currency?.toUpperCase()
+      });
+      res.json(rule);
+    } catch (error) {
+      console.error("Commission rule update error:", error);
+      res.status(400).json({ message: "Failed to update commission rule", error: getErrorMessage(error) });
+    }
+  });
+  app2.get("/api/admin/payouts", authenticateToken, requireAdmin, async (_req, res) => {
+    try {
+      const payouts = await listPayoutRequests();
+      res.json(payouts);
+    } catch (error) {
+      console.error("Admin payout fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch payouts" });
+    }
+  });
+  app2.post("/api/admin/payouts/:id/approve", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const payout = await approvePayoutRequest(Number(req.params.id), getAuthenticatedUser(req).id);
+      res.json(payout);
+    } catch (error) {
+      console.error("Payout approval error:", error);
+      res.status(400).json({ message: "Failed to approve payout", error: getErrorMessage(error) });
+    }
+  });
+  app2.post("/api/admin/payouts/:id/reject", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const payout = await rejectPayoutRequest(Number(req.params.id), String(req.body.reason || "Rejected by admin"));
+      res.json(payout);
+    } catch (error) {
+      console.error("Payout rejection error:", error);
+      res.status(400).json({ message: "Failed to reject payout", error: getErrorMessage(error) });
+    }
+  });
+  const releaseWorker = setInterval(() => {
+    releaseEligibleCommissions().catch((error) => {
+      console.error("Scheduled commission release error:", error);
+    });
+  }, env.REFERRAL_RELEASE_WORKER_MS);
+  releaseWorker.unref?.();
   const paginate = (items, page, limit) => {
     const total = items.length;
     const start = (page - 1) * limit;
     return { items: items.slice(start, start + limit), total };
   };
-  app2.get("/api/admin/dashboard/stats", authenticateToken, requireEditor, async (_req, res) => {
+  app2.get("/api/admin/dashboard/stats", authenticateToken, requireAdminPortal, async (_req, res) => {
     try {
       const [
         users2,
@@ -1975,7 +4967,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to fetch dashboard statistics" });
     }
   });
-  app2.get("/api/admin/dashboard/recent-activity", authenticateToken, requireEditor, async (_req, res) => {
+  app2.get("/api/admin/dashboard/recent-activity", authenticateToken, requireAdminPortal, async (_req, res) => {
     try {
       const recentActivity = (await storage.getAnalytics()).slice(0, 20).map((item) => {
         const meta = parseAnalyticsMeta(item.metadata);
@@ -2023,7 +5015,11 @@ async function registerRoutes(app2) {
   });
   app2.post("/api/admin/users", authenticateToken, requireAdmin, async (req, res) => {
     try {
+      const requester = getAuthenticatedUser(req);
       const userData = insertUserSchema.parse(req.body);
+      if (userData.role === "super_admin" && requester.role !== "super_admin") {
+        return res.status(403).json({ message: "Only a super administrator can create super admin users" });
+      }
       const existing = await storage.getUserByEmail(userData.email) || await storage.getUserByUsername(userData.username);
       if (existing) {
         return res.status(400).json({ message: "User already exists" });
@@ -2052,7 +5048,22 @@ async function registerRoutes(app2) {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const requester = getAuthenticatedUser(req);
+      const existingUser = await storage.getUser(id);
+      if (!existingUser) return res.status(404).json({ message: "User not found" });
       const updateData = insertUserSchema.partial().parse(req.body);
+      if (id === requester.id && updateData.isActive === false) {
+        return res.status(400).json({ message: "You cannot deactivate your own account" });
+      }
+      if (id === requester.id && updateData.role && updateData.role !== requester.role) {
+        return res.status(400).json({ message: "You cannot change your own role" });
+      }
+      if (updateData.role === "super_admin" && requester.role !== "super_admin") {
+        return res.status(403).json({ message: "Only a super administrator can assign the super admin role" });
+      }
+      if (existingUser.role === "super_admin" && requester.role !== "super_admin") {
+        return res.status(403).json({ message: "Only a super administrator can update super admin users" });
+      }
       const nextUser = updateData.password ? { ...updateData, password: await bcrypt.hash(updateData.password, 10) } : updateData;
       const user = await storage.updateUser(id, nextUser);
       if (req.body.region !== void 0) {
@@ -2075,6 +5086,15 @@ async function registerRoutes(app2) {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const requester = getAuthenticatedUser(req);
+      if (id === requester.id) {
+        return res.status(400).json({ message: "You cannot delete your own account" });
+      }
+      const targetUser = await storage.getUser(id);
+      if (!targetUser) return res.status(404).json({ message: "User not found" });
+      if (targetUser.role === "super_admin" && requester.role !== "super_admin") {
+        return res.status(403).json({ message: "Only a super administrator can delete super admin users" });
+      }
       const success = await storage.deleteUser(id);
       deleteUserMeta(id);
       if (!success) return res.status(404).json({ message: "User not found" });
@@ -2116,6 +5136,7 @@ async function registerRoutes(app2) {
       const createdBy = getAuthenticatedUser(req).id;
       const amount = parseNumber(req.body.amount);
       const deadline = req.body.deadline ? new Date(req.body.deadline) : /* @__PURE__ */ new Date();
+      const featuredImage = ensureMediaReference(req.body.featuredImage, "scholarships");
       const scholarshipData = insertScholarshipSchema.parse({
         title: req.body.title ?? "",
         description: req.body.description ?? "",
@@ -2126,7 +5147,7 @@ async function registerRoutes(app2) {
         deadline,
         requirements: req.body.requirements ?? null,
         category: req.body.category ?? "General",
-        imageUrl: req.body.featuredImage ?? null,
+        imageUrl: featuredImage,
         isActive: req.body.status === "published",
         createdBy
       });
@@ -2136,7 +5157,7 @@ async function registerRoutes(app2) {
         status: normalizeAdminStatus(req.body.status, scholarship.isActive),
         isPremium: Boolean(req.body.isPremium),
         paymentStatus: req.body.paymentStatus ?? "unpaid",
-        featuredImage: req.body.featuredImage ?? "",
+        featuredImage,
         region: req.body.region ?? "Global"
       });
       await emitAdminRealtimeEvent(req, {
@@ -2166,7 +5187,8 @@ async function registerRoutes(app2) {
       if (req.body.deadline !== void 0) payload.deadline = new Date(req.body.deadline);
       if (req.body.requirements !== void 0) payload.requirements = req.body.requirements;
       if (req.body.category !== void 0) payload.category = req.body.category;
-      if (req.body.featuredImage !== void 0) payload.imageUrl = req.body.featuredImage;
+      const featuredImage = req.body.featuredImage !== void 0 ? ensureMediaReference(req.body.featuredImage, "scholarships") : void 0;
+      if (featuredImage !== void 0) payload.imageUrl = featuredImage;
       if (req.body.status !== void 0) payload.isActive = req.body.status === "published";
       const updateData = insertScholarshipSchema.partial().parse(payload);
       const scholarship = await storage.updateScholarship(id, updateData);
@@ -2176,7 +5198,7 @@ async function registerRoutes(app2) {
         status: req.body.status,
         isPremium: parseOptionalBoolean(req.body.isPremium),
         paymentStatus: req.body.paymentStatus,
-        featuredImage: req.body.featuredImage,
+        featuredImage,
         region: req.body.region
       });
       await emitAdminRealtimeEvent(req, {
@@ -2235,6 +5257,7 @@ async function registerRoutes(app2) {
   app2.post("/api/admin/jobs", authenticateToken, requireEditor, async (req, res) => {
     try {
       const createdBy = getAuthenticatedUser(req).id;
+      const featuredImage = ensureMediaReference(req.body.featuredImage, "jobs");
       const jobData = insertJobSchema.parse({
         title: req.body.title ?? "",
         description: req.body.description ?? "",
@@ -2247,7 +5270,7 @@ async function registerRoutes(app2) {
         benefits: req.body.benefits ?? null,
         isRemote: Boolean(req.body.isRemote),
         deadline: req.body.deadline ? new Date(req.body.deadline) : null,
-        imageUrl: req.body.featuredImage ?? null,
+        imageUrl: featuredImage,
         isActive: req.body.status === "published",
         createdBy
       });
@@ -2260,7 +5283,7 @@ async function registerRoutes(app2) {
         isPremium: Boolean(req.body.isPremium),
         price: req.body.price ?? "",
         paymentStatus: req.body.paymentStatus ?? "unpaid",
-        featuredImage: req.body.featuredImage ?? "",
+        featuredImage,
         benefits: req.body.benefits ?? ""
       });
       await emitAdminRealtimeEvent(req, {
@@ -2287,7 +5310,8 @@ async function registerRoutes(app2) {
       if (req.body.location !== void 0) payload.location = req.body.location;
       if (req.body.jobType !== void 0) payload.jobType = req.body.jobType;
       if (req.body.deadline !== void 0) payload.deadline = req.body.deadline ? new Date(req.body.deadline) : null;
-      if (req.body.featuredImage !== void 0) payload.imageUrl = req.body.featuredImage;
+      const featuredImage = req.body.featuredImage !== void 0 ? ensureMediaReference(req.body.featuredImage, "jobs") : void 0;
+      if (featuredImage !== void 0) payload.imageUrl = featuredImage;
       if (req.body.status !== void 0) payload.isActive = req.body.status === "published";
       const updateData = insertJobSchema.partial().parse(payload);
       const job = await storage.updateJob(id, updateData);
@@ -2300,7 +5324,7 @@ async function registerRoutes(app2) {
         isPremium: parseOptionalBoolean(req.body.isPremium),
         price: req.body.price,
         paymentStatus: req.body.paymentStatus,
-        featuredImage: req.body.featuredImage,
+        featuredImage,
         benefits: req.body.benefits
       });
       await emitAdminRealtimeEvent(req, {
@@ -2356,10 +5380,11 @@ async function registerRoutes(app2) {
   });
   app2.post("/api/admin/partners", authenticateToken, requireEditor, async (req, res) => {
     try {
+      const logo = ensureMediaReference(req.body.logo, "partners");
       const partnerData = insertPartnerSchema.parse({
         name: req.body.name ?? "",
         description: req.body.description ?? "",
-        logoUrl: req.body.logo ?? null,
+        logoUrl: logo,
         website: req.body.website ?? null,
         country: req.body.region ?? "Global",
         studentCount: req.body.studentCount ?? null,
@@ -2369,7 +5394,7 @@ async function registerRoutes(app2) {
       const partner = await storage.createPartner(partnerData);
       setPartnerMeta(partner.id, {
         partnershipType: req.body.partnershipType ?? "partner",
-        logo: req.body.logo ?? "",
+        logo,
         contactEmail: req.body.contactEmail ?? "",
         contactPhone: req.body.contactPhone ?? "",
         address: req.body.address ?? "",
@@ -2397,7 +5422,8 @@ async function registerRoutes(app2) {
       const payload = {};
       if (req.body.name !== void 0) payload.name = req.body.name;
       if (req.body.description !== void 0) payload.description = req.body.description;
-      if (req.body.logo !== void 0) payload.logoUrl = req.body.logo;
+      const logo = req.body.logo !== void 0 ? ensureMediaReference(req.body.logo, "partners") : void 0;
+      if (logo !== void 0) payload.logoUrl = logo;
       if (req.body.website !== void 0) payload.website = req.body.website;
       if (req.body.region !== void 0) payload.country = req.body.region;
       if (req.body.studentCount !== void 0) payload.studentCount = req.body.studentCount;
@@ -2408,7 +5434,7 @@ async function registerRoutes(app2) {
       if (!partner) return res.status(404).json({ message: "Partner not found" });
       setPartnerMeta(id, {
         partnershipType: req.body.partnershipType,
-        logo: req.body.logo,
+        logo,
         contactEmail: req.body.contactEmail,
         contactPhone: req.body.contactPhone,
         address: req.body.address,
@@ -2472,11 +5498,12 @@ async function registerRoutes(app2) {
   app2.post("/api/admin/blog", authenticateToken, requireEditor, async (req, res) => {
     try {
       const authorId = getAuthenticatedUser(req).id;
+      const featuredImage = ensureMediaReference(req.body.featuredImage, "blogs");
       const postData = insertBlogPostSchema.parse({
         title: req.body.title ?? "",
         content: req.body.content ?? "",
         excerpt: req.body.excerpt ?? null,
-        imageUrl: req.body.featuredImage ?? null,
+        imageUrl: featuredImage,
         category: req.body.category ?? "General",
         tags: parseStringArray(req.body.tags) ?? [],
         isPublished: req.body.status === "published",
@@ -2486,7 +5513,7 @@ async function registerRoutes(app2) {
       setBlogMeta(post.id, {
         slug: req.body.slug ?? `post-${post.id}`,
         status: normalizeAdminStatus(req.body.status, post.isPublished),
-        featuredImage: req.body.featuredImage ?? ""
+        featuredImage
       });
       await emitAdminRealtimeEvent(req, {
         event: "blog_post_created",
@@ -2509,7 +5536,8 @@ async function registerRoutes(app2) {
       if (req.body.title !== void 0) payload.title = req.body.title;
       if (req.body.content !== void 0) payload.content = req.body.content;
       if (req.body.excerpt !== void 0) payload.excerpt = req.body.excerpt;
-      if (req.body.featuredImage !== void 0) payload.imageUrl = req.body.featuredImage;
+      const featuredImage = req.body.featuredImage !== void 0 ? ensureMediaReference(req.body.featuredImage, "blogs") : void 0;
+      if (featuredImage !== void 0) payload.imageUrl = featuredImage;
       if (req.body.category !== void 0) payload.category = req.body.category;
       if (req.body.tags !== void 0) payload.tags = parseStringArray(req.body.tags) ?? [];
       if (req.body.status !== void 0) payload.isPublished = req.body.status === "published";
@@ -2519,7 +5547,7 @@ async function registerRoutes(app2) {
       setBlogMeta(id, {
         slug: req.body.slug,
         status: req.body.status,
-        featuredImage: req.body.featuredImage
+        featuredImage
       });
       await emitAdminRealtimeEvent(req, {
         event: "blog_post_updated",
@@ -2571,11 +5599,12 @@ async function registerRoutes(app2) {
   });
   app2.post("/api/admin/team", authenticateToken, requireEditor, async (req, res) => {
     try {
+      const profileImage = ensureMediaReference(req.body.profileImage, "teams");
       const memberData = insertTeamMemberSchema.parse({
         name: req.body.name ?? "",
         position: req.body.position ?? "",
         bio: req.body.bio ?? null,
-        imageUrl: req.body.profileImage ?? null,
+        imageUrl: profileImage,
         email: req.body.email ?? null,
         linkedin: req.body.linkedIn ?? null,
         twitter: req.body.twitter ?? null,
@@ -2585,7 +5614,7 @@ async function registerRoutes(app2) {
       const member = await storage.createTeamMember(memberData);
       setTeamMeta(member.id, {
         department: req.body.department ?? "",
-        profileImage: req.body.profileImage ?? ""
+        profileImage
       });
       await emitAdminRealtimeEvent(req, {
         event: "team_member_created",
@@ -2608,7 +5637,8 @@ async function registerRoutes(app2) {
       if (req.body.name !== void 0) payload.name = req.body.name;
       if (req.body.position !== void 0) payload.position = req.body.position;
       if (req.body.bio !== void 0) payload.bio = req.body.bio;
-      if (req.body.profileImage !== void 0) payload.imageUrl = req.body.profileImage;
+      const profileImage = req.body.profileImage !== void 0 ? ensureMediaReference(req.body.profileImage, "teams") : void 0;
+      if (profileImage !== void 0) payload.imageUrl = profileImage;
       if (req.body.email !== void 0) payload.email = req.body.email;
       if (req.body.linkedIn !== void 0) payload.linkedin = req.body.linkedIn;
       if (req.body.twitter !== void 0) payload.twitter = req.body.twitter;
@@ -2619,7 +5649,7 @@ async function registerRoutes(app2) {
       if (!member) return res.status(404).json({ message: "Team member not found" });
       setTeamMeta(id, {
         department: req.body.department,
-        profileImage: req.body.profileImage
+        profileImage
       });
       await emitAdminRealtimeEvent(req, {
         event: "team_member_updated",
@@ -2652,6 +5682,173 @@ async function registerRoutes(app2) {
     } catch (error) {
       console.error("Admin team delete error:", error);
       res.status(500).json({ message: "Failed to delete team member" });
+    }
+  });
+  app2.get("/api/admin/events", authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const page = Number(req.query.page ?? 1);
+      const limit = Number(req.query.limit ?? 50);
+      const search = String(req.query.search ?? "").toLowerCase();
+      const statusFilter = String(req.query.status ?? "").toLowerCase();
+      const allEvents = await storage.getAllEvents();
+      const mapped = await Promise.all(allEvents.map(toAdminEvent));
+      const filtered = mapped.filter((item) => {
+        const matchesSearch = !search || item.title.toLowerCase().includes(search) || item.description.toLowerCase().includes(search) || item.category.toLowerCase().includes(search) || item.location.toLowerCase().includes(search);
+        const matchesStatus = !statusFilter || item.status === statusFilter || String(item.runtimeStatus).toLowerCase() === statusFilter;
+        return matchesSearch && matchesStatus;
+      });
+      const { items, total } = paginate(filtered, page, limit);
+      res.json({ data: items, total });
+    } catch (error) {
+      console.error("Admin events error:", error);
+      res.status(500).json({ message: "Failed to fetch events" });
+    }
+  });
+  app2.get("/api/admin/events/analytics", authenticateToken, requireEditor, async (_req, res) => {
+    try {
+      const [events2, registrations, analytics2] = await Promise.all([
+        storage.getAllEvents(),
+        storage.getAllEventRegistrations(),
+        storage.getAnalytics()
+      ]);
+      const eventAnalytics = analytics2.filter((item) => {
+        const meta = parseAnalyticsMeta(item.metadata);
+        return meta.type === "event";
+      });
+      const views = eventAnalytics.filter((item) => item.event === "event_viewed").length;
+      const shares = eventAnalytics.filter((item) => item.event === "event_shared").length;
+      const published = events2.filter((event) => event.status === "published").length;
+      const live = events2.filter((event) => deriveEventRuntimeStatus(event) === "live").length;
+      const upcoming = events2.filter((event) => deriveEventRuntimeStatus(event) === "upcoming").length;
+      const categoryStats = events2.reduce((acc, event) => {
+        acc[event.category] = (acc[event.category] ?? 0) + 1;
+        return acc;
+      }, {});
+      res.json({
+        totalEvents: events2.length,
+        publishedEvents: published,
+        liveEvents: live,
+        upcomingEvents: upcoming,
+        registrations: registrations.length,
+        approvedRegistrations: registrations.filter((item) => item.status === "approved" || item.status === "checked_in").length,
+        views,
+        shares,
+        conversionRate: views > 0 ? Math.round(registrations.length / views * 100) : 0,
+        categoryStats,
+        topEvents: events2.slice().sort((left, right) => Number(right.viewCount ?? 0) - Number(left.viewCount ?? 0)).slice(0, 5)
+      });
+    } catch (error) {
+      console.error("Admin events analytics error:", error);
+      res.status(500).json({ message: "Failed to fetch event analytics" });
+    }
+  });
+  app2.post("/api/admin/events", authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const payload = eventPayloadSchema.parse(req.body);
+      if (payload.endAt <= payload.startAt) {
+        return res.status(400).json({ message: "Event end date must be after start date" });
+      }
+      const coverImage = ensureMediaReference(payload.coverImage, "events");
+      const baseSlug = slugify(payload.slug || payload.title);
+      const existing = await storage.getEventBySlug(baseSlug);
+      const eventData = insertEventSchema.parse({
+        ...payload,
+        slug: existing ? `${baseSlug}-${randomBytes(2).toString("hex")}` : baseSlug,
+        coverImage,
+        tags: normalizeEventTags(payload.tags),
+        createdBy: getAuthenticatedUser(req).id
+      });
+      const event = await storage.createEvent(eventData);
+      await emitAdminRealtimeEvent(req, {
+        event: "event_created",
+        channel: "events",
+        entityType: "event",
+        referenceId: event.id,
+        payload: { event: await toAdminEvent(event) }
+      });
+      res.status(201).json(await toAdminEvent(event));
+    } catch (error) {
+      console.error("Admin event create error:", error);
+      res.status(400).json({ message: "Failed to create event", error: getErrorMessage(error) });
+    }
+  });
+  app2.put("/api/admin/events/:id", authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const payload = eventPayloadSchema.partial().parse(req.body);
+      if (payload.startAt && payload.endAt && payload.endAt <= payload.startAt) {
+        return res.status(400).json({ message: "Event end date must be after start date" });
+      }
+      const updatePayload = { ...payload };
+      if (payload.slug) updatePayload.slug = slugify(payload.slug);
+      if (payload.coverImage !== void 0) updatePayload.coverImage = ensureMediaReference(payload.coverImage, "events");
+      if (payload.tags !== void 0) updatePayload.tags = normalizeEventTags(payload.tags);
+      const updateData = insertEventSchema.partial().parse(updatePayload);
+      const event = await storage.updateEvent(id, updateData);
+      if (!event) return res.status(404).json({ message: "Event not found" });
+      await emitAdminRealtimeEvent(req, {
+        event: "event_updated",
+        channel: "events",
+        entityType: "event",
+        referenceId: event.id,
+        payload: { event: await toAdminEvent(event) }
+      });
+      res.json(await toAdminEvent(event));
+    } catch (error) {
+      console.error("Admin event update error:", error);
+      res.status(400).json({ message: "Failed to update event", error: getErrorMessage(error) });
+    }
+  });
+  app2.delete("/api/admin/events/:id", authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const success = await storage.deleteEvent(id);
+      if (!success) return res.status(404).json({ message: "Event not found" });
+      await emitAdminRealtimeEvent(req, {
+        event: "event_deleted",
+        channel: "events",
+        entityType: "event",
+        referenceId: id,
+        payload: { id: String(id) }
+      });
+      res.status(204).send();
+    } catch (error) {
+      console.error("Admin event delete error:", error);
+      res.status(500).json({ message: "Failed to delete event" });
+    }
+  });
+  app2.get("/api/admin/events/:id/registrations", authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      res.json(await storage.getEventRegistrations(id));
+    } catch (error) {
+      console.error("Admin event registration fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch event registrations" });
+    }
+  });
+  app2.put("/api/admin/event-registrations/:id", authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const payload = eventRegistrationReviewSchema.parse(req.body);
+      const registration = await storage.updateEventRegistration(id, {
+        ...payload,
+        checkedInAt: payload.status === "checked_in" ? /* @__PURE__ */ new Date() : void 0
+      });
+      await emitAdminRealtimeEvent(req, {
+        event: "event_registration_updated",
+        channel: "events",
+        entityType: "event_registration",
+        referenceId: registration.eventId,
+        payload: { registration }
+      });
+      res.json(registration);
+    } catch (error) {
+      console.error("Admin event registration update error:", error);
+      res.status(400).json({ message: "Failed to update registration", error: getErrorMessage(error) });
     }
   });
   app2.get("/api/admin/applications", authenticateToken, requireAdmin, async (req, res) => {
@@ -2688,23 +5885,137 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to fetch applications" });
     }
   });
+  app2.get("/api/admin/applications/export", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const search = String(req.query.search ?? "").toLowerCase();
+      const statusFilter = String(req.query.status ?? "").toLowerCase();
+      const allApplications = await storage.getAllApplications();
+      const filtered = statusFilter ? allApplications.filter((app3) => app3.status === statusFilter) : allApplications;
+      const enriched = await Promise.all(
+        filtered.map(async (app3) => {
+          const user = await storage.getUser(app3.userId);
+          const scholarship = app3.type === "scholarship" ? await storage.getScholarship(app3.referenceId) : null;
+          const job = app3.type === "job" ? await storage.getJob(app3.referenceId) : null;
+          return {
+            id: app3.id,
+            applicantName: user ? `${user.firstName} ${user.lastName}`.trim() : "Applicant",
+            applicantEmail: user?.email ?? "",
+            opportunityTitle: scholarship?.title ?? job?.title ?? "Opportunity",
+            opportunityType: app3.type ?? "application",
+            status: app3.status,
+            submittedAt: app3.submittedAt,
+            updatedAt: app3.updatedAt
+          };
+        })
+      );
+      const searched = search ? enriched.filter(
+        (app3) => app3.applicantName.toLowerCase().includes(search) || app3.applicantEmail.toLowerCase().includes(search) || app3.opportunityTitle.toLowerCase().includes(search) || app3.opportunityType.toLowerCase().includes(search)
+      ) : enriched;
+      const headers = [
+        "Application ID",
+        "Applicant Name",
+        "Applicant Email",
+        "Opportunity",
+        "Type",
+        "Status",
+        "Submitted At",
+        "Updated At"
+      ];
+      const rows = searched.map((app3) => [
+        app3.id,
+        app3.applicantName,
+        app3.applicantEmail,
+        app3.opportunityTitle,
+        app3.opportunityType,
+        app3.status,
+        app3.submittedAt,
+        app3.updatedAt
+      ]);
+      const csv = [headers, ...rows].map((row) => row.map(escapeCsvValue).join(",")).join("\n");
+      await storage.logAnalytics({
+        event: "applications_exported",
+        userId: getAuthenticatedUser(req).id,
+        metadata: { total: searched.length, status: statusFilter || "all", search: search || null },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent")
+      });
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="mtendere-applications-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.csv"`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Admin applications export error:", error);
+      res.status(500).json({ message: "Failed to export applications" });
+    }
+  });
   app2.put("/api/admin/applications/:id", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
-      const updateData = insertApplicationSchema.partial().parse({
-        status: req.body.status,
-        notes: req.body.reviewNotes
-      });
-      const application = await storage.updateApplication(id, updateData);
+      const payload = adminApplicationReviewSchema.parse(req.body);
+      const existingApplication = await storage.getApplication(id);
+      if (!existingApplication) {
+        return res.status(404).json({ message: "Application not found" });
+      }
+      const updateData = {};
+      if (payload.status) {
+        updateData.status = payload.status;
+      }
+      const application = Object.keys(updateData).length > 0 ? await storage.updateApplication(id, updateData) : existingApplication;
+      const [user, scholarship, job] = await Promise.all([
+        storage.getUser(application.userId),
+        application.type === "scholarship" ? storage.getScholarship(application.referenceId) : Promise.resolve(null),
+        application.type === "job" ? storage.getJob(application.referenceId) : Promise.resolve(null)
+      ]);
+      const applicantName = user ? `${user.firstName} ${user.lastName}`.trim() : "Applicant";
+      const opportunityTitle = scholarship?.title ?? job?.title ?? "Opportunity";
+      const enrichedApplication = {
+        ...application,
+        id: String(application.id),
+        applicantName,
+        applicantEmail: user?.email ?? "",
+        opportunityTitle,
+        opportunityType: application.type ?? "application",
+        coverLetter: application.notes ?? ""
+      };
       await emitAdminRealtimeEvent(req, {
         event: "application_updated",
         channel: "applications",
         entityType: "application",
         referenceId: id,
-        payload: { application: { ...application, id: String(application.id) } }
+        payload: {
+          application: enrichedApplication,
+          review: {
+            previousStatus: existingApplication.status,
+            nextStatus: application.status,
+            hasReviewNotes: Boolean(payload.reviewNotes)
+          }
+        }
       });
-      res.json(application);
+      await storage.logAnalytics({
+        event: "application_reviewed",
+        userId: getAuthenticatedUser(req).id,
+        metadata: {
+          applicationId: id,
+          previousStatus: existingApplication.status,
+          nextStatus: application.status,
+          hasReviewNotes: Boolean(payload.reviewNotes)
+        },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent")
+      });
+      if (payload.status && payload.status !== existingApplication.status && user?.email) {
+        const dashboardUrl = `${env.PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`}/dashboard`;
+        void sendApplicationStatusUpdate({
+          email: user.email,
+          name: applicantName,
+          opportunityTitle,
+          opportunityType: application.type,
+          status: payload.status,
+          reviewNotes: payload.reviewNotes,
+          dashboardUrl
+        });
+      }
+      res.json(enrichedApplication);
     } catch (error) {
       console.error("Admin applications update error:", error);
       res.status(400).json({ message: "Failed to update application", error: getErrorMessage(error) });
@@ -2730,21 +6041,29 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to get chat response", error: getErrorMessage(error) });
     }
   });
-  app2.get("/api/admin/roles", authenticateToken, requireAdmin, (req, res) => {
+  app2.get("/api/admin/roles", authenticateToken, requireSuperAdmin, (req, res) => {
     const search = String(req.query.search ?? "").toLowerCase();
     const roles = getAdminRoles().filter((role) => {
       if (!search) return true;
       return role.name.toLowerCase().includes(search) || role.description.toLowerCase().includes(search);
-    });
+    }).map((role) => ({
+      ...role,
+      isSystem: isCoreAdminRole(role.id)
+    }));
     res.json({ roles, total: roles.length });
   });
-  app2.post("/api/admin/roles", authenticateToken, requireAdmin, async (req, res) => {
+  app2.post("/api/admin/roles", authenticateToken, requireSuperAdmin, async (req, res) => {
+    const payload = adminRoleInputSchema.parse(req.body);
+    const id = normalizeRoleId(payload.name) || String(Date.now());
+    if (isCoreAdminRole(id) || getAdminRoles().some((role2) => role2.id === id)) {
+      return res.status(409).json({ message: "A role with this name already exists" });
+    }
     const role = upsertAdminRole({
-      id: req.body.name?.toLowerCase().replace(/\s+/g, "-") || String(Date.now()),
-      name: req.body.name ?? "Role",
-      description: req.body.description ?? "",
-      permissions: Array.isArray(req.body.permissions) ? req.body.permissions : [],
-      isActive: true
+      id,
+      name: payload.name,
+      description: payload.description,
+      permissions: payload.permissions.filter((permission) => adminPermissionIds.has(permission)),
+      isActive: payload.isActive
     });
     await emitAdminRealtimeEvent(req, {
       event: "role_created",
@@ -2755,13 +6074,16 @@ async function registerRoutes(app2) {
     });
     res.status(201).json(role);
   });
-  app2.put("/api/admin/roles/:id", authenticateToken, requireAdmin, async (req, res) => {
+  app2.put("/api/admin/roles/:id", authenticateToken, requireSuperAdmin, async (req, res) => {
+    const existing = getAdminRoles().find((role2) => role2.id === req.params.id);
+    if (!existing) return res.status(404).json({ message: "Role not found" });
+    const payload = adminRoleInputSchema.parse(req.body);
     const role = upsertAdminRole({
       id: req.params.id,
-      name: req.body.name ?? req.params.id,
-      description: req.body.description ?? "",
-      permissions: Array.isArray(req.body.permissions) ? req.body.permissions : [],
-      isActive: req.body.isActive ?? true
+      name: isCoreAdminRole(req.params.id) ? existing.name : payload.name,
+      description: payload.description,
+      permissions: payload.permissions.filter((permission) => adminPermissionIds.has(permission)),
+      isActive: isCoreAdminRole(req.params.id) ? true : payload.isActive
     });
     await emitAdminRealtimeEvent(req, {
       event: "role_updated",
@@ -2772,8 +6094,13 @@ async function registerRoutes(app2) {
     });
     res.json(role);
   });
-  app2.delete("/api/admin/roles/:id", authenticateToken, requireAdmin, async (req, res) => {
-    deleteAdminRole(req.params.id);
+  app2.delete("/api/admin/roles/:id", authenticateToken, requireSuperAdmin, async (req, res) => {
+    const deleted = deleteAdminRole(req.params.id);
+    if (!deleted) {
+      return res.status(isCoreAdminRole(req.params.id) ? 409 : 404).json({
+        message: isCoreAdminRole(req.params.id) ? "System roles are protected and cannot be deleted" : "Role not found"
+      });
+    }
     await emitAdminRealtimeEvent(req, {
       event: "role_deleted",
       channel: "admin-roles",
@@ -2783,16 +6110,12 @@ async function registerRoutes(app2) {
     });
     res.status(204).send();
   });
-  app2.get("/api/admin/settings", authenticateToken, requireAdmin, (_req, res) => {
+  app2.get("/api/admin/settings", authenticateToken, requireSuperAdmin, (_req, res) => {
     res.json(getAdminSettings());
   });
-  app2.put("/api/admin/settings", authenticateToken, requireAdmin, async (req, res) => {
-    const settings = updateAdminSettings({
-      platformName: req.body.platformName,
-      supportEmail: req.body.supportEmail,
-      sessionTimeout: req.body.sessionTimeout,
-      maxLoginAttempts: req.body.maxLoginAttempts
-    });
+  app2.put("/api/admin/settings", authenticateToken, requireSuperAdmin, async (req, res) => {
+    const payload = adminSettingsUpdateSchema.parse(req.body);
+    const settings = updateAdminSettings(payload);
     await emitAdminRealtimeEvent(req, {
       event: "settings_updated",
       channel: "admin-settings",
@@ -2801,7 +6124,46 @@ async function registerRoutes(app2) {
     });
     res.json(settings);
   });
-  app2.get("/api/admin/notifications", authenticateToken, requireEditor, async (req, res) => {
+  app2.post("/api/admin/settings/invalidate-sessions", authenticateToken, requireSuperAdmin, async (req, res) => {
+    const invalidatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const settings = updateAdminSettings({ authTokenInvalidBefore: invalidatedAt });
+    await storage.logAnalytics({
+      event: "admin_sessions_invalidated",
+      userId: getAuthenticatedUser(req).id,
+      metadata: { invalidatedAt },
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent")
+    });
+    await emitAdminRealtimeEvent(req, {
+      event: "sessions_invalidated",
+      channel: "admin-settings",
+      entityType: "settings",
+      payload: { invalidatedAt }
+    });
+    res.json({ invalidatedAt, settings });
+  });
+  app2.post("/api/admin/settings/cache/clear", authenticateToken, requireSuperAdmin, async (req, res) => {
+    const clearedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const currentSettings = getAdminSettings();
+    const settings = updateAdminSettings({
+      cacheVersion: (currentSettings.cacheVersion || 1) + 1
+    });
+    await storage.logAnalytics({
+      event: "admin_cache_cleared",
+      userId: getAuthenticatedUser(req).id,
+      metadata: { clearedAt, cacheVersion: settings.cacheVersion },
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent")
+    });
+    await emitAdminRealtimeEvent(req, {
+      event: "cache_cleared",
+      channel: "admin-settings",
+      entityType: "settings",
+      payload: { clearedAt, cacheVersion: settings.cacheVersion }
+    });
+    res.json({ clearedAt, cacheVersion: settings.cacheVersion });
+  });
+  app2.get("/api/admin/notifications", authenticateToken, requireAdminPortal, async (req, res) => {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 20);
@@ -2820,11 +6182,11 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to fetch notifications" });
     }
   });
-  app2.put("/api/admin/notifications/:id/read", authenticateToken, requireEditor, (req, res) => {
+  app2.put("/api/admin/notifications/:id/read", authenticateToken, requireAdminPortal, (req, res) => {
     markNotificationRead(req.params.id);
     res.status(204).send();
   });
-  app2.put("/api/admin/notifications/read-all", authenticateToken, requireEditor, async (_req, res) => {
+  app2.put("/api/admin/notifications/read-all", authenticateToken, requireAdminPortal, async (_req, res) => {
     const ids = (await storage.getAnalytics()).map((item) => `analytics-${item.id}`);
     markNotificationsRead(ids);
     res.status(204).send();
@@ -2877,6 +6239,129 @@ async function registerRoutes(app2) {
       }))
     });
   });
+  app2.get("/api/admin/media/assets", authenticateToken, requireEditor, (_req, res) => {
+    res.json({
+      root: "assets/imgs",
+      modules: Array.from(mediaAssetModules).sort(),
+      assets: listMediaAssets()
+    });
+  });
+  app2.post(
+    "/api/admin/media/assets/:module",
+    authenticateToken,
+    requireEditor,
+    mediaAssetUpload.array("files", 10),
+    (req, res) => {
+      const moduleName = String(req.params.module || "").toLowerCase();
+      const filesPayload = req.files;
+      const files = Array.isArray(filesPayload) ? filesPayload : [];
+      const rejected = [];
+      const accepted = files.filter((file) => {
+        if (isValidImageFile(file.path)) return true;
+        rejected.push({ originalName: file.originalname, reason: "invalid-image-signature" });
+        try {
+          fs3.unlinkSync(file.path);
+        } catch (error) {
+          console.error("Failed to remove invalid media upload:", error);
+        }
+        return false;
+      });
+      if (!accepted.length && rejected.length) {
+        return res.status(400).json({
+          message: "No valid image files uploaded.",
+          rejected
+        });
+      }
+      res.json({
+        module: moduleName,
+        files: accepted.map((file) => {
+          const relativePath = path3.relative(mediaAssetRoot, file.path).replace(/\\/g, "/");
+          return {
+            path: `assets/imgs/${relativePath}`,
+            reference: relativePath,
+            previewUrl: toMediaAssetUrl(relativePath),
+            module: moduleName,
+            originalName: file.originalname,
+            size: file.size,
+            type: file.mimetype,
+            valid: true,
+            note: "This source asset is governed and can be assigned immediately."
+          };
+        }),
+        rejected
+      });
+    }
+  );
+  app2.get("/api/admin/media/audit", authenticateToken, requireEditor, async (_req, res) => {
+    try {
+      const [blogs, team, scholarshipsList, jobsList, partnersList, testimonialsList, eventsList] = await Promise.all([
+        storage.getAllBlogPosts(),
+        storage.getAllTeamMembers(),
+        storage.getAllScholarships(),
+        storage.getAllJobs(),
+        storage.getAllPartners(),
+        storage.getAllTestimonials(),
+        storage.getAllEvents()
+      ]);
+      const references = [
+        ...blogs.map((item) => ({ module: "blogs", id: item.id, title: item.title, field: "imageUrl", value: item.imageUrl })),
+        ...team.map((item) => ({ module: "teams", id: item.id, title: item.name, field: "imageUrl", value: item.imageUrl })),
+        ...scholarshipsList.map((item) => ({
+          module: "scholarships",
+          id: item.id,
+          title: item.title,
+          field: "imageUrl",
+          value: item.imageUrl
+        })),
+        ...jobsList.map((item) => ({
+          module: "jobs",
+          id: item.id,
+          title: item.title,
+          field: "featuredImage",
+          value: getJobMeta(item.id).featuredImage ?? null
+        })),
+        ...partnersList.map((item) => ({ module: "partners", id: item.id, title: item.name, field: "logoUrl", value: item.logoUrl })),
+        ...testimonialsList.map((item) => ({
+          module: "testimonials",
+          id: item.id,
+          title: item.authorName || `Testimonial ${item.id}`,
+          field: "imageUrl",
+          value: item.imageUrl
+        })),
+        ...eventsList.map((item) => ({
+          module: "events",
+          id: item.id,
+          title: item.title,
+          field: "coverImage",
+          value: item.coverImage
+        }))
+      ];
+      const invalidReferences = references.filter((reference) => !isValidMediaReference(reference.value)).map((reference) => ({
+        ...reference,
+        reason: reference.value ? /^https?:\/\//i.test(reference.value) ? "external-url" : reference.value.startsWith("/uploads/") ? "upload-folder" : "missing-local-asset" : "missing"
+      }));
+      await storage.logAnalytics({
+        event: "media_audit_run",
+        userId: null,
+        metadata: {
+          checked: references.length,
+          invalid: invalidReferences.length
+        },
+        ipAddress: null,
+        userAgent: null
+      });
+      res.json({
+        checked: references.length,
+        invalidCount: invalidReferences.length,
+        invalidReferences,
+        fallbackPolicy: ["assigned asset", "category default", "global default", "styled initials placeholder"],
+        assets: listMediaAssets()
+      });
+    } catch (error) {
+      console.error("Admin media audit error:", error);
+      res.status(500).json({ message: "Failed to audit media assets" });
+    }
+  });
   app2.get("/api/analytics/summary", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const summary = await storage.getAnalyticsSummary();
@@ -2912,6 +6397,10 @@ async function registerRoutes(app2) {
   app2.post("/api/saved-items", authenticateToken, async (req, res) => {
     try {
       const userId = getAuthenticatedUser(req).id;
+      const existing = await storage.isItemSaved(userId, String(req.body.type), Number(req.body.referenceId));
+      if (existing) {
+        return res.status(409).json({ message: "Item is already saved" });
+      }
       const savedItemData = insertSavedItemSchema.parse({
         ...req.body,
         userId
@@ -2952,10 +6441,145 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to check saved status" });
     }
   });
+  app2.post("/api/subscribers", async (req, res) => {
+    try {
+      const payload = subscriberRequestSchema.parse(req.body);
+      if (payload.website) {
+        return res.status(201).json({
+          message: "Please check your inbox to confirm your subscription."
+        });
+      }
+      const verificationToken = randomBytes(32).toString("hex");
+      const unsubscribeToken = randomBytes(32).toString("hex");
+      const existing = await storage.getSubscriberByEmail(payload.email);
+      const subscriberPayload = insertSubscriberSchema.parse({
+        email: payload.email,
+        name: payload.name ?? existing?.name ?? null,
+        preferences: payload.preferences ?? existing?.preferences ?? ["scholarships", "jobs", "study-abroad"],
+        source: payload.source,
+        status: "pending",
+        verificationToken,
+        unsubscribeToken,
+        verifiedAt: null,
+        unsubscribedAt: null
+      });
+      const subscriber = existing ? await storage.updateSubscriber(existing.id, subscriberPayload) : await storage.createSubscriber(subscriberPayload);
+      const baseUrl = env.PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`;
+      const verificationUrl = `${baseUrl}/api/subscribers/verify/${verificationToken}`;
+      const unsubscribeUrl = `${baseUrl}/api/subscribers/unsubscribe/${unsubscribeToken}`;
+      void sendSubscriptionConfirmation({
+        email: subscriber.email,
+        name: subscriber.name,
+        verificationUrl,
+        unsubscribeUrl
+      });
+      await storage.logAnalytics({
+        event: "subscriber_created",
+        metadata: { email: subscriber.email, source: payload.source },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent")
+      });
+      res.status(201).json({
+        message: "Please check your inbox to confirm your subscription.",
+        subscriber: {
+          id: subscriber.id,
+          email: subscriber.email,
+          status: subscriber.status,
+          preferences: subscriber.preferences
+        }
+      });
+    } catch (error) {
+      console.error("Subscriber creation error:", error);
+      res.status(400).json({ message: "Failed to subscribe", error: getErrorMessage(error) });
+    }
+  });
+  app2.get("/api/subscribers/verify/:token", async (req, res) => {
+    try {
+      const subscriber = await storage.getSubscriberByVerificationToken(req.params.token);
+      if (!subscriber) return res.status(404).json({ message: "Verification link not found" });
+      await storage.updateSubscriber(subscriber.id, {
+        status: "active",
+        verifiedAt: /* @__PURE__ */ new Date(),
+        verificationToken: null
+      });
+      const redirectUrl = `${env.PUBLIC_APP_URL || "/"}${env.PUBLIC_APP_URL ? "" : ""}`;
+      res.redirect(302, `${redirectUrl}?subscription=verified`);
+    } catch (error) {
+      console.error("Subscriber verification error:", error);
+      res.status(500).json({ message: "Failed to verify subscription" });
+    }
+  });
+  app2.get("/api/subscribers/unsubscribe/:token", async (req, res) => {
+    try {
+      const subscriber = await storage.getSubscriberByUnsubscribeToken(req.params.token);
+      if (!subscriber) return res.status(404).json({ message: "Unsubscribe link not found" });
+      await storage.updateSubscriber(subscriber.id, {
+        status: "unsubscribed",
+        unsubscribedAt: /* @__PURE__ */ new Date()
+      });
+      const redirectUrl = env.PUBLIC_APP_URL || "/";
+      res.redirect(302, `${redirectUrl}?subscription=unsubscribed`);
+    } catch (error) {
+      console.error("Subscriber unsubscribe error:", error);
+      res.status(500).json({ message: "Failed to unsubscribe" });
+    }
+  });
+  app2.post("/api/subscribers/unsubscribe", async (req, res) => {
+    try {
+      const email = z3.string().trim().email().transform((value) => value.toLowerCase()).parse(req.body.email);
+      const subscriber = await storage.getSubscriberByEmail(email);
+      if (subscriber) {
+        await storage.updateSubscriber(subscriber.id, {
+          status: "unsubscribed",
+          unsubscribedAt: /* @__PURE__ */ new Date()
+        });
+      }
+      res.json({ message: "Subscription preferences updated." });
+    } catch (error) {
+      res.status(400).json({ message: "Valid email required", error: getErrorMessage(error) });
+    }
+  });
+  app2.get("/api/admin/subscribers", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const page = Number(req.query.page ?? 1);
+      const limit = Number(req.query.limit ?? 50);
+      const status = String(req.query.status ?? "").toLowerCase();
+      const search = String(req.query.search ?? "").toLowerCase();
+      const allSubscribers = await storage.getAllSubscribers();
+      const filtered = allSubscribers.filter((subscriber) => {
+        const matchesStatus = !status || subscriber.status === status;
+        const matchesSearch = !search || subscriber.email.toLowerCase().includes(search) || (subscriber.name || "").toLowerCase().includes(search);
+        return matchesStatus && matchesSearch;
+      });
+      const safePage = Number.isFinite(page) && page > 0 ? page : 1;
+      const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 100) : 50;
+      const start = (safePage - 1) * safeLimit;
+      res.json({ subscribers: filtered.slice(start, start + safeLimit), total: filtered.length });
+    } catch (error) {
+      console.error("Admin subscribers error:", error);
+      res.status(500).json({ message: "Failed to fetch subscribers" });
+    }
+  });
   app2.post("/api/messages", async (req, res) => {
     try {
       const messageData = insertMessageSchema.parse(req.body);
       const message = await storage.createMessage(messageData);
+      void sendContactAcknowledgement({
+        email: message.email,
+        name: message.name,
+        subject: message.subject
+      });
+      void sendAdminNotification({
+        subject: "New Mtendere contact message",
+        message: `${message.name} (${message.email}) sent: ${message.subject || "General inquiry"}`,
+        metadata: { messageId: message.id }
+      });
+      await storage.logAnalytics({
+        event: "contact_message_submitted",
+        metadata: { messageId: message.id, subject: message.subject },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent")
+      });
       res.status(201).json({ message: "Message sent successfully", data: message });
     } catch (error) {
       console.error("Message creation error:", error);
@@ -3000,29 +6624,30 @@ async function registerRoutes(app2) {
 
 // server/vite.ts
 import express2 from "express";
-import fs3 from "fs";
-import path4 from "path";
+import fs4 from "fs";
+import path5 from "path";
 import { createServer as createViteServer, createLogger } from "vite";
 
 // vite.config.ts
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import path3 from "path";
+import path4 from "path";
 import { fileURLToPath } from "url";
 var __filename = fileURLToPath(import.meta.url);
-var __dirname = path3.dirname(__filename);
+var __dirname = path4.dirname(__filename);
 var vite_config_default = defineConfig({
-  root: path3.resolve(__dirname, "client"),
+  root: path4.resolve(__dirname, "client"),
   plugins: [react()],
+  assetsInclude: ["**/*.JPG", "**/*.JPEG", "**/*.PNG", "**/*.WEBP"],
   resolve: {
     alias: {
-      "@": path3.resolve(__dirname, "client/src"),
-      "@assets": path3.resolve(__dirname, "client/src/assets"),
-      "@shared": path3.resolve(__dirname, "shared")
+      "@": path4.resolve(__dirname, "client/src"),
+      "@assets": path4.resolve(__dirname, "client/src/assets"),
+      "@shared": path4.resolve(__dirname, "shared")
     }
   },
   build: {
-    outDir: path3.resolve(__dirname, "dist/client"),
+    outDir: path4.resolve(__dirname, "dist/client"),
     emptyOutDir: true
   },
   server: {
@@ -3067,13 +6692,13 @@ async function setupVite(app2, server) {
   app2.use("*", async (req, res, next) => {
     const url = req.originalUrl;
     try {
-      const clientTemplate = path4.resolve(
+      const clientTemplate = path5.resolve(
         import.meta.dirname,
         "..",
         "client",
         "index.html"
       );
-      let template = await fs3.promises.readFile(clientTemplate, "utf-8");
+      let template = await fs4.promises.readFile(clientTemplate, "utf-8");
       template = template.replace(
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`
@@ -3091,6 +6716,7 @@ async function setupVite(app2, server) {
 var app = express3();
 var isProduction = env.NODE_ENV === "production";
 var port = env.PORT;
+app.disable("x-powered-by");
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -3109,7 +6735,38 @@ app.use(
   })
 );
 app.set("trust proxy", true);
-app.use(express3.json({ limit: "1mb" }));
+var allowedOrigins = new Set(
+  [
+    env.PUBLIC_APP_URL,
+    `http://localhost:${port}`,
+    `http://127.0.0.1:${port}`,
+    `http://0.0.0.0:${port}`
+  ].filter(Boolean)
+);
+app.use((req, res, next) => {
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+    return next();
+  }
+  const origin = req.get("origin");
+  if (!origin) {
+    return next();
+  }
+  const hostOrigin = `${req.protocol}://${req.get("host")}`;
+  if (origin === hostOrigin || allowedOrigins.has(origin)) {
+    return next();
+  }
+  return res.status(403).json({ message: "Request origin is not allowed" });
+});
+app.use(
+  express3.json({
+    limit: "1mb",
+    verify: (req, _res, buf) => {
+      if (req.originalUrl === "/api/stripe/webhook") {
+        req.rawBody = Buffer.from(buf);
+      }
+    }
+  })
+);
 app.use(express3.urlencoded({ extended: false }));
 var rateLimitWindowMs = env.RATE_LIMIT_WINDOW_MS;
 var rateLimitMax = env.RATE_LIMIT_MAX;
@@ -3148,7 +6805,7 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   const startTime = Date.now();
   const requestPath = req.path;
-  const requestId = randomUUID();
+  const requestId = randomUUID2();
   res.setHeader("X-Request-Id", requestId);
   let responseBody;
   const originalJson = res.json.bind(res);
@@ -3185,17 +6842,17 @@ app.use((req, res, next) => {
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
-    const clientDistPath = path5.resolve(import.meta.dirname, "..", "dist", "client");
-    const adminDistPath = path5.resolve(import.meta.dirname, "..", "dist", "admin");
-    if (fs4.existsSync(adminDistPath)) {
+    const clientDistPath = path6.resolve(import.meta.dirname, "..", "dist", "client");
+    const adminDistPath = path6.resolve(import.meta.dirname, "..", "dist", "admin");
+    if (fs5.existsSync(adminDistPath)) {
       app.use("/admin", express3.static(adminDistPath));
       app.get("/admin/*", (_req, res) => {
-        res.sendFile(path5.join(adminDistPath, "index.html"));
+        res.sendFile(path6.join(adminDistPath, "index.html"));
       });
     }
     app.use(express3.static(clientDistPath));
     app.get("*", (_req, res) => {
-      res.sendFile(path5.join(clientDistPath, "index.html"));
+      res.sendFile(path6.join(clientDistPath, "index.html"));
     });
   }
   server.on("error", (error) => {

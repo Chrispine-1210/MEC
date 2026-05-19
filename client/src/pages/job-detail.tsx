@@ -1,11 +1,10 @@
-import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useAuth } from "@/hooks/use-auth";
-import { useToast } from "@/hooks/use-toast";
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
+import ApplicationDialog from "@/components/application-dialog";
+import SaveItemButton from "@/components/save-item-button";
+import GovernedImage from "@/components/governed-image";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,9 +28,6 @@ import {
   Wifi,
   Wrench,
 } from "lucide-react";
-
-const FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?auto=format&fit=crop&q=80&w=1600";
 
 const formatCurrency = (amount: number | null | undefined, currency?: string | null) => {
   if (!amount) return "Competitive";
@@ -62,9 +58,6 @@ const getDaysLeft = (dateString?: string | null) => {
 export default function JobDetail() {
   const [, params] = useRoute("/jobs/:id");
   const id = Number(params?.id ?? 0);
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const [isSaved, setIsSaved] = useState(false);
 
   const { data: job, isLoading: jobLoading } = useQuery<ApiJob>({
     queryKey: [`/api/jobs/${id}`],
@@ -79,42 +72,6 @@ export default function JobDetail() {
   const related = (jobs || [])
     .filter((item) => item.id !== id && item.jobType === resolved?.jobType)
     .slice(0, 3);
-
-  const applyMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest("POST", "/api/applications", {
-        type: "job",
-        referenceId: id,
-        status: "pending",
-      });
-    },
-    onSuccess: () => {
-      toast({
-        title: "Application submitted",
-        description: "Your job application has been submitted successfully.",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
-    },
-    onError: () => {
-      toast({
-        title: "Application failed",
-        description: "Please try again or contact support.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleApply = () => {
-    if (!user) {
-      toast({
-        title: "Login required",
-        description: "Please log in to apply for jobs.",
-        variant: "destructive",
-      });
-      return;
-    }
-    applyMutation.mutate();
-  };
 
   if (jobLoading && listLoading) {
     return (
@@ -286,14 +243,20 @@ export default function JobDetail() {
     <div className="min-h-screen bg-background">
       <ExpandingNav />
 
-      <section
-        className="relative mt-16 overflow-hidden py-20 text-white"
-        style={{
-          backgroundImage: `url(${resolved.imageUrl || FALLBACK_IMAGE})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        }}
-      >
+      <section className="relative mt-16 overflow-hidden py-20 text-white">
+        <div className="absolute inset-0">
+          <GovernedImage
+            module="job"
+            src={resolved.imageUrl}
+            title={resolved.title}
+            category={resolved.jobType}
+            variant="hero"
+            priority
+            aspectRatio="auto"
+            className="h-full"
+            wrapperClassName="h-full rounded-none shadow-none"
+          />
+        </div>
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-green/95 via-mtendere-green/88 to-mtendere-blue/86" />
         <div className="container relative z-10 mx-auto max-w-6xl px-4">
           <Button asChild variant="ghost" className="mb-6 -ml-3 text-white hover:bg-card/20">
@@ -534,21 +497,22 @@ export default function JobDetail() {
                   </div>
                 </div>
 
-                <Button
-                  className="w-full bg-mtendere-green font-bold hover:bg-mtendere-green/90"
-                  onClick={handleApply}
-                  disabled={applyMutation.isPending}
-                >
-                  {applyMutation.isPending ? "Submitting..." : "Apply Now"}
-                </Button>
+                <ApplicationDialog
+                  type="job"
+                  referenceId={id}
+                  title={resolved.title}
+                  trigger={
+                    <Button className="w-full bg-mtendere-green font-bold hover:bg-mtendere-green/90">
+                      Apply Now
+                    </Button>
+                  }
+                />
 
-                <Button
-                  variant="outline"
+                <SaveItemButton
+                  type="job"
+                  referenceId={id}
                   className="w-full border-mtendere-green text-mtendere-green hover:bg-mtendere-green hover:text-white"
-                  onClick={() => setIsSaved((prev) => !prev)}
-                >
-                  {isSaved ? "Saved to dashboard" : "Save for later"}
-                </Button>
+                />
 
                 <Button asChild variant="ghost" className="w-full text-muted-foreground">
                   <Link href="/contact">Talk to an advisor</Link>
