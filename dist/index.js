@@ -27,6 +27,7 @@ var optionalEnvBoolean = z.preprocess((value) => {
 var envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.coerce.number().int().positive().default(5e3),
+  ADMIN_PORT: z.coerce.number().int().positive().default(5174),
   JWT_SECRET: z.string().min(1, "JWT_SECRET is required"),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(6e4),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
@@ -7726,6 +7727,7 @@ async function setupVite(app2, server) {
 var app = express3();
 var isProduction = env.NODE_ENV === "production";
 var port = env.PORT;
+var adminPort = env.ADMIN_PORT;
 app.disable("x-powered-by");
 app.use(
   helmet({
@@ -7777,14 +7779,14 @@ var developmentOrigins = isProduction ? [] : [
   "http://localhost:3000",
   "http://localhost:5000",
   "http://localhost:5173",
-  "http://localhost:5174",
+  `http://localhost:${adminPort}`,
   "http://127.0.0.1:3000",
   "http://127.0.0.1:5000",
   "http://127.0.0.1:5173",
-  "http://127.0.0.1:5174",
+  `http://127.0.0.1:${adminPort}`,
   "http://0.0.0.0:5000",
   "http://0.0.0.0:5173",
-  "http://0.0.0.0:5174"
+  `http://0.0.0.0:${adminPort}`
 ];
 var allowedOrigins = new Set(
   [
@@ -7792,7 +7794,10 @@ var allowedOrigins = new Set(
     ...developmentOrigins,
     `http://localhost:${port}`,
     `http://127.0.0.1:${port}`,
-    `http://0.0.0.0:${port}`
+    `http://0.0.0.0:${port}`,
+    `http://localhost:${adminPort}`,
+    `http://127.0.0.1:${adminPort}`,
+    `http://0.0.0.0:${adminPort}`
   ].map(normalizeOrigin).filter(Boolean)
 );
 var isAllowedOrigin = (origin, req) => {

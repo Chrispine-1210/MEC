@@ -1,10 +1,20 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const rootDir = path.resolve(__dirname, "..");
+
+dotenv.config({ path: path.resolve(rootDir, ".env"), quiet: true });
+dotenv.config({ path: path.resolve(__dirname, ".env"), override: false, quiet: true });
+
+const configuredAdminPort = Number(process.env.ADMIN_PORT ?? process.env.VITE_ADMIN_PORT ?? 5174);
+const adminPort = Number.isFinite(configuredAdminPort) && configuredAdminPort > 0
+  ? configuredAdminPort
+  : 5174;
 
 export default defineConfig({
   root: path.resolve(__dirname, "client"),
@@ -35,7 +45,7 @@ export default defineConfig({
   base: "/admin/",
 
   server: {
-    port: 5174,
+    port: adminPort,
     strictPort: false,
     fs: {
       allow: [".."],
