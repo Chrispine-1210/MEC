@@ -3182,12 +3182,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  const releaseWorker = setInterval(() => {
-    releaseEligibleCommissions().catch((error) => {
-      console.error('Scheduled commission release error:', error);
-    });
-  }, env.REFERRAL_RELEASE_WORKER_MS);
-  releaseWorker.unref?.();
+  const shouldRunReferralReleaseWorker =
+    env.REFERRAL_RELEASE_WORKER_ENABLED ?? env.NODE_ENV === "production";
+
+  if (shouldRunReferralReleaseWorker) {
+    const releaseWorker = setInterval(() => {
+      releaseEligibleCommissions().catch((error) => {
+        if (isTransientDbConnectivityError(error)) {
+          console.warn(
+            `[referrals] Scheduled commission release skipped after a transient database connection issue: ${getErrorMessage(error)}`,
+          );
+          return;
+        }
+
+        console.error('Scheduled commission release error:', error);
+      });
+    }, env.REFERRAL_RELEASE_WORKER_MS);
+    releaseWorker.unref?.();
+  } else {
+    console.info(
+      `[referrals] Scheduled commission release worker disabled in ${env.NODE_ENV}. Set REFERRAL_RELEASE_WORKER_ENABLED=true to run it locally.`,
+    );
+  }
 
   // Admin routes (shared backend)
   const paginate = <T,>(items: T[], page: number, limit: number) => {

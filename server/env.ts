@@ -6,6 +6,16 @@ const optionalEnvString = z.preprocess(
   z.string().optional(),
 );
 
+const optionalEnvBoolean = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return undefined;
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return value;
+}, z.boolean().optional());
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.coerce.number().int().positive().default(5000),
@@ -31,6 +41,7 @@ const envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: optionalEnvString,
   STRIPE_DEFAULT_CURRENCY: z.string().length(3).default("USD"),
   REFERRAL_PAYOUT_MIN_AMOUNT: z.coerce.number().int().positive().default(2500),
+  REFERRAL_RELEASE_WORKER_ENABLED: optionalEnvBoolean,
   REFERRAL_RELEASE_WORKER_MS: z.coerce.number().int().positive().default(900_000),
 });
 

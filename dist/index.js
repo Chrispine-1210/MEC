@@ -16,6 +16,14 @@ var optionalEnvString = z.preprocess(
   (value) => typeof value === "string" && value.trim() === "" ? void 0 : value,
   z.string().optional()
 );
+var optionalEnvBoolean = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return void 0;
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return value;
+}, z.boolean().optional());
 var envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.coerce.number().int().positive().default(5e3),
@@ -41,6 +49,7 @@ var envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: optionalEnvString,
   STRIPE_DEFAULT_CURRENCY: z.string().length(3).default("USD"),
   REFERRAL_PAYOUT_MIN_AMOUNT: z.coerce.number().int().positive().default(2500),
+  REFERRAL_RELEASE_WORKER_ENABLED: optionalEnvBoolean,
   REFERRAL_RELEASE_WORKER_MS: z.coerce.number().int().positive().default(9e5)
 });
 var env = envSchema.parse(process.env);
@@ -5458,12 +5467,25 @@ async function registerRoutes(app2) {
       res.status(400).json({ message: "Failed to reject payout", error: getErrorMessage(error) });
     }
   });
-  const releaseWorker = setInterval(() => {
-    releaseEligibleCommissions().catch((error) => {
-      console.error("Scheduled commission release error:", error);
-    });
-  }, env.REFERRAL_RELEASE_WORKER_MS);
-  releaseWorker.unref?.();
+  const shouldRunReferralReleaseWorker = env.REFERRAL_RELEASE_WORKER_ENABLED ?? env.NODE_ENV === "production";
+  if (shouldRunReferralReleaseWorker) {
+    const releaseWorker = setInterval(() => {
+      releaseEligibleCommissions().catch((error) => {
+        if (isTransientDbConnectivityError(error)) {
+          console.warn(
+            `[referrals] Scheduled commission release skipped after a transient database connection issue: ${getErrorMessage(error)}`
+          );
+          return;
+        }
+        console.error("Scheduled commission release error:", error);
+      });
+    }, env.REFERRAL_RELEASE_WORKER_MS);
+    releaseWorker.unref?.();
+  } else {
+    console.info(
+      `[referrals] Scheduled commission release worker disabled in ${env.NODE_ENV}. Set REFERRAL_RELEASE_WORKER_ENABLED=true to run it locally.`
+    );
+  }
   const paginate = (items, page, limit) => {
     const total = items.length;
     const start = (page - 1) * limit;
