@@ -4,6 +4,8 @@ import { useLocation } from "wouter";
 import AdminSidebar from "@/components/admin/admin-sidebar";
 import AnalyticsDashboard from "@/components/admin/analytics-dashboard";
 import ContentManager from "@/components/admin/content-manager";
+import EventManager from "@/components/admin/event-manager";
+import SubscriberManager from "@/components/admin/subscriber-manager";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,13 +16,15 @@ import {
   GraduationCap, 
   Briefcase,
   Activity,
+  CalendarDays,
   TrendingUp,
   Eye,
   Settings,
-  Bell
+  Bell,
+  Mail
 } from "lucide-react";
 
-type AdminView = 'dashboard' | 'analytics' | 'scholarships' | 'jobs' | 'users' | 'blog-posts' | 'testimonials' | 'partners' | 'team-members';
+type AdminView = 'dashboard' | 'analytics' | 'events' | 'scholarships' | 'jobs' | 'users' | 'blog-posts' | 'testimonials' | 'partners' | 'team-members' | 'subscribers';
 
 export default function Admin() {
   const { user, isLoading } = useAuth();
@@ -63,6 +67,10 @@ export default function Admin() {
     switch (activeView) {
       case 'analytics':
         return <AnalyticsDashboard />;
+      case 'events':
+        return <EventManager />;
+      case 'subscribers':
+        return <SubscriberManager />;
       case 'scholarships':
       case 'jobs':
       case 'users':
@@ -132,12 +140,12 @@ export default function Admin() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-muted-foreground">Scholarships</p>
+                      <p className="text-sm text-muted-foreground">Events</p>
                       <p className="text-2xl font-bold text-mtendere-orange">
-                        {analytics?.totalScholarships || 0}
+                        {analytics?.totalEvents || 0}
                       </p>
                     </div>
-                    <GraduationCap className="w-8 h-8 text-mtendere-orange" />
+                    <CalendarDays className="w-8 h-8 text-mtendere-orange" />
                   </div>
                 </CardContent>
               </Card>
@@ -146,12 +154,12 @@ export default function Admin() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-muted-foreground">Job Openings</p>
+                      <p className="text-sm text-muted-foreground">Subscribers</p>
                       <p className="text-2xl font-bold text-mtendere-blue">
-                        {analytics?.totalJobs || 0}
+                        {analytics?.totalSubscribers || 0}
                       </p>
                     </div>
-                    <Briefcase className="w-8 h-8 text-mtendere-blue" />
+                    <Mail className="w-8 h-8 text-mtendere-blue" />
                   </div>
                 </CardContent>
               </Card>
@@ -205,6 +213,14 @@ export default function Admin() {
                 <CardContent className="space-y-3">
                   <Button 
                     className="w-full bg-mtendere-blue hover:bg-mtendere-blue/90" 
+                    onClick={() => setActiveView('events')}
+                  >
+                    <CalendarDays className="w-4 h-4 mr-2" />
+                    Manage Events
+                  </Button>
+
+                  <Button 
+                    className="w-full bg-mtendere-blue hover:bg-mtendere-blue/90" 
                     onClick={() => setActiveView('scholarships')}
                   >
                     <GraduationCap className="w-4 h-4 mr-2" />
@@ -234,6 +250,15 @@ export default function Admin() {
                   >
                     <TrendingUp className="w-4 h-4 mr-2" />
                     View Analytics
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="w-full border-mtendere-green text-mtendere-green hover:bg-mtendere-green hover:text-white"
+                    onClick={() => setActiveView('subscribers')}
+                  >
+                    <Mail className="w-4 h-4 mr-2" />
+                    Manage Subscribers
                   </Button>
                 </CardContent>
               </Card>

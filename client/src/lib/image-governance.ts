@@ -1,0 +1,440 @@
+export type GovernedImageModule =
+  | "blog"
+  | "team"
+  | "partner"
+  | "scholarship"
+  | "job"
+  | "event"
+  | "opportunity"
+  | "project"
+  | "program"
+  | "news"
+  | "testimonial"
+  | "misc"
+  | "default";
+
+export type GovernedImageVariant = "hero" | "card" | "inline" | "profile" | "logo" | "gallery" | "fallback";
+
+export type GovernedImageInput = {
+  module: GovernedImageModule;
+  src?: string | null;
+  title?: string | null;
+  category?: string | null;
+  tags?: Array<string | null | undefined> | null;
+  index?: number;
+  variant?: GovernedImageVariant;
+};
+
+export type ResolvedGovernedImage = {
+  src: string;
+  alt: string;
+  caption: string;
+  key: string;
+  fallbackLevel: "assigned" | "category" | "module" | "global" | "placeholder";
+  module: GovernedImageModule;
+};
+
+type AssetEntry = {
+  key: string;
+  src: string;
+  relativePath: string;
+  normalizedPath: string;
+  fileName: string;
+  folder: string;
+};
+
+const GOVERNED_ASSET_FOLDERS = new Set([
+  "blogs",
+  "team",
+  "teams",
+  "partners",
+  "scholarships",
+  "jobs",
+  "events",
+  "opportunities",
+  "projects",
+  "programs",
+  "news",
+  "misc",
+  "defaults",
+  "testimonials",
+  "students",
+]);
+
+const imageModules = import.meta.glob(
+  [
+    "../assets/imgs/blogs/application-guidance.jpg",
+    "../assets/imgs/blogs/career-motivation.jpg",
+    "../assets/imgs/blogs/chiunda-campus.jpg",
+    "../assets/imgs/blogs/counselling-mentorship.jpg",
+    "../assets/imgs/team.jpg",
+    "../assets/imgs/team/Brend tawina.jpg",
+    "../assets/imgs/team/christoper.jpg",
+    "../assets/imgs/team/dr. daniel.jpg",
+    "../assets/imgs/team/george.jpg",
+    "../assets/imgs/team/mr. rabson.jpg",
+    "../assets/imgs/team/ms brenda.jpg",
+    "../assets/imgs/team/timothy.jpg",
+    "../assets/imgs/teams/brend-tawina.jpg",
+    "../assets/imgs/teams/dr-daniel.jpg",
+    "../assets/imgs/teams/george.jpg",
+    "../assets/imgs/teams/ms-brenda.jpg",
+    "../assets/imgs/teams/timothy.jpg",
+    "../assets/imgs/partners/cu-logo-white.webp",
+    "../assets/imgs/partners/gbs-dubai.webp",
+    "../assets/imgs/partners/our-partners.jpg",
+    "../assets/imgs/partners/partners-2.jpg",
+    "../assets/imgs/partners/partners-default.jpg",
+    "../assets/imgs/scholarships/application-guidance.jpg",
+    "../assets/imgs/scholarships/application-registration.jpg",
+    "../assets/imgs/scholarships/graduates-default.jpg",
+    "../assets/imgs/scholarships/students.jpg",
+    "../assets/imgs/jobs/computer-repair.jpg",
+    "../assets/imgs/jobs/corporate.jpg",
+    "../assets/imgs/jobs/inspector.jpg",
+    "../assets/imgs/jobs/jobs-default.jpg",
+    "../assets/imgs/Events/IMG-20221029-WA0058.jpg",
+    "../assets/imgs/Events/IMG-20220907-WA0124.jpg",
+    "../assets/imgs/Events/IMG-20230311-WA0110.jpg",
+    "../assets/imgs/Events/IMG-20250321-WA0250.jpg",
+    "../assets/imgs/events/events-default.jpg",
+    "../assets/imgs/projects/foundation.jpg",
+    "../assets/imgs/programs/abroad-students.jpg",
+    "../assets/imgs/programs/international-studies.jpg",
+    "../assets/imgs/programs/students-campus.jpg",
+    "../assets/imgs/students/Edna Kalonga.jpg",
+    "../assets/imgs/students/Ian Ndola.jpg",
+    "../assets/imgs/students/Janet Kandulu.jpg",
+    "../assets/imgs/testimonials/edna-kalonga.jpg",
+    "../assets/imgs/testimonials/ian-ndola.jpg",
+    "../assets/imgs/testimonials/trust-mangani.jpg",
+    "../assets/imgs/misc/about-mtendere.jpg",
+    "../assets/imgs/misc/mtendere.jpg",
+    "../assets/imgs/defaults/mtendere-default.png",
+  ],
+  {
+    eager: true,
+    import: "default",
+    query: "?url",
+  },
+) as Record<string, string>;
+
+const assets: AssetEntry[] = Object.entries(imageModules)
+  .map(([key, src]) => {
+    const relativePath = key.replace(/^..\/assets\/imgs\//, "");
+    const normalizedPath = normalizePath(relativePath);
+    const segments = normalizedPath.split("/");
+
+    return {
+      key,
+      src,
+      relativePath,
+      normalizedPath,
+      fileName: segments[segments.length - 1] || normalizedPath,
+      folder: segments[0] || "root",
+    };
+  })
+  .sort((left, right) => left.normalizedPath.localeCompare(right.normalizedPath));
+
+const MODULE_FOLDERS: Record<GovernedImageModule, string[]> = {
+  blog: ["blogs", "blog"],
+  team: ["teams", "team"],
+  partner: ["partners", "partner"],
+  scholarship: ["scholarships", "scholarship", "students"],
+  job: ["jobs", "job"],
+  event: ["events", "event"],
+  opportunity: ["opportunities", "opportunity"],
+  project: ["projects", "project"],
+  program: ["programs", "program", "courses", "services"],
+  news: ["news", "events", "blog"],
+  testimonial: ["students", "testimonials", "team"],
+  misc: ["misc", "background", "services"],
+  default: ["defaults"],
+};
+
+const MODULE_KEYWORDS: Record<GovernedImageModule, string[]> = {
+  blog: [
+    "blog",
+    "application",
+    "career",
+    "motivation",
+    "students",
+    "study",
+    "education",
+    "events",
+    "expo",
+    "india",
+    "europe",
+    "departure",
+    "partnership",
+    "mentorship",
+    "campus",
+    "consultant",
+  ],
+  team: ["team", "brenda", "george", "daniel", "christ", "timothy", "rabson", "ortiz", "staff"],
+  partner: ["partner", "university", "campus", "chandigarh", "ct-logo", "gedu", "gbs", "msm", "au-logo"],
+  scholarship: ["scholarship", "graduate", "students", "campus", "application", "study", "abroad", "foundation"],
+  job: ["job", "career", "business", "corporate", "worker", "factory", "computer", "chart", "resume"],
+  event: ["event", "cerebration", "registration", "workshop", "meeting", "exhibition", "departure"],
+  opportunity: ["opportunity", "career", "students", "application", "international", "study"],
+  project: ["project", "foundation", "students", "moments", "services"],
+  program: ["program", "course", "services", "students", "application", "study"],
+  news: ["news", "event", "moments", "foundation", "departure"],
+  testimonial: ["students", "campus", "graduate", "trust", "mirabel", "janet", "edna", "karonga", "ian", "edina"],
+  misc: ["mtendere", "about", "moments", "background", "services"],
+  default: ["default", "mtendere", "logo"],
+};
+
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  scholarship: ["scholarship", "graduate", "students", "application", "guidance", "foundation"],
+  scholarships: ["scholarship", "graduate", "students", "application", "guidance", "foundation"],
+  education: ["students", "campus", "study", "university", "graduates", "chandigarh"],
+  "study abroad": ["abroad", "international", "campus", "students", "departure", "malawi"],
+  career: ["career", "motivation", "business", "corporate", "mentorship", "recruit"],
+  "tips & guides": ["application", "guidance", "registration", "mentorship", "students"],
+  visa: ["application", "registration", "departure", "international", "abroad"],
+  business: ["business", "corporate", "chart", "partner", "meeting"],
+  tech: ["computer", "chips", "factory", "technology", "businessman"],
+  technology: ["computer", "chips", "factory", "technology", "businessman"],
+  events: ["event", "workshop", "meeting", "cerebration", "exhibition"],
+  event: ["event", "workshop", "meeting", "cerebration", "exhibition"],
+  "education expo": ["event", "exhibition", "meeting", "students", "partners"],
+  india: ["india", "students", "campus", "chandigarh", "application"],
+  europe: ["international", "study", "event", "partners", "students"],
+  departure: ["departure", "abroad", "students", "airport", "study"],
+  partnerships: ["partners", "meeting", "university", "international", "event"],
+  general: ["mtendere", "moments", "about", "students", "foundation"],
+};
+
+const MODULE_DEFAULT_KEYS: Record<GovernedImageModule, string[]> = {
+  blog: ["events/img-20250321-wa0250.jpg", "events/img-20221029-wa0058.jpg", "events/img-20220907-wa0124.jpg", "events/img-20230311-wa0110.jpg"],
+  team: ["teams/ms-brenda.jpg", "teams/george", "teams/dr-daniel", "teams/timothy"],
+  partner: ["partners/partners-default.jpg", "partners/our-partners", "partners/partners-2", "partners/gbs"],
+  scholarship: ["scholarships/graduates-default.jpg", "scholarships/students", "scholarships/application-guidance"],
+  job: ["jobs/jobs-default.jpg", "jobs/corporate", "jobs/computer-repair", "jobs/inspector"],
+  event: ["events/events-default.jpg", "blogs/chiunda-campus", "programs/students-campus"],
+  opportunity: ["scholarships/application-guidance", "blogs/career-motivation", "programs/students-campus"],
+  project: ["projects/foundation", "misc/mtendere", "programs/students-campus"],
+  program: ["programs/international-studies", "programs/students-campus", "programs/abroad-students"],
+  news: ["events/events-default.jpg", "projects/foundation", "blogs/application-guidance"],
+  testimonial: ["students/Janet Kandulu.jpg", "students/Edna Kalonga.jpg", "students/Ian Ndola.jpg"],
+  misc: ["misc/mtendere", "misc/about-mtendere", "defaults/mtendere-default"],
+  default: ["defaults/mtendere-default.png", "misc/mtendere", "misc/about-mtendere"],
+};
+
+export function getGovernedImageAssets() {
+  return assets.map(({ key, src, relativePath, folder }) => ({ key, src, relativePath, folder }));
+}
+
+export function resolveGovernedImage(input: GovernedImageInput): ResolvedGovernedImage {
+  const module = input.module;
+  const assigned = resolveAssignedLocalAsset(input.src);
+
+  if (assigned) {
+    return toResolved(assigned, input, "assigned");
+  }
+
+  const categoryAsset = pickCategoryAsset(input);
+  if (categoryAsset) {
+    return toResolved(categoryAsset, input, "category");
+  }
+
+  const moduleAsset = pickModuleAsset(input);
+  if (moduleAsset) {
+    return toResolved(moduleAsset, input, "module");
+  }
+
+  const globalAsset = pickByHints(MODULE_DEFAULT_KEYS.default, assets) || assets[0];
+
+  if (globalAsset) {
+    return toResolved(globalAsset, { ...input, module }, "global");
+  }
+
+  return {
+    src: "",
+    alt: buildAlt(input),
+    caption: buildCaption(input),
+    key: "placeholder",
+    fallbackLevel: "placeholder",
+    module,
+  };
+}
+
+export function getGovernedImageSrc(input: GovernedImageInput) {
+  return resolveGovernedImage(input).src;
+}
+
+export function getGovernedBackgroundImage(input: GovernedImageInput) {
+  return `url("${getGovernedImageSrc(input)}")`;
+}
+
+export function getBlogInlineImages(input: {
+  title: string;
+  content: string;
+  category?: string | null;
+  tags?: string[] | null;
+  maxImages?: number;
+}) {
+  const sectionCount = (input.content.match(/^#{2,3}\s+/gm) || []).length;
+  const wordCount = input.content.split(/\s+/).filter(Boolean).length;
+  const targetCount = Math.max(1, Math.min(input.maxImages ?? 4, sectionCount || Math.ceil(wordCount / 350)));
+
+  return Array.from({ length: targetCount }, (_, index) =>
+    resolveGovernedImage({
+      module: "blog",
+      title: input.title,
+      category: input.category,
+      tags: input.tags,
+      index: index + 1,
+      variant: "inline",
+    }),
+  );
+}
+
+export function isExternalImage(src?: string | null) {
+  return Boolean(src && /^https?:\/\//i.test(src));
+}
+
+export function isGovernedAsset(src?: string | null) {
+  return Boolean(resolveAssignedLocalAsset(src));
+}
+
+function pickCategoryAsset(input: GovernedImageInput) {
+  const tokens = [
+    ...(input.category ? splitTokens(input.category) : []),
+    ...(input.tags || []).flatMap((tag) => splitTokens(tag || "")),
+  ];
+  const hints = tokens.flatMap((token) => CATEGORY_KEYWORDS[token] || [token]);
+  const modulePool = getModulePool(input.module);
+  return pickByHints(hints, modulePool, input) || pickByHints(hints, assets, input);
+}
+
+function pickModuleAsset(input: GovernedImageInput) {
+  const moduleDefaults = pickByHints(MODULE_DEFAULT_KEYS[input.module], assets, input);
+  if (moduleDefaults) return moduleDefaults;
+
+  const modulePool = getModulePool(input.module);
+  if (modulePool.length > 0) return pickDeterministic(modulePool, getHashSeed(input));
+
+  return pickByHints(MODULE_KEYWORDS[input.module], assets, input);
+}
+
+function getModulePool(module: GovernedImageModule) {
+  const folders = MODULE_FOLDERS[module] || [];
+  const keywords = MODULE_KEYWORDS[module] || [];
+
+  return assets.filter((asset) => {
+    const path = asset.normalizedPath;
+    return (
+      folders.some((folder) => path === folder || path.startsWith(`${folder}/`)) ||
+      keywords.some((keyword) => path.includes(normalizePath(keyword)))
+    );
+  });
+}
+
+function resolveAssignedLocalAsset(src?: string | null) {
+  if (!src || isExternalImage(src) || src.startsWith("/uploads/")) return undefined;
+
+  const normalizedSrc = normalizePath(src);
+  const bundledAsset =
+    assets.find((asset) => asset.src === src) ||
+    assets.find((asset) => normalizedSrc.includes(asset.normalizedPath)) ||
+    assets.find((asset) => asset.normalizedPath.includes(normalizedSrc)) ||
+    assets.find((asset) => normalizedSrc.endsWith(asset.fileName));
+
+  if (bundledAsset) return bundledAsset;
+
+  const runtimeReference = toGovernedRuntimeReference(normalizedSrc);
+  if (!runtimeReference) return undefined;
+
+  const segments = runtimeReference.split("/");
+  return {
+    key: `runtime:${runtimeReference}`,
+    src: `/media-assets/${runtimeReference.split("/").map(encodeURIComponent).join("/")}`,
+    relativePath: runtimeReference,
+    normalizedPath: runtimeReference,
+    fileName: segments[segments.length - 1] || runtimeReference,
+    folder: segments[0] || "runtime",
+  };
+}
+
+function toGovernedRuntimeReference(value: string) {
+  const normalized = value
+    .replace(/^assets\/imgs\//, "")
+    .replace(/^media-assets\//, "")
+    .replace(/^\/media-assets\//, "")
+    .replace(/^\/assets\/imgs\//, "");
+  const [folder] = normalized.split("/");
+
+  if (!folder || !GOVERNED_ASSET_FOLDERS.has(folder)) return "";
+  if (normalized.includes("..") || !/\.(jpe?g|png|webp)$/i.test(normalized)) return "";
+  return normalized;
+}
+
+function pickByHints(hints: string[] = [], pool: AssetEntry[] = assets, input?: GovernedImageInput) {
+  const normalizedHints = hints.map(normalizePath).filter(Boolean);
+  if (normalizedHints.length === 0) return undefined;
+
+  const matches = pool.filter((asset) => normalizedHints.some((hint) => asset.normalizedPath.includes(hint)));
+  if (matches.length === 0) return undefined;
+
+  return pickDeterministic(matches, getHashSeed(input));
+}
+
+function pickDeterministic(pool: AssetEntry[], seed = "mtendere") {
+  if (pool.length === 0) return undefined;
+  return pool[positiveHash(seed) % pool.length];
+}
+
+function toResolved(asset: AssetEntry, input: GovernedImageInput, fallbackLevel: ResolvedGovernedImage["fallbackLevel"]) {
+  return {
+    src: asset.src,
+    alt: buildAlt(input),
+    caption: buildCaption(input),
+    key: asset.relativePath,
+    fallbackLevel,
+    module: input.module,
+  };
+}
+
+function buildAlt(input: GovernedImageInput) {
+  const title = input.title?.trim();
+  if (title) return title;
+  const moduleLabel = input.module === "default" ? "Mtendere image" : `${input.module} image`;
+  return moduleLabel.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function buildCaption(input: GovernedImageInput) {
+  const category = input.category?.trim();
+  if (category && input.variant === "inline") return `${category} insight from Mtendere Education Consult`;
+  if (input.variant === "profile") return "Mtendere team profile";
+  if (input.variant === "logo") return "Mtendere partner identity";
+  return "Mtendere Education Consult";
+}
+
+function getHashSeed(input?: GovernedImageInput) {
+  if (!input) return "mtendere";
+  return [input.module, input.variant, input.category, input.title, input.index, ...(input.tags || [])]
+    .filter(Boolean)
+    .join("|");
+}
+
+function splitTokens(value: string) {
+  return normalizePath(value)
+    .split(/[^a-z0-9]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+function normalizePath(value: string) {
+  return value.replace(/\\/g, "/").toLowerCase().replace(/^\/+/, "").trim();
+}
+
+function positiveHash(value: string) {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(index);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}

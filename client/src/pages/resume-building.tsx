@@ -1,14 +1,19 @@
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
+import GovernedImage from "@/components/governed-image";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { useQuery } from "@tanstack/react-query";
+import type { ApiTestimonial } from "@/lib/api-types";
+import { publicContentQueryOptions } from "@/lib/realtime-content";
 import { Link } from "wouter";
 import {
   User, Layout, CheckSquare, Linkedin, Star, FileText, Clock,
   PhoneCall, Award, CheckCircle2, ArrowRight, Briefcase, BookOpen
 } from "lucide-react";
+import { getGovernedBackgroundImage } from "@/lib/image-governance";
 
 const PACKAGES = [
   {
@@ -66,30 +71,6 @@ const PROCESS = [
   { step: "05", title: "Delivery", desc: "Receive your polished, job-ready documents in PDF and editable Word format.", icon: CheckSquare },
 ];
 
-const TESTIMONIALS = [
-  {
-    name: "Chipo Banda",
-    role: "Marketing Manager, Blantyre",
-    text: "After working with Mtendere to redesign my resume, I received 3 interview invitations within a week. The LinkedIn optimization alone doubled my profile views.",
-    rating: 5,
-    img: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=100",
-  },
-  {
-    name: "Kondwani Phiri",
-    role: "Software Engineer, Lilongwe",
-    text: "I had been applying for months with no response. Within 2 weeks of using Mtendere's resume service, I had landed a job at TechMalawi Solutions. Absolutely worth it.",
-    rating: 5,
-    img: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100",
-  },
-  {
-    name: "Grace Nkosi",
-    role: "Project Manager, Zomba",
-    text: "The interview coaching session was invaluable. The team helped me articulate my experience clearly and confidently. I got the job on my first interview after the session.",
-    rating: 5,
-    img: "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=100",
-  },
-];
-
 const FAQS = [
   {
     q: "How long does the resume writing process take?",
@@ -114,6 +95,13 @@ const FAQS = [
 ];
 
 export default function ResumeBuilding() {
+  const { data: testimonials = [] } = useQuery<ApiTestimonial[]>({
+    queryKey: ["/api/testimonials"],
+    initialData: [],
+    ...publicContentQueryOptions,
+  });
+  const approvedTestimonials = testimonials.filter((item) => item?.isApproved !== false).slice(0, 3);
+
   return (
     <div className="min-h-screen bg-background">
       <ExpandingNav />
@@ -122,7 +110,12 @@ export default function ResumeBuilding() {
       <section
         className="relative pt-28 pb-24 text-white overflow-hidden"
         style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1586281380349-632531db7ed4?auto=format&fit=crop&q=80&w=2000')`,
+          backgroundImage: getGovernedBackgroundImage({
+            module: "job",
+            title: "Resume building",
+            category: "career",
+            variant: "hero",
+          }),
           backgroundSize: "cover",
           backgroundPosition: "center top",
         }}
@@ -337,23 +330,53 @@ export default function ResumeBuilding() {
             <h2 className="mb-4 text-4xl font-extrabold text-mtendere-blue">What Our Clients Say</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {TESTIMONIALS.map((t) => (
-              <div key={t.name} className="rounded-2xl border border-border/70 bg-card p-8 shadow-lg">
-                <div className="flex items-center gap-1 mb-4">
-                  {[...Array(t.rating)].map((_, i) => (
-                    <Star key={i} className="w-5 h-5 fill-mtendere-orange text-mtendere-orange" />
-                  ))}
-                </div>
-                <p className="mb-6 italic leading-relaxed text-muted-foreground">"{t.text}"</p>
-                <div className="flex items-center gap-3">
-                  <img src={t.img} alt={t.name} className="w-12 h-12 rounded-full object-cover border-2 border-mtendere-orange" />
-                  <div>
-                    <div className="font-bold text-foreground">{t.name}</div>
-                    <div className="text-sm text-mtendere-blue/80">{t.role}</div>
+            {approvedTestimonials.length > 0 ? (
+              approvedTestimonials.map((testimonial) => {
+                const rating = Math.max(1, Math.min(5, testimonial.rating || 5));
+                const name = testimonial.authorName || "Mtendere Student";
+
+                return (
+                  <div key={testimonial.id} className="rounded-2xl border border-border/70 bg-card p-8 shadow-lg">
+                    <div className="flex items-center gap-1 mb-4">
+                      {[...Array(5)].map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`w-5 h-5 ${
+                            i < rating
+                              ? "fill-mtendere-orange text-mtendere-orange"
+                              : "text-muted-foreground/30"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <p className="mb-6 italic leading-relaxed text-muted-foreground">"{testimonial.content}"</p>
+                    <div className="flex items-center gap-3">
+                      <GovernedImage
+                        module="testimonial"
+                        src={testimonial.imageUrl}
+                        title={name}
+                        variant="profile"
+                        aspectRatio="auto"
+                        className="h-12 w-12"
+                        wrapperClassName="h-full rounded-full border-2 border-mtendere-orange shadow-none"
+                      />
+                      <div>
+                        <div className="font-bold text-foreground">{name}</div>
+                        <div className="text-sm text-mtendere-blue/80">
+                          {testimonial.credential || "Mtendere Graduate"}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
+                );
+              })
+            ) : (
+              <Card className="md:col-span-3 border border-dashed border-border/70">
+                <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                  Approved testimonials will appear here after they are published in Admin.
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       </section>
@@ -383,7 +406,12 @@ export default function ResumeBuilding() {
       <section
         className="py-20 text-white text-center relative overflow-hidden"
         style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&q=80&w=2000')`,
+          backgroundImage: getGovernedBackgroundImage({
+            module: "job",
+            title: "Career transformation",
+            category: "career",
+            variant: "hero",
+          }),
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}

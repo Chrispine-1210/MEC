@@ -3,12 +3,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 
 export default function Register() {
   const [, setLocation] = useLocation();
+  const referralCode = new URLSearchParams(window.location.search).get("ref");
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -85,6 +87,7 @@ export default function Register() {
         email: formData.email,
         username: formData.username,
         password: formData.password,
+        referralCode: referralCode || undefined,
       });
 
       if (success) {
@@ -108,6 +111,11 @@ export default function Register() {
           <CardDescription>
             Join thousands of students advancing their careers with Mtendere
           </CardDescription>
+          {referralCode && (
+            <Badge className="mx-auto mt-3 bg-mtendere-green/15 text-mtendere-green border-mtendere-green/20">
+              Referral {referralCode.toUpperCase()}
+            </Badge>
+          )}
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

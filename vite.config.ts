@@ -24,6 +24,7 @@ export default defineConfig({
   root: path.resolve(__dirname, "client"),
 
   plugins: [react()],
+  assetsInclude: ["**/*.JPG", "**/*.JPEG", "**/*.PNG", "**/*.WEBP"],
 
   resolve: {
     alias: {

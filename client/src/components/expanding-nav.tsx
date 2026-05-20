@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import GlobalSearch from "@/components/global-search";
 import { 
   Menu, 
   X, 
@@ -14,6 +15,7 @@ import {
   Award,
   Building,
   ChevronDown,
+  CalendarDays,
   User,
   Settings,
   LogOut
@@ -83,6 +85,7 @@ export default function ExpandingNav() {
               { label: "Scholarships", href: "/scholarships", icon: Award },
               { label: "Study Abroad", href: "/study-abroad", icon: Globe },
               { label: "University Applications", href: "/university-applications", icon: BookOpen },
+              { label: "Events", href: "/events", icon: CalendarDays },
             ]
           },
           {
@@ -103,14 +106,19 @@ export default function ExpandingNav() {
       active: location === "/partners",
     },
     {
+      label: "Events",
+      href: "/events",
+      active: location === "/events" || location.startsWith("/events/"),
+    },
+    {
       label: "Blog",
       href: "/blog",
       active: location === "/blog",
     },
     {
       label: "Team",
-      href: "/about#team",
-      active: false,
+      href: "/team",
+      active: location === "/team",
     },
     {
       label: "About",
@@ -206,6 +214,8 @@ export default function ExpandingNav() {
             ))}
           </div>
 
+          <GlobalSearch className="hidden w-56 2xl:w-72 xl:block" />
+
           {/* User Actions */}
           <div className="hidden lg:flex items-center space-x-4">
             {user ? (
@@ -283,6 +293,9 @@ export default function ExpandingNav() {
         {isOpen && (
           <div className="lg:hidden animate-slide-in">
             <div className="px-2 pt-2 pb-3 space-y-1 bg-card border-t border-border/60">
+              <div className="px-1 pb-2">
+                <GlobalSearch onNavigate={closeMenu} placeholder="Search scholarships, jobs, blogs..." />
+              </div>
               {navItems.map((item) => (
                 <div key={item.label}>
                   {item.dropdown ? (

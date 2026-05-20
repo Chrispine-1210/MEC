@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,10 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
-import { useAuth } from "@/hooks/use-auth";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import ApplicationDialog from "@/components/application-dialog";
+import GovernedImage from "@/components/governed-image";
 import type { ApiJob } from "@/lib/api-types";
+import { getGovernedBackgroundImage } from "@/lib/image-governance";
+import { publicContentQueryOptions } from "@/lib/realtime-content";
+import { truncateRichText } from "@/lib/rich-text";
+import { useDebouncedValue } from "@/hooks/use-debounce";
 import { 
   Search, 
   Filter, 
@@ -22,7 +26,8 @@ import {
   Building,
   Clock,
   Wifi,
-  Users
+  Users,
+  X
 } from "lucide-react";
 
 interface Job {
@@ -45,44 +50,20 @@ export default function Jobs() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("");
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const debouncedSearchQuery = useDebouncedValue(searchQuery.trim(), 300);
 
   const { data: jobs, isLoading } = useQuery<ApiJob[]>({
     queryKey: ["/api/jobs"],
+    ...publicContentQueryOptions,
   });
 
   const { data: searchResults, isLoading: isSearching } = useQuery<ApiJob[]>({
-    queryKey: ["/api/jobs/search", searchQuery],
-    enabled: searchQuery.length > 2,
+    queryKey: ["/api/jobs/search", { q: debouncedSearchQuery }],
+    enabled: debouncedSearchQuery.length >= 2,
+    ...publicContentQueryOptions,
   });
 
-  const applyMutation = useMutation({
-    mutationFn: async (jobId: number) => {
-      return apiRequest("POST", "/api/applications", {
-        type: "job",
-        referenceId: jobId,
-        status: "pending",
-      });
-    },
-    onSuccess: () => {
-      toast({
-        title: "Application Submitted",
-        description: "Your job application has been submitted successfully.",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
-    },
-    onError: (error) => {
-      toast({
-        title: "Application Failed",
-        description: "Failed to submit your application. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const displayJobs = searchQuery.length > 2 ? searchResults : jobs;
+  const displayJobs = debouncedSearchQuery.length >= 2 ? searchResults : jobs;
   const jobTypes = [...new Set(jobs?.map(j => j.jobType) || [])];
   const locations = [...new Set(jobs?.map(j => j.location) || [])];
 
@@ -117,18 +98,6 @@ export default function Jobs() {
     return diffDays <= 7 && diffDays > 0;
   };
 
-  const handleApply = (jobId: number) => {
-    if (!user) {
-      toast({
-        title: "Authentication Required",
-        description: "Please log in to apply for jobs.",
-        variant: "destructive",
-      });
-      return;
-    }
-    applyMutation.mutate(jobId);
-  };
-
   return (
     <div className="min-h-screen bg-background">
       <ExpandingNav />
@@ -137,7 +106,12 @@ export default function Jobs() {
       <section 
         className="relative py-24 text-white overflow-hidden"
         style={ {
-          backgroundImage: `url(${'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?auto=format&fit=crop&q=80&w=2000'})`,
+          backgroundImage: getGovernedBackgroundImage({
+            module: "job",
+            title: "Career opportunities",
+            category: "career",
+            variant: "hero",
+          }),
           backgroundSize: 'cover',
           backgroundPosition: 'center'
         } }
@@ -166,6 +140,18 @@ export default function Jobs() {
                 <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
                   <div className="loading-spinner"></div>
                 </div>
+              )}
+              {searchQuery && !isSearching && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-2 top-1/2 h-9 w-9 -translate-y-1/2 text-muted-foreground"
+                  onClick={() => setSearchQuery("")}
+                  aria-label="Clear job search"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
               )}
             </div>
           </div>
@@ -231,7 +217,7 @@ export default function Jobs() {
         <div className="mb-6">
           <p className="text-muted-foreground">
             Showing {filteredJobs?.length || 0} job{filteredJobs?.length !== 1 ? 's' : ''}
-            {searchQuery && ` for "${searchQuery}"`}
+            {debouncedSearchQuery && ` for "${debouncedSearchQuery}"`}
             {selectedType && ` in ${selectedType}`}
             {selectedLocation && ` at ${selectedLocation}`}
           </p>
@@ -257,25 +243,20 @@ export default function Jobs() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {filteredJobs?.map((job, idx) => {
-              const jobImages = [
-                "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=800",
-                "https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&q=80&w=800",
-                "https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&q=80&w=800",
-                "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&q=80&w=800",
-              ];
-
-              const heroImage = jobImages[0];
-
               return (
                 <Card key={idx}>
                   <div className="relative">
-                    {heroImage ? (
-                      <img
-                        src={heroImage}
-                        alt={job.title}
-                        className="w-full h-32 object-cover rounded-t-lg"
-                      />
-                    ) : null}
+                    <GovernedImage
+                      module="job"
+                      src={job.imageUrl}
+                      title={job.title}
+                      category={job.jobType}
+                      index={idx}
+                      variant="card"
+                      aspectRatio="auto"
+                      className="h-32"
+                      wrapperClassName="h-full rounded-t-lg rounded-b-none shadow-none"
+                    />
                     <div className="absolute top-3 left-3 flex gap-2">
                       <Badge className="bg-mtendere-green text-white font-bold text-xs">{job.jobType}</Badge>
                       {job.isRemote && (
@@ -307,9 +288,9 @@ export default function Jobs() {
                   </CardHeader>
 
                   <CardContent>
-                    <p className="text-muted-foreground mb-4 line-clamp-3">
-                      {job.description}
-                    </p>
+                  <p className="text-muted-foreground mb-4 line-clamp-3">
+                    {truncateRichText(job.description, 180)}
+                  </p>
 
                     <div className="space-y-3 mb-6">
                       <div className="flex items-center justify-between">
@@ -355,26 +336,22 @@ export default function Jobs() {
                     )}
 
                     <div className="flex space-x-2">
-                      <Button
-                        className="flex-1 bg-mtendere-green hover:bg-mtendere-green/90"
-                        onClick={() => handleApply(job.id)}
-                        disabled={applyMutation.isPending}
-                      >
-                        {applyMutation.isPending ? (
-                          <>
-                            <div className="loading-spinner mr-2"></div>
-                            Applying...
-                          </>
-                        ) : (
-                          <>
+                      <ApplicationDialog
+                        type="job"
+                        referenceId={job.id}
+                        title={job.title}
+                        trigger={
+                          <Button className="flex-1 bg-mtendere-green hover:bg-mtendere-green/90">
                             <Users className="w-4 h-4 mr-2" />
                             Apply Now
-                          </>
-                        )}
-                      </Button>
+                          </Button>
+                        }
+                      />
 
-                      <Button variant="outline" size="icon">
-                        <ExternalLink className="w-4 h-4" />
+                      <Button asChild variant="outline" size="icon" aria-label={`View ${job.title}`}>
+                        <Link href={`/jobs/${job.id}`}>
+                          <ExternalLink className="w-4 h-4" />
+                        </Link>
                       </Button>
                     </div>
                   </CardContent>

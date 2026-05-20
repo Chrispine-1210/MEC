@@ -31,6 +31,10 @@ export type PartnerMeta = {
   contactPhone?: string;
   address?: string;
   region?: string;
+  videoUrl?: string;
+  videoTitle?: string;
+  videoDescription?: string;
+  isFeatured?: boolean;
   isPremium?: boolean;
   paymentStatus?: string;
 };
@@ -50,6 +54,26 @@ export type UserMeta = {
   region?: string;
 };
 
+export type AiChatMessage = {
+  role: "user" | "assistant" | "system";
+  content: string;
+  createdAt: string;
+};
+
+export type AiChatConversation = {
+  id: string;
+  userId: string | null;
+  userEmail?: string | null;
+  channel: "public" | "admin";
+  messages: AiChatMessage[];
+  summary: string | null;
+  isActive: boolean;
+  moderationFlags: string[];
+  createdAt: string;
+  updatedAt: string;
+  lastMessageAt: string;
+};
+
 export type AdminRole = {
   id: string;
   name: string;
@@ -65,6 +89,13 @@ export type AdminSettings = {
   supportEmail: string;
   sessionTimeout: number;
   maxLoginAttempts: number;
+  maintenanceMode: boolean;
+  emailNotifications: boolean;
+  twoFactorRequired: boolean;
+  weeklySummary: boolean;
+  contentPublishedNotifications: boolean;
+  authTokenInvalidBefore: string | null;
+  cacheVersion: number;
   updatedAt: string;
 };
 
@@ -75,12 +106,19 @@ type AdminState = {
   partners: Record<string, PartnerMeta>;
   blogPosts: Record<string, BlogMeta>;
   teamMembers: Record<string, TeamMeta>;
+  aiConversations: Record<string, AiChatConversation>;
   roles: AdminRole[];
   settings: AdminSettings;
   readNotificationIds: string[];
 };
 
 const nowIso = () => new Date().toISOString();
+
+export const CORE_ADMIN_ROLE_IDS = ["viewer", "editor", "admin", "super_admin"] as const;
+
+const coreAdminRoleSet = new Set<string>(CORE_ADMIN_ROLE_IDS);
+
+export const isCoreAdminRole = (id: string) => coreAdminRoleSet.has(id);
 
 const DEFAULT_ROLES: AdminRole[] = [
   {
@@ -98,11 +136,13 @@ const DEFAULT_ROLES: AdminRole[] = [
     description: "Can create and update platform content.",
     permissions: [
       "view_dashboard",
+      "manage_events",
       "manage_scholarships",
       "manage_jobs",
       "manage_partners",
       "manage_blog",
       "manage_team",
+      "manage_media",
     ],
     isActive: true,
     createdAt: nowIso(),
@@ -114,11 +154,13 @@ const DEFAULT_ROLES: AdminRole[] = [
     description: "Can manage content, users, and applications.",
     permissions: [
       "view_dashboard",
+      "manage_events",
       "manage_scholarships",
       "manage_jobs",
       "manage_partners",
       "manage_blog",
       "manage_team",
+      "manage_media",
       "manage_users",
       "review_applications",
       "view_analytics",
@@ -133,11 +175,13 @@ const DEFAULT_ROLES: AdminRole[] = [
     description: "Full system access including settings and roles.",
     permissions: [
       "view_dashboard",
+      "manage_events",
       "manage_scholarships",
       "manage_jobs",
       "manage_partners",
       "manage_blog",
       "manage_team",
+      "manage_media",
       "manage_users",
       "review_applications",
       "view_analytics",
@@ -150,6 +194,30 @@ const DEFAULT_ROLES: AdminRole[] = [
   },
 ];
 
+const normalizeAdminRoles = (roles?: AdminRole[]) => {
+  if (!roles?.length) return DEFAULT_ROLES;
+
+  const provided = new Map(roles.map((role) => [role.id, role]));
+  const normalizedCoreRoles = DEFAULT_ROLES.map((defaultRole) => {
+    const existing = provided.get(defaultRole.id);
+    if (!existing) return defaultRole;
+
+    return {
+      ...defaultRole,
+      ...existing,
+      permissions: Array.from(
+        new Set([...(existing.permissions ?? []), ...defaultRole.permissions]),
+      ),
+      isActive: true,
+      createdAt: existing.createdAt ?? defaultRole.createdAt,
+      updatedAt: existing.updatedAt ?? defaultRole.updatedAt,
+    };
+  });
+
+  const customRoles = roles.filter((role) => !isCoreAdminRole(role.id));
+  return [...normalizedCoreRoles, ...customRoles];
+};
+
 const createDefaultState = (): AdminState => ({
   users: {},
   scholarships: {},
@@ -157,12 +225,20 @@ const createDefaultState = (): AdminState => ({
   partners: {},
   blogPosts: {},
   teamMembers: {},
+  aiConversations: {},
   roles: DEFAULT_ROLES,
   settings: {
     platformName: "Mtendere Education Platform",
-    supportEmail: "support@mtendere.com",
+    supportEmail: "mtendereeducation@gmail.com",
     sessionTimeout: 30,
     maxLoginAttempts: 5,
+    maintenanceMode: false,
+    emailNotifications: true,
+    twoFactorRequired: false,
+    weeklySummary: false,
+    contentPublishedNotifications: true,
+    authTokenInvalidBefore: null,
+    cacheVersion: 1,
     updatedAt: nowIso(),
   },
   readNotificationIds: [],
@@ -177,6 +253,14 @@ const stateFilePath = path.resolve(
 
 const ensureStateDirectory = () => {
   fs.mkdirSync(path.dirname(stateFilePath), { recursive: true });
+};
+
+const getStateFileMtime = () => {
+  try {
+    return fs.statSync(stateFilePath).mtimeMs;
+  } catch {
+    return 0;
+  }
 };
 
 const loadState = (): AdminState => {
@@ -201,7 +285,8 @@ const loadState = (): AdminState => {
       partners: parsed.partners ?? {},
       blogPosts: parsed.blogPosts ?? {},
       teamMembers: parsed.teamMembers ?? {},
-      roles: parsed.roles?.length ? parsed.roles : DEFAULT_ROLES,
+      aiConversations: parsed.aiConversations ?? {},
+      roles: normalizeAdminRoles(parsed.roles),
       settings: {
         ...createDefaultState().settings,
         ...(parsed.settings ?? {}),
@@ -214,20 +299,38 @@ const loadState = (): AdminState => {
 };
 
 let cachedState = loadState();
+let cachedStateMtime = getStateFileMtime();
+
+const refreshStateFromDiskIfChanged = () => {
+  const nextMtime = getStateFileMtime();
+  if (nextMtime > 0 && nextMtime !== cachedStateMtime) {
+    cachedState = loadState();
+    cachedStateMtime = nextMtime;
+  }
+};
 
 const saveState = () => {
   ensureStateDirectory();
   fs.writeFileSync(stateFilePath, JSON.stringify(cachedState, null, 2), "utf-8");
+  cachedStateMtime = getStateFileMtime();
 };
 
 const updateCollectionItem = <T extends Record<string, unknown>>(
   collection: keyof Pick<
     AdminState,
-    "users" | "scholarships" | "jobs" | "partners" | "blogPosts" | "teamMembers"
+    | "users"
+    | "scholarships"
+    | "jobs"
+    | "partners"
+    | "blogPosts"
+    | "teamMembers"
+    | "aiConversations"
   >,
   id: string | number,
   value: T,
 ) => {
+  refreshStateFromDiskIfChanged();
+
   cachedState = {
     ...cachedState,
     [collection]: {
@@ -245,10 +348,18 @@ const updateCollectionItem = <T extends Record<string, unknown>>(
 const deleteCollectionItem = (
   collection: keyof Pick<
     AdminState,
-    "users" | "scholarships" | "jobs" | "partners" | "blogPosts" | "teamMembers"
+    | "users"
+    | "scholarships"
+    | "jobs"
+    | "partners"
+    | "blogPosts"
+    | "teamMembers"
+    | "aiConversations"
   >,
   id: string | number,
 ) => {
+  refreshStateFromDiskIfChanged();
+
   const nextCollection = { ...cachedState[collection] };
   delete nextCollection[String(id)];
 
@@ -260,48 +371,113 @@ const deleteCollectionItem = (
   saveState();
 };
 
-export const getAdminState = () => cachedState;
+export const getAdminState = () => {
+  refreshStateFromDiskIfChanged();
+  return cachedState;
+};
 
-export const getUserMeta = (id: string | number) => cachedState.users[String(id)] ?? {};
+export const getUserMeta = (id: string | number) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.users[String(id)] ?? {};
+};
 export const setUserMeta = (id: string | number, value: UserMeta) =>
   updateCollectionItem("users", id, value);
 export const deleteUserMeta = (id: string | number) => deleteCollectionItem("users", id);
 
-export const getScholarshipMeta = (id: string | number) =>
-  cachedState.scholarships[String(id)] ?? {};
+export const getScholarshipMeta = (id: string | number) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.scholarships[String(id)] ?? {};
+};
 export const setScholarshipMeta = (id: string | number, value: ScholarshipMeta) =>
   updateCollectionItem("scholarships", id, value);
 export const deleteScholarshipMeta = (id: string | number) =>
   deleteCollectionItem("scholarships", id);
 
-export const getJobMeta = (id: string | number) => cachedState.jobs[String(id)] ?? {};
+export const getJobMeta = (id: string | number) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.jobs[String(id)] ?? {};
+};
 export const setJobMeta = (id: string | number, value: JobMeta) =>
   updateCollectionItem("jobs", id, value);
 export const deleteJobMeta = (id: string | number) => deleteCollectionItem("jobs", id);
 
-export const getPartnerMeta = (id: string | number) =>
-  cachedState.partners[String(id)] ?? {};
+export const getPartnerMeta = (id: string | number) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.partners[String(id)] ?? {};
+};
 export const setPartnerMeta = (id: string | number, value: PartnerMeta) =>
   updateCollectionItem("partners", id, value);
 export const deletePartnerMeta = (id: string | number) =>
   deleteCollectionItem("partners", id);
 
-export const getBlogMeta = (id: string | number) => cachedState.blogPosts[String(id)] ?? {};
+export const getBlogMeta = (id: string | number) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.blogPosts[String(id)] ?? {};
+};
 export const setBlogMeta = (id: string | number, value: BlogMeta) =>
   updateCollectionItem("blogPosts", id, value);
 export const deleteBlogMeta = (id: string | number) => deleteCollectionItem("blogPosts", id);
 
-export const getTeamMeta = (id: string | number) =>
-  cachedState.teamMembers[String(id)] ?? {};
+export const getTeamMeta = (id: string | number) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.teamMembers[String(id)] ?? {};
+};
 export const setTeamMeta = (id: string | number, value: TeamMeta) =>
   updateCollectionItem("teamMembers", id, value);
 export const deleteTeamMeta = (id: string | number) => deleteCollectionItem("teamMembers", id);
 
-export const getAdminRoles = () => [...cachedState.roles];
+export const getAiChatConversation = (id: string) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.aiConversations[id];
+};
+
+export const listAiChatConversations = () => {
+  refreshStateFromDiskIfChanged();
+  return Object.values(cachedState.aiConversations).sort(
+    (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime(),
+  );
+};
+
+export const upsertAiChatConversation = (
+  conversation: Omit<AiChatConversation, "updatedAt"> & Partial<Pick<AiChatConversation, "updatedAt">>,
+) => {
+  const now = nowIso();
+  const previous = getAiChatConversation(conversation.id);
+  const nextConversation: AiChatConversation = {
+    ...previous,
+    ...conversation,
+    messages: conversation.messages.slice(-40),
+    moderationFlags: Array.from(new Set(conversation.moderationFlags ?? [])),
+    createdAt: previous?.createdAt ?? conversation.createdAt ?? now,
+    updatedAt: now,
+    lastMessageAt: conversation.lastMessageAt ?? now,
+  };
+
+  updateCollectionItem("aiConversations", conversation.id, nextConversation);
+  return nextConversation;
+};
+
+export const closeAiChatConversation = (id: string) => {
+  const conversation = getAiChatConversation(id);
+  if (!conversation) return null;
+
+  return upsertAiChatConversation({
+    ...conversation,
+    isActive: false,
+    lastMessageAt: nowIso(),
+  });
+};
+
+export const getAdminRoles = () => {
+  refreshStateFromDiskIfChanged();
+  return [...cachedState.roles];
+};
 
 export const upsertAdminRole = (
   role: Omit<AdminRole, "createdAt" | "updatedAt"> & Partial<Pick<AdminRole, "createdAt">>,
 ) => {
+  refreshStateFromDiskIfChanged();
+
   const existing = cachedState.roles.find((item) => item.id === role.id);
   const nextRole: AdminRole = {
     ...existing,
@@ -322,22 +498,43 @@ export const upsertAdminRole = (
 };
 
 export const deleteAdminRole = (id: string) => {
+  refreshStateFromDiskIfChanged();
+
+  if (isCoreAdminRole(id)) {
+    return false;
+  }
+
+  const existed = cachedState.roles.some((role) => role.id === id);
+  if (!existed) {
+    return false;
+  }
+
   cachedState = {
     ...cachedState,
     roles: cachedState.roles.filter((role) => role.id !== id),
   };
 
   saveState();
+  return true;
 };
 
-export const getAdminSettings = () => ({ ...cachedState.settings });
+export const getAdminSettings = () => {
+  refreshStateFromDiskIfChanged();
+  return { ...cachedState.settings };
+};
 
 export const updateAdminSettings = (updates: Partial<AdminSettings>) => {
+  refreshStateFromDiskIfChanged();
+
+  const cleanUpdates = Object.fromEntries(
+    Object.entries(updates).filter(([, value]) => value !== undefined),
+  ) as Partial<AdminSettings>;
+
   cachedState = {
     ...cachedState,
     settings: {
       ...cachedState.settings,
-      ...updates,
+      ...cleanUpdates,
       updatedAt: nowIso(),
     },
   };
@@ -346,10 +543,14 @@ export const updateAdminSettings = (updates: Partial<AdminSettings>) => {
   return cachedState.settings;
 };
 
-export const isNotificationRead = (id: string) =>
-  cachedState.readNotificationIds.includes(id);
+export const isNotificationRead = (id: string) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.readNotificationIds.includes(id);
+};
 
 export const markNotificationRead = (id: string) => {
+  refreshStateFromDiskIfChanged();
+
   if (cachedState.readNotificationIds.includes(id)) {
     return;
   }
@@ -363,6 +564,8 @@ export const markNotificationRead = (id: string) => {
 };
 
 export const markNotificationsRead = (ids: string[]) => {
+  refreshStateFromDiskIfChanged();
+
   const uniqueIds = Array.from(new Set([...cachedState.readNotificationIds, ...ids]));
 
   cachedState = {

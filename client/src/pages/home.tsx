@@ -2,13 +2,14 @@ import VideoHeader from "@/components/video-header";
 import InteractiveCarousel from "@/components/interactive-carousel";
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
+import GovernedImage from "@/components/governed-image";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import TeamMemberDialog from "@/components/team-member-dialog";
+import TeamPortrait from "@/components/team-portrait";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import {
   GraduationCap, 
@@ -29,318 +30,53 @@ import {
   Instagram,
   Calendar,
   Heart,
-  Star
+  Star,
+  BookOpen
 } from "lucide-react";
 import type {
   ApiScholarship,
   ApiJob,
   ApiPartner,
   ApiTestimonial,
-  ApiTeamMember,
   ApiBlogPost,
+  ApiTeamMember,
 } from "@/lib/api-types";
-
-import logoImg from "@assets/mtendere-logo.svg";
-
-const daysFromNow = (days: number) =>
-  new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
-
-const fallbackScholarships: ApiScholarship[] = [
-  {
-    id: 9001,
-    title: "Global STEM Excellence Scholarship",
-    description:
-      "Full tuition and living stipend for high-achieving STEM students with leadership potential.",
-    institution: "University of Global Tech",
-    country: "United Kingdom",
-    amount: null,
-    currency: "USD",
-    deadline: daysFromNow(45),
-    requirements: ["GPA 3.5+ or equivalent", "Leadership experience", "Personal statement"],
-    category: "STEM",
-    imageUrl:
-      "https://images.unsplash.com/photo-1523050853063-bd805a9ce011?auto=format&fit=crop&q=80&w=800",
-    isActive: true,
-    createdBy: 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 9002,
-    title: "Women in Tech Scholarship",
-    description:
-      "Dedicated support for women pursuing computer science, data, or engineering programs.",
-    institution: "International Institute of Innovation",
-    country: "Canada",
-    amount: 12000,
-    currency: "USD",
-    deadline: daysFromNow(60),
-    requirements: ["Female applicants", "STEM focus", "Academic merit"],
-    category: "Technology",
-    imageUrl:
-      "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&q=80&w=800",
-    isActive: true,
-    createdBy: 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 9003,
-    title: "Future Leaders Fellowship",
-    description:
-      "Leadership-focused funding for students committed to community impact and innovation.",
-    institution: "Global Leadership Academy",
-    country: "United States",
-    amount: 15000,
-    currency: "USD",
-    deadline: daysFromNow(75),
-    requirements: ["Leadership portfolio", "Community service", "Two references"],
-    category: "Leadership",
-    imageUrl:
-      "https://images.unsplash.com/photo-1523580494863-6f3031224c94?auto=format&fit=crop&q=80&w=800",
-    isActive: true,
-    createdBy: 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
-
-const fallbackJobs: ApiJob[] = [
-  {
-    id: 9101,
-    title: "Graduate Data Analyst",
-    description:
-      "Entry-level analyst role supporting education program insights and reporting.",
-    company: "Mtendere Partner Labs",
-    location: "Lilongwe, Malawi",
-    salary: 1200,
-    currency: "USD",
-    jobType: "Full-time",
-    requirements: ["Excel or SQL basics", "Data storytelling", "Detail-oriented"],
-    benefits: ["Mentorship", "Training budget", "Hybrid work option"],
-    isRemote: false,
-    deadline: daysFromNow(30),
-    isActive: true,
-    createdBy: 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    imageUrl:
-      "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?auto=format&fit=crop&q=80&w=800",
-  },
-  {
-    id: 9102,
-    title: "Program Operations Coordinator",
-    description:
-      "Support scholarship and admissions workflows for global university partners.",
-    company: "Global Education Network",
-    location: "Blantyre, Malawi",
-    salary: 950,
-    currency: "USD",
-    jobType: "Full-time",
-    requirements: ["Project coordination", "Client communication", "Documentation"],
-    benefits: ["Health cover", "Learning stipend", "Career coaching"],
-    isRemote: true,
-    deadline: daysFromNow(40),
-    isActive: true,
-    createdBy: 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    imageUrl:
-      "https://images.unsplash.com/photo-1485217988980-11786ced9454?auto=format&fit=crop&q=80&w=800",
-  },
-  {
-    id: 9103,
-    title: "Campus Outreach Ambassador",
-    description:
-      "Lead on-campus engagements and build awareness for Mtendere programs.",
-    company: "Mtendere Education Consult",
-    location: "Zomba, Malawi",
-    salary: 600,
-    currency: "USD",
-    jobType: "Part-time",
-    requirements: ["Student leadership", "Event coordination", "Public speaking"],
-    benefits: ["Performance bonus", "Leadership training", "Travel support"],
-    isRemote: false,
-    deadline: daysFromNow(20),
-    isActive: true,
-    createdBy: 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    imageUrl:
-      "https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&q=80&w=800",
-  },
-];
-
-const fallbackTestimonials: ApiTestimonial[] = [
-  {
-    id: 9201,
-    userId: 0,
-    content:
-      "Mtendere helped me secure a fully funded scholarship and guided every step of my application.",
-    rating: 5,
-    imageUrl:
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200",
-    isApproved: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 9202,
-    userId: 0,
-    content:
-      "The career coaching and resume support put me ahead in interviews and landing my first role.",
-    rating: 5,
-    imageUrl:
-      "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&q=80&w=200",
-    isApproved: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 9203,
-    userId: 0,
-    content:
-      "Their advisors challenged my plan and made it stronger. I now have offers from two universities.",
-    rating: 5,
-    imageUrl:
-      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200",
-    isApproved: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
-
-const fallbackBlogPosts: ApiBlogPost[] = [
-  {
-    id: 9301,
-    title: "How to Build a Winning Scholarship Profile",
-    content:
-      "A step-by-step framework for crafting a standout profile and personal statement.",
-    excerpt:
-      "Learn how to structure your profile, highlight impact, and submit stronger applications.",
-    imageUrl:
-      "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&q=80&w=800",
-    category: "Scholarships",
-    tags: ["applications", "strategy"],
-    isPublished: true,
-    authorId: 0,
-    likes: 24,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 9302,
-    title: "Job Search Playbook for Final Year Students",
-    content:
-      "Build a job search pipeline, optimize your resume, and master interview preparation.",
-    excerpt:
-      "Practical steps to go from campus to career with clarity and confidence.",
-    imageUrl:
-      "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&q=80&w=800",
-    category: "Careers",
-    tags: ["jobs", "interviews"],
-    isPublished: true,
-    authorId: 0,
-    likes: 18,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 9303,
-    title: "Study Abroad Planning Timeline",
-    content:
-      "A clear timeline for applications, visas, funding, and pre-departure planning.",
-    excerpt:
-      "Map your study abroad journey with a timeline that reduces stress and improves outcomes.",
-    imageUrl:
-      "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&q=80&w=800",
-    category: "Study Abroad",
-    tags: ["planning", "visa"],
-    isPublished: true,
-    authorId: 0,
-    likes: 32,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
-
-const fallbackTeamMembers: ApiTeamMember[] = [
-  {
-    id: 9401,
-    name: "Tiwonge Banda",
-    position: "Scholarship Strategy Lead",
-    bio:
-      "Guides scholarship applicants through positioning, storytelling, and submission strategy.",
-    imageUrl:
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=400",
-    email: "tiwonge@mtendere.com",
-    linkedin: "https://linkedin.com",
-    twitter: null,
-    order: 1,
-    isActive: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 9402,
-    name: "Natasha Phiri",
-    position: "Global Admissions Advisor",
-    bio:
-      "Supports students with application strategy, school fit, and interview readiness.",
-    imageUrl:
-      "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&q=80&w=400",
-    email: "natasha@mtendere.com",
-    linkedin: "https://linkedin.com",
-    twitter: null,
-    order: 2,
-    isActive: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 9403,
-    name: "Kelvin Mbewe",
-    position: "Career Placement Coach",
-    bio:
-      "Coaches job seekers on resume strategy, interview performance, and offer negotiation.",
-    imageUrl:
-      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=400",
-    email: "kelvin@mtendere.com",
-    linkedin: "https://linkedin.com",
-    twitter: null,
-    order: 3,
-    isActive: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
+import { getGovernedBackgroundImage } from "@/lib/image-governance";
+import { publicContentQueryOptions } from "@/lib/realtime-content";
+import { truncateRichText } from "@/lib/rich-text";
+import { getTeamGroups } from "@/lib/team-display";
 
 export default function Home() {
   const { data: scholarships } = useQuery<ApiScholarship[]>({
     queryKey: ["/api/scholarships"],
+    ...publicContentQueryOptions,
   });
 
   const { data: jobs } = useQuery<ApiJob[]>({
     queryKey: ["/api/jobs"],
+    ...publicContentQueryOptions,
   });
 
   const { data: partners } = useQuery<ApiPartner[]>({
     queryKey: ["/api/partners"],
+    ...publicContentQueryOptions,
   });
 
   const { data: testimonials } = useQuery<ApiTestimonial[]>({
     queryKey: ["/api/testimonials"],
     initialData: [],
-  });
-
-  const { data: teamMembers } = useQuery<ApiTeamMember[]>({
-    queryKey: ["/api/team-members"],
-    initialData: [],
+    ...publicContentQueryOptions,
   });
 
   const { data: blogPosts } = useQuery<ApiBlogPost[]>({
     queryKey: ["/api/blog-posts"],
     initialData: [],
+    ...publicContentQueryOptions,
+  });
+
+  const { data: teamMembers = [] } = useQuery<ApiTeamMember[]>({
+    queryKey: ["/api/team-members"],
+    ...publicContentQueryOptions,
   });
 
   const activeScholarships = (scholarships || []).filter(
@@ -351,25 +87,17 @@ export default function Home() {
     (item) => item && item.isApproved !== false
   );
 
-  const featuredScholarships =
-    activeScholarships.length > 0 ? activeScholarships : fallbackScholarships;
-  const featuredJobs = activeJobs.length > 0 ? activeJobs : fallbackJobs;
-  const featuredTestimonials =
-    approvedTestimonials.length > 0 ? approvedTestimonials : fallbackTestimonials;
+  const featuredScholarships = activeScholarships;
+  const featuredJobs = activeJobs;
+  const featuredTestimonials = approvedTestimonials;
+  const testimonialHighlights = featuredTestimonials.slice(0, 3);
 
   const publishedBlogPosts = (blogPosts || []).filter(
     (post) => post && post.isPublished !== false
   );
-  const blogHighlights =
-    publishedBlogPosts.length > 0
-      ? publishedBlogPosts.slice(0, 3)
-      : fallbackBlogPosts;
+  const blogHighlights = publishedBlogPosts.slice(0, 3);
 
-  const activeTeamMembers = (teamMembers || []).filter(
-    (member) => member && member.isActive !== false
-  );
-  const teamRoster =
-    activeTeamMembers.length > 0 ? activeTeamMembers : fallbackTeamMembers;
+  const teamRoster = getTeamGroups(teamMembers).all;
 
   return (
     <div className="min-h-screen bg-background">
@@ -455,13 +183,22 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-            {blogHighlights.map((post: any) => (
-              <Card key={post.id} className="group flex flex-col h-full hover:shadow-2xl transition-all duration-500 overflow-hidden border-none bg-mtendere-gray/30 backdrop-blur-sm">
+          {blogHighlights.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+              {blogHighlights.map((post: any) => (
+                <Card key={post.id} className="group flex flex-col h-full hover:shadow-2xl transition-all duration-500 overflow-hidden border-none bg-mtendere-gray/30 backdrop-blur-sm">
                 <div className="relative h-64 overflow-hidden">
-                  <div 
-                    className="absolute inset-0 bg-cover bg-center group-hover:scale-110 transition-transform duration-700"
-                    style={ { backgroundImage: `url(${post.imageUrl || 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&q=80&w=800'})` } }
+                  <GovernedImage
+                    module="blog"
+                    src={post.imageUrl}
+                    title={post.title}
+                    category={post.category}
+                    tags={Array.isArray(post.tags) ? post.tags : []}
+                    variant="card"
+                    aspectRatio="auto"
+                    className="h-full"
+                    wrapperClassName="h-full rounded-none shadow-none"
+                    imageClassName="group-hover:scale-110"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                 </div>
@@ -481,7 +218,7 @@ export default function Home() {
                 </CardHeader>
                 <CardContent className="px-8 pt-6 pb-4 flex-1">
                   <CardDescription className="text-muted-foreground line-clamp-3 leading-relaxed text-base">
-                    {post.excerpt || (post.content ? post.content.substring(0, 150) + '...' : 'No content available')}
+                    {post.excerpt || (post.content ? truncateRichText(post.content, 150) : 'No content available')}
                   </CardDescription>
                 </CardContent>
                 <div className="px-8 pb-8 mt-auto">
@@ -498,9 +235,17 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
-              </Card>
-            ))}
-          </div>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card className="mx-auto max-w-2xl border border-dashed border-border/70">
+              <CardContent className="py-12 text-center">
+                <BookOpen className="mx-auto mb-4 h-12 w-12 text-muted-foreground/40" />
+                <p className="text-muted-foreground">Published blog posts from Admin will appear here.</p>
+              </CardContent>
+            </Card>
+          )}
           
           <div className="text-center mt-20">
             <Button asChild size="lg" className="bg-mtendere-blue hover:bg-mtendere-blue/90 shadow-xl px-10 py-6 rounded-full text-lg font-bold transition-all hover:scale-105">
@@ -514,7 +259,12 @@ export default function Home() {
       <section
         className="py-24 text-white relative overflow-hidden"
         style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1523580494863-6f3031224c94?auto=format&fit=crop&q=80&w=2000')`,
+          backgroundImage: getGovernedBackgroundImage({
+            module: "testimonial",
+            title: "Student success stories",
+            category: "education",
+            variant: "hero",
+          }),
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}
@@ -534,48 +284,51 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {[
-              {
-                name: "Chipo Mwale",
-                role: "Oxford University Scholar",
-                country: "🇬🇧 United Kingdom",
-                text: "Mtendere's guidance was transformational. They helped me secure a full scholarship to Oxford — something I never thought possible. From the application essay to visa preparation, they supported me every step of the way.",
-                img: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=200",
-              },
-              {
-                name: "Kondwani Banda",
-                role: "DAAD Scholar — TU Munich",
-                country: "🇩🇪 Germany",
-                text: "I was rejected from three universities before finding Mtendere. They completely rewrote my applications, coached me for interviews, and I'm now completing my Master's degree at one of Germany's best technical universities.",
-                img: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200",
-              },
-              {
-                name: "Grace Phiri",
-                role: "Chevening Scholar",
-                country: "🇬🇧 United Kingdom",
-                text: "The resume and personal statement services at Mtendere are world-class. My Chevening application was completely transformed by their expert guidance. Now I'm living my dream in London!",
-                img: "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=200",
-              },
-            ].map((t) => (
-              <div key={t.name} className="bg-card/10 backdrop-blur-sm border border-white/20 rounded-2xl p-8 hover:bg-card/15 transition-all duration-300 group">
-                <div className="flex items-center gap-1 mb-5">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="w-5 h-5 fill-mtendere-orange text-mtendere-orange" />
-                  ))}
-                </div>
-                <p className="text-white/85 italic leading-relaxed mb-6 text-base">"{t.text}"</p>
-                <div className="flex items-center gap-4 pt-4 border-t border-white/20">
-                  <img src={t.img} alt={t.name} className="w-14 h-14 rounded-full object-cover border-2 border-mtendere-orange" />
-                  <div>
-                    <div className="font-bold text-white text-lg">{t.name}</div>
-                    <div className="text-sm text-muted-foreground/50">{t.role}</div>
-                    <div className="text-xs text-mtendere-orange font-semibold mt-0.5">{t.country}</div>
+          {testimonialHighlights.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+              {testimonialHighlights.map((testimonial) => {
+                const rating = Math.max(1, Math.min(5, testimonial.rating || 5));
+                const name = testimonial.authorName || "Mtendere Student";
+
+                return (
+                  <div key={testimonial.id} className="bg-card/10 backdrop-blur-sm border border-white/20 rounded-2xl p-8 hover:bg-card/15 transition-all duration-300 group">
+                    <div className="flex items-center gap-1 mb-5">
+                      {[...Array(5)].map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`w-5 h-5 ${
+                            i < rating
+                              ? "fill-mtendere-orange text-mtendere-orange"
+                              : "text-white/30"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <p className="text-white/85 italic leading-relaxed mb-6 text-base">"{testimonial.content}"</p>
+                    <div className="flex items-center gap-4 pt-4 border-t border-white/20">
+                      <GovernedImage
+                        module="testimonial"
+                        src={testimonial.imageUrl}
+                        title={name}
+                        variant="profile"
+                        aspectRatio="auto"
+                        className="h-14 w-14"
+                        wrapperClassName="h-full rounded-full border-2 border-mtendere-orange shadow-none"
+                      />
+                      <div>
+                        <div className="font-bold text-white text-lg">{name}</div>
+                        <div className="text-sm text-white/70">{testimonial.credential || "Mtendere Graduate"}</div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mx-auto max-w-2xl rounded-2xl border border-white/20 bg-card/10 p-8 text-center backdrop-blur-sm">
+              <p className="text-white/80">Approved testimonials from Admin will appear here.</p>
+            </div>
+          )}
         </div>
       </section>
 
@@ -596,74 +349,50 @@ export default function Home() {
           </div>
 
           <div className="max-w-5xl mx-auto">
-            <Carousel className="w-full">
-              <CarouselContent>
-                {teamRoster.map((member: any) => (
-                  <CarouselItem key={member.id} className="md:basis-1/2 lg:basis-1/3 p-4">
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Card className="text-center hover:shadow-lg transition-all duration-300 cursor-pointer group h-full">
-                          <CardContent className="p-6 flex flex-col items-center">
-                            <Avatar className="w-32 h-32 mb-4 border-4 border-white shadow-md group-hover:border-mtendere-blue/20 transition-all">
-                              <AvatarImage src={member.imageUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=400'} alt={member.name || 'Team Member'} />
-                              <AvatarFallback>{member.name ? member.name[0] : 'U'}</AvatarFallback>
-                            </Avatar>
-                            <h3 className="text-xl font-bold text-mtendere-blue group-hover:text-mtendere-green transition-colors">{member.name || 'Anonymous'}</h3>
-                            <p className="text-mtendere-green font-medium mb-3">{member.position}</p>
-                            <Button variant="outline" size="sm" className="w-full mt-2">View Profile</Button>
-                          </CardContent>
-                        </Card>
-                      </DialogTrigger>
-                      <DialogContent className="sm:max-w-[500px]">
-                        <DialogHeader>
-                          <div className="flex flex-col items-center gap-4 py-4">
-                            <Avatar className="w-32 h-32 border-4 border-mtendere-blue/10">
-                              <AvatarImage src={member.imageUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=400'} alt={member.name || 'Team Member'} />
-                              <AvatarFallback>{member.name ? member.name[0] : 'U'}</AvatarFallback>
-                            </Avatar>
-                            <div className="text-center">
-                              <DialogTitle className="text-2xl font-bold text-mtendere-blue">{member.name || 'Anonymous'}</DialogTitle>
-                              <p className="text-mtendere-green font-semibold">{member.position}</p>
-                            </div>
-                          </div>
-                        </DialogHeader>
-                        <div className="py-4">
-                          <h4 className="font-semibold text-mtendere-blue mb-2">Biography</h4>
-                          <p className="text-muted-foreground leading-relaxed italic">
-                            "{member.bio || "No biography available."}"
-                          </p>
-                        </div>
-                        <div className="flex flex-col gap-3">
-                          <div className="flex justify-center space-x-6">
-                            {member.linkedin && (
-                              <a href={member.linkedin} target="_blank" rel="noopener noreferrer" className="text-muted-foreground/70 hover:text-mtendere-blue transition-colors">
-                                <Linkedin className="w-6 h-6" />
-                              </a>
-                            )}
-                            {member.twitter && (
-                              <a href={member.twitter} target="_blank" rel="noopener noreferrer" className="text-muted-foreground/70 hover:text-mtendere-blue/80 transition-colors">
-                                <Twitter className="w-6 h-6" />
-                              </a>
-                            )}
-                            {member.email && (
-                              <a href={`mailto:${member.email}`} className="text-muted-foreground/70 hover:text-destructive transition-colors">
-                                <Mail className="w-6 h-6" />
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  </CarouselItem>
-                ))}
-              </CarouselContent>
-              <CarouselPrevious className="hidden md:flex -left-12" />
-              <CarouselNext className="hidden md:flex -right-12" />
-            </Carousel>
+            {teamRoster.length > 0 ? (
+              <Carousel className="w-full">
+                <CarouselContent>
+                  {teamRoster.map((member) => (
+                    <CarouselItem key={member.id} className="md:basis-1/2 lg:basis-1/3 p-4">
+                      <TeamMemberDialog
+                        member={member}
+                        trigger={
+                          <Card className="h-full cursor-pointer text-center transition-all duration-300 hover:shadow-lg group">
+                            <CardContent className="flex flex-col items-center p-6">
+                              <TeamPortrait
+                                member={member}
+                                aspectRatio="auto"
+                                className="mb-4 h-32 w-32"
+                                wrapperClassName="h-full rounded-full border-4 border-white shadow-md transition-all group-hover:border-mtendere-blue/20"
+                              />
+                              <h3 className="text-xl font-bold text-mtendere-blue transition-colors group-hover:text-mtendere-green">
+                                {member.name}
+                              </h3>
+                              <p className="mb-3 text-mtendere-green font-medium">{member.position}</p>
+                              <Button variant="outline" size="sm" className="mt-2 w-full">
+                                View Profile
+                              </Button>
+                            </CardContent>
+                          </Card>
+                        }
+                      />
+                    </CarouselItem>
+                  ))}
+                </CarouselContent>
+                <CarouselPrevious className="hidden md:flex -left-12" />
+                <CarouselNext className="hidden md:flex -right-12" />
+              </Carousel>
+            ) : (
+              <Card className="border border-dashed border-border/70">
+                <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                  Team profiles will appear here after they are published in Admin.
+                </CardContent>
+              </Card>
+            )}
 
             <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
               <Button asChild size="lg" className="bg-mtendere-blue hover:bg-mtendere-blue/90 font-bold">
-                <Link href="/about">Meet the Full Team</Link>
+                <Link href="/team">Meet the Full Team</Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="border-mtendere-green text-mtendere-green hover:bg-mtendere-green hover:text-white font-bold">
                 <Link href="/contact">Book a Consultation</Link>
@@ -677,7 +406,12 @@ export default function Home() {
       <section
         className="py-16 relative overflow-hidden text-white"
         style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&q=80&w=2000')`,
+          backgroundImage: getGovernedBackgroundImage({
+            module: "misc",
+            title: "Mtendere student outcomes",
+            category: "education",
+            variant: "hero",
+          }),
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}
@@ -825,7 +559,12 @@ export default function Home() {
       <section
         className="py-24 relative overflow-hidden text-white text-center"
         style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&q=80&w=2000')`,
+          backgroundImage: getGovernedBackgroundImage({
+            module: "misc",
+            title: "Mtendere future students",
+            category: "education",
+            variant: "hero",
+          }),
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}

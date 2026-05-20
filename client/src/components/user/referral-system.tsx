@@ -1,419 +1,337 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { 
-  Users, 
-  Gift, 
-  Share, 
-  Copy, 
-  Mail, 
-  MessageCircle,
-  DollarSign,
-  Trophy,
-  Star,
+import type { ApiReferralDashboard } from "@/lib/api-types";
+import {
   CheckCircle,
   Clock,
-  Send
+  Copy,
+  DollarSign,
+  ExternalLink,
+  Mail,
+  MessageCircle,
+  Send,
+  ShieldAlert,
+  Trophy,
+  Users,
 } from "lucide-react";
 
-interface Referral {
-  id: number;
-  referrerId: number;
-  referredUserId?: number | null;
-  referredEmail: string;
-  status: string;
-  rewardAmount: number | null;
-  createdAt: string;
-  completedAt?: string | null;
-}
+type ReferralSystemProps = {
+  dashboard?: ApiReferralDashboard | null;
+};
 
-interface ReferralSystemProps {
-  referrals: Referral[];
-}
+const emptyDashboard: ApiReferralDashboard = {
+  referralCode: null,
+  referralLink: null,
+  stats: {
+    clicks: 0,
+    signups: 0,
+    paidConversions: 0,
+    conversionRate: 0,
+    pendingEarnings: 0,
+    availableEarnings: 0,
+    lifetimeEarned: 0,
+  },
+  wallet: null,
+  referrals: [],
+  ledger: [],
+};
 
-export default function ReferralSystem({ referrals }: ReferralSystemProps) {
+export default function ReferralSystem({ dashboard }: ReferralSystemProps) {
   const [referralEmail, setReferralEmail] = useState("");
-  const [showShareOptions, setShowShareOptions] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const data = dashboard ?? emptyDashboard;
+  const currency = data.wallet?.currency || "USD";
+  const referralLink = data.referralLink || `${window.location.origin}/dashboard`;
 
-  const referralMutation = useMutation({
+  const inviteMutation = useMutation({
     mutationFn: async (email: string) => {
-      return apiRequest("POST", "/api/referrals", {
-        referredEmail: email,
-        rewardAmount: 50, // Default reward amount
-      });
+      return apiRequest("POST", "/api/referrals/invites", { referredEmail: email });
     },
     onSuccess: () => {
       toast({
-        title: "Referral Sent!",
-        description: "Your referral has been sent successfully. You'll earn rewards when they join!",
+        title: "Referral Sent",
+        description: "The invitation has been recorded.",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/referrals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/referrals/me"] });
       setReferralEmail("");
     },
     onError: () => {
       toast({
         title: "Referral Failed",
-        description: "Failed to send referral. Please try again.",
+        description: "Please check the email address and try again.",
         variant: "destructive",
       });
     },
   });
 
-  const handleSendReferral = () => {
-    if (!referralEmail.trim()) {
+  const payoutMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("POST", "/api/payouts", {
+        amount: data.stats.availableEarnings,
+        method: "manual",
+        destination: { note: "Manual payout review" },
+      });
+    },
+    onSuccess: () => {
       toast({
-        title: "Email Required",
-        description: "Please enter an email address to send the referral.",
+        title: "Payout Requested",
+        description: "Your withdrawal request is queued for review.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/referrals/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/payouts"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Payout Unavailable",
+        description: error instanceof Error ? error.message : "Please try again later.",
         variant: "destructive",
       });
-      return;
-    }
+    },
+  });
 
-    if (!/\S+@\S+\.\S+/.test(referralEmail)) {
-      toast({
-        title: "Invalid Email",
-        description: "Please enter a valid email address.",
-        variant: "destructive",
-      });
-      return;
-    }
+  const paidProgress = Math.min((data.stats.paidConversions / 5) * 100, 100);
+  const leaderboardTier =
+    data.stats.paidConversions >= 10
+      ? "Gold"
+      : data.stats.paidConversions >= 5
+        ? "Silver"
+        : data.stats.paidConversions >= 1
+          ? "Bronze"
+          : "Starter";
 
-    referralMutation.mutate(referralEmail);
+  const formatMoney = (minorUnits: number) =>
+    new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+    }).format((minorUnits || 0) / 100);
+
+  const formatDate = (value?: string | null) => {
+    if (!value) return "Pending";
+    return new Date(value).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
   };
 
-  const handleCopyReferralLink = () => {
-    const referralLink = `${window.location.origin}/register?ref=USER123`; // Replace with actual referral code
-    navigator.clipboard.writeText(referralLink);
+  const handleSendReferral = () => {
+    if (!/\S+@\S+\.\S+/.test(referralEmail.trim())) {
+      toast({
+        title: "Valid Email Required",
+        description: "Enter a valid email address.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    inviteMutation.mutate(referralEmail.trim());
+  };
+
+  const handleCopyReferralLink = async () => {
+    await navigator.clipboard.writeText(referralLink);
     toast({
-      title: "Link Copied!",
-      description: "Referral link has been copied to your clipboard.",
+      title: "Link Copied",
+      description: "Your referral link is ready to share.",
     });
   };
 
   const handleShareEmail = () => {
-    const subject = "Join Mtendere Education - Transform Your Career!";
-    const body = `Hi there!\n\nI wanted to share an amazing platform that has helped me with my educational journey. Mtendere Education Consultants offers incredible scholarships and job opportunities.\n\nJoin using my referral link: ${window.location.origin}/register?ref=USER123\n\nBest regards!`;
+    const subject = "Join Mtendere Education";
+    const body = `Join Mtendere Education using my referral link: ${referralLink}`;
     window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
   };
 
   const handleShareWhatsApp = () => {
-    const message = `🎓 Transform your career with Mtendere Education! \n\nJoin using my referral link and unlock amazing scholarships and job opportunities: ${window.location.origin}/register?ref=USER123`;
+    const message = `Join Mtendere Education using my referral link: ${referralLink}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`);
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'completed':
-        return <CheckCircle className="w-4 h-4 text-mtendere-green" />;
-      case 'pending':
-        return <Clock className="w-4 h-4 text-mtendere-orange" />;
-      default:
-        return <Mail className="w-4 h-4 text-muted-foreground" />;
+  const statusBadge = (status: string, fraudStatus: string) => {
+    if (fraudStatus === "hold" || fraudStatus === "review") {
+      return (
+        <Badge className="bg-destructive/10 text-destructive border-destructive/20">
+          <ShieldAlert className="mr-1 h-3.5 w-3.5" />
+          Review
+        </Badge>
+      );
     }
-  };
 
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'completed':
-        return 'bg-mtendere-green/15 text-mtendere-green border-mtendere-green/20';
-      case 'pending':
-        return 'bg-mtendere-orange/15 text-mtendere-orange border-mtendere-orange/30';
-      default:
-        return 'bg-muted text-foreground border-border/60';
+    if (status === "activated") {
+      return (
+        <Badge className="bg-mtendere-green/15 text-mtendere-green border-mtendere-green/20">
+          <CheckCircle className="mr-1 h-3.5 w-3.5" />
+          Paid
+        </Badge>
+      );
     }
-  };
 
-  const totalReferrals = referrals.length;
-  const completedReferrals = referrals.filter(r => r.status === 'completed').length;
-  const pendingReferrals = referrals.filter(r => r.status === 'pending').length;
-  const totalEarnings = referrals
-    .filter(r => r.status === 'completed')
-    .reduce((sum, r) => sum + (r.rewardAmount ?? 0), 0);
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
+    return (
+      <Badge className="bg-mtendere-orange/15 text-mtendere-orange border-mtendere-orange/30">
+        <Clock className="mr-1 h-3.5 w-3.5" />
+        Pending
+      </Badge>
+    );
   };
 
   return (
     <div className="space-y-6">
-      {/* Overview Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-mtendere-blue/10 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-mtendere-blue font-medium">Total Referrals</p>
-              <p className="text-2xl font-bold text-mtendere-blue">{totalReferrals}</p>
+        <Metric label="Clicks" value={data.stats.clicks} icon={<ExternalLink className="h-7 w-7" />} tone="blue" />
+        <Metric label="Signups" value={data.stats.signups} icon={<Users className="h-7 w-7" />} tone="green" />
+        <Metric label="Paid" value={data.stats.paidConversions} icon={<CheckCircle className="h-7 w-7" />} tone="orange" />
+        <Metric label="Rate" value={`${data.stats.conversionRate}%`} icon={<Trophy className="h-7 w-7" />} tone="blue" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-5">
+        <div className="rounded-lg border bg-background p-4">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end">
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="referralLink">Referral Link</Label>
+              <div className="flex gap-2">
+                <Input id="referralLink" value={referralLink} readOnly className="font-mono text-sm" />
+                <Button variant="outline" size="icon" onClick={handleCopyReferralLink} title="Copy referral link">
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
-            <Users className="w-8 h-8 text-mtendere-blue" />
+            <div className="flex gap-2">
+              <Button variant="outline" size="icon" onClick={handleShareEmail} title="Share by email">
+                <Mail className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="icon" onClick={handleShareWhatsApp} title="Share on WhatsApp">
+                <MessageCircle className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 md:items-end">
+            <div className="space-y-2">
+              <Label htmlFor="referralEmail">Invite by Email</Label>
+              <Input
+                id="referralEmail"
+                type="email"
+                placeholder="friend@example.com"
+                value={referralEmail}
+                onChange={(event) => setReferralEmail(event.target.value)}
+                onKeyDown={(event) => event.key === "Enter" && handleSendReferral()}
+              />
+            </div>
+            <Button
+              onClick={handleSendReferral}
+              disabled={inviteMutation.isPending}
+              className="bg-mtendere-blue hover:bg-mtendere-blue/90"
+            >
+              <Send className="mr-2 h-4 w-4" />
+              Send Invite
+            </Button>
           </div>
         </div>
 
-        <div className="bg-mtendere-green/10 rounded-lg p-4">
+        <div className="rounded-lg border bg-background p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-mtendere-green font-medium">Successful</p>
-              <p className="text-2xl font-bold text-mtendere-green">{completedReferrals}</p>
+              <p className="text-sm text-muted-foreground">Available</p>
+              <p className="text-2xl font-bold text-mtendere-green">{formatMoney(data.stats.availableEarnings)}</p>
             </div>
-            <CheckCircle className="w-8 h-8 text-mtendere-green" />
+            <DollarSign className="h-8 w-8 text-mtendere-green" />
           </div>
-        </div>
-
-        <div className="bg-mtendere-orange/10 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-mtendere-orange font-medium">Pending</p>
-              <p className="text-2xl font-bold text-mtendere-orange">{pendingReferrals}</p>
-            </div>
-            <Clock className="w-8 h-8 text-mtendere-orange" />
+          <div className="mt-3 text-sm text-muted-foreground">
+            Pending: {formatMoney(data.stats.pendingEarnings)}
           </div>
-        </div>
-
-        <div className="bg-mtendere-green/10 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-mtendere-green font-medium">Total Earned</p>
-              <p className="text-2xl font-bold text-mtendere-green">${totalEarnings}</p>
-            </div>
-            <DollarSign className="w-8 h-8 text-mtendere-green" />
-          </div>
+          <Button
+            className="mt-4 w-full bg-mtendere-green hover:bg-mtendere-green/90"
+            disabled={data.stats.availableEarnings <= 0 || payoutMutation.isPending}
+            onClick={() => payoutMutation.mutate()}
+          >
+            Request Payout
+          </Button>
         </div>
       </div>
 
-      {/* Send Referral */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg text-mtendere-blue flex items-center">
-            <Gift className="w-5 h-5 mr-2" />
-            Invite Friends & Earn Rewards
-          </CardTitle>
-          <CardDescription>
-            Invite your friends to join Mtendere and earn $50 for each successful referral!
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2">
-              <Label htmlFor="referralEmail">Friend's Email Address</Label>
-              <div className="flex space-x-2 mt-1">
-                <Input
-                  id="referralEmail"
-                  type="email"
-                  placeholder="Enter your friend's email"
-                  value={referralEmail}
-                  onChange={(e) => setReferralEmail(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSendReferral()}
-                />
-                <Button 
-                  onClick={handleSendReferral}
-                  disabled={referralMutation.isPending}
-                  className="bg-mtendere-blue hover:bg-mtendere-blue/90"
-                >
-                  {referralMutation.isPending ? (
-                    <Clock className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Send className="w-4 h-4" />
-                  )}
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Share Options</Label>
-              <div className="flex space-x-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleCopyReferralLink}
-                  title="Copy Referral Link"
-                >
-                  <Copy className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleShareEmail}
-                  title="Share via Email"
-                >
-                  <Mail className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleShareWhatsApp}
-                  title="Share via WhatsApp"
-                >
-                  <MessageCircle className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
+      <div className="rounded-lg border bg-background p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-mtendere-blue">Rewards Tier</h3>
+            <p className="text-sm text-muted-foreground">{leaderboardTier} tier</p>
           </div>
+          <Badge variant="outline" className="border-mtendere-blue/40 text-mtendere-blue">
+            {data.stats.paidConversions}/5 paid conversions
+          </Badge>
+        </div>
+        <Progress value={paidProgress} className="mt-4 h-2" />
+      </div>
 
-          {/* How it Works */}
-          <div className="bg-mtendere-gray rounded-lg p-4 mt-6">
-            <h4 className="font-semibold text-mtendere-blue mb-3">How it works:</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div className="flex items-start space-x-2">
-                <div className="w-6 h-6 bg-mtendere-blue rounded-full flex items-center justify-center text-white text-xs font-bold">1</div>
+      <div className="rounded-lg border bg-background">
+        <div className="border-b p-4">
+          <h3 className="font-semibold text-mtendere-blue">Referral Activity</h3>
+          <p className="text-sm text-muted-foreground">Revenue-qualified referrals and commission status</p>
+        </div>
+
+        {data.referrals.length === 0 ? (
+          <div className="p-8 text-center">
+            <Users className="mx-auto mb-3 h-12 w-12 text-muted-foreground/50" />
+            <p className="font-medium text-muted-foreground">No referrals yet</p>
+          </div>
+        ) : (
+          <div className="divide-y">
+            {data.referrals.map((referral) => (
+              <div key={referral.id} className="grid grid-cols-1 gap-3 p-4 md:grid-cols-[1fr_auto_auto] md:items-center">
                 <div>
-                  <p className="font-medium">Send Invitation</p>
-                  <p className="text-muted-foreground">Invite friends via email or share your referral link</p>
+                  <p className="font-medium">{referral.referredEmail}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Joined {formatDate(referral.createdAt)} · Release {formatDate(referral.releaseAt)}
+                  </p>
+                </div>
+                {statusBadge(referral.status, referral.fraudStatus)}
+                <div className="text-left md:text-right">
+                  <p className="font-semibold text-mtendere-green">{formatMoney(referral.commissionAmount)}</p>
+                  <p className="text-xs text-muted-foreground">{referral.commissionStatus || "No commission"}</p>
                 </div>
               </div>
-              <div className="flex items-start space-x-2">
-                <div className="w-6 h-6 bg-mtendere-green rounded-full flex items-center justify-center text-white text-xs font-bold">2</div>
-                <div>
-                  <p className="font-medium">Friend Joins</p>
-                  <p className="text-muted-foreground">Your friend registers and creates their profile</p>
-                </div>
-              </div>
-              <div className="flex items-start space-x-2">
-                <div className="w-6 h-6 bg-mtendere-orange rounded-full flex items-center justify-center text-white text-xs font-bold">3</div>
-                <div>
-                  <p className="font-medium">Earn Rewards</p>
-                  <p className="text-muted-foreground">Get $50 when they make their first application</p>
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Referral History */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg text-mtendere-blue">Referral History</CardTitle>
-          <CardDescription>Track your referrals and earnings</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {referrals.length === 0 ? (
-            <div className="text-center py-12">
-              <Users className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-muted-foreground mb-2">No Referrals Yet</h3>
-              <p className="text-muted-foreground mb-6">Start inviting friends to earn rewards!</p>
-              <Button 
-                onClick={() => document.getElementById('referralEmail')?.focus()}
-                className="bg-mtendere-blue hover:bg-mtendere-blue/90"
-              >
-                Send Your First Referral
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {referrals.map((referral) => (
-                <div key={referral.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/40 transition-colors">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-mtendere-blue to-mtendere-green rounded-full flex items-center justify-center">
-                      <Users className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <p className="font-medium">{referral.referredEmail}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Invited: {formatDate(referral.createdAt)}
-                        {referral.completedAt && (
-                          <span> • Joined: {formatDate(referral.completedAt)}</span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center space-x-3">
-                    <Badge className={`${getStatusColor(referral.status)} border`}>
-                      {getStatusIcon(referral.status)}
-                      <span className="ml-1 capitalize">{referral.status}</span>
-                    </Badge>
-                    
-                    {referral.status === 'completed' && (
-                      <div className="text-right">
-                        <p className="font-semibold text-mtendere-green">${referral.rewardAmount}</p>
-                        <p className="text-xs text-muted-foreground">Earned</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Rewards Program */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg text-mtendere-blue flex items-center">
-            <Trophy className="w-5 h-5 mr-2" />
-            Rewards Program
-          </CardTitle>
-          <CardDescription>Special milestones and bonus rewards</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Bronze Tier */}
-            <div className="text-center p-4 border rounded-lg">
-              <div className="w-12 h-12 bg-mtendere-orange/15 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Star className="w-6 h-6 text-mtendere-orange" />
-              </div>
-              <h4 className="font-semibold text-mtendere-orange mb-2">Bronze Member</h4>
-              <p className="text-sm text-muted-foreground mb-3">1-4 successful referrals</p>
-              <Badge variant="outline" className="border-mtendere-orange/40 text-mtendere-orange">
-                $50 per referral
-              </Badge>
-            </div>
-
-            {/* Silver Tier */}
-            <div className="text-center p-4 border rounded-lg">
-              <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mx-auto mb-3">
-                <Star className="w-6 h-6 text-muted-foreground" />
-              </div>
-              <h4 className="font-semibold text-foreground/80 mb-2">Silver Member</h4>
-              <p className="text-sm text-muted-foreground mb-3">5-9 successful referrals</p>
-              <Badge variant="outline" className="border-border/70 text-foreground/80">
-                $75 per referral
-              </Badge>
-            </div>
-
-            {/* Gold Tier */}
-            <div className="text-center p-4 border rounded-lg">
-              <div className="w-12 h-12 bg-mtendere-orange/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Trophy className="w-6 h-6 text-mtendere-orange" />
-              </div>
-              <h4 className="font-semibold text-mtendere-orange mb-2">Gold Member</h4>
-              <p className="text-sm text-muted-foreground mb-3">10+ successful referrals</p>
-              <Badge variant="outline" className="border-mtendere-orange/40 text-mtendere-orange">
-                $100 per referral
-              </Badge>
-            </div>
-          </div>
-
-          {/* Progress to Next Tier */}
-          <div className="mt-6 p-4 bg-mtendere-blue/10 rounded-lg">
-            <div className="flex justify-between items-center mb-2">
-              <span className="font-medium text-mtendere-blue">Progress to Silver</span>
-              <span className="text-sm text-mtendere-blue">{completedReferrals}/5 referrals</span>
-            </div>
-            <Progress value={(completedReferrals / 5) * 100} className="h-2" />
-            <p className="text-sm text-mtendere-blue mt-2">
-              {5 - completedReferrals} more successful referrals to unlock Silver tier rewards!
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+        )}
+      </div>
     </div>
   );
 }
 
+function Metric({
+  label,
+  value,
+  icon,
+  tone,
+}: {
+  label: string;
+  value: number | string;
+  icon: ReactNode;
+  tone: "blue" | "green" | "orange";
+}) {
+  const toneClass =
+    tone === "green"
+      ? "bg-mtendere-green/10 text-mtendere-green"
+      : tone === "orange"
+        ? "bg-mtendere-orange/10 text-mtendere-orange"
+        : "bg-mtendere-blue/10 text-mtendere-blue";
 
-
-
+  return (
+    <div className={`rounded-lg p-4 ${toneClass}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium">{label}</p>
+          <p className="text-2xl font-bold">{value}</p>
+        </div>
+        {icon}
+      </div>
+    </div>
+  );
+}

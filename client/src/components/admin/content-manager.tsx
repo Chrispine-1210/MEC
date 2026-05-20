@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import GovernedImage from "@/components/governed-image";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { 
@@ -112,10 +113,11 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
   };
 
   const handleSave = () => {
+    const payload = prepareFormData(formData);
     if (editingItem) {
-      updateMutation.mutate({ id: editingItem.id, data: formData });
+      updateMutation.mutate({ id: editingItem.id, data: payload });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate(payload);
     }
   };
 
@@ -133,6 +135,28 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
 
   const handleChange = (field: string, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const prepareFormData = (data: Record<string, any>) => {
+    if (contentType !== 'blog-posts') return data;
+
+    const tags = Array.isArray(data.tags)
+      ? data.tags
+      : String(data.tags || '')
+          .split(',')
+          .map((tag) => tag.trim())
+          .filter(Boolean);
+
+    return {
+      ...data,
+      imageUrl: data.imageUrl || null,
+      tags,
+    };
+  };
+
+  const getTagInputValue = () => {
+    if (Array.isArray(formData.tags)) return formData.tags.join(', ');
+    return formData.tags || '';
   };
 
   const getDefaultFormData = () => {
@@ -166,13 +190,18 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
           title: '',
           content: '',
           excerpt: '',
+          imageUrl: '',
           category: '',
+          tags: [],
           isPublished: false,
         };
       case 'testimonials':
         return {
+          authorName: '',
+          credential: '',
           content: '',
           rating: 5,
+          imageUrl: '',
           isApproved: false,
         };
       case 'partners':
@@ -398,6 +427,16 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
             </div>
 
             <div>
+              <Label htmlFor="imageUrl">Featured Image</Label>
+              <Input
+                id="imageUrl"
+                value={formData.imageUrl || ''}
+                onChange={(e) => handleChange('imageUrl', e.target.value)}
+                placeholder="events/IMG-20250321-WA0250.jpg"
+              />
+            </div>
+
+            <div>
               <Label htmlFor="content">Content</Label>
               <Textarea
                 id="content"
@@ -418,13 +457,92 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
                   placeholder="e.g., Education, Career"
                 />
               </div>
+              <div>
+                <Label htmlFor="tags">Tags</Label>
+                <Input
+                  id="tags"
+                  value={getTagInputValue()}
+                  onChange={(e) => handleChange('tags', e.target.value)}
+                  placeholder="India, Education Expo, Events"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="isPublished"
+                checked={formData.isPublished || false}
+                onCheckedChange={(checked) => handleChange('isPublished', checked)}
+              />
+              <Label htmlFor="isPublished">Published</Label>
+            </div>
+          </>
+        );
+
+      case 'testimonials':
+        return (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="authorName">Student Name</Label>
+                <Input
+                  id="authorName"
+                  value={formData.authorName || ''}
+                  onChange={(e) => handleChange('authorName', e.target.value)}
+                  placeholder="Janet Kandulu"
+                />
+              </div>
+              <div>
+                <Label htmlFor="credential">Program / University</Label>
+                <Input
+                  id="credential"
+                  value={formData.credential || ''}
+                  onChange={(e) => handleChange('credential', e.target.value)}
+                  placeholder="Bs Nutrition and Dietetics, Chandigarh University"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="imageUrl">Photo</Label>
+              <Input
+                id="imageUrl"
+                value={formData.imageUrl || ''}
+                onChange={(e) => handleChange('imageUrl', e.target.value)}
+                placeholder="students/Janet Kandulu.jpg"
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="content">Testimonial</Label>
+              <Textarea
+                id="content"
+                value={formData.content || ''}
+                onChange={(e) => handleChange('content', e.target.value)}
+                placeholder="Student testimonial"
+                rows={5}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="rating">Rating</Label>
+                <Input
+                  id="rating"
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={formData.rating ?? 5}
+                  onChange={(e) => handleChange('rating', Math.min(5, Math.max(1, Number(e.target.value) || 1)))}
+                />
+              </div>
               <div className="flex items-center space-x-2 pt-6">
                 <Switch
-                  id="isPublished"
-                  checked={formData.isPublished || false}
-                  onCheckedChange={(checked) => handleChange('isPublished', checked)}
+                  id="isApproved"
+                  checked={formData.isApproved || false}
+                  onCheckedChange={(checked) => handleChange('isApproved', checked)}
                 />
-                <Label htmlFor="isPublished">Published</Label>
+                <Label htmlFor="isApproved">Approved</Label>
               </div>
             </div>
           </>
@@ -436,11 +554,14 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
   };
 
   const renderItemCard = (item: any) => {
+    const itemTitle = item.title || item.name || item.authorName || `Item ${item.id}`;
+    const itemDescription = item.description || item.excerpt || item.credential || item.content;
+
     return (
       <Card key={item.id} className="hover:shadow-lg transition-shadow duration-300">
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between">
-            <CardTitle className="text-lg line-clamp-1">{item.title || item.name}</CardTitle>
+            <CardTitle className="text-lg line-clamp-1">{itemTitle}</CardTitle>
             <div className="flex space-x-2">
               <Button variant="ghost" size="icon" onClick={() => handleEdit(item)}>
                 <Edit className="w-4 h-4" />
@@ -455,13 +576,34 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
               </Button>
             </div>
           </div>
-          {item.description && (
+          {itemDescription && (
             <CardDescription className="line-clamp-2">
-              {item.description}
+              {itemDescription}
             </CardDescription>
           )}
         </CardHeader>
         <CardContent>
+          {contentType === 'testimonials' && (
+            <div className="mb-4 flex items-center gap-3">
+              <GovernedImage
+                module="testimonial"
+                src={item.imageUrl}
+                title={itemTitle}
+                variant="profile"
+                aspectRatio="auto"
+                className="h-12 w-12"
+                wrapperClassName="h-12 w-12 rounded-full shadow-none"
+              />
+              <div className="min-w-0">
+                <p className="line-clamp-1 text-sm font-medium text-mtendere-blue">
+                  {item.authorName || 'Student testimonial'}
+                </p>
+                <p className="line-clamp-1 text-xs text-muted-foreground">
+                  {item.credential || 'No credential added'}
+                </p>
+              </div>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <div className="flex space-x-2">
               {item.isActive !== undefined && (
@@ -493,7 +635,10 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
   const filteredItems = items?.filter((item: any) =>
     item.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     item.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    item.authorName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.credential?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.content?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const getTitle = () => {

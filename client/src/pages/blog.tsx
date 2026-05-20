@@ -3,39 +3,44 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
+import GovernedImage from "@/components/governed-image";
+import NewsletterSignup from "@/components/newsletter-signup";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { type BlogPost } from "@shared/schema";
-import { Search, Calendar, Heart, ArrowRight, BookOpen, Tag } from "lucide-react";
+import type { ApiBlogPost } from "@/lib/api-types";
+import { getGovernedBackgroundImage } from "@/lib/image-governance";
+import { publicContentQueryOptions } from "@/lib/realtime-content";
+import { richTextToPlainText, truncateRichText } from "@/lib/rich-text";
+import { useDebouncedValue } from "@/hooks/use-debounce";
+import { Search, Calendar, Heart, ArrowRight, BookOpen, X } from "lucide-react";
 
-const CATEGORIES = ["All", "Scholarships", "Study Abroad", "Career", "Tips & Guides", "Visa"];
-
-const PLACEHOLDER_IMAGES = [
-  "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&q=80&w=800",
-  "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&q=80&w=800",
-  "https://images.unsplash.com/photo-1467269204594-9661b134dd2b?auto=format&fit=crop&q=80&w=800",
-  "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&q=80&w=800",
-  "https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&q=80&w=800",
-  "https://images.unsplash.com/photo-1556761175-4b46a572b786?auto=format&fit=crop&q=80&w=800",
-];
+const getReadingTime = (content: string) =>
+  Math.max(1, Math.ceil(richTextToPlainText(content).split(/\s+/).filter(Boolean).length / 200));
 
 export default function Blog() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const debouncedSearchQuery = useDebouncedValue(searchQuery.trim(), 300);
 
-  const { data: posts, isLoading } = useQuery<BlogPost[]>({
+  const { data: posts, isLoading } = useQuery<ApiBlogPost[]>({
     queryKey: ["/api/blog-posts"],
+    ...publicContentQueryOptions,
   });
 
-  const { data: searchResults, isLoading: isSearching } = useQuery<BlogPost[]>({
-    queryKey: ["/api/blog-posts/search", searchQuery],
-    enabled: searchQuery.length > 2,
+  const { data: searchResults, isLoading: isSearching } = useQuery<ApiBlogPost[]>({
+    queryKey: ["/api/blog-posts/search", { q: debouncedSearchQuery }],
+    enabled: debouncedSearchQuery.length >= 2,
+    ...publicContentQueryOptions,
   });
 
-  const displayPosts = searchQuery.length > 2 ? searchResults : posts;
+  const displayPosts = debouncedSearchQuery.length >= 2 ? searchResults : posts;
+  const categoryOptions = [
+    "All",
+    ...Array.from(new Set((posts || []).map((post) => post.category).filter(Boolean))).sort(),
+  ];
 
   const filtered = displayPosts?.filter(post =>
     selectedCategory === "All" || post.category === selectedCategory
@@ -52,7 +57,12 @@ export default function Blog() {
       <section
         className="relative py-28 text-white overflow-hidden"
         style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&q=80&w=2000')`,
+          backgroundImage: getGovernedBackgroundImage({
+            module: "blog",
+            title: "Mtendere blog insights",
+            category: "general",
+            variant: "hero",
+          }),
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}
@@ -77,8 +87,20 @@ export default function Blog() {
               placeholder="Search articles..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-12 pr-4 py-6 text-lg bg-card text-foreground border-0 rounded-xl shadow-2xl"
+              className="pl-12 pr-12 py-6 text-lg bg-card text-foreground border-0 rounded-xl shadow-2xl"
             />
+            {searchQuery && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-2 top-1/2 h-9 w-9 -translate-y-1/2 text-muted-foreground"
+                onClick={() => setSearchQuery("")}
+                aria-label="Clear article search"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
       </section>
@@ -87,7 +109,7 @@ export default function Blog() {
       <section className="bg-card border-b sticky top-16 z-30 shadow-sm">
         <div className="container mx-auto px-4">
           <div className="flex space-x-1 overflow-x-auto py-3">
-            {CATEGORIES.map((cat) => (
+            {categoryOptions.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
@@ -105,7 +127,7 @@ export default function Blog() {
       </section>
 
       <div className="container mx-auto px-4 py-16">
-        {isLoading ? (
+        {isLoading || isSearching ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[...Array(6)].map((_, i) => (
               <Card key={i}>
@@ -139,10 +161,18 @@ export default function Blog() {
                 <div className="mb-14 group cursor-pointer rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 bg-card border">
                   <div className="md:flex">
                     <div className="md:w-1/2 h-72 md:h-auto overflow-hidden">
-                      <img
-                        src={featured.imageUrl || PLACEHOLDER_IMAGES[0]}
-                        alt={featured.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                      <GovernedImage
+                        module="blog"
+                        src={featured.imageUrl}
+                        title={featured.title}
+                        category={featured.category}
+                        tags={featured.tags || []}
+                        variant="hero"
+                        priority
+                        aspectRatio="auto"
+                        className="h-full"
+                        wrapperClassName="h-full rounded-none shadow-none"
+                        imageClassName="group-hover:scale-105"
                       />
                     </div>
                     <div className="md:w-1/2 p-8 md:p-12 flex flex-col justify-center">
@@ -152,12 +182,15 @@ export default function Blog() {
                           <Calendar className="w-3.5 h-3.5" />
                           {new Date(featured.createdAt!).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
                         </span>
+                        <Badge variant="outline" className="border-mtendere-blue/20 text-mtendere-blue">
+                          {getReadingTime(featured.content)} min read
+                        </Badge>
                       </div>
                       <h2 className="text-2xl md:text-3xl font-extrabold text-mtendere-blue mb-4 group-hover:text-mtendere-green transition-colors">
                         {featured.title}
                       </h2>
                       <p className="text-muted-foreground leading-relaxed mb-6 line-clamp-3">
-                        {featured.excerpt || featured.content.substring(0, 200) + "..."}
+                        {featured.excerpt || truncateRichText(featured.content, 200)}
                       </p>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-sm font-semibold text-mtendere-blue group-hover:text-mtendere-green transition-colors">
@@ -181,10 +214,18 @@ export default function Blog() {
                   <Link key={post.id} href={`/blog/${post.id}`}>
                     <Card className="group h-full flex flex-col cursor-pointer hover:shadow-2xl transition-all duration-500 overflow-hidden border-none bg-muted/40">
                       <div className="relative h-52 overflow-hidden">
-                        <img
-                          src={post.imageUrl || PLACEHOLDER_IMAGES[i % PLACEHOLDER_IMAGES.length]}
-                          alt={post.title}
-                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                        <GovernedImage
+                          module="blog"
+                          src={post.imageUrl}
+                          title={post.title}
+                          category={post.category}
+                          tags={post.tags || []}
+                          index={i}
+                          variant="card"
+                          aspectRatio="auto"
+                          className="h-full"
+                          wrapperClassName="h-full rounded-none shadow-none"
+                          imageClassName="group-hover:scale-110"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                         <Badge className="absolute top-4 left-4 bg-mtendere-blue text-white text-xs font-bold">
@@ -195,6 +236,8 @@ export default function Blog() {
                         <div className="flex items-center gap-2 text-xs text-muted-foreground/70 mb-2">
                           <Calendar className="w-3.5 h-3.5" />
                           {new Date(post.createdAt!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          <span className="mx-1 h-1 w-1 rounded-full bg-muted-foreground/40" />
+                          <span>{getReadingTime(post.content)} min read</span>
                         </div>
                         <CardTitle className="text-lg font-bold text-mtendere-blue line-clamp-2 group-hover:text-mtendere-green transition-colors leading-snug">
                           {post.title}
@@ -202,7 +245,7 @@ export default function Blog() {
                       </CardHeader>
                       <CardContent className="flex-1 flex flex-col">
                         <CardDescription className="text-muted-foreground line-clamp-3 leading-relaxed mb-4">
-                          {post.excerpt || post.content.substring(0, 130) + "..."}
+                          {post.excerpt || truncateRichText(post.content, 130)}
                         </CardDescription>
                         <div className="mt-auto flex items-center justify-between pt-3 border-t border-border/40">
                           <span className="text-sm font-bold text-mtendere-blue flex items-center gap-1 group-hover:text-mtendere-green transition-colors">
@@ -227,7 +270,12 @@ export default function Blog() {
       <section
         className="py-20 text-white text-center relative overflow-hidden"
         style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&q=80&w=2000')`,
+          backgroundImage: getGovernedBackgroundImage({
+            module: "blog",
+            title: "Mtendere newsletter and community updates",
+            category: "education",
+            variant: "hero",
+          }),
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}
@@ -238,16 +286,7 @@ export default function Blog() {
           <p className="text-lg mb-8 opacity-90">
             Get the latest scholarship opportunities, career tips, and success stories delivered to your inbox.
           </p>
-          <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-            <Input
-              type="email"
-              placeholder="Enter your email address"
-              className="bg-card text-foreground border-0 rounded-xl py-6 text-base"
-            />
-            <Button className="bg-mtendere-orange hover:bg-mtendere-orange/90 text-white font-bold px-8 py-6 rounded-xl whitespace-nowrap shadow-xl">
-              Subscribe
-            </Button>
-          </div>
+          <NewsletterSignup source="blog" compact className="mx-auto" />
         </div>
       </section>
       <Footer />

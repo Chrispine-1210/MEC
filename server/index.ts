@@ -12,71 +12,7 @@ const app = express();
 const isProduction = env.NODE_ENV === "production";
 const port = env.PORT;
 const adminPort = env.ADMIN_PORT;
-
-const normalizeOrigin = (value?: string | null) => {
-  if (!value) return undefined;
-
-  try {
-    return new URL(value).origin;
-  } catch {
-    return undefined;
-  }
-};
-
-const configuredOrigins = [
-  env.FRONTEND_URL,
-  env.VITE_SITE_URL,
-  env.VITE_API_URL,
-  ...(env.ALLOWED_ORIGINS?.split(",") ?? []),
-]
-  .map((origin) => normalizeOrigin(origin?.trim()))
-  .filter((origin): origin is string => Boolean(origin));
-
-const developmentOrigins = [
-  `http://localhost:${adminPort}`,
-  `http://127.0.0.1:${adminPort}`,
-  `http://localhost:${port}`,
-  `http://127.0.0.1:${port}`,
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-];
-
-const allowedOrigins = new Set([
-  ...configuredOrigins,
-  ...(isProduction ? [] : developmentOrigins),
-]);
-
-const isAllowedOrigin = (origin?: string) => {
-  if (!origin) return true;
-  if (allowedOrigins.has(origin)) return true;
-
-  return !isProduction && /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(origin);
-};
-
-app.use((req: Request, res: Response, next: NextFunction) => {
-  const origin = req.get("origin");
-
-  if (origin && isAllowedOrigin(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      "Authorization, Content-Type, X-Requested-With, X-CSRF-Token",
-    );
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-  }
-
-  if (req.method === "OPTIONS") {
-    if (!isAllowedOrigin(origin)) {
-      return res.status(403).json({ message: "Request origin is not allowed" });
-    }
-
-    return res.sendStatus(204);
-  }
-
-  return next();
-});
+app.disable("x-powered-by");
 
 app.use(
   helmet({
@@ -89,6 +25,16 @@ app.use(
         connectSrc: ["'self'", "https:", "ws:", "wss:"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         mediaSrc: ["'self'", "https:"],
+        frameSrc: [
+          "'self'",
+          "https://www.youtube.com",
+          "https://www.youtube-nocookie.com",
+        ],
+        childSrc: [
+          "'self'",
+          "https://www.youtube.com",
+          "https://www.youtube-nocookie.com",
+        ],
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"],
       },
@@ -97,7 +43,124 @@ app.use(
 );
 
 app.set("trust proxy", true);
-app.use(express.json({ limit: "1mb" }));
+
+const splitOriginList = (value?: string) =>
+  (value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const normalizeOrigin = (value?: string) => {
+  if (!value) return null;
+
+  try {
+    return new URL(value).origin;
+  } catch {
+    return value.replace(/\/+$/, "");
+  }
+};
+
+const configuredOrigins = [
+  env.PUBLIC_APP_URL,
+  env.FRONTEND_URL,
+  env.ADMIN_APP_URL,
+  env.VITE_SITE_URL,
+  env.VITE_API_URL,
+  ...splitOriginList(env.CORS_ORIGIN),
+  ...splitOriginList(env.CORS_ORIGINS),
+  ...splitOriginList(env.ALLOWED_ORIGINS),
+];
+
+const developmentOrigins = isProduction
+  ? []
+  : [
+      "http://localhost:3000",
+      "http://localhost:5000",
+      "http://localhost:5173",
+      `http://localhost:${adminPort}`,
+      "http://127.0.0.1:3000",
+      "http://127.0.0.1:5000",
+      "http://127.0.0.1:5173",
+      `http://127.0.0.1:${adminPort}`,
+      "http://0.0.0.0:5000",
+      "http://0.0.0.0:5173",
+      `http://0.0.0.0:${adminPort}`,
+    ];
+
+const allowedOrigins = new Set(
+  [
+    ...configuredOrigins,
+    ...developmentOrigins,
+    `http://localhost:${port}`,
+    `http://127.0.0.1:${port}`,
+    `http://0.0.0.0:${port}`,
+    `http://localhost:${adminPort}`,
+    `http://127.0.0.1:${adminPort}`,
+    `http://0.0.0.0:${adminPort}`,
+  ]
+    .map(normalizeOrigin)
+    .filter(Boolean) as string[],
+);
+
+const isAllowedOrigin = (origin: string | undefined, req: Request) => {
+  if (!origin) return true;
+
+  const normalizedOrigin = normalizeOrigin(origin);
+  const hostOrigin = normalizeOrigin(`${req.protocol}://${req.get("host")}`);
+
+  return Boolean(
+    normalizedOrigin &&
+      (normalizedOrigin === hostOrigin || allowedOrigins.has(normalizedOrigin)),
+  );
+};
+
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const origin = req.get("origin");
+  const originAllowed = isAllowedOrigin(origin, req);
+
+  if (origin && originAllowed) {
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      req.get("access-control-request-headers") || "Content-Type,Authorization,X-CSRF-Token,X-Requested-With",
+    );
+    res.setHeader("Access-Control-Max-Age", "86400");
+  }
+
+  if (req.method === "OPTIONS") {
+    return originAllowed
+      ? res.sendStatus(204)
+      : res.status(403).json({ message: "Request origin is not allowed" });
+  }
+
+  if (["GET", "HEAD"].includes(req.method)) {
+    return next();
+  }
+
+  if (!origin) {
+    return next();
+  }
+
+  if (originAllowed) {
+    return next();
+  }
+
+  return res.status(403).json({ message: "Request origin is not allowed" });
+});
+
+app.use(
+  express.json({
+    limit: "1mb",
+    verify: (req, _res, buf) => {
+      if ((req as Request).originalUrl === "/api/stripe/webhook") {
+        (req as Request & { rawBody?: Buffer }).rawBody = Buffer.from(buf);
+      }
+    },
+  }),
+);
 app.use(express.urlencoded({ extended: false }));
 
 const rateLimitWindowMs = env.RATE_LIMIT_WINDOW_MS;

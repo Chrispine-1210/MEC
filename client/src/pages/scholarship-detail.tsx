@@ -1,11 +1,12 @@
-import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useAuth } from "@/hooks/use-auth";
-import { useToast } from "@/hooks/use-toast";
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
+import ApplicationDialog from "@/components/application-dialog";
+import SaveItemButton from "@/components/save-item-button";
+import GovernedImage from "@/components/governed-image";
+import RichContent from "@/components/rich-content";
+import { publicContentQueryOptions } from "@/lib/realtime-content";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,9 +30,6 @@ import {
   Target,
   Users,
 } from "lucide-react";
-
-const FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1523050853063-bd805a9ce011?auto=format&fit=crop&q=80&w=1600";
 
 const formatCurrency = (amount: number | null | undefined, currency?: string | null) => {
   if (!amount) return "Full coverage";
@@ -62,59 +60,22 @@ const getDaysLeft = (dateString?: string | null) => {
 export default function ScholarshipDetail() {
   const [, params] = useRoute("/scholarships/:id");
   const id = Number(params?.id ?? 0);
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const [isSaved, setIsSaved] = useState(false);
 
   const { data: scholarship, isLoading: scholarshipLoading } = useQuery<ApiScholarship>({
     queryKey: [`/api/scholarships/${id}`],
     enabled: Number.isFinite(id) && id > 0,
+    ...publicContentQueryOptions,
   });
 
   const { data: scholarships, isLoading: listLoading } = useQuery<ApiScholarship[]>({
     queryKey: ["/api/scholarships"],
+    ...publicContentQueryOptions,
   });
 
   const resolved = scholarship || scholarships?.find((item) => item.id === id);
   const related = (scholarships || [])
     .filter((item) => item.id !== id && item.category === resolved?.category)
     .slice(0, 3);
-
-  const applyMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest("POST", "/api/applications", {
-        type: "scholarship",
-        referenceId: id,
-        status: "pending",
-      });
-    },
-    onSuccess: () => {
-      toast({
-        title: "Application submitted",
-        description: "Your scholarship application has been submitted successfully.",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
-    },
-    onError: () => {
-      toast({
-        title: "Application failed",
-        description: "Please try again or contact support.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleApply = () => {
-    if (!user) {
-      toast({
-        title: "Login required",
-        description: "Please log in to apply for scholarships.",
-        variant: "destructive",
-      });
-      return;
-    }
-    applyMutation.mutate();
-  };
 
   if (scholarshipLoading && listLoading) {
     return (
@@ -148,18 +109,12 @@ export default function ScholarshipDetail() {
   }
 
   const daysLeft = getDaysLeft(resolved.deadline);
-  const descriptionParagraphs =
-    resolved.description
-      ?.split(/\n+/)
-      .map((paragraph) => paragraph.trim())
-      .filter(Boolean) || [];
-  const overviewParagraphs =
-    descriptionParagraphs.length > 0
-      ? descriptionParagraphs
-      : [
-          "This opportunity is designed for ambitious students who want stronger academic access, financial support, and a clear application path.",
-          "Mtendere can help you assess eligibility, strengthen your narrative, and submit a more competitive application package before the deadline.",
-        ];
+  const overviewContent =
+    resolved.description ||
+    [
+      "This opportunity is designed for ambitious students who want stronger academic access, financial support, and a clear application path.",
+      "Mtendere can help you assess eligibility, strengthen your narrative, and submit a more competitive application package before the deadline.",
+    ].join("\n\n");
   const requirements =
     Array.isArray(resolved.requirements) && resolved.requirements.length > 0
       ? resolved.requirements
@@ -263,14 +218,20 @@ export default function ScholarshipDetail() {
     <div className="min-h-screen bg-background">
       <ExpandingNav />
 
-      <section
-        className="relative mt-16 overflow-hidden py-20 text-white"
-        style={{
-          backgroundImage: `url(${resolved.imageUrl || FALLBACK_IMAGE})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        }}
-      >
+      <section className="relative mt-16 overflow-hidden py-20 text-white">
+        <div className="absolute inset-0">
+          <GovernedImage
+            module="scholarship"
+            src={resolved.imageUrl}
+            title={resolved.title}
+            category={resolved.category}
+            variant="hero"
+            priority
+            aspectRatio="auto"
+            className="h-full"
+            wrapperClassName="h-full rounded-none shadow-none"
+          />
+        </div>
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/95 via-mtendere-blue/88 to-mtendere-green/86" />
         <div className="container relative z-10 mx-auto max-w-6xl px-4">
           <Button asChild variant="ghost" className="mb-6 -ml-3 text-white hover:bg-card/20">
@@ -367,11 +328,7 @@ export default function ScholarshipDetail() {
               <h2 className="text-2xl font-bold text-mtendere-blue md:text-3xl">
                 What this opportunity could unlock for you
               </h2>
-              <div className="space-y-4 text-base leading-relaxed text-muted-foreground">
-                {overviewParagraphs.map((paragraph) => (
-                  <p key={paragraph}>{paragraph}</p>
-                ))}
-              </div>
+              <RichContent html={overviewContent} />
             </section>
 
             <section>
@@ -502,21 +459,22 @@ export default function ScholarshipDetail() {
                   </div>
                 </div>
 
-                <Button
-                  className="w-full bg-mtendere-blue font-bold hover:bg-mtendere-blue/90"
-                  onClick={handleApply}
-                  disabled={applyMutation.isPending}
-                >
-                  {applyMutation.isPending ? "Submitting..." : "Apply Now"}
-                </Button>
+                <ApplicationDialog
+                  type="scholarship"
+                  referenceId={id}
+                  title={resolved.title}
+                  trigger={
+                    <Button className="w-full bg-mtendere-blue font-bold hover:bg-mtendere-blue/90">
+                      Apply Now
+                    </Button>
+                  }
+                />
 
-                <Button
-                  variant="outline"
+                <SaveItemButton
+                  type="scholarship"
+                  referenceId={id}
                   className="w-full border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white"
-                  onClick={() => setIsSaved((prev) => !prev)}
-                >
-                  {isSaved ? "Saved to dashboard" : "Save for later"}
-                </Button>
+                />
 
                 <Button asChild variant="ghost" className="w-full text-muted-foreground">
                   <Link href="/contact">Talk to an advisor</Link>

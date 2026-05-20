@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,10 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
-import { useAuth } from "@/hooks/use-auth";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import ApplicationDialog from "@/components/application-dialog";
+import GovernedImage from "@/components/governed-image";
 import type { ApiScholarship } from "@/lib/api-types";
+import { getGovernedBackgroundImage } from "@/lib/image-governance";
+import { publicContentQueryOptions } from "@/lib/realtime-content";
+import { truncateRichText } from "@/lib/rich-text";
+import { useDebouncedValue } from "@/hooks/use-debounce";
 import { 
   Search, 
   Filter, 
@@ -21,7 +25,8 @@ import {
   ExternalLink,
   BookOpen,
   Globe,
-  Clock
+  Clock,
+  X
 } from "lucide-react";
 
 type Scholarship = ApiScholarship;
@@ -49,48 +54,24 @@ export default function Scholarships() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [currentVideo, setCurrentVideo] = useState(0);
   const [isPlayingVideo, setIsPlayingVideo] = useState(true);
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const debouncedSearchQuery = useDebouncedValue(searchQuery.trim(), 300);
 
   const { data: scholarships, isLoading } = useQuery<Scholarship[]>({
     queryKey: ["/api/scholarships"],
+    ...publicContentQueryOptions,
   });
 
   const { data: searchResults, isLoading: isSearching } = useQuery<Scholarship[]>({
-    queryKey: ["/api/scholarships/search", searchQuery],
-    enabled: searchQuery.length > 2,
+    queryKey: ["/api/scholarships/search", { q: debouncedSearchQuery }],
+    enabled: debouncedSearchQuery.length >= 2,
+    ...publicContentQueryOptions,
   });
 
   const handleNextVideo = () => {
     setCurrentVideo((prev) => (prev + 1) % videoSources.length);
   };
 
-  const applyMutation = useMutation({
-    mutationFn: async (scholarshipId: number) => {
-      return apiRequest("POST", "/api/applications", {
-        type: "scholarship",
-        referenceId: scholarshipId,
-        status: "pending",
-      });
-    },
-    onSuccess: () => {
-      toast({
-        title: "Application Submitted",
-        description: "Your scholarship application has been submitted successfully.",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
-    },
-    onError: (error) => {
-      toast({
-        title: "Application Failed",
-        description: "Failed to submit your application. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const displayScholarships = searchQuery.length > 2 ? searchResults : scholarships;
+  const displayScholarships = debouncedSearchQuery.length >= 2 ? searchResults : scholarships;
   const categories = [...new Set(scholarships?.map(s => s.category) || [])];
 
   const filteredScholarships = displayScholarships?.filter(scholarship => 
@@ -122,18 +103,6 @@ export default function Scholarships() {
     return diffDays <= 30 && diffDays > 0;
   };
 
-  const handleApply = (scholarshipId: number) => {
-    if (!user) {
-      toast({
-        title: "Authentication Required",
-        description: "Please log in to apply for scholarships.",
-        variant: "destructive",
-      });
-      return;
-    }
-    applyMutation.mutate(scholarshipId);
-  };
-
   return (
     <div className="min-h-screen bg-background">
       <ExpandingNav />
@@ -142,7 +111,12 @@ export default function Scholarships() {
       <section 
         className="relative py-24 text-white overflow-hidden"
         style={ {
-          backgroundImage: `url(${'https://images.unsplash.com/photo-1541339907198-e08756ebafe3?auto=format&fit=crop&q=80&w=2000'})`,
+          backgroundImage: getGovernedBackgroundImage({
+            module: "scholarship",
+            title: "Scholarship opportunities",
+            category: "scholarships",
+            variant: "hero",
+          }),
           backgroundSize: 'cover',
           backgroundPosition: 'center'
         } }
@@ -171,6 +145,18 @@ export default function Scholarships() {
                 <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
                   <div className="loading-spinner"></div>
                 </div>
+              )}
+              {searchQuery && !isSearching && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-2 top-1/2 h-9 w-9 -translate-y-1/2 text-muted-foreground"
+                  onClick={() => setSearchQuery("")}
+                  aria-label="Clear scholarship search"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
               )}
             </div>
           </div>
@@ -248,7 +234,7 @@ export default function Scholarships() {
         <div className="mb-6">
           <p className="text-muted-foreground">
             Showing {filteredScholarships?.length || 0} scholarship{filteredScholarships?.length !== 1 ? 's' : ''}
-            {searchQuery && ` for "${searchQuery}"`}
+            {debouncedSearchQuery && ` for "${debouncedSearchQuery}"`}
             {selectedCategory && ` in ${selectedCategory}`}
           </p>
         </div>
@@ -272,44 +258,38 @@ export default function Scholarships() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredScholarships?.map((scholarship) => (
+            {filteredScholarships?.map((scholarship, index) => (
               <Card key={scholarship.id} className="hover:shadow-2xl transition-all duration-500 overflow-hidden group border-none bg-card shadow-md flex flex-col">
-                {scholarship.imageUrl && (
-                  <div className="relative h-48 overflow-hidden">
-                    <img
-                      src={scholarship.imageUrl}
-                      alt={scholarship.title}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                    <div className="absolute top-3 left-3 flex gap-2">
-                      <Badge className="bg-mtendere-green text-white font-bold text-xs">{scholarship.category}</Badge>
-                      {isDeadlineApproaching(scholarship.deadline) && (
-                        <Badge variant="destructive" className="animate-pulse text-xs">
-                          <Clock className="w-3 h-3 mr-1" />
-                          Urgent
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="absolute bottom-3 left-3">
-                      <span className="text-white text-sm font-bold drop-shadow flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5" />{scholarship.country}
-                      </span>
-                    </div>
+                <div className="relative h-48 overflow-hidden">
+                  <GovernedImage
+                    module="scholarship"
+                    src={scholarship.imageUrl}
+                    title={scholarship.title}
+                    category={scholarship.category}
+                    index={index}
+                    variant="card"
+                    aspectRatio="auto"
+                    className="h-full"
+                    wrapperClassName="h-full rounded-none shadow-none"
+                    imageClassName="group-hover:scale-110"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                  <div className="absolute top-3 left-3 flex gap-2">
+                    <Badge className="bg-mtendere-green text-white font-bold text-xs">{scholarship.category}</Badge>
+                    {isDeadlineApproaching(scholarship.deadline) && (
+                      <Badge variant="destructive" className="animate-pulse text-xs">
+                        <Clock className="w-3 h-3 mr-1" />
+                        Urgent
+                      </Badge>
+                    )}
                   </div>
-                )}
-                <CardHeader className={scholarship.imageUrl ? "pt-4" : ""}>
-                  {!scholarship.imageUrl && (
-                    <div className="flex items-start justify-between mb-2">
-                      <Badge className="bg-mtendere-green text-white">{scholarship.category}</Badge>
-                      {isDeadlineApproaching(scholarship.deadline) && (
-                        <Badge variant="destructive" className="animate-pulse">
-                          <Clock className="w-3 h-3 mr-1" />
-                          Urgent
-                        </Badge>
-                      )}
-                    </div>
-                  )}
+                  <div className="absolute bottom-3 left-3">
+                    <span className="text-white text-sm font-bold drop-shadow flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5" />{scholarship.country}
+                    </span>
+                  </div>
+                </div>
+                <CardHeader className="pt-4">
                   <CardTitle className="text-lg text-mtendere-blue line-clamp-2 font-bold group-hover:text-mtendere-green transition-colors">
                     {scholarship.title}
                   </CardTitle>
@@ -323,7 +303,7 @@ export default function Scholarships() {
                 
                 <CardContent>
                   <p className="text-muted-foreground mb-4 line-clamp-3">
-                    {scholarship.description}
+                    {truncateRichText(scholarship.description, 180)}
                   </p>
                   
                   <div className="space-y-3 mb-6">
@@ -349,26 +329,22 @@ export default function Scholarships() {
                   </div>
 
                   <div className="flex space-x-2">
-                    <Button
-                      className="flex-1 bg-mtendere-blue hover:bg-mtendere-blue/90 text-white font-bold shadow-md"
-                      onClick={() => handleApply(scholarship.id)}
-                      disabled={applyMutation.isPending}
-                    >
-                      {applyMutation.isPending ? (
-                        <>
-                          <div className="loading-spinner mr-2"></div>
-                          Applying...
-                        </>
-                      ) : (
-                        <>
+                    <ApplicationDialog
+                      type="scholarship"
+                      referenceId={scholarship.id}
+                      title={scholarship.title}
+                      trigger={
+                        <Button className="flex-1 bg-mtendere-blue hover:bg-mtendere-blue/90 text-white font-bold shadow-md">
                           <BookOpen className="w-4 h-4 mr-2" />
                           Apply Now
-                        </>
-                      )}
-                    </Button>
+                        </Button>
+                      }
+                    />
                     
-                    <Button variant="outline" size="icon" className="border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white shadow-sm">
-                      <ExternalLink className="w-4 h-4" />
+                    <Button asChild variant="outline" size="icon" className="border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white shadow-sm" aria-label={`View ${scholarship.title}`}>
+                      <Link href={`/scholarships/${scholarship.id}`}>
+                        <ExternalLink className="w-4 h-4" />
+                      </Link>
                     </Button>
                   </div>
                 </CardContent>

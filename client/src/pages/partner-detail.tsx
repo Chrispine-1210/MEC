@@ -2,11 +2,15 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useRoute } from "wouter";
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
+import GovernedImage from "@/components/governed-image";
+import RichContent from "@/components/rich-content";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ApiPartner } from "@/lib/api-types";
+import { publicContentQueryOptions } from "@/lib/realtime-content";
+import { richTextToPlainText } from "@/lib/rich-text";
 import {
   ArrowLeft,
   ArrowRight,
@@ -24,9 +28,6 @@ import {
   Target,
   Users,
 } from "lucide-react";
-
-const FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&q=80&w=1600";
 
 const formatStudentCount = (count?: number | null) => {
   if (!count) return "Flexible cohort sizes";
@@ -69,10 +70,12 @@ export default function PartnerDetail() {
   const { data: partner, isLoading: partnerLoading } = useQuery<ApiPartner>({
     queryKey: [`/api/partners/${id}`],
     enabled: Number.isFinite(id) && id > 0,
+    ...publicContentQueryOptions,
   });
 
   const { data: partners, isLoading: listLoading } = useQuery<ApiPartner[]>({
     queryKey: ["/api/partners"],
+    ...publicContentQueryOptions,
   });
 
   const resolved = partner || partners?.find((item) => item.id === id);
@@ -115,6 +118,9 @@ export default function PartnerDetail() {
     { label: "Campus signal", value: getCampusScale(resolved.studentCount), icon: Compass },
     { label: "Recognition", value: resolved.ranking || "Advisor review available", icon: Star },
   ];
+  const fallbackDescription =
+    "Use this page to understand how this institution fits into your wider education plan, what to compare carefully, and how Mtendere can help you move from interest to action.";
+  const descriptionSummary = richTextToPlainText(resolved.description) || fallbackDescription;
 
   const decisionFrames = [
     {
@@ -212,14 +218,20 @@ export default function PartnerDetail() {
     <div className="min-h-screen bg-background">
       <ExpandingNav />
 
-      <section
-        className="relative mt-16 overflow-hidden py-20 text-white"
-        style={{
-          backgroundImage: `url(${resolved.logoUrl || FALLBACK_IMAGE})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        }}
-      >
+      <section className="relative mt-16 overflow-hidden py-20 text-white">
+        <div className="absolute inset-0">
+          <GovernedImage
+            module="partner"
+            src={resolved.logoUrl}
+            title={resolved.name}
+            category={resolved.country}
+            variant="hero"
+            priority
+            aspectRatio="auto"
+            className="h-full"
+            wrapperClassName="h-full rounded-none shadow-none"
+          />
+        </div>
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/95 via-mtendere-blue/88 to-mtendere-green/84" />
         <div className="absolute -left-20 top-10 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
         <div className="absolute bottom-0 right-0 h-72 w-72 rounded-full bg-mtendere-orange/20 blur-3xl" />
@@ -249,10 +261,7 @@ export default function PartnerDetail() {
               </div>
 
               <h1 className="mb-5 text-4xl font-bold md:text-6xl">{resolved.name}</h1>
-              <p className="max-w-3xl text-base leading-relaxed text-white/85 md:text-lg">
-                {resolved.description ||
-                  "Use this page to understand how this institution fits into your wider education plan, what to compare carefully, and how Mtendere can help you move from interest to action."}
-              </p>
+              <p className="max-w-3xl text-base leading-relaxed text-white/85 md:text-lg">{descriptionSummary}</p>
 
               <div className="mt-8 grid gap-4 sm:grid-cols-3">
                 {heroStats.slice(0, 3).map(({ label, value, icon: Icon }) => (
@@ -353,15 +362,16 @@ export default function PartnerDetail() {
               <h2 className="mt-4 text-2xl font-bold text-mtendere-blue md:text-3xl">
                 Use this institution as a decision point, not just a destination name
               </h2>
-              <div className="mt-4 space-y-4 text-base leading-relaxed text-muted-foreground">
-                <p>
-                  The strongest partner pages help students understand academic fit, cost, timing, and support before
-                  they spend money or energy on a full application. That is the lens we use here.
-                </p>
-                <p>
-                  {resolved.name} may be a compelling option, but the right next step is usually to compare it against
-                  alternatives, confirm the pathway, and understand what kind of application effort it will take.
-                </p>
+              <div className="mt-4">
+                <RichContent
+                  html={
+                    resolved.description ||
+                    [
+                      "The strongest partner pages help students understand academic fit, cost, timing, and support before they spend money or energy on a full application. That is the lens we use here.",
+                      `${resolved.name} may be a compelling option, but the right next step is usually to compare it against alternatives, confirm the pathway, and understand what kind of application effort it will take.`,
+                    ].join("\n\n")
+                  }
+                />
               </div>
             </section>
 

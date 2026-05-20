@@ -12,6 +12,7 @@ interface User {
   profilePicture?: string | null;
   phone?: string | null;
   dateOfBirth?: string | null;
+  referralCode?: string | null;
 }
 
 interface AuthContextType {

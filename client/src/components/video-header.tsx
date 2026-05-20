@@ -1,33 +1,67 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { Play, Pause, Volume2, VolumeX, ChevronDown, ArrowRight } from "lucide-react";
+import { ArrowRight, ChevronDown, ExternalLink, Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { getGovernedBackgroundImage } from "@/lib/image-governance";
+import { publicContentQueryOptions } from "@/lib/realtime-content";
+import type { ApiPartnerVideo } from "@/lib/api-types";
 
-const videoSources = [
-  {
-    url: "https://assets.mixkit.co/videos/preview/mixkit-group-of-students-working-in-a-university-library-40040-large.mp4",
-    headline: "Your Gateway to",
-    highlight: "Global Education",
-    caption: "We connect ambitious Malawian students with world-class universities, fully-funded scholarships, and life-changing career opportunities across 50+ countries.",
-    badge: "Trusted by 10,000+ Students",
-  },
-  {
-    url: "https://assets.mixkit.co/videos/preview/mixkit-students-walking-on-a-university-campus-40038-large.mp4",
-    headline: "Access Over",
-    highlight: "200+ Top Universities",
-    caption: "From Oxford to MIT, our expert consultants help you apply, prepare, and succeed at the world's most prestigious institutions.",
-    badge: "200+ Partner Universities",
-  },
-  {
-    url: "https://assets.mixkit.co/videos/preview/mixkit-young-woman-working-on-a-laptop-in-a-library-40041-large.mp4",
-    headline: "Scholarships,",
-    highlight: "Careers & Beyond",
-    caption: "Study abroad, secure scholarships, build a winning CV, and launch your career - all with personalised guidance from our Malawi-based team.",
-    badge: "50+ Countries - 10K+ Students Helped",
-  },
-];
+const isDirectVideoUrl = (url: string) => /\.(mp4|webm|ogg)(\?.*)?$/i.test(url);
+
+const getYouTubeId = (url: string) => {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, "");
+
+    if (host === "youtu.be") {
+      return parsed.pathname.split("/").filter(Boolean)[0] || null;
+    }
+
+    if (host.endsWith("youtube.com")) {
+      if (parsed.pathname.startsWith("/embed/")) {
+        return parsed.pathname.split("/").filter(Boolean)[1] || null;
+      }
+
+      if (parsed.pathname.startsWith("/shorts/")) {
+        return parsed.pathname.split("/").filter(Boolean)[1] || null;
+      }
+
+      return parsed.searchParams.get("v");
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+};
+
+const buildEmbedUrl = (url: string, shouldAutoplay: boolean) => {
+  const youtubeId = getYouTubeId(url);
+  if (!youtubeId) return null;
+
+  const params = new URLSearchParams({
+    autoplay: shouldAutoplay ? "1" : "0",
+    mute: "1",
+    controls: "0",
+    disablekb: "1",
+    enablejsapi: "1",
+    loop: "1",
+    playlist: youtubeId,
+    rel: "0",
+    modestbranding: "1",
+    playsinline: "1",
+  });
+
+  return `https://www.youtube-nocookie.com/embed/${youtubeId}?${params.toString()}`;
+};
 
 export default function VideoHeader() {
+  const { data: partnerVideos = [] } = useQuery<ApiPartnerVideo[]>({
+    queryKey: ["/api/partner-videos"],
+    ...publicContentQueryOptions,
+  });
+
   const [currentVideo, setCurrentVideo] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(true);
@@ -36,64 +70,111 @@ export default function VideoHeader() {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  const current = partnerVideos[currentVideo] ?? null;
+  const directVideo = current && isDirectVideoUrl(current.videoUrl) ? current.videoUrl : null;
+  const embedUrl = current && !directVideo ? buildEmbedUrl(current.videoUrl, isPlaying) : null;
+  const hasVideos = partnerVideos.length > 0;
+
+  useEffect(() => {
+    if (currentVideo >= partnerVideos.length) {
+      setCurrentVideo(0);
+    }
+  }, [currentVideo, partnerVideos.length]);
+
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !directVideo) return;
 
     const updateTime = () => setCurrentTime(video.currentTime);
-    const updateDuration = () => setDuration(video.duration);
+    const updateDuration = () => setDuration(video.duration || 0);
 
-    video.addEventListener('timeupdate', updateTime);
-    video.addEventListener('loadedmetadata', updateDuration);
-    video.addEventListener('ended', handleNextVideo);
+    video.addEventListener("timeupdate", updateTime);
+    video.addEventListener("loadedmetadata", updateDuration);
+    video.addEventListener("ended", handleNextVideo);
 
     return () => {
-      video.removeEventListener('timeupdate', updateTime);
-      video.removeEventListener('loadedmetadata', updateDuration);
-      video.removeEventListener('ended', handleNextVideo);
+      video.removeEventListener("timeupdate", updateTime);
+      video.removeEventListener("loadedmetadata", updateDuration);
+      video.removeEventListener("ended", handleNextVideo);
     };
-  }, [currentVideo]);
+  }, [currentVideo, directVideo]);
 
   useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !directVideo) return;
+
     if (isPlaying) {
-      const interval = setInterval(() => {
-        handleNextVideo();
-      }, 30000);
-      return () => clearInterval(interval);
+      void video.play().catch(() => undefined);
+    } else {
+      video.pause();
     }
-  }, [isPlaying, currentVideo]);
+  }, [directVideo, isPlaying, currentVideo]);
+
+  useEffect(() => {
+    if (!isPlaying || partnerVideos.length < 2) return;
+
+    const interval = window.setInterval(() => {
+      handleNextVideo();
+    }, 30000);
+
+    return () => window.clearInterval(interval);
+  }, [isPlaying, currentVideo, partnerVideos.length]);
+
+  const fallbackBackground = useMemo(
+    () =>
+      getGovernedBackgroundImage({
+        module: "program",
+        title: current?.partnerName || "Mtendere global education",
+        category: current?.country || "education",
+        variant: "hero",
+      }),
+    [current?.country, current?.partnerName],
+  );
 
   const handlePlayPause = () => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !directVideo) {
+      setIsPlaying((value) => !value);
+      return;
+    }
+
     if (isPlaying) {
       video.pause();
     } else {
-      video.play();
+      void video.play();
     }
+
     setIsPlaying(!isPlaying);
   };
 
   const handleMuteToggle = () => {
     const video = videoRef.current;
-    if (!video) return;
-    video.muted = !isMuted;
+    if (video) {
+      video.muted = !isMuted;
+    }
     setIsMuted(!isMuted);
   };
 
-  const handleNextVideo = () => {
+  function handleNextVideo() {
+    if (partnerVideos.length < 2) return;
+
     setIsTransitioning(true);
-    setTimeout(() => {
-      setCurrentVideo((prev) => (prev + 1) % videoSources.length);
+    window.setTimeout(() => {
+      setCurrentVideo((prev) => (prev + 1) % partnerVideos.length);
+      setCurrentTime(0);
+      setDuration(0);
       setIsTransitioning(false);
     }, 300);
-  };
+  }
 
   const handleVideoSelect = (index: number) => {
     if (index === currentVideo) return;
+
     setIsTransitioning(true);
-    setTimeout(() => {
+    window.setTimeout(() => {
       setCurrentVideo(index);
+      setCurrentTime(0);
+      setDuration(0);
       setIsTransitioning(false);
     }, 300);
   };
@@ -101,159 +182,162 @@ export default function VideoHeader() {
   const formatTime = (time: number) => {
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
   };
-
-  const current = videoSources[currentVideo];
 
   return (
     <section className="video-header">
-      {/* Video Background */}
-      <div className="absolute inset-0 w-full h-full overflow-hidden">
-        <video
-          ref={videoRef}
-          className="w-full h-full object-cover"
-          autoPlay
-          muted={isMuted}
-          loop={false}
-          playsInline
-          key={currentVideo}
-        >
-          <source src={current.url} type="video/mp4" />
-          <div
-            className="w-full h-full bg-cover bg-center"
-            style={{
-              backgroundImage: "url('https://images.unsplash.com/photo-1523240795612-9a054b0db644?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080')"
-            }}
+      <div className="absolute inset-0 h-full w-full overflow-hidden">
+        {directVideo ? (
+          <video
+            ref={videoRef}
+            className="h-full w-full object-cover"
+            autoPlay={isPlaying}
+            muted={isMuted}
+            loop={partnerVideos.length < 2}
+            playsInline
+            key={directVideo}
+          >
+            <source src={directVideo} />
+          </video>
+        ) : embedUrl ? (
+          <iframe
+            key={embedUrl}
+            title={current?.title || "Partner university video"}
+            src={embedUrl}
+            className="h-full w-full scale-125 border-0 object-cover md:scale-110"
+            loading="eager"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
           />
-        </video>
-
-      {/* Gradient overlay - darker at bottom for text legibility */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70" />
-    </div>
-
-      {/* Video Controls - bottom left */}
-      <div className="absolute bottom-6 left-6 flex items-center space-x-3 z-20">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-white hover:text-mtendere-orange hover:bg-card/20 h-8 w-8"
-          onClick={handlePlayPause}
-        >
-          {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
-        </Button>
-
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-white hover:text-mtendere-orange hover:bg-card/20 h-8 w-8"
-          onClick={handleMuteToggle}
-        >
-          {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-        </Button>
-
-        <div className="text-white/70 text-xs font-mono">
-          {formatTime(currentTime)} / {formatTime(duration)}
-        </div>
-
-        <div className="w-24 h-1 bg-card/30 rounded-full overflow-hidden">
+        ) : (
           <div
-            className="h-full bg-mtendere-orange transition-all duration-300"
-            style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }}
+            className="h-full w-full bg-cover bg-center"
+            style={{ backgroundImage: fallbackBackground }}
           />
-        </div>
+        )}
+
+        <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/45 to-black/75" />
       </div>
 
-      {/* Slide Dots - bottom right */}
-      <div className="absolute bottom-6 right-6 flex space-x-2 z-20">
-        {videoSources.map((_, index) => (
-          <button
-            key={index}
-            aria-label={`Slide ${index + 1}`}
-            className={`transition-all duration-300 rounded-full ${
-              index === currentVideo
-                ? 'bg-mtendere-orange w-8 h-3'
-                : 'bg-card/50 hover:bg-card/80 w-3 h-3'
-            }`}
-            onClick={() => handleVideoSelect(index)}
-          />
-        ))}
+      <div className="absolute bottom-6 left-6 z-20 flex items-center space-x-3">
+        {hasVideos && (
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-white hover:bg-card/20 hover:text-mtendere-orange"
+              onClick={handlePlayPause}
+              aria-label={isPlaying ? "Pause hero video rotation" : "Play hero video rotation"}
+            >
+              {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+            </Button>
+
+            {directVideo && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-white hover:bg-card/20 hover:text-mtendere-orange"
+                onClick={handleMuteToggle}
+                aria-label={isMuted ? "Unmute hero video" : "Mute hero video"}
+              >
+                {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+              </Button>
+            )}
+
+            {directVideo && (
+              <>
+                <div className="font-mono text-xs text-white/70">
+                  {formatTime(currentTime)} / {formatTime(duration)}
+                </div>
+                <div className="h-1 w-24 overflow-hidden rounded-full bg-card/30">
+                  <div
+                    className="h-full bg-mtendere-orange transition-all duration-300"
+                    style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : "0%" }}
+                  />
+                </div>
+              </>
+            )}
+          </>
+        )}
       </div>
 
-      {/* Hero Content */}
+      {partnerVideos.length > 1 && (
+        <div className="absolute bottom-6 right-6 z-20 flex space-x-2">
+          {partnerVideos.map((video, index) => (
+            <button
+              key={`${video.partnerId}-${video.videoUrl}`}
+              aria-label={`Show ${video.partnerName} video`}
+              className={`rounded-full transition-all duration-300 ${
+                index === currentVideo
+                  ? "h-3 w-8 bg-mtendere-orange"
+                  : "h-3 w-3 bg-card/50 hover:bg-card/80"
+              }`}
+              onClick={() => handleVideoSelect(index)}
+            />
+          ))}
+        </div>
+      )}
+
       <div className="video-content">
         <div
-          className={`text-center text-white max-w-5xl mx-auto px-6 transition-opacity duration-300 ${
-            isTransitioning ? 'opacity-0' : 'opacity-100'
+          className={`mx-auto max-w-5xl px-6 text-center text-white transition-opacity duration-300 ${
+            isTransitioning ? "opacity-0" : "opacity-100"
           }`}
         >
-          {/* Top badge */}
-          <div className="inline-flex items-center gap-2 bg-card/15 backdrop-blur-sm border border-white/30 text-white text-sm font-semibold px-4 py-1.5 rounded-full mb-6">
-            <span className="w-2 h-2 rounded-full bg-mtendere-orange animate-pulse" />
-            {current.badge}
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/30 bg-card/15 px-4 py-1.5 text-sm font-semibold text-white backdrop-blur-sm">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-mtendere-orange" />
+            {current?.country || "Global partner network"}
           </div>
 
-          {/* Company name caption */}
-          <p className="text-base md:text-lg font-bold tracking-[0.25em] text-mtendere-orange uppercase mb-3 drop-shadow">
-            Mtendere Education Consult
+          <p className="mb-3 text-base font-bold uppercase tracking-[0.25em] text-mtendere-orange drop-shadow md:text-lg">
+            {current?.partnerName || "Mtendere Education Consult"}
           </p>
 
-          {/* Main headline */}
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-5 leading-tight drop-shadow-lg">
-            {current.headline}{" "}
-            <span className="text-mtendere-orange">{current.highlight}</span>
+          <h1 className="mb-5 text-4xl font-black leading-tight drop-shadow-lg md:text-6xl lg:text-7xl">
+            {current?.title || "Your Gateway to "}
+            {!current && <span className="text-mtendere-orange">Global Education</span>}
           </h1>
 
-          {/* Sub-caption */}
-          <p className="text-lg md:text-xl text-white/90 mb-10 max-w-3xl mx-auto leading-relaxed font-medium drop-shadow">
-            {current.caption}
+          <p className="mx-auto mb-10 max-w-3xl text-lg font-medium leading-relaxed text-white/90 drop-shadow md:text-xl">
+            {current?.description ||
+              "We connect ambitious students with administered partner institutions, scholarships, jobs, and career pathways from one governed platform."}
           </p>
 
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <div className="flex flex-col justify-center gap-4 sm:flex-row">
             <Button
               asChild
               size="lg"
-              className="bg-mtendere-orange hover:bg-mtendere-orange/90 text-white font-bold px-8 py-4 text-base shadow-xl hover:shadow-mtendere-orange/30 transition-all"
+              className="bg-mtendere-orange px-8 py-4 text-base font-bold text-white shadow-xl transition-all hover:bg-mtendere-orange/90 hover:shadow-mtendere-orange/30"
             >
-              <Link href="/scholarships">
-                Explore Scholarships
-                <ArrowRight className="ml-2 w-4 h-4" />
+              <Link href={current ? `/partners/${current.partnerId}` : "/partners"}>
+                View Partner
+                <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
-            <Button
-              asChild
-              size="lg"
-              className="bg-card/15 backdrop-blur-sm border-2 border-white text-white hover:bg-card hover:text-mtendere-blue font-bold px-8 py-4 text-base transition-all"
-            >
-              <Link href="/contact">
-                Book a Free Consultation
-              </Link>
-            </Button>
-          </div>
 
-          {/* Stats strip */}
-          <div className="mt-12 grid grid-cols-3 gap-6 max-w-xl mx-auto">
-            {[
-              { value: "10K+", label: "Students Helped" },
-              { value: "200+", label: "Universities" },
-              { value: "50+", label: "Countries" },
-            ].map((stat) => (
-              <div key={stat.label} className="text-center">
-                <div className="text-2xl md:text-3xl font-black text-mtendere-orange">{stat.value}</div>
-                <div className="text-xs md:text-sm text-white/80 font-medium mt-0.5">{stat.label}</div>
-              </div>
-            ))}
+            <Button
+              asChild
+              size="lg"
+              className="border-2 border-white bg-card/15 px-8 py-4 text-base font-bold text-white backdrop-blur-sm transition-all hover:bg-card hover:text-mtendere-blue"
+            >
+              {current?.website ? (
+                <a href={current.website} target="_blank" rel="noopener noreferrer">
+                  Official Website
+                  <ExternalLink className="ml-2 h-4 w-4" />
+                </a>
+              ) : (
+                <Link href="/contact">Book a Free Consultation</Link>
+              )}
+            </Button>
           </div>
         </div>
       </div>
 
-      {/* Scroll indicator */}
-      <div className="absolute bottom-20 left-1/2 -translate-x-1/2 text-white/60 animate-bounce z-20 hidden md:block">
-        <ChevronDown className="w-7 h-7" />
+      <div className="absolute bottom-20 left-1/2 z-20 hidden -translate-x-1/2 animate-bounce text-white/60 md:block">
+        <ChevronDown className="h-7 w-7" />
       </div>
     </section>
   );
 }
-
-

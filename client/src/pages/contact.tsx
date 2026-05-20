@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { socialLinks } from "@/lib/social-links";
 import { 
   MapPin, 
   Phone, 
@@ -50,8 +52,13 @@ export default function Contact() {
     setIsLoading(true);
 
     try {
-      // Simulate form submission
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await apiRequest("POST", "/api/messages", {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone || null,
+        subject: formData.inquiryType ? `${formData.inquiryType}: ${formData.subject}` : formData.subject,
+        message: formData.message,
+      });
       
       toast({
         title: "Message Sent Successfully",
@@ -82,19 +89,19 @@ export default function Contact() {
     {
       icon: MapPin,
       title: "Visit Our Office",
-      details: ["Off Mandala Road, Area 3", "Behind NBS Bank, Lilongwe", "Malawi"],
+      details: ["Lilongwe, Malawi"],
       color: "text-mtendere-blue",
     },
     {
       icon: Phone,
       title: "Call Us",
-      details: ["+265 998 882 786", "+265 887 209 531", "Mon-Fri: 9AM-6PM"],
+      details: ["+265 999 360 325", "Monday - Friday: 8:00 AM - 5:00 PM", "Saturday: 9:00 AM - 1:00 PM"],
       color: "text-mtendere-green",
     },
     {
       icon: Mail,
       title: "Email Us",
-      details: ["mtendereeducationconsult@gmail.com"],
+      details: ["mtendereeducation@gmail.com"],
       color: "text-mtendere-orange",
     },
   ];
@@ -125,12 +132,12 @@ export default function Contact() {
             </p>
             <div className="flex justify-center space-x-8 text-sm opacity-90 font-bold drop-shadow-md">
               <div className="text-center">
-                <div className="text-2xl font-bold">24/7</div>
-                <div className="uppercase tracking-tighter">Support</div>
+                <div className="text-2xl font-bold">8AM-5PM</div>
+                <div className="uppercase tracking-tighter">Weekdays</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold">&lt;24h</div>
-                <div className="uppercase tracking-tighter">Response</div>
+                <div className="text-2xl font-bold">9AM-1PM</div>
+                <div className="uppercase tracking-tighter">Saturday</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold">50+</div>
@@ -444,18 +451,23 @@ export default function Contact() {
                 Connect with us on social media for the latest scholarship updates and educational tips.
               </p>
               <div className="flex justify-center md:justify-start space-x-6">
-                <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="text-muted-foreground/70 hover:text-mtendere-blue transition-colors">
-                  <Facebook className="w-8 h-8" />
-                </a>
-                <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-muted-foreground/70 hover:text-mtendere-blue/80 transition-colors">
-                  <Twitter className="w-8 h-8" />
-                </a>
-                <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-muted-foreground/70 hover:text-mtendere-orange transition-colors">
-                  <Instagram className="w-8 h-8" />
-                </a>
-                <a href="https://www.linkedin.com/in/mtendere-education-consult-478133298/" target="_blank" rel="noopener noreferrer" className="text-muted-foreground/70 hover:text-mtendere-blue transition-colors">
-                  <Linkedin className="w-8 h-8" />
-                </a>
+                {[
+                  { href: socialLinks.x, icon: Twitter, label: "X", hoverClass: "hover:text-mtendere-blue/80" },
+                  { href: socialLinks.instagram, icon: Instagram, label: "Instagram", hoverClass: "hover:text-mtendere-orange" },
+                  { href: socialLinks.facebook, icon: Facebook, label: "Facebook", hoverClass: "hover:text-mtendere-blue" },
+                  { href: socialLinks.linkedin, icon: Linkedin, label: "LinkedIn", hoverClass: "hover:text-mtendere-blue" },
+                ].map((social) => (
+                  <a
+                    key={social.label}
+                    href={social.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={social.label}
+                    className={`text-muted-foreground/70 transition-colors ${social.hoverClass}`}
+                  >
+                    <social.icon className="w-8 h-8" />
+                  </a>
+                ))}
               </div>
             </div>
             
@@ -467,13 +479,17 @@ export default function Contact() {
                 For urgent matters or emergency support, contact us directly
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button className="bg-mtendere-green hover:bg-mtendere-green/90 text-white font-bold">
-                  <Phone className="w-4 h-4 mr-2" />
-                  Call Emergency Line
+                <Button asChild className="bg-mtendere-green hover:bg-mtendere-green/90 text-white font-bold">
+                  <a href="tel:+265999360325">
+                    <Phone className="w-4 h-4 mr-2" />
+                    Call Mtendere
+                  </a>
                 </Button>
-                <Button variant="outline" className="border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white font-bold">
-                  <MessageCircle className="w-4 h-4 mr-2" />
-                  Live Chat Support
+                <Button asChild variant="outline" className="border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white font-bold">
+                  <a href="mailto:mtendereeducation@gmail.com?subject=Support%20request">
+                    <MessageCircle className="w-4 h-4 mr-2" />
+                    Email Support
+                  </a>
                 </Button>
               </div>
             </div>

@@ -9,8 +9,9 @@ import { Progress } from "@/components/ui/progress";
 import { Link, useLocation } from "wouter";
 import ApplicationTracker from "@/components/user/application-tracker";
 import ReferralSystem from "@/components/user/referral-system";
+import CheckoutButton from "@/components/user/checkout-button";
 import ExpandingNav from "@/components/expanding-nav";
-import type { ApiApplication, ApiReferral } from "@/lib/api-types";
+import type { ApiApplication, ApiReferralDashboard } from "@/lib/api-types";
 import {
   User,
   FileText,
@@ -32,8 +33,8 @@ export default function Dashboard() {
     enabled: !!user,
   });
 
-  const { data: referrals } = useQuery<ApiReferral[]>({
-    queryKey: ["/api/referrals"],
+  const { data: referralDashboard } = useQuery<ApiReferralDashboard>({
+    queryKey: ["/api/referrals/me"],
     enabled: !!user,
   });
 
@@ -56,7 +57,7 @@ export default function Dashboard() {
 
   const completedApplications = applications?.filter((app) => app.status === "approved").length || 0;
   const pendingApplications = applications?.filter((app) => app.status === "pending").length || 0;
-  const totalReferrals = referrals?.length || 0;
+  const totalReferrals = referralDashboard?.stats.signups || 0;
 
   // Calculate real profile completion from available user fields
   const profileFields = [
@@ -172,7 +173,7 @@ export default function Dashboard() {
                 <CardDescription>Earn rewards by referring friends to Mtendere</CardDescription>
               </CardHeader>
               <CardContent>
-                <ReferralSystem referrals={referrals || []} />
+                <ReferralSystem dashboard={referralDashboard} />
               </CardContent>
             </Card>
           </div>
@@ -212,6 +213,21 @@ export default function Dashboard() {
                     Complete Profile
                   </Button>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg text-mtendere-blue">Secure Checkout</CardTitle>
+                <CardDescription>Application support deposit</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <CheckoutButton
+                  amount={5000}
+                  currency="USD"
+                  productName="Application support deposit"
+                  productType="application_support"
+                />
               </CardContent>
             </Card>
 

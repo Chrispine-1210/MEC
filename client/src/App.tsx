@@ -11,6 +11,7 @@ import Home from "@/pages/home";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
 import Dashboard from "@/pages/dashboard";
+import Referrals from "@/pages/referrals";
 import Admin from "@/pages/admin";
 import Scholarships from "@/pages/scholarships";
 import ScholarshipDetail from "@/pages/scholarship-detail";
@@ -18,7 +19,10 @@ import Jobs from "@/pages/jobs";
 import JobDetail from "@/pages/job-detail";
 import Partners from "@/pages/partners";
 import PartnerDetail from "@/pages/partner-detail";
+import Events from "@/pages/events";
+import EventDetail from "@/pages/event-detail";
 import About from "@/pages/about";
+import Team from "@/pages/team";
 import Contact from "@/pages/contact";
 import AIChat from "@/components/ai-chat";
 import BackToTop from "@/components/back-to-top";
@@ -36,6 +40,7 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/dashboard" component={Dashboard} />
+      <Route path="/referrals" component={Referrals} />
       <Route path="/admin" component={Admin} />
       <Route path="/scholarships/:id" component={ScholarshipDetail} />
       <Route path="/scholarships" component={Scholarships} />
@@ -43,7 +48,10 @@ function Router() {
       <Route path="/jobs" component={Jobs} />
       <Route path="/partners/:id" component={PartnerDetail} />
       <Route path="/partners" component={Partners} />
+      <Route path="/events/:id" component={EventDetail} />
+      <Route path="/events" component={Events} />
       <Route path="/about" component={About} />
+      <Route path="/team" component={Team} />
       <Route path="/contact" component={Contact} />
       <Route path="/blog" component={Blog} />
       <Route path="/blog/:id" component={BlogDetail} />

@@ -13,7 +13,8 @@ import {
   Bot,
   User,
   Minimize2,
-  Maximize2
+  Maximize2,
+  RotateCcw
 } from "lucide-react";
 
 interface ChatMessage {
@@ -23,30 +24,63 @@ interface ChatMessage {
   timestamp: Date;
 }
 
+const CONVERSATION_ID_KEY = "mtendere-ai-conversation-id";
+const CHAT_TRANSCRIPT_KEY = "mtendere-ai-chat-messages";
+
+const welcomeMessage = (): ChatMessage => ({
+  id: "welcome",
+  content: "Hello! I'm your AI assistant for Mtendere Education. How can I help you today?",
+  sender: "assistant",
+  timestamp: new Date(),
+});
+
+const loadStoredMessages = (): ChatMessage[] => {
+  if (typeof window === "undefined") return [welcomeMessage()];
+
+  try {
+    const stored = localStorage.getItem(CHAT_TRANSCRIPT_KEY);
+    if (!stored) return [welcomeMessage()];
+
+    const parsed = JSON.parse(stored) as Array<Omit<ChatMessage, "timestamp"> & { timestamp: string }>;
+    const messages = parsed
+      .filter((item) => item?.id && item?.content && (item.sender === "user" || item.sender === "assistant"))
+      .slice(-30)
+      .map((item) => ({
+        ...item,
+        timestamp: new Date(item.timestamp),
+      }));
+
+    return messages.length > 0 ? messages : [welcomeMessage()];
+  } catch {
+    return [welcomeMessage()];
+  }
+};
+
 export default function AIChat() {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: '1',
-      content: "Hello! I'm your AI assistant for Mtendere Education. How can I help you today?",
-      sender: 'assistant',
-      timestamp: new Date(),
-    }
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>(loadStoredMessages);
   const [inputMessage, setInputMessage] = useState("");
+  const [conversationId, setConversationId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem(CONVERSATION_ID_KEY);
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const chatMutation = useMutation({
     mutationFn: async (message: string) => {
-      const response = await apiRequest("POST", "/api/chat", { message });
+      const response = await apiRequest("POST", "/api/chat", { message, conversationId });
       return response.json();
     },
     onSuccess: (data) => {
+      if (data.conversationId) {
+        setConversationId(data.conversationId);
+        localStorage.setItem(CONVERSATION_ID_KEY, data.conversationId);
+      }
       const assistantMessage: ChatMessage = {
         id: Date.now().toString(),
-        content: data.response,
+        content: data.response || "I received your message, but I could not generate a full response. Please try again or contact the Mtendere team directly.",
         sender: 'assistant',
         timestamp: new Date(),
       };
@@ -65,6 +99,20 @@ export default function AIChat() {
 
   useEffect(() => {
     scrollToBottom();
+  }, [messages]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    localStorage.setItem(
+      CHAT_TRANSCRIPT_KEY,
+      JSON.stringify(
+        messages.slice(-30).map((message) => ({
+          ...message,
+          timestamp: message.timestamp.toISOString(),
+        })),
+      ),
+    );
   }, [messages]);
 
   useEffect(() => {
@@ -117,8 +165,27 @@ export default function AIChat() {
   ];
 
   const handleQuickAction = (action: string) => {
-    setInputMessage(action);
-    handleSendMessage();
+    if (chatMutation.isPending) return;
+
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      content: action,
+      sender: 'user',
+      timestamp: new Date(),
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInputMessage("");
+    chatMutation.mutate(action);
+  };
+
+  const resetConversation = () => {
+    setMessages([welcomeMessage()]);
+    setInputMessage("");
+    setConversationId(null);
+    localStorage.removeItem(CONVERSATION_ID_KEY);
+    localStorage.removeItem(CHAT_TRANSCRIPT_KEY);
+    inputRef.current?.focus();
   };
 
   return (
@@ -158,7 +225,17 @@ export default function AIChat() {
                   variant="ghost"
                   size="icon"
                   className="text-white hover:bg-card hover:bg-opacity-20 w-8 h-8"
+                  onClick={resetConversation}
+                  aria-label="Start new AI conversation"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-white hover:bg-card hover:bg-opacity-20 w-8 h-8"
                   onClick={() => setIsMinimized(!isMinimized)}
+                  aria-label={isMinimized ? "Expand AI chat" : "Minimize AI chat"}
                 >
                   {isMinimized ? (
                     <Maximize2 className="w-4 h-4" />
@@ -171,6 +248,7 @@ export default function AIChat() {
                   size="icon"
                   className="text-white hover:bg-card hover:bg-opacity-20 w-8 h-8"
                   onClick={() => setIsOpen(false)}
+                  aria-label="Close AI chat"
                 >
                   <X className="w-4 h-4" />
                 </Button>
@@ -259,6 +337,7 @@ export default function AIChat() {
                     onChange={(e) => setInputMessage(e.target.value)}
                     onKeyPress={handleKeyPress}
                     disabled={chatMutation.isPending}
+                    maxLength={900}
                     className="flex-1 text-sm bg-background border-border/70 focus:border-mtendere-blue focus:ring-mtendere-blue"
                   />
                   <Button

@@ -2,8 +2,10 @@ import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, GraduationCap, Briefcase, Star, MapPin, Calendar, DollarSign, Building, Award } from "lucide-react";
+import GovernedImage from "@/components/governed-image";
+import { ChevronLeft, ChevronRight, GraduationCap, Briefcase, Star, MapPin, Building } from "lucide-react";
 import { Link } from "wouter";
+import { truncateRichText } from "@/lib/rich-text";
 
 interface CarouselItem {
   id: number;
@@ -33,8 +35,8 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
       id: scholarship.id,
       type: 'scholarship' as const,
       title: scholarship.title,
-      description: scholarship.description,
-      imageUrl: scholarship.imageUrl || 'https://images.unsplash.com/photo-1523050853063-bd805a9ce011?auto=format&fit=crop&q=80&w=800',
+      description: truncateRichText(scholarship.description, 180),
+      imageUrl: scholarship.imageUrl,
       metadata: {
         institution: scholarship.institution,
         country: scholarship.country,
@@ -48,8 +50,8 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
       id: job.id,
       type: 'job' as const,
       title: job.title,
-      description: job.description,
-      imageUrl: job.imageUrl || 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?auto=format&fit=crop&q=80&w=800',
+      description: truncateRichText(job.description, 180),
+      imageUrl: job.imageUrl,
       metadata: {
         company: job.company,
         location: job.location,
@@ -62,10 +64,11 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
     ...testimonials.slice(0, 3).map(testimonial => ({
       id: testimonial.id,
       type: 'testimonial' as const,
-      title: "Student Success Story",
+      title: testimonial.authorName || "Student Success Story",
       description: testimonial.content,
-      imageUrl: testimonial.imageUrl || 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&q=80&w=800',
+      imageUrl: testimonial.imageUrl,
       metadata: {
+        credential: testimonial.credential,
         rating: testimonial.rating,
         userId: testimonial.userId,
       }
@@ -144,10 +147,16 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
         return (
           <Card className="h-full hover:shadow-xl transition-shadow duration-300 overflow-hidden">
             <div className="h-48 w-full overflow-hidden">
-              <img 
-                src={item.imageUrl} 
-                alt={item.title} 
-                className="w-full h-full object-cover transition-transform duration-500 hover:scale-110" 
+              <GovernedImage
+                module="scholarship"
+                src={item.imageUrl}
+                title={item.title}
+                category={item.metadata.category}
+                variant="card"
+                aspectRatio="auto"
+                className="h-full"
+                wrapperClassName="h-full rounded-none shadow-none"
+                imageClassName="hover:scale-110"
               />
             </div>
             <CardHeader>
@@ -197,10 +206,16 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
         return (
           <Card className="h-full hover:shadow-xl transition-shadow duration-300 overflow-hidden">
             <div className="h-48 w-full overflow-hidden">
-              <img 
-                src={item.imageUrl} 
-                alt={item.title} 
-                className="w-full h-full object-cover transition-transform duration-500 hover:scale-110" 
+              <GovernedImage
+                module="job"
+                src={item.imageUrl}
+                title={item.title}
+                category={item.metadata.jobType}
+                variant="card"
+                aspectRatio="auto"
+                className="h-full"
+                wrapperClassName="h-full rounded-none shadow-none"
+                imageClassName="hover:scale-110"
               />
             </div>
             <CardHeader>
@@ -270,7 +285,7 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
                 {item.title}
               </CardTitle>
               <CardDescription>
-                Mtendere Graduate Success
+                {item.metadata.credential || "Mtendere Graduate Success"}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -280,18 +295,31 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
               <div className="flex items-center">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-mtendere-blue to-mtendere-green flex items-center justify-center mr-3">
                   {item.imageUrl ? (
-                    <img 
-                      src={item.imageUrl} 
-                      alt="Student"
-                      className="w-full h-full rounded-full object-cover"
+                    <GovernedImage
+                      module="testimonial"
+                      src={item.imageUrl}
+                      title={item.title}
+                      variant="profile"
+                      aspectRatio="auto"
+                      className="h-full w-full"
+                      wrapperClassName="h-full rounded-full shadow-none"
                     />
                   ) : (
-                    <Award className="w-5 h-5 text-white" />
+                    <GovernedImage
+                      module="testimonial"
+                      title={item.title}
+                      variant="profile"
+                      aspectRatio="auto"
+                      className="h-full w-full"
+                      wrapperClassName="h-full rounded-full shadow-none"
+                    />
                   )}
                 </div>
                 <div>
-                  <div className="font-semibold text-mtendere-blue">Student</div>
-                  <div className="text-sm text-muted-foreground">Successful Graduate</div>
+                  <div className="font-semibold text-mtendere-blue">{item.title}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {item.metadata.credential || "Successful Graduate"}
+                  </div>
                 </div>
               </div>
               <Button asChild variant="outline" className="w-full mt-4 border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white">

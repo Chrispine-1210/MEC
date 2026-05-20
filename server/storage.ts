@@ -1,13 +1,16 @@
 import {
-  users, scholarships, jobs, applications, partners, testimonials, blogPosts, teamMembers, referrals, analytics, blogComments, savedItems, messages,
+  users, scholarships, jobs, applications, partners, testimonials, blogPosts, teamMembers, events, eventRegistrations, eventComments, eventReactions, referrals, analytics, blogComments, savedItems, messages, subscribers,
   type User, type InsertUser, type Scholarship, type InsertScholarship, type Job, type InsertJob,
   type Application, type InsertApplication, type Partner, type InsertPartner, type Testimonial, type InsertTestimonial,
   type BlogPost, type InsertBlogPost, type TeamMember, type InsertTeamMember, type Referral, type InsertReferral,
   type Analytics, type InsertAnalytics, type BlogComment, type InsertBlogComment,
-  type SavedItem, type InsertSavedItem, type Message, type InsertMessage
+  type SavedItem, type InsertSavedItem, type Message, type InsertMessage,
+  type Subscriber, type InsertSubscriber,
+  type Event, type InsertEvent, type EventRegistration, type InsertEventRegistration,
+  type EventComment, type InsertEventComment, type EventReaction, type InsertEventReaction
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, asc, and, or, like, count, sql } from "drizzle-orm";
+import { eq, desc, asc, and, or, ilike, count, sql } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -81,6 +84,30 @@ export interface IStorage {
   updateTeamMember(id: number, teamMember: Partial<InsertTeamMember>): Promise<TeamMember>;
   deleteTeamMember(id: number): Promise<boolean>;
 
+  // Events
+  getEvent(id: number): Promise<Event | undefined>;
+  getEventBySlug(slug: string): Promise<Event | undefined>;
+  getAllEvents(): Promise<Event[]>;
+  getPublishedEvents(): Promise<Event[]>;
+  createEvent(event: InsertEvent): Promise<Event>;
+  updateEvent(id: number, event: Partial<InsertEvent>): Promise<Event>;
+  deleteEvent(id: number): Promise<boolean>;
+  searchEvents(query: string): Promise<Event[]>;
+  incrementEventView(id: number): Promise<Event>;
+  incrementEventShare(id: number): Promise<Event>;
+  incrementEventLike(id: number): Promise<Event>;
+  getEventRegistrations(eventId: number): Promise<EventRegistration[]>;
+  getAllEventRegistrations(): Promise<EventRegistration[]>;
+  createEventRegistration(registration: InsertEventRegistration): Promise<EventRegistration>;
+  updateEventRegistration(
+    id: number,
+    registration: Partial<InsertEventRegistration> & { checkedInAt?: Date },
+  ): Promise<EventRegistration>;
+  getEventComments(eventId: number, includeModerated?: boolean): Promise<EventComment[]>;
+  createEventComment(comment: InsertEventComment): Promise<EventComment>;
+  updateEventComment(id: number, comment: Partial<InsertEventComment>): Promise<EventComment>;
+  createEventReaction(reaction: InsertEventReaction): Promise<EventReaction>;
+
   // Referrals
   getReferral(id: number): Promise<Referral | undefined>;
   getUserReferrals(userId: number): Promise<Referral[]>;
@@ -105,6 +132,14 @@ export interface IStorage {
   createMessage(message: InsertMessage): Promise<Message>;
   getAllMessages(): Promise<Message[]>;
   markMessageRead(id: number): Promise<Message>;
+
+  // Subscribers
+  getSubscriberByEmail(email: string): Promise<Subscriber | undefined>;
+  getSubscriberByVerificationToken(token: string): Promise<Subscriber | undefined>;
+  getSubscriberByUnsubscribeToken(token: string): Promise<Subscriber | undefined>;
+  getAllSubscribers(): Promise<Subscriber[]>;
+  createSubscriber(subscriber: InsertSubscriber): Promise<Subscriber>;
+  updateSubscriber(id: number, subscriber: Partial<InsertSubscriber>): Promise<Subscriber>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -192,10 +227,10 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(scholarships.isActive, true),
           or(
-            like(scholarships.title, `%${query}%`),
-            like(scholarships.description, `%${query}%`),
-            like(scholarships.institution, `%${query}%`),
-            like(scholarships.country, `%${query}%`)
+            ilike(scholarships.title, `%${query}%`),
+            ilike(scholarships.description, `%${query}%`),
+            ilike(scholarships.institution, `%${query}%`),
+            ilike(scholarships.country, `%${query}%`)
           )
         )
       )
@@ -247,10 +282,10 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(jobs.isActive, true),
           or(
-            like(jobs.title, `%${query}%`),
-            like(jobs.description, `%${query}%`),
-            like(jobs.company, `%${query}%`),
-            like(jobs.location, `%${query}%`)
+            ilike(jobs.title, `%${query}%`),
+            ilike(jobs.description, `%${query}%`),
+            ilike(jobs.company, `%${query}%`),
+            ilike(jobs.location, `%${query}%`)
           )
         )
       )
@@ -411,9 +446,9 @@ export class DatabaseStorage implements IStorage {
       .from(blogPosts)
       .where(
         or(
-          like(blogPosts.title, `%${query}%`),
-          like(blogPosts.content, `%${query}%`),
-          like(blogPosts.category, `%${query}%`)
+          ilike(blogPosts.title, `%${query}%`),
+          ilike(blogPosts.content, `%${query}%`),
+          ilike(blogPosts.category, `%${query}%`)
         )
       )
       .orderBy(desc(blogPosts.createdAt));
@@ -479,6 +514,156 @@ export class DatabaseStorage implements IStorage {
   async deleteTeamMember(id: number): Promise<boolean> {
     const result = await db.delete(teamMembers).where(eq(teamMembers.id, id));
     return (result as any).rowCount > 0;
+  }
+
+  // Events
+  async getEvent(id: number): Promise<Event | undefined> {
+    const [event] = await db.select().from(events).where(eq(events.id, id));
+    return event || undefined;
+  }
+
+  async getEventBySlug(slug: string): Promise<Event | undefined> {
+    const [event] = await db.select().from(events).where(eq(events.slug, slug));
+    return event || undefined;
+  }
+
+  async getAllEvents(): Promise<Event[]> {
+    return await db.select().from(events).orderBy(desc(events.startAt), desc(events.createdAt));
+  }
+
+  async getPublishedEvents(): Promise<Event[]> {
+    return await db
+      .select()
+      .from(events)
+      .where(eq(events.status, "published"))
+      .orderBy(asc(events.startAt), desc(events.createdAt));
+  }
+
+  async createEvent(insertEvent: InsertEvent): Promise<Event> {
+    const [event] = await db.insert(events).values(insertEvent as typeof events.$inferInsert).returning();
+    return event;
+  }
+
+  async updateEvent(id: number, updateEvent: Partial<InsertEvent>): Promise<Event> {
+    const [event] = await db
+      .update(events)
+      .set({ ...updateEvent, updatedAt: new Date() } as Partial<typeof events.$inferInsert>)
+      .where(eq(events.id, id))
+      .returning();
+    return event;
+  }
+
+  async deleteEvent(id: number): Promise<boolean> {
+    await db.delete(eventReactions).where(eq(eventReactions.eventId, id));
+    await db.delete(eventComments).where(eq(eventComments.eventId, id));
+    await db.delete(eventRegistrations).where(eq(eventRegistrations.eventId, id));
+    const result = await db.delete(events).where(eq(events.id, id));
+    return (result as any).rowCount > 0;
+  }
+
+  async searchEvents(query: string): Promise<Event[]> {
+    return await db
+      .select()
+      .from(events)
+      .where(
+        and(
+          eq(events.status, "published"),
+          or(
+            ilike(events.title, `%${query}%`),
+            ilike(events.description, `%${query}%`),
+            ilike(events.category, `%${query}%`),
+            ilike(events.location, `%${query}%`),
+          ),
+        ),
+      )
+      .orderBy(asc(events.startAt));
+  }
+
+  async incrementEventView(id: number): Promise<Event> {
+    const [event] = await db
+      .update(events)
+      .set({ viewCount: sql`${events.viewCount} + 1` })
+      .where(eq(events.id, id))
+      .returning();
+    return event;
+  }
+
+  async incrementEventShare(id: number): Promise<Event> {
+    const [event] = await db
+      .update(events)
+      .set({ shareCount: sql`${events.shareCount} + 1` })
+      .where(eq(events.id, id))
+      .returning();
+    return event;
+  }
+
+  async incrementEventLike(id: number): Promise<Event> {
+    const [event] = await db
+      .update(events)
+      .set({ likeCount: sql`${events.likeCount} + 1` })
+      .where(eq(events.id, id))
+      .returning();
+    return event;
+  }
+
+  async getEventRegistrations(eventId: number): Promise<EventRegistration[]> {
+    return await db
+      .select()
+      .from(eventRegistrations)
+      .where(eq(eventRegistrations.eventId, eventId))
+      .orderBy(desc(eventRegistrations.createdAt));
+  }
+
+  async getAllEventRegistrations(): Promise<EventRegistration[]> {
+    return await db.select().from(eventRegistrations).orderBy(desc(eventRegistrations.createdAt));
+  }
+
+  async createEventRegistration(insertRegistration: InsertEventRegistration): Promise<EventRegistration> {
+    const [registration] = await db.insert(eventRegistrations).values(insertRegistration as typeof eventRegistrations.$inferInsert).returning();
+    return registration;
+  }
+
+  async updateEventRegistration(
+    id: number,
+    updateRegistration: Partial<InsertEventRegistration> & { checkedInAt?: Date },
+  ): Promise<EventRegistration> {
+    const [registration] = await db
+      .update(eventRegistrations)
+      .set({ ...updateRegistration, updatedAt: new Date() } as Partial<typeof eventRegistrations.$inferInsert>)
+      .where(eq(eventRegistrations.id, id))
+      .returning();
+    return registration;
+  }
+
+  async getEventComments(eventId: number, includeModerated = false): Promise<EventComment[]> {
+    return await db
+      .select()
+      .from(eventComments)
+      .where(
+        includeModerated
+          ? eq(eventComments.eventId, eventId)
+          : and(eq(eventComments.eventId, eventId), eq(eventComments.status, "approved")),
+      )
+      .orderBy(asc(eventComments.createdAt));
+  }
+
+  async createEventComment(insertComment: InsertEventComment): Promise<EventComment> {
+    const [comment] = await db.insert(eventComments).values(insertComment).returning();
+    return comment;
+  }
+
+  async updateEventComment(id: number, updateComment: Partial<InsertEventComment>): Promise<EventComment> {
+    const [comment] = await db
+      .update(eventComments)
+      .set({ ...updateComment, updatedAt: new Date() })
+      .where(eq(eventComments.id, id))
+      .returning();
+    return comment;
+  }
+
+  async createEventReaction(insertReaction: InsertEventReaction): Promise<EventReaction> {
+    const [reaction] = await db.insert(eventReactions).values(insertReaction).returning();
+    return reaction;
   }
 
   // Referrals
@@ -559,6 +744,10 @@ export class DatabaseStorage implements IStorage {
     const totalApplications = await db.select({ count: count() }).from(applications);
     const activeTestimonials = await db.select({ count: count() }).from(testimonials).where(eq(testimonials.isApproved, true));
     const publishedBlogPosts = await db.select({ count: count() }).from(blogPosts).where(eq(blogPosts.isPublished, true));
+    const totalSubscribers = await db.select({ count: count() }).from(subscribers);
+    const totalEvents = await db.select({ count: count() }).from(events);
+    const publishedEvents = await db.select({ count: count() }).from(events).where(eq(events.status, "published"));
+    const eventRegistrationsCount = await db.select({ count: count() }).from(eventRegistrations);
 
     return {
       totalUsers: totalUsers[0].count,
@@ -567,6 +756,10 @@ export class DatabaseStorage implements IStorage {
       totalApplications: totalApplications[0].count,
       activeTestimonials: activeTestimonials[0].count,
       publishedBlogPosts: publishedBlogPosts[0].count,
+      totalSubscribers: totalSubscribers[0].count,
+      totalEvents: totalEvents[0].count,
+      publishedEvents: publishedEvents[0].count,
+      eventRegistrations: eventRegistrationsCount[0].count,
     };
   }
 
@@ -623,6 +816,48 @@ export class DatabaseStorage implements IStorage {
       .where(eq(messages.id, id))
       .returning();
     return message;
+  }
+
+  async getSubscriberByEmail(email: string): Promise<Subscriber | undefined> {
+    const [subscriber] = await db
+      .select()
+      .from(subscribers)
+      .where(eq(subscribers.email, email.toLowerCase()));
+    return subscriber || undefined;
+  }
+
+  async getSubscriberByVerificationToken(token: string): Promise<Subscriber | undefined> {
+    const [subscriber] = await db
+      .select()
+      .from(subscribers)
+      .where(eq(subscribers.verificationToken, token));
+    return subscriber || undefined;
+  }
+
+  async getSubscriberByUnsubscribeToken(token: string): Promise<Subscriber | undefined> {
+    const [subscriber] = await db
+      .select()
+      .from(subscribers)
+      .where(eq(subscribers.unsubscribeToken, token));
+    return subscriber || undefined;
+  }
+
+  async getAllSubscribers(): Promise<Subscriber[]> {
+    return await db.select().from(subscribers).orderBy(desc(subscribers.createdAt));
+  }
+
+  async createSubscriber(insertSubscriber: InsertSubscriber): Promise<Subscriber> {
+    const [subscriber] = await db.insert(subscribers).values(insertSubscriber).returning();
+    return subscriber;
+  }
+
+  async updateSubscriber(id: number, updateSubscriber: Partial<InsertSubscriber>): Promise<Subscriber> {
+    const [subscriber] = await db
+      .update(subscribers)
+      .set({ ...updateSubscriber, updatedAt: new Date() })
+      .where(eq(subscribers.id, id))
+      .returning();
+    return subscriber;
   }
 }
 
