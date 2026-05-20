@@ -15,9 +15,18 @@ import { z } from "zod";
 var envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.coerce.number().int().positive().default(5e3),
+  ADMIN_PORT: z.coerce.number().int().positive().default(5174),
+  FRONTEND_URL: z.string().url().optional(),
+  VITE_SITE_URL: z.string().url().optional(),
+  VITE_API_URL: z.string().url().optional(),
+  ALLOWED_ORIGINS: z.string().optional(),
   JWT_SECRET: z.string().min(1, "JWT_SECRET is required"),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(6e4),
-  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120)
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
+  REFERRAL_RELEASE_WORKER_ENABLED: z.string().optional().transform((value) => {
+    if (value === void 0 || value.trim() === "") return void 0;
+    return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+  })
 });
 var env = envSchema.parse(process.env);
 
@@ -382,6 +391,17 @@ import "dotenv/config";
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
 import ws from "ws";
+var nodeMajor = Number(process.versions.node.split(".")[0]);
+if (nodeMajor >= 25) {
+  throw new Error(
+    `Unsupported Node.js runtime ${process.versions.node}. Use Node 20 or 22 LTS for this project.`
+  );
+}
+if (nodeMajor >= 24) {
+  console.warn(
+    `[db] Node.js ${process.versions.node} is newer than the supported LTS range for this stack. Use Node 20 or 22 LTS if Neon WebSocket connections behave unexpectedly.`
+  );
+}
 neonConfig.webSocketConstructor = ws;
 var isDevelopment = process.env.NODE_ENV !== "production";
 var connectionString = (isDevelopment ? process.env.DATABASE_URL_UNPOOLED : void 0) || process.env.DATABASE_URL;
@@ -3007,10 +3027,18 @@ import { createServer as createViteServer, createLogger } from "vite";
 // vite.config.ts
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import dotenv from "dotenv";
 import path3 from "path";
 import { fileURLToPath } from "url";
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path3.dirname(__filename);
+dotenv.config({ path: path3.resolve(__dirname, ".env"), quiet: true });
+var configuredAdminPort = Number(process.env.ADMIN_PORT ?? 5174);
+var adminPort = Number.isFinite(configuredAdminPort) && configuredAdminPort > 0 ? configuredAdminPort : 5174;
+var configuredApiPort = Number(process.env.PORT ?? 5e3);
+var apiPort = Number.isFinite(configuredApiPort) && configuredApiPort > 0 ? configuredApiPort : 5e3;
+var apiTarget = `http://localhost:${apiPort}`;
+var wsTarget = `ws://localhost:${apiPort}`;
 var vite_config_default = defineConfig({
   root: path3.resolve(__dirname, "client"),
   plugins: [react()],
@@ -3026,8 +3054,20 @@ var vite_config_default = defineConfig({
     emptyOutDir: true
   },
   server: {
+    port: adminPort,
+    strictPort: false,
     fs: {
       strict: false
+    },
+    proxy: {
+      "/api": apiTarget,
+      "/auth": apiTarget,
+      "/uploads": apiTarget,
+      "/media-assets": apiTarget,
+      "/ws": {
+        target: wsTarget,
+        ws: true
+      }
     }
   }
 });
@@ -3091,6 +3131,58 @@ async function setupVite(app2, server) {
 var app = express3();
 var isProduction = env.NODE_ENV === "production";
 var port = env.PORT;
+var adminPort2 = env.ADMIN_PORT;
+var normalizeOrigin = (value) => {
+  if (!value) return void 0;
+  try {
+    return new URL(value).origin;
+  } catch {
+    return void 0;
+  }
+};
+var configuredOrigins = [
+  env.FRONTEND_URL,
+  env.VITE_SITE_URL,
+  env.VITE_API_URL,
+  ...env.ALLOWED_ORIGINS?.split(",") ?? []
+].map((origin) => normalizeOrigin(origin?.trim())).filter((origin) => Boolean(origin));
+var developmentOrigins = [
+  `http://localhost:${adminPort2}`,
+  `http://127.0.0.1:${adminPort2}`,
+  `http://localhost:${port}`,
+  `http://127.0.0.1:${port}`,
+  "http://localhost:5173",
+  "http://127.0.0.1:5173"
+];
+var allowedOrigins = /* @__PURE__ */ new Set([
+  ...configuredOrigins,
+  ...isProduction ? [] : developmentOrigins
+]);
+var isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+  if (allowedOrigins.has(origin)) return true;
+  return !isProduction && /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(origin);
+};
+app.use((req, res, next) => {
+  const origin = req.get("origin");
+  if (origin && isAllowedOrigin(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Authorization, Content-Type, X-Requested-With, X-CSRF-Token"
+    );
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+  }
+  if (req.method === "OPTIONS") {
+    if (!isAllowedOrigin(origin)) {
+      return res.status(403).json({ message: "Request origin is not allowed" });
+    }
+    return res.sendStatus(204);
+  }
+  return next();
+});
 app.use(
   helmet({
     contentSecurityPolicy: {

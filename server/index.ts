@@ -11,6 +11,72 @@ import { log, setupVite } from "./vite";
 const app = express();
 const isProduction = env.NODE_ENV === "production";
 const port = env.PORT;
+const adminPort = env.ADMIN_PORT;
+
+const normalizeOrigin = (value?: string | null) => {
+  if (!value) return undefined;
+
+  try {
+    return new URL(value).origin;
+  } catch {
+    return undefined;
+  }
+};
+
+const configuredOrigins = [
+  env.FRONTEND_URL,
+  env.VITE_SITE_URL,
+  env.VITE_API_URL,
+  ...(env.ALLOWED_ORIGINS?.split(",") ?? []),
+]
+  .map((origin) => normalizeOrigin(origin?.trim()))
+  .filter((origin): origin is string => Boolean(origin));
+
+const developmentOrigins = [
+  `http://localhost:${adminPort}`,
+  `http://127.0.0.1:${adminPort}`,
+  `http://localhost:${port}`,
+  `http://127.0.0.1:${port}`,
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+];
+
+const allowedOrigins = new Set([
+  ...configuredOrigins,
+  ...(isProduction ? [] : developmentOrigins),
+]);
+
+const isAllowedOrigin = (origin?: string) => {
+  if (!origin) return true;
+  if (allowedOrigins.has(origin)) return true;
+
+  return !isProduction && /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(origin);
+};
+
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const origin = req.get("origin");
+
+  if (origin && isAllowedOrigin(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Authorization, Content-Type, X-Requested-With, X-CSRF-Token",
+    );
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+  }
+
+  if (req.method === "OPTIONS") {
+    if (!isAllowedOrigin(origin)) {
+      return res.status(403).json({ message: "Request origin is not allowed" });
+    }
+
+    return res.sendStatus(204);
+  }
+
+  return next();
+});
 
 app.use(
   helmet({
