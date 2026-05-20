@@ -9,10 +9,10 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.resolve(__dirname, ".env"), quiet: true });
 
-const configuredAdminPort = Number(process.env.ADMIN_PORT ?? 5174);
-const adminPort = Number.isFinite(configuredAdminPort) && configuredAdminPort > 0
-  ? configuredAdminPort
-  : 5174;
+const configuredClientPort = Number(process.env.CLIENT_PORT ?? process.env.VITE_CLIENT_PORT ?? 5173);
+const clientPort = Number.isFinite(configuredClientPort) && configuredClientPort > 0
+  ? configuredClientPort
+  : 5173;
 const configuredApiPort = Number(process.env.PORT ?? 5000);
 const apiPort = Number.isFinite(configuredApiPort) && configuredApiPort > 0
   ? configuredApiPort
@@ -40,7 +40,7 @@ export default defineConfig({
   },
 
   server: {
-    port: adminPort,
+    port: clientPort,
     strictPort: false,
     fs: {
       strict: false,

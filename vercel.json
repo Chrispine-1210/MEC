@@ -1,0 +1,45 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "installCommand": "npm install --include=dev",
+  "buildCommand": "npm run build:vercel",
+  "outputDirectory": "dist/client",
+  "functions": {
+    "api/[...path].js": {
+      "includeFiles": "dist/**"
+    }
+  },
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    },
+    {
+      "src": "/auth/(.*)",
+      "dest": "/api/auth/$1"
+    },
+    {
+      "src": "/uploads/(.*)",
+      "dest": "/api/uploads/$1"
+    },
+    {
+      "src": "/media-assets/(.*)",
+      "dest": "/api/media-assets/$1"
+    },
+    {
+      "src": "/ws",
+      "dest": "/api/ws"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/admin(?:/.*)?",
+      "dest": "/admin/index.html"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
+}

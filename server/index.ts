@@ -8,10 +8,11 @@ import express, { type NextFunction, type Request, type Response } from "express
 import { registerRoutes } from "./routes";
 import { log, setupVite } from "./vite";
 
-const app = express();
+export const app = express();
 const isProduction = env.NODE_ENV === "production";
 const port = env.PORT;
 const adminPort = env.ADMIN_PORT;
+const isVercelRuntime = process.env.VERCEL === "1" || process.env.VERCEL === "true";
 app.disable("x-powered-by");
 
 app.use(
@@ -242,7 +243,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-(async () => {
+export const ready = (async () => {
   const server = await registerRoutes(app);
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
@@ -265,7 +266,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     res.status(status).json({ message });
   });
 
-  if (app.get("env") === "development") {
+  if (!isVercelRuntime && app.get("env") === "development") {
     await setupVite(app, server);
   } else {
     const clientDistPath = path.resolve(import.meta.dirname, "..", "dist", "client");
@@ -292,7 +293,13 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     throw error;
   });
 
-  server.listen(port, "0.0.0.0", () => {
-    log(`Server listening on port ${port}`);
-  });
+  if (!isVercelRuntime) {
+    server.listen(port, "0.0.0.0", () => {
+      log(`Server listening on port ${port}`);
+    });
+  }
+
+  return server;
 })();
+
+export default app;

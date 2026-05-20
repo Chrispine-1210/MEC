@@ -1113,6 +1113,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const uploadsDir = path.resolve(import.meta.dirname, "..", "uploads");
   fs.mkdirSync(uploadsDir, { recursive: true });
   app.use("/uploads", express.static(uploadsDir));
+  app.use("/api/uploads", express.static(uploadsDir));
 
   const allowedUploadMimeTypes = new Set([
     "application/pdf",
@@ -1343,7 +1344,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return mediaDefaultReferences[moduleName] || mediaDefaultReferences.defaults;
   };
 
-  app.get("/media-assets/*", (req, res) => {
+  const serveMediaAsset = (req: Request, res: Response) => {
     try {
       const requestedPath = normalizeMediaAssetReference((req.params as Record<string, string>)["0"]);
       if (!requestedPath) return res.status(404).send("Not found");
@@ -1359,7 +1360,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Media asset delivery error:", error);
       res.status(404).send("Not found");
     }
-  });
+  };
+
+  app.get("/media-assets/*", serveMediaAsset);
+  app.get("/api/media-assets/*", serveMediaAsset);
 
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok" });

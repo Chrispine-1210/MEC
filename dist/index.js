@@ -3754,6 +3754,7 @@ async function registerRoutes(app2) {
   const uploadsDir = path3.resolve(import.meta.dirname, "..", "uploads");
   fs3.mkdirSync(uploadsDir, { recursive: true });
   app2.use("/uploads", express.static(uploadsDir));
+  app2.use("/api/uploads", express.static(uploadsDir));
   const allowedUploadMimeTypes = /* @__PURE__ */ new Set([
     "application/pdf",
     "application/msword",
@@ -3934,7 +3935,7 @@ async function registerRoutes(app2) {
     if (candidate && isValidMediaReference(candidate)) return candidate;
     return mediaDefaultReferences[moduleName] || mediaDefaultReferences.defaults;
   };
-  app2.get("/media-assets/*", (req, res) => {
+  const serveMediaAsset = (req, res) => {
     try {
       const requestedPath = normalizeMediaAssetReference(req.params["0"]);
       if (!requestedPath) return res.status(404).send("Not found");
@@ -3948,7 +3949,9 @@ async function registerRoutes(app2) {
       console.error("Media asset delivery error:", error);
       res.status(404).send("Not found");
     }
-  });
+  };
+  app2.get("/media-assets/*", serveMediaAsset);
+  app2.get("/api/media-assets/*", serveMediaAsset);
   app2.get("/api/health", (_req, res) => {
     res.json({ status: "ok" });
   });
@@ -7660,8 +7663,8 @@ import { fileURLToPath } from "url";
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path4.dirname(__filename);
 dotenv.config({ path: path4.resolve(__dirname, ".env"), quiet: true });
-var configuredAdminPort = Number(process.env.ADMIN_PORT ?? 5174);
-var adminPort = Number.isFinite(configuredAdminPort) && configuredAdminPort > 0 ? configuredAdminPort : 5174;
+var configuredClientPort = Number(process.env.CLIENT_PORT ?? process.env.VITE_CLIENT_PORT ?? 5173);
+var clientPort = Number.isFinite(configuredClientPort) && configuredClientPort > 0 ? configuredClientPort : 5173;
 var configuredApiPort = Number(process.env.PORT ?? 5e3);
 var apiPort = Number.isFinite(configuredApiPort) && configuredApiPort > 0 ? configuredApiPort : 5e3;
 var apiTarget = `http://localhost:${apiPort}`;
@@ -7682,7 +7685,7 @@ var vite_config_default = defineConfig({
     emptyOutDir: true
   },
   server: {
-    port: adminPort,
+    port: clientPort,
     strictPort: false,
     fs: {
       strict: false
@@ -7759,7 +7762,8 @@ async function setupVite(app2, server) {
 var app = express3();
 var isProduction = env.NODE_ENV === "production";
 var port = env.PORT;
-var adminPort2 = env.ADMIN_PORT;
+var adminPort = env.ADMIN_PORT;
+var isVercelRuntime = process.env.VERCEL === "1" || process.env.VERCEL === "true";
 app.disable("x-powered-by");
 app.use(
   helmet({
@@ -7812,14 +7816,14 @@ var developmentOrigins = isProduction ? [] : [
   "http://localhost:3000",
   "http://localhost:5000",
   "http://localhost:5173",
-  `http://localhost:${adminPort2}`,
+  `http://localhost:${adminPort}`,
   "http://127.0.0.1:3000",
   "http://127.0.0.1:5000",
   "http://127.0.0.1:5173",
-  `http://127.0.0.1:${adminPort2}`,
+  `http://127.0.0.1:${adminPort}`,
   "http://0.0.0.0:5000",
   "http://0.0.0.0:5173",
-  `http://0.0.0.0:${adminPort2}`
+  `http://0.0.0.0:${adminPort}`
 ];
 var allowedOrigins = new Set(
   [
@@ -7828,9 +7832,9 @@ var allowedOrigins = new Set(
     `http://localhost:${port}`,
     `http://127.0.0.1:${port}`,
     `http://0.0.0.0:${port}`,
-    `http://localhost:${adminPort2}`,
-    `http://127.0.0.1:${adminPort2}`,
-    `http://0.0.0.0:${adminPort2}`
+    `http://localhost:${adminPort}`,
+    `http://127.0.0.1:${adminPort}`,
+    `http://0.0.0.0:${adminPort}`
   ].map(normalizeOrigin).filter(Boolean)
 );
 var isAllowedOrigin = (origin, req) => {
@@ -7941,7 +7945,7 @@ app.use((req, res, next) => {
   });
   next();
 });
-(async () => {
+var ready = (async () => {
   const server = await registerRoutes(app);
   app.use((err, _req, res, _next) => {
     const status = typeof err === "object" && err !== null && "status" in err ? Number(err.status) || 500 : typeof err === "object" && err !== null && "statusCode" in err ? Number(err.statusCode) || 500 : 500;
@@ -7951,7 +7955,7 @@ app.use((req, res, next) => {
     }
     res.status(status).json({ message });
   });
-  if (app.get("env") === "development") {
+  if (!isVercelRuntime && app.get("env") === "development") {
     await setupVite(app, server);
   } else {
     const clientDistPath = path6.resolve(import.meta.dirname, "..", "dist", "client");
@@ -7974,7 +7978,16 @@ app.use((req, res, next) => {
     }
     throw error;
   });
-  server.listen(port, "0.0.0.0", () => {
-    log(`Server listening on port ${port}`);
-  });
+  if (!isVercelRuntime) {
+    server.listen(port, "0.0.0.0", () => {
+      log(`Server listening on port ${port}`);
+    });
+  }
+  return server;
 })();
+var index_default = app;
+export {
+  app,
+  index_default as default,
+  ready
+};

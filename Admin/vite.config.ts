@@ -15,6 +15,9 @@ const configuredAdminPort = Number(process.env.ADMIN_PORT ?? process.env.VITE_AD
 const adminPort = Number.isFinite(configuredAdminPort) && configuredAdminPort > 0
   ? configuredAdminPort
   : 5174;
+const adminBuildOutDir = process.env.ADMIN_BUILD_OUT_DIR
+  ? path.resolve(rootDir, process.env.ADMIN_BUILD_OUT_DIR)
+  : path.resolve(rootDir, "dist", "admin");
 
 export default defineConfig({
   root: path.resolve(__dirname, "client"),
@@ -28,7 +31,7 @@ export default defineConfig({
   },
 
   build: {
-    outDir: path.resolve(__dirname, "..", "dist", "admin"),
+    outDir: adminBuildOutDir,
     emptyOutDir: true,
     sourcemap: false,
     target: "es2020",
