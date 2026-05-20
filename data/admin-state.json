@@ -39,6 +39,7 @@
   },
   "blogPosts": {},
   "teamMembers": {},
+  "aiConversations": {},
   "roles": [
     {
       "id": "viewer",
@@ -121,12 +122,12 @@
     "maxLoginAttempts": 5,
     "maintenanceMode": false,
     "emailNotifications": true,
-    "twoFactorRequired": false,
+    "twoFactorRequired": true,
     "weeklySummary": false,
     "contentPublishedNotifications": true,
     "authTokenInvalidBefore": null,
     "cacheVersion": 1,
-    "updatedAt": "2026-04-09T12:03:59.310Z"
+    "updatedAt": "2026-05-20T10:55:30.257Z"
   },
   "readNotificationIds": [
     "analytics-10",

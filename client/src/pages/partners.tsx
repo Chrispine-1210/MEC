@@ -1,8 +1,10 @@
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
@@ -11,6 +13,7 @@ import type { ApiPartner } from "@/lib/api-types";
 import { getGovernedBackgroundImage } from "@/lib/image-governance";
 import { publicContentQueryOptions } from "@/lib/realtime-content";
 import { truncateRichText } from "@/lib/rich-text";
+import { useDebouncedValue } from "@/hooks/use-debounce";
 import { 
   Users, 
   Trophy, 
@@ -22,18 +25,41 @@ import {
   Building,
   Star,
   Calendar,
-  BookOpen
+  BookOpen,
+  Search,
+  X
 } from "lucide-react";
 
 type Partner = ApiPartner;
 
 export default function Partners() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebouncedValue(searchQuery.trim().toLowerCase(), 300);
   const { data: partners, isLoading } = useQuery<Partner[]>({
     queryKey: ["/api/partners"],
     ...publicContentQueryOptions,
   });
 
-  const featuredPartners = (partners || [])
+  const filteredPartners = useMemo(() => {
+    const items = partners || [];
+    if (!debouncedSearchQuery) return items;
+
+    return items.filter((partner) => {
+      const haystack = [
+        partner.name,
+        partner.description,
+        partner.country,
+        partner.partnershipType,
+        partner.ranking,
+        partner.website,
+        partner.videoTitle,
+      ].filter(Boolean).join(" ").toLowerCase();
+
+      return debouncedSearchQuery.split(/\s+/).every((token) => haystack.includes(token));
+    });
+  }, [debouncedSearchQuery, partners]);
+
+  const featuredPartners = [...filteredPartners]
     .filter((partner) => partner.isActive !== false)
     .sort((a, b) => Number(Boolean(b.isFeatured)) - Number(Boolean(a.isFeatured)))
     .slice(0, 3);
@@ -72,6 +98,28 @@ export default function Partners() {
             <p className="text-xl md:text-2xl mb-8 opacity-95 drop-shadow-lg font-semibold">
               We've partnered with leading educational institutions worldwide to provide you with the best opportunities for your academic and career advancement
             </p>
+            <div className="relative mx-auto mb-8 max-w-2xl">
+              <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground/70" />
+              <Input
+                type="text"
+                placeholder="Search partners by university, country, category, video, or website..."
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                className="rounded-xl border-0 bg-card py-6 pl-12 pr-12 text-lg text-foreground shadow-2xl"
+              />
+              {searchQuery && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-2 top-1/2 h-9 w-9 -translate-y-1/2 text-muted-foreground"
+                  onClick={() => setSearchQuery("")}
+                  aria-label="Clear partner search"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
             <div className="flex justify-center space-x-8 text-sm opacity-95 drop-shadow-lg">
               <div className="bg-card/10 backdrop-blur rounded-xl p-6">
                 <div className="text-3xl font-bold">200+</div>
@@ -192,7 +240,7 @@ export default function Partners() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {partners?.map((partner, idx) => {
+              {filteredPartners?.map((partner, idx) => {
                 return (
                 <Card key={partner.id} className="hover:shadow-2xl transition-all duration-500 overflow-hidden group border-none bg-card shadow-md flex flex-col">
                   <div className="relative h-44 overflow-hidden">
@@ -259,14 +307,14 @@ export default function Partners() {
             </div>
           )}
 
-          {partners?.length === 0 && !isLoading && (
+          {filteredPartners?.length === 0 && !isLoading && (
             <div className="text-center py-12">
               <Building className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
               <h3 className="text-xl font-semibold text-muted-foreground mb-2">
                 No partners found
               </h3>
               <p className="text-muted-foreground">
-                We're continuously expanding our network. Check back soon for new partnerships.
+                {debouncedSearchQuery ? "Try another partner, country, category, or video search." : "We're continuously expanding our network. Check back soon for new partnerships."}
               </p>
             </div>
           )}

@@ -7,7 +7,7 @@ var __export = (target, all) => {
 // server/index.ts
 import fs5 from "fs";
 import path6 from "path";
-import { randomUUID as randomUUID2 } from "crypto";
+import { randomUUID as randomUUID3 } from "crypto";
 
 // server/env.ts
 import "dotenv/config";
@@ -16,6 +16,14 @@ var optionalEnvString = z.preprocess(
   (value) => typeof value === "string" && value.trim() === "" ? void 0 : value,
   z.string().optional()
 );
+var optionalEnvBoolean = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return void 0;
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return value;
+}, z.boolean().optional());
 var envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.coerce.number().int().positive().default(5e3),
@@ -33,10 +41,15 @@ var envSchema = z.object({
   EMAIL_API_URL: optionalEnvString,
   EMAIL_API_KEY: optionalEnvString,
   ADMIN_NOTIFICATION_EMAIL: optionalEnvString,
+  REDIS_URL: optionalEnvString,
+  SENTRY_DSN: optionalEnvString,
+  SENTRY_ENVIRONMENT: optionalEnvString,
+  SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).optional(),
   STRIPE_SECRET_KEY: optionalEnvString,
   STRIPE_WEBHOOK_SECRET: optionalEnvString,
   STRIPE_DEFAULT_CURRENCY: z.string().length(3).default("USD"),
   REFERRAL_PAYOUT_MIN_AMOUNT: z.coerce.number().int().positive().default(2500),
+  REFERRAL_RELEASE_WORKER_ENABLED: optionalEnvBoolean,
   REFERRAL_RELEASE_WORKER_MS: z.coerce.number().int().positive().default(9e5)
 });
 var env = envSchema.parse(process.env);
@@ -1030,7 +1043,7 @@ var pool = new Pool({
 var db = drizzle({ client: pool, schema: schema_exports });
 
 // server/storage.ts
-import { eq, desc, asc, and, or, like, count, sql } from "drizzle-orm";
+import { eq, desc, asc, and, or, ilike, count, sql } from "drizzle-orm";
 var DatabaseStorage = class {
   // Users
   async getUser(id) {
@@ -1088,10 +1101,10 @@ var DatabaseStorage = class {
       and(
         eq(scholarships.isActive, true),
         or(
-          like(scholarships.title, `%${query}%`),
-          like(scholarships.description, `%${query}%`),
-          like(scholarships.institution, `%${query}%`),
-          like(scholarships.country, `%${query}%`)
+          ilike(scholarships.title, `%${query}%`),
+          ilike(scholarships.description, `%${query}%`),
+          ilike(scholarships.institution, `%${query}%`),
+          ilike(scholarships.country, `%${query}%`)
         )
       )
     ).orderBy(desc(scholarships.createdAt));
@@ -1124,10 +1137,10 @@ var DatabaseStorage = class {
       and(
         eq(jobs.isActive, true),
         or(
-          like(jobs.title, `%${query}%`),
-          like(jobs.description, `%${query}%`),
-          like(jobs.company, `%${query}%`),
-          like(jobs.location, `%${query}%`)
+          ilike(jobs.title, `%${query}%`),
+          ilike(jobs.description, `%${query}%`),
+          ilike(jobs.company, `%${query}%`),
+          ilike(jobs.location, `%${query}%`)
         )
       )
     ).orderBy(desc(jobs.createdAt));
@@ -1227,9 +1240,9 @@ var DatabaseStorage = class {
   async searchBlogPosts(query) {
     return await db.select().from(blogPosts).where(
       or(
-        like(blogPosts.title, `%${query}%`),
-        like(blogPosts.content, `%${query}%`),
-        like(blogPosts.category, `%${query}%`)
+        ilike(blogPosts.title, `%${query}%`),
+        ilike(blogPosts.content, `%${query}%`),
+        ilike(blogPosts.category, `%${query}%`)
       )
     ).orderBy(desc(blogPosts.createdAt));
   }
@@ -1302,10 +1315,10 @@ var DatabaseStorage = class {
       and(
         eq(events.status, "published"),
         or(
-          like(events.title, `%${query}%`),
-          like(events.description, `%${query}%`),
-          like(events.category, `%${query}%`),
-          like(events.location, `%${query}%`)
+          ilike(events.title, `%${query}%`),
+          ilike(events.description, `%${query}%`),
+          ilike(events.category, `%${query}%`),
+          ilike(events.location, `%${query}%`)
         )
       )
     ).orderBy(asc(events.startAt));
@@ -1480,7 +1493,7 @@ var storage = new DatabaseStorage();
 
 // server/routes.ts
 import bcrypt from "bcryptjs";
-import { randomBytes } from "crypto";
+import { randomBytes, randomUUID as randomUUID2 } from "crypto";
 import fs3 from "fs";
 import jwt from "jsonwebtoken";
 import multer from "multer";
@@ -1490,14 +1503,122 @@ import { z as z3 } from "zod";
 
 // server/ai.ts
 import OpenAI from "openai";
+
+// server/search.ts
+var MAX_QUERY_LENGTH = 120;
+var normalizeSearchQuery = (value) => String(value ?? "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().slice(0, MAX_QUERY_LENGTH).toLowerCase();
+var getSearchTokens = (value) => {
+  const normalized = normalizeSearchQuery(value);
+  if (!normalized) return [];
+  return Array.from(
+    new Set(
+      normalized.split(" ").map((token) => token.trim()).filter((token) => token.length >= 2)
+    )
+  );
+};
+var stringifySearchValue = (value) => {
+  if (value === null || value === void 0) return "";
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map((item) => stringifySearchValue(item)).join(" ");
+  if (typeof value === "object") {
+    return Object.values(value).map((item) => stringifySearchValue(item)).join(" ");
+  }
+  return String(value);
+};
+var buildSearchHaystack = (values) => normalizeSearchQuery(values.map((value) => stringifySearchValue(value)).join(" "));
+var matchesSearchTokens = (haystack, tokens) => tokens.length === 0 || tokens.every((token) => haystack.includes(token));
+var scoreSearchHit = (haystack, query, tokens) => {
+  if (!query) return 0;
+  let score = haystack.includes(query) ? query.length * 4 : 0;
+  for (const token of tokens) {
+    const index2 = haystack.indexOf(token);
+    if (index2 === -1) continue;
+    score += Math.max(4, 40 - index2);
+  }
+  return score;
+};
+var searchAndRank = (items, query, getFields) => {
+  const normalizedQuery = normalizeSearchQuery(query);
+  const tokens = getSearchTokens(normalizedQuery);
+  if (!normalizedQuery) {
+    return items;
+  }
+  return items.map((item, index2) => {
+    const haystack = buildSearchHaystack(getFields(item));
+    return {
+      item,
+      index: index2,
+      score: matchesSearchTokens(haystack, tokens) ? scoreSearchHit(haystack, normalizedQuery, tokens) : -1
+    };
+  }).filter((result) => result.score >= 0).sort((a, b) => b.score - a.score || a.index - b.index).map((result) => result.item);
+};
+var parsePagination = (pageValue, limitValue, maxLimit = 100) => {
+  const page = Number(pageValue ?? 1);
+  const limit = Number(limitValue ?? 50);
+  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+  const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), maxLimit) : 50;
+  return {
+    page: safePage,
+    limit: safeLimit,
+    offset: (safePage - 1) * safeLimit
+  };
+};
+
+// server/ai.ts
 var apiKey = process.env.OPENAI_API_KEY ?? process.env.API_KEY;
 var model = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
 var openai = apiKey ? new OpenAI({ apiKey }) : null;
-async function getChatResponse(message) {
+var getRelevantContextLines = (message, platformContext) => {
+  if (!platformContext) return [];
+  const tokens = getSearchTokens(message).filter((token) => token.length > 2);
+  const lines = platformContext.split("\n").map((line) => line.trim()).filter(Boolean);
+  if (tokens.length === 0) return lines.slice(0, 4);
+  return lines.map((line, index2) => {
+    const normalized = normalizeSearchQuery(line);
+    const score = tokens.reduce((total, token) => total + (normalized.includes(token) ? 1 : 0), 0);
+    return { line, index: index2, score };
+  }).filter((item) => item.score > 0).sort((a, b) => b.score - a.score || a.index - b.index).slice(0, 5).map((item) => item.line);
+};
+var buildLocalChatResponse = (message, options) => {
+  const normalized = normalizeSearchQuery(message);
+  const contextLines = getRelevantContextLines(message, options.platformContext);
+  const lines = [];
+  if (/(scholarship|grant|funding|study|university|college|apply)/.test(normalized)) {
+    lines.push("I can help you narrow scholarship and study options. Start from the Scholarships page, compare deadline, country, institution, eligibility, and required documents, then submit the matching application form.");
+  }
+  if (/(job|career|work|employment|resume|cv|interview)/.test(normalized)) {
+    lines.push("For jobs, use the Job Portal to compare role type, location, requirements, salary information where listed, and deadline before applying or saving a listing.");
+  }
+  if (/(partner|video|chandigarh|perul|gedu|gbs)/.test(normalized)) {
+    lines.push("Partner information and university videos are managed through Admin, so the homepage and partner pages should reflect the latest Chandigarh, Perul, GEDU, GBS, and other partner updates after publishing.");
+  }
+  if (/(application|documents?|transcript|passport|cover letter|resume)/.test(normalized)) {
+    lines.push("For applications, prepare accurate personal details, academic documents, resume or CV where required, and any cover letter or supporting files requested by the opportunity.");
+  }
+  if (/(contact|phone|email|support|help|urgent|emergency)/.test(normalized)) {
+    lines.push("For urgent or account-specific help, contact the Mtendere team directly through the Contact page, phone, or email so staff can verify details safely.");
+  }
+  if (contextLines.length > 0) {
+    lines.push(`Relevant current platform data: ${contextLines.join(" | ")}`);
+  }
+  if (lines.length === 0) {
+    lines.push("I can help with scholarships, jobs, study abroad, partner universities, application documents, and career preparation. Tell me your preferred country, program area, qualification level, or deadline and I will guide the next step.");
+  }
+  if (options.channel === "admin") {
+    lines.push("Admin note: review the matching content record, message, or application in Admin Management before making final operational decisions.");
+  }
+  return lines.join("\n\n");
+};
+async function getChatResponse(message, options = {}) {
   if (!openai) {
-    return "AI chat is not configured yet. Please contact our team directly and set OPENAI_API_KEY to enable assistant responses.";
+    return buildLocalChatResponse(message, options);
   }
   try {
+    const history = (options.history ?? []).filter((item) => item.role === "user" || item.role === "assistant").slice(-10);
+    const platformContext = options.platformContext ? `
+
+Current Mtendere platform data snapshot:
+${options.platformContext}` : "";
     const response = await openai.chat.completions.create({
       model,
       messages: [
@@ -1510,11 +1631,14 @@ async function getChatResponse(message) {
           - University application processes
           - Professional development advice
           
-          Our partners include GBS (Global Business School), Chandigarh University, and other international institutions.
+          Our partners include GBS (Global Business School), Chandigarh University, Perul University/institutional partners, GEDU, and other international institutions.
           
           Be professional, helpful, and encouraging. Provide specific, actionable advice when possible.
-          If you don't know something specific about our services, direct users to contact our team directly.`
+          Prioritize current platform content when it is available in the context.
+          If you don't know something specific about our services, direct users to contact our team directly.
+          Keep responses concise, practical, and safe for an education consultancy.${platformContext}`
         },
+        ...history,
         {
           role: "user",
           content: message
@@ -1526,7 +1650,7 @@ async function getChatResponse(message) {
     return response.choices[0].message.content || "I'm sorry, I couldn't process your request right now. Please try again or contact our support team.";
   } catch (error) {
     console.error("OpenAI API error:", error);
-    return "I'm currently experiencing technical difficulties. Please try again later or contact our support team for immediate assistance.";
+    return buildLocalChatResponse(message, options);
   }
 }
 
@@ -1891,6 +2015,7 @@ var createDefaultState = () => ({
   partners: {},
   blogPosts: {},
   teamMembers: {},
+  aiConversations: {},
   roles: DEFAULT_ROLES,
   settings: {
     platformName: "Mtendere Education Platform",
@@ -1943,6 +2068,7 @@ var loadState = () => {
       partners: parsed.partners ?? {},
       blogPosts: parsed.blogPosts ?? {},
       teamMembers: parsed.teamMembers ?? {},
+      aiConversations: parsed.aiConversations ?? {},
       roles: normalizeAdminRoles(parsed.roles),
       settings: {
         ...createDefaultState().settings,
@@ -2028,6 +2154,40 @@ var getTeamMeta = (id) => {
 };
 var setTeamMeta = (id, value) => updateCollectionItem("teamMembers", id, value);
 var deleteTeamMeta = (id) => deleteCollectionItem("teamMembers", id);
+var getAiChatConversation = (id) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.aiConversations[id];
+};
+var listAiChatConversations = () => {
+  refreshStateFromDiskIfChanged();
+  return Object.values(cachedState.aiConversations).sort(
+    (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
+  );
+};
+var upsertAiChatConversation = (conversation) => {
+  const now = nowIso();
+  const previous = getAiChatConversation(conversation.id);
+  const nextConversation = {
+    ...previous,
+    ...conversation,
+    messages: conversation.messages.slice(-40),
+    moderationFlags: Array.from(new Set(conversation.moderationFlags ?? [])),
+    createdAt: previous?.createdAt ?? conversation.createdAt ?? now,
+    updatedAt: now,
+    lastMessageAt: conversation.lastMessageAt ?? now
+  };
+  updateCollectionItem("aiConversations", conversation.id, nextConversation);
+  return nextConversation;
+};
+var closeAiChatConversation = (id) => {
+  const conversation = getAiChatConversation(id);
+  if (!conversation) return null;
+  return upsertAiChatConversation({
+    ...conversation,
+    isActive: false,
+    lastMessageAt: nowIso()
+  });
+};
 var getAdminRoles = () => {
   refreshStateFromDiskIfChanged();
   return [...cachedState.roles];
@@ -2887,6 +3047,10 @@ var publicApplicationRequestSchema = z3.object({
   documents: z3.record(z3.unknown()).optional(),
   notes: z3.string().trim().max(4e3).optional()
 });
+var chatRequestSchema = z3.object({
+  message: z3.string().trim().min(1).max(2e3),
+  conversationId: z3.string().trim().min(8).max(120).optional()
+});
 var eventPayloadSchema = z3.object({
   title: z3.string().trim().min(3).max(220),
   slug: z3.string().trim().max(180).optional(),
@@ -3119,6 +3283,16 @@ var toAdminJob = (job) => {
     createdBy: job.createdBy ? String(job.createdBy) : null,
     createdAt: job.createdAt ?? null,
     updatedAt: job.updatedAt ?? null
+  };
+};
+var toPublicJob = (job) => {
+  const meta = getJobMeta(job.id);
+  return {
+    ...job,
+    imageUrl: meta.featuredImage ?? job.imageUrl ?? null,
+    salaryRange: meta.salaryRange ?? null,
+    applicationUrl: meta.applicationUrl ?? null,
+    region: meta.region ?? null
   };
 };
 var toAdminPartner = (partner) => {
@@ -3508,6 +3682,61 @@ async function registerRoutes(app2) {
     } catch (error) {
       console.error("Admin realtime event error:", error);
     }
+  };
+  const buildAiPlatformContext = async () => {
+    const [scholarshipsList, jobsList, partnersList, blogList] = await Promise.all([
+      storage.getActiveScholarships(),
+      storage.getActiveJobs(),
+      storage.getActivePartners(),
+      storage.getPublishedBlogPosts()
+    ]);
+    const scholarshipsContext = scholarshipsList.slice(0, 8).map((item) => `Scholarship: ${item.title} at ${item.institution}, ${item.country}; category ${item.category}; deadline ${item.deadline}`).join("\n");
+    const jobsContext = jobsList.slice(0, 8).map((item) => `Job: ${item.title} at ${item.company}, ${item.location}; type ${item.jobType}; deadline ${item.deadline ?? "open"}`).join("\n");
+    const partnersContext = partnersList.map(toPublicPartner).slice(0, 8).map((item) => `Partner: ${item.name}; ${item.country ?? "Global"}; ${item.partnershipType ?? "partner"}; video ${item.videoUrl ? "available" : "not listed"}`).join("\n");
+    const blogContext = blogList.slice(0, 5).map((item) => `Blog: ${item.title}; category ${item.category}`).join("\n");
+    return [scholarshipsContext, jobsContext, partnersContext, blogContext].filter(Boolean).join("\n");
+  };
+  const detectChatFlags = (message) => {
+    const normalized = normalizeSearchQuery(message);
+    const flags = [];
+    if (/(urgent|emergency|asap|immediately|deadline today)/.test(normalized)) flags.push("urgent");
+    if (/(visa|passport|immigration|payment|refund|fees?|bank|money)/.test(normalized)) flags.push("sensitive");
+    if (/(angry|complaint|scam|fraud|lawsuit|legal|police)/.test(normalized)) flags.push("escalation");
+    return flags;
+  };
+  const buildConversationSummary = (messages2) => {
+    const lastUserMessage = [...messages2].reverse().find((item) => item.role === "user");
+    return lastUserMessage?.content.slice(0, 180) ?? "AI chat conversation";
+  };
+  const appendAiConversationTurn = ({
+    conversationId,
+    userId,
+    userEmail,
+    channel,
+    message,
+    response
+  }) => {
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const id = conversationId || randomUUID2();
+    const existing = getAiChatConversation(id);
+    const messages2 = [
+      ...existing?.messages ?? [],
+      { role: "user", content: message, createdAt: now },
+      { role: "assistant", content: response, createdAt: (/* @__PURE__ */ new Date()).toISOString() }
+    ];
+    const flags = Array.from(/* @__PURE__ */ new Set([...existing?.moderationFlags ?? [], ...detectChatFlags(message)]));
+    return upsertAiChatConversation({
+      id,
+      userId,
+      userEmail,
+      channel,
+      messages: messages2,
+      summary: buildConversationSummary(messages2),
+      isActive: true,
+      moderationFlags: flags,
+      createdAt: existing?.createdAt ?? now,
+      lastMessageAt: now
+    });
   };
   const uploadsDir = path3.resolve(import.meta.dirname, "..", "uploads");
   fs3.mkdirSync(uploadsDir, { recursive: true });
@@ -3936,6 +4165,127 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to delete user" });
     }
   });
+  app2.get("/api/search", async (req, res) => {
+    try {
+      const query = normalizeSearchQuery(req.query.q ?? req.query.search);
+      if (query.length < 2) {
+        return res.json({ query, results: [], total: 0 });
+      }
+      const [scholarshipsList, jobsList, partnersList, blogList, eventsList, teamList] = await Promise.all([
+        storage.getActiveScholarships(),
+        storage.getActiveJobs(),
+        storage.getActivePartners(),
+        storage.getPublishedBlogPosts(),
+        storage.getPublishedEvents(),
+        storage.getActiveTeamMembers()
+      ]);
+      const results = [
+        ...searchAndRank(scholarshipsList, query, (item) => [
+          item.title,
+          item.description,
+          item.institution,
+          item.country,
+          item.category,
+          item.requirements
+        ]).slice(0, 8).map((item) => ({
+          id: item.id,
+          type: "scholarship",
+          title: item.title,
+          description: item.description,
+          href: `/scholarships/${item.id}`,
+          category: item.category,
+          imageUrl: item.imageUrl
+        })),
+        ...searchAndRank(jobsList, query, (item) => [
+          item.title,
+          item.description,
+          item.company,
+          item.location,
+          item.jobType,
+          item.requirements
+        ]).slice(0, 8).map((item) => ({
+          id: item.id,
+          type: "job",
+          title: item.title,
+          description: item.description,
+          href: `/jobs/${item.id}`,
+          category: item.jobType,
+          imageUrl: getJobMeta(item.id).featuredImage ?? null
+        })),
+        ...searchAndRank(partnersList.map(toPublicPartner), query, (item) => [
+          item.name,
+          item.description,
+          item.country,
+          item.partnershipType,
+          item.ranking
+        ]).slice(0, 8).map((item) => ({
+          id: item.id,
+          type: "partner",
+          title: item.name,
+          description: item.description,
+          href: `/partners/${item.id}`,
+          category: item.partnershipType ?? item.country,
+          imageUrl: item.logoUrl
+        })),
+        ...searchAndRank(blogList, query, (item) => [
+          item.title,
+          item.excerpt,
+          item.content,
+          item.category,
+          item.tags
+        ]).slice(0, 8).map((item) => ({
+          id: item.id,
+          type: "blog",
+          title: item.title,
+          description: item.excerpt ?? item.content,
+          href: `/blog/${item.id}`,
+          category: item.category,
+          imageUrl: item.imageUrl
+        })),
+        ...searchAndRank(eventsList, query, (item) => [
+          item.title,
+          item.summary,
+          item.description,
+          item.category,
+          item.location,
+          item.tags
+        ]).slice(0, 6).map((item) => ({
+          id: item.id,
+          type: "event",
+          title: item.title,
+          description: item.summary ?? item.description,
+          href: `/events/${item.slug || item.id}`,
+          category: item.category,
+          imageUrl: item.coverImage
+        })),
+        ...searchAndRank(teamList, query, (item) => [
+          item.name,
+          item.position,
+          item.bio,
+          item.email
+        ]).slice(0, 6).map((item) => ({
+          id: item.id,
+          type: "team",
+          title: item.name,
+          description: item.position,
+          href: "/team",
+          category: "Team",
+          imageUrl: item.imageUrl
+        }))
+      ].slice(0, 30);
+      await storage.logAnalytics({
+        event: "site_search",
+        userId: getOptionalAuthenticatedUser(req)?.id ?? null,
+        metadata: { query, total: results.length },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent")
+      });
+      res.json({ query, results, total: results.length });
+    } catch (error) {
+      console.error("Site search error:", error);
+      res.status(500).json({ message: "Failed to search content" });
+    }
+  });
   app2.get("/api/scholarships", async (req, res) => {
     try {
       const requester = getOptionalAuthenticatedUser(req);
@@ -3948,8 +4298,8 @@ async function registerRoutes(app2) {
   });
   app2.get("/api/scholarships/search", async (req, res) => {
     try {
-      const q = req.query.q ?? req.query.p0;
-      if (!q || typeof q !== "string") {
+      const q = normalizeSearchQuery(req.query.q ?? req.query.p0);
+      if (q.length < 2) {
         return res.status(400).json({ message: "Search query is required" });
       }
       const scholarships2 = await storage.searchScholarships(q);
@@ -4020,7 +4370,7 @@ async function registerRoutes(app2) {
     try {
       const requester = getOptionalAuthenticatedUser(req);
       const jobs2 = isAdmin(requester) ? await storage.getAllJobs() : await storage.getActiveJobs();
-      res.json(jobs2);
+      res.json(jobs2.map(toPublicJob));
     } catch (error) {
       console.error("Jobs fetch error:", error);
       res.status(500).json({ message: "Failed to fetch jobs" });
@@ -4028,12 +4378,12 @@ async function registerRoutes(app2) {
   });
   app2.get("/api/jobs/search", async (req, res) => {
     try {
-      const q = req.query.q ?? req.query.p0;
-      if (!q || typeof q !== "string") {
+      const q = normalizeSearchQuery(req.query.q ?? req.query.p0);
+      if (q.length < 2) {
         return res.status(400).json({ message: "Search query is required" });
       }
       const jobs2 = await storage.searchJobs(q);
-      res.json(jobs2);
+      res.json(jobs2.map(toPublicJob));
     } catch (error) {
       console.error("Job search error:", error);
       res.status(500).json({ message: "Failed to search jobs" });
@@ -4047,7 +4397,7 @@ async function registerRoutes(app2) {
       const requester = getOptionalAuthenticatedUser(req);
       const isVisible = job && (isAdmin(requester) || job.isActive !== false);
       if (!isVisible) return res.status(404).json({ message: "Job not found" });
-      res.json(job);
+      res.json(toPublicJob(job));
     } catch (error) {
       console.error("Job detail fetch error:", error);
       res.status(500).json({ message: "Failed to fetch job" });
@@ -4343,8 +4693,8 @@ async function registerRoutes(app2) {
   });
   app2.get("/api/blog-posts/search", async (req, res) => {
     try {
-      const q = req.query.q ?? req.query.p0;
-      if (!q || typeof q !== "string") {
+      const q = normalizeSearchQuery(req.query.q ?? req.query.p0);
+      if (q.length < 2) {
         return res.status(400).json({ message: "Search query is required" });
       }
       const requester = getOptionalAuthenticatedUser(req);
@@ -4537,7 +4887,7 @@ async function registerRoutes(app2) {
     try {
       const requester = getOptionalAuthenticatedUser(req);
       const allEvents = isAdmin(requester) ? await storage.getAllEvents() : await storage.getPublishedEvents();
-      const search = String(req.query.search ?? req.query.q ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search ?? req.query.q);
       const category = String(req.query.category ?? "").toLowerCase();
       const location = String(req.query.location ?? "").toLowerCase();
       const type = String(req.query.type ?? "").toLowerCase();
@@ -4546,10 +4896,18 @@ async function registerRoutes(app2) {
       const status = String(req.query.status ?? "").toLowerCase();
       const date = String(req.query.date ?? "").toLowerCase();
       const enriched = await Promise.all(allEvents.map(toPublicEvent));
-      const filtered = enriched.filter((event) => {
+      const searchMatched = searchAndRank(enriched, search, (event) => [
+        event.title,
+        event.summary,
+        event.description,
+        event.category,
+        event.location,
+        event.eventType,
+        event.tags
+      ]);
+      const filtered = searchMatched.filter((event) => {
         const runtimeStatus = String(event.runtimeStatus ?? "").toLowerCase();
         const startsAt = new Date(event.startAt).getTime();
-        const matchesSearch = !search || event.title.toLowerCase().includes(search) || event.description.toLowerCase().includes(search) || event.category.toLowerCase().includes(search) || event.location.toLowerCase().includes(search);
         const matchesCategory = !category || event.category.toLowerCase() === category;
         const matchesLocation = !location || event.location.toLowerCase().includes(location);
         const matchesType = !type || event.eventType.toLowerCase().includes(type);
@@ -4557,7 +4915,7 @@ async function registerRoutes(app2) {
         const matchesPrice = !price || price === "free" && !event.isPaid || price === "paid" && event.isPaid;
         const matchesStatus = !status || runtimeStatus === status || status === "featured" && event.isFeatured || status === "recommended" && event.isRecommended || status === "trending" && event.isTrending;
         const matchesDate = !date || date === "today" && new Date(event.startAt).toDateString() === (/* @__PURE__ */ new Date()).toDateString() || date === "week" && startsAt <= Date.now() + 7 * 24 * 60 * 60 * 1e3 || date === "month" && startsAt <= Date.now() + 30 * 24 * 60 * 60 * 1e3;
-        return matchesSearch && matchesCategory && matchesLocation && matchesType && matchesFormat && matchesPrice && matchesStatus && matchesDate;
+        return matchesCategory && matchesLocation && matchesType && matchesFormat && matchesPrice && matchesStatus && matchesDate;
       });
       res.json(filtered);
     } catch (error) {
@@ -4567,8 +4925,8 @@ async function registerRoutes(app2) {
   });
   app2.get("/api/events/search", async (req, res) => {
     try {
-      const q = req.query.q ?? req.query.p0;
-      if (!q || typeof q !== "string") {
+      const q = normalizeSearchQuery(req.query.q ?? req.query.p0);
+      if (q.length < 2) {
         return res.status(400).json({ message: "Search query is required" });
       }
       const events2 = await storage.searchEvents(q);
@@ -5109,17 +5467,250 @@ async function registerRoutes(app2) {
       res.status(400).json({ message: "Failed to reject payout", error: getErrorMessage(error) });
     }
   });
-  const releaseWorker = setInterval(() => {
-    releaseEligibleCommissions().catch((error) => {
-      console.error("Scheduled commission release error:", error);
-    });
-  }, env.REFERRAL_RELEASE_WORKER_MS);
-  releaseWorker.unref?.();
+  const shouldRunReferralReleaseWorker = env.REFERRAL_RELEASE_WORKER_ENABLED ?? env.NODE_ENV === "production";
+  if (shouldRunReferralReleaseWorker) {
+    const releaseWorker = setInterval(() => {
+      releaseEligibleCommissions().catch((error) => {
+        if (isTransientDbConnectivityError(error)) {
+          console.warn(
+            `[referrals] Scheduled commission release skipped after a transient database connection issue: ${getErrorMessage(error)}`
+          );
+          return;
+        }
+        console.error("Scheduled commission release error:", error);
+      });
+    }, env.REFERRAL_RELEASE_WORKER_MS);
+    releaseWorker.unref?.();
+  } else {
+    console.info(
+      `[referrals] Scheduled commission release worker disabled in ${env.NODE_ENV}. Set REFERRAL_RELEASE_WORKER_ENABLED=true to run it locally.`
+    );
+  }
   const paginate = (items, page, limit) => {
     const total = items.length;
     const start = (page - 1) * limit;
     return { items: items.slice(start, start + limit), total };
   };
+  const compactText = (value, fallback = "") => {
+    const text2 = typeof value === "string" ? value : value === null || value === void 0 ? fallback : JSON.stringify(value);
+    return text2.replace(/\s+/g, " ").trim().slice(0, 180);
+  };
+  app2.get("/api/admin/search", authenticateToken, requireAdminPortal, async (req, res) => {
+    try {
+      const query = normalizeSearchQuery(req.query.q ?? req.query.search);
+      const requester = getAuthenticatedUser(req);
+      const canSearchSensitive = isAdmin(requester);
+      if (query.length < 2) {
+        return res.json({ query, results: [], total: 0 });
+      }
+      const [
+        scholarships2,
+        jobs2,
+        partners2,
+        blogPosts2,
+        teamMembers2,
+        events2,
+        users2,
+        applications2,
+        messages2
+      ] = await Promise.all([
+        storage.getAllScholarships(),
+        storage.getAllJobs(),
+        storage.getAllPartners(),
+        storage.getAllBlogPosts(),
+        storage.getAllTeamMembers(),
+        storage.getAllEvents(),
+        canSearchSensitive ? storage.getAllUsers() : Promise.resolve([]),
+        canSearchSensitive ? storage.getAllApplications() : Promise.resolve([]),
+        canSearchSensitive ? storage.getAllMessages() : Promise.resolve([])
+      ]);
+      const usersById = new Map(users2.map((user) => [user.id, user]));
+      const results = [
+        ...searchAndRank(scholarships2.map(toAdminScholarship), query, (item) => [
+          item.title,
+          item.description,
+          item.institution,
+          item.region,
+          item.category,
+          item.status,
+          item.requirements
+        ]).slice(0, 8).map((item) => ({
+          id: item.id,
+          type: "scholarship",
+          title: item.title,
+          description: `${item.institution || "Scholarship"} \u2022 ${item.region || "Global"} \u2022 ${item.status}`,
+          href: `/admin/scholarships?search=${encodeURIComponent(item.title)}`,
+          category: item.category,
+          status: item.status
+        })),
+        ...searchAndRank(jobs2.map(toAdminJob), query, (item) => [
+          item.title,
+          item.description,
+          item.company,
+          item.location,
+          item.region,
+          item.jobType,
+          item.status,
+          item.requirements
+        ]).slice(0, 8).map((item) => ({
+          id: item.id,
+          type: "job",
+          title: item.title,
+          description: `${item.company || "Job"} \u2022 ${item.location || item.region || "Global"} \u2022 ${item.status}`,
+          href: `/admin/jobs?search=${encodeURIComponent(item.title)}`,
+          category: item.jobType,
+          status: item.status
+        })),
+        ...searchAndRank(partners2.map(toAdminPartner), query, (item) => [
+          item.name,
+          item.description,
+          item.website,
+          item.region,
+          item.partnershipType,
+          item.videoTitle,
+          item.videoDescription
+        ]).slice(0, 8).map((item) => ({
+          id: item.id,
+          type: "partner",
+          title: item.name,
+          description: `${item.partnershipType || "Partner"} \u2022 ${item.region || "Global"}`,
+          href: `/admin/partners?search=${encodeURIComponent(item.name)}`,
+          category: item.partnershipType,
+          status: item.isActive ? "active" : "inactive"
+        })),
+        ...searchAndRank(blogPosts2.map(toAdminBlogPost), query, (item) => [
+          item.title,
+          item.excerpt,
+          item.content,
+          item.category,
+          item.tags,
+          item.status
+        ]).slice(0, 8).map((item) => ({
+          id: item.id,
+          type: "blog",
+          title: item.title,
+          description: `${item.category || "Blog"} \u2022 ${item.status}`,
+          href: `/admin/blog?search=${encodeURIComponent(item.title)}`,
+          category: item.category,
+          status: item.status
+        })),
+        ...searchAndRank(teamMembers2.map(toAdminTeamMember), query, (item) => [
+          item.name,
+          item.position,
+          item.bio,
+          item.email,
+          item.department,
+          item.linkedIn,
+          item.twitter
+        ]).slice(0, 6).map((item) => ({
+          id: item.id,
+          type: "team",
+          title: item.name,
+          description: `${item.position || "Team member"}${item.department ? ` \u2022 ${item.department}` : ""}`,
+          href: `/admin/team?search=${encodeURIComponent(item.name)}`,
+          category: item.department || "Team",
+          status: item.isActive ? "active" : "inactive"
+        })),
+        ...searchAndRank(await Promise.all(events2.map(toAdminEvent)), query, (item) => [
+          item.title,
+          item.summary,
+          item.description,
+          item.location,
+          item.category,
+          item.status,
+          item.tags
+        ]).slice(0, 6).map((item) => ({
+          id: item.id,
+          type: "event",
+          title: item.title,
+          description: `${item.category || "Event"} \u2022 ${item.location || "Location TBA"} \u2022 ${item.status}`,
+          href: `/admin/activity?search=${encodeURIComponent(item.title)}`,
+          category: item.category,
+          status: item.status
+        })),
+        ...searchAndRank(users2.map(toAdminUser), query, (item) => [
+          item.username,
+          item.email,
+          item.firstName,
+          item.lastName,
+          item.role,
+          item.region
+        ]).slice(0, 6).map((item) => ({
+          id: item.id,
+          type: "user",
+          title: `${item.firstName} ${item.lastName}`.trim() || item.username,
+          description: `${item.email} \u2022 ${item.role}`,
+          href: `/admin/users?search=${encodeURIComponent(item.email || item.username)}`,
+          category: item.role,
+          status: item.isActive ? "active" : "inactive"
+        })),
+        ...searchAndRank(applications2, query, (item) => [
+          item.id,
+          item.type,
+          item.status,
+          usersById.get(item.userId)?.firstName,
+          usersById.get(item.userId)?.lastName,
+          usersById.get(item.userId)?.email,
+          item.documents,
+          item.referenceId
+        ]).slice(0, 6).map((item) => {
+          const applicantName = compactText(`${usersById.get(item.userId)?.firstName ?? ""} ${usersById.get(item.userId)?.lastName ?? ""}`) || compactText(usersById.get(item.userId)?.email) || `Application ${item.id}`;
+          return {
+            id: String(item.id),
+            type: "application",
+            title: applicantName,
+            description: `${item.type || "Application"} \u2022 ${item.status || "pending"}`,
+            href: `/admin/applications?search=${encodeURIComponent(applicantName)}`,
+            category: item.type,
+            status: item.status
+          };
+        }),
+        ...searchAndRank(messages2, query, (item) => [
+          item.name,
+          item.email,
+          item.phone,
+          item.subject,
+          item.message,
+          item.isRead ? "read" : "unread"
+        ]).slice(0, 6).map((item) => ({
+          id: String(item.id),
+          type: "message",
+          title: item.subject || `Message from ${item.name}`,
+          description: `${item.name} \u2022 ${item.email} \u2022 ${compactText(item.message)}`,
+          href: `/admin/messages?search=${encodeURIComponent(item.email || item.name)}`,
+          category: "Message",
+          status: item.isRead ? "read" : "unread"
+        })),
+        ...searchAndRank(listAiChatConversations(), query, (item) => [
+          item.id,
+          item.userEmail,
+          item.channel,
+          item.summary,
+          item.moderationFlags,
+          item.messages.map((message) => message.content)
+        ]).slice(0, 6).map((item) => ({
+          id: item.id,
+          type: "ai",
+          title: item.summary || "AI conversation",
+          description: `${item.channel} chat \u2022 ${item.messages.length} messages`,
+          href: `/admin/ai-chat?search=${encodeURIComponent(item.summary || item.id)}`,
+          category: item.channel,
+          status: item.isActive ? "active" : "closed"
+        }))
+      ].slice(0, 40);
+      await storage.logAnalytics({
+        event: "admin_global_search",
+        userId: requester.id,
+        metadata: { query, total: results.length },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent")
+      });
+      res.json({ query, results, total: results.length });
+    } catch (error) {
+      console.error("Admin global search error:", error);
+      res.status(500).json({ message: "Failed to search admin content" });
+    }
+  });
   app2.get("/api/admin/dashboard/stats", authenticateToken, requireAdminPortal, async (_req, res) => {
     try {
       const [
@@ -5165,7 +5756,7 @@ async function registerRoutes(app2) {
         totalPartners: partners2.length,
         totalBlogPosts: blogPosts2.length,
         totalApplications: applications2.length,
-        totalActiveChats: 0,
+        totalActiveChats: listAiChatConversations().filter((conversation) => conversation.isActive).length,
         activeScholarships: activeScholarships.length,
         activeJobs: activeJobs.length,
         pendingApplications,
@@ -5204,11 +5795,16 @@ async function registerRoutes(app2) {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
-      const search = String(req.query.search ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search);
       const allUsers = await storage.getAllUsers();
-      const filtered = search ? allUsers.filter(
-        (user) => user.username.toLowerCase().includes(search) || user.email.toLowerCase().includes(search)
-      ) : allUsers;
+      const filtered = searchAndRank(allUsers, search, (user) => [
+        user.username,
+        user.email,
+        user.firstName,
+        user.lastName,
+        user.role,
+        getUserMeta(user.id).region
+      ]);
       const { items, total } = paginate(filtered, page, limit);
       res.json({ users: items.map(toAdminUser), total });
     } catch (error) {
@@ -5330,14 +5926,21 @@ async function registerRoutes(app2) {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
-      const search = String(req.query.search ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search);
       const statusFilter = String(req.query.status ?? "").toLowerCase();
       const allScholarships = await storage.getAllScholarships();
       const mapped = allScholarships.map(toAdminScholarship);
-      const filtered = mapped.filter((item) => {
-        const matchesSearch = !search || item.title.toLowerCase().includes(search) || item.description.toLowerCase().includes(search) || item.institution.toLowerCase().includes(search);
+      const filtered = searchAndRank(mapped, search, (item) => [
+        item.title,
+        item.description,
+        item.institution,
+        item.category,
+        item.region,
+        item.requirements,
+        item.eligibility
+      ]).filter((item) => {
         const matchesStatus = !statusFilter || item.status === statusFilter;
-        return matchesSearch && matchesStatus;
+        return matchesStatus;
       });
       const { items, total } = paginate(filtered, page, limit);
       res.json({ data: items, total });
@@ -5453,14 +6056,22 @@ async function registerRoutes(app2) {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
-      const search = String(req.query.search ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search);
       const statusFilter = String(req.query.status ?? "").toLowerCase();
       const allJobs = await storage.getAllJobs();
       const mapped = allJobs.map(toAdminJob);
-      const filtered = mapped.filter((item) => {
-        const matchesSearch = !search || item.title.toLowerCase().includes(search) || item.company.toLowerCase().includes(search);
+      const filtered = searchAndRank(mapped, search, (item) => [
+        item.title,
+        item.description,
+        item.company,
+        item.location,
+        item.region,
+        item.jobType,
+        item.requirements,
+        item.benefits
+      ]).filter((item) => {
         const matchesStatus = !statusFilter || item.status === statusFilter;
-        return matchesSearch && matchesStatus;
+        return matchesStatus;
       });
       const { items, total } = paginate(filtered, page, limit);
       res.json({ data: items, total });
@@ -5579,13 +6190,19 @@ async function registerRoutes(app2) {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
-      const search = String(req.query.search ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search);
       const allPartners = await storage.getAllPartners();
       const mapped = allPartners.map(toAdminPartner);
-      const filtered = mapped.filter((item) => {
-        if (!search) return true;
-        return item.name.toLowerCase().includes(search);
-      });
+      const filtered = searchAndRank(mapped, search, (item) => [
+        item.name,
+        item.description,
+        item.region,
+        item.partnershipType,
+        item.website,
+        item.videoTitle,
+        item.videoDescription,
+        item.contactEmail
+      ]);
       const { items, total } = paginate(filtered, page, limit);
       res.json({ partners: items, total });
     } catch (error) {
@@ -5702,14 +6319,20 @@ async function registerRoutes(app2) {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
-      const search = String(req.query.search ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search);
       const statusFilter = String(req.query.status ?? "").toLowerCase();
       const allPosts = await storage.getAllBlogPosts();
       const mapped = allPosts.map(toAdminBlogPost);
-      const filtered = mapped.filter((item) => {
-        const matchesSearch = !search || item.title.toLowerCase().includes(search) || item.content.toLowerCase().includes(search);
+      const filtered = searchAndRank(mapped, search, (item) => [
+        item.title,
+        item.excerpt,
+        item.content,
+        item.category,
+        item.tags,
+        item.slug
+      ]).filter((item) => {
         const matchesStatus = !statusFilter || item.status === statusFilter;
-        return matchesSearch && matchesStatus;
+        return matchesStatus;
       });
       const { items, total } = paginate(filtered, page, limit);
       res.json({ posts: items, total });
@@ -5809,10 +6432,16 @@ async function registerRoutes(app2) {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
-      const search = String(req.query.search ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search);
       const allMembers = await storage.getAllTeamMembers();
       const mapped = allMembers.map(toAdminTeamMember);
-      const filtered = mapped.filter((item) => !search || item.name.toLowerCase().includes(search));
+      const filtered = searchAndRank(mapped, search, (item) => [
+        item.name,
+        item.position,
+        item.department,
+        item.bio,
+        item.email
+      ]);
       const { items, total } = paginate(filtered, page, limit);
       res.json({ members: items, total });
     } catch (error) {
@@ -5911,7 +6540,7 @@ async function registerRoutes(app2) {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
-      const search = String(req.query.search ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search);
       const statusFilter = String(req.query.status ?? "").toLowerCase();
       const allEvents = await storage.getAllEvents();
       const mapped = await Promise.all(allEvents.map(toAdminEvent));
@@ -6078,7 +6707,7 @@ async function registerRoutes(app2) {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
-      const search = String(req.query.search ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search);
       const statusFilter = String(req.query.status ?? "").toLowerCase();
       const allApplications = await storage.getAllApplications();
       const filtered = statusFilter ? allApplications.filter((app3) => app3.status === statusFilter) : allApplications;
@@ -6098,9 +6727,14 @@ async function registerRoutes(app2) {
           };
         })
       );
-      const searched = search ? enriched.filter(
-        (app3) => app3.applicantName.toLowerCase().includes(search) || app3.applicantEmail.toLowerCase().includes(search) || app3.opportunityTitle.toLowerCase().includes(search) || app3.opportunityType.toLowerCase().includes(search)
-      ) : enriched;
+      const searched = search ? searchAndRank(enriched, search, (app3) => [
+        app3.applicantName,
+        app3.applicantEmail,
+        app3.opportunityTitle,
+        app3.opportunityType,
+        app3.status,
+        app3.coverLetter
+      ]) : enriched;
       const { items, total } = paginate(searched, page, limit);
       res.json({ applications: items, total });
     } catch (error) {
@@ -6110,7 +6744,7 @@ async function registerRoutes(app2) {
   });
   app2.get("/api/admin/applications/export", authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const search = String(req.query.search ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search);
       const statusFilter = String(req.query.status ?? "").toLowerCase();
       const allApplications = await storage.getAllApplications();
       const filtered = statusFilter ? allApplications.filter((app3) => app3.status === statusFilter) : allApplications;
@@ -6131,9 +6765,13 @@ async function registerRoutes(app2) {
           };
         })
       );
-      const searched = search ? enriched.filter(
-        (app3) => app3.applicantName.toLowerCase().includes(search) || app3.applicantEmail.toLowerCase().includes(search) || app3.opportunityTitle.toLowerCase().includes(search) || app3.opportunityType.toLowerCase().includes(search)
-      ) : enriched;
+      const searched = search ? searchAndRank(enriched, search, (app3) => [
+        app3.applicantName,
+        app3.applicantEmail,
+        app3.opportunityTitle,
+        app3.opportunityType,
+        app3.status
+      ]) : enriched;
       const headers = [
         "Application ID",
         "Applicant Name",
@@ -6255,32 +6893,100 @@ async function registerRoutes(app2) {
       res.status(400).json({ message: "Failed to update application", error: getErrorMessage(error) });
     }
   });
-  app2.get("/api/admin/ai-chat/conversations", authenticateToken, requireAdmin, (_req, res) => {
-    res.json({ conversations: [], total: 0 });
+  app2.get("/api/admin/ai-chat/conversations", authenticateToken, requireAdmin, (req, res) => {
+    const { page, limit, offset } = parsePagination(req.query.page, req.query.limit, 100);
+    const search = normalizeSearchQuery(req.query.search);
+    const channel = normalizeSearchQuery(req.query.channel);
+    const flag = normalizeSearchQuery(req.query.flag);
+    const status = normalizeSearchQuery(req.query.status);
+    const filtered = searchAndRank(listAiChatConversations(), search, (conversation) => [
+      conversation.id,
+      conversation.userId,
+      conversation.userEmail,
+      conversation.channel,
+      conversation.summary,
+      conversation.moderationFlags,
+      conversation.messages.map((item) => item.content)
+    ]).filter((conversation) => {
+      const matchesChannel = !channel || conversation.channel === channel;
+      const matchesFlag = !flag || (flag === "any" || flag === "flagged") && conversation.moderationFlags.length > 0 || conversation.moderationFlags.includes(flag);
+      const matchesStatus = !status || status === "active" && conversation.isActive || status === "closed" && !conversation.isActive;
+      return matchesChannel && matchesFlag && matchesStatus;
+    });
+    res.json({
+      conversations: filtered.slice(offset, offset + limit),
+      total: filtered.length,
+      page,
+      limit
+    });
   });
-  app2.get("/api/admin/ai-chat/conversations/:id", authenticateToken, requireAdmin, (_req, res) => {
-    res.status(404).json({ message: "Conversation not found" });
+  app2.get("/api/admin/ai-chat/conversations/:id", authenticateToken, requireAdmin, (req, res) => {
+    const conversation = getAiChatConversation(req.params.id);
+    if (!conversation) return res.status(404).json({ message: "Conversation not found" });
+    res.json(conversation);
+  });
+  app2.put("/api/admin/ai-chat/conversations/:id/close", authenticateToken, requireAdmin, async (req, res) => {
+    const conversation = closeAiChatConversation(req.params.id);
+    if (!conversation) return res.status(404).json({ message: "Conversation not found" });
+    await storage.logAnalytics({
+      event: "admin_ai_chat_closed",
+      userId: getAuthenticatedUser(req).id,
+      metadata: { conversationId: conversation.id },
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent")
+    });
+    broadcast("ai-chat", { type: "ai_chat_updated", conversation });
+    res.json(conversation);
   });
   app2.get("/api/admin/ai/conversations", authenticateToken, requireAdmin, (req, res) => {
     res.redirect(307, "/api/admin/ai-chat/conversations");
   });
   app2.post("/api/admin/ai/chat", authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const { message } = req.body;
-      if (!message) return res.status(400).json({ message: "Message is required" });
-      const response = await getChatResponse(String(message));
-      res.json({ response });
+      const payload = chatRequestSchema.parse(req.body);
+      const user = getAuthenticatedUser(req);
+      const existing = payload.conversationId ? getAiChatConversation(payload.conversationId) : void 0;
+      const response = await getChatResponse(payload.message, {
+        channel: "admin",
+        platformContext: await buildAiPlatformContext(),
+        history: existing?.messages.map((item) => ({
+          role: item.role === "system" ? "assistant" : item.role,
+          content: item.content
+        }))
+      });
+      const conversation = appendAiConversationTurn({
+        conversationId: payload.conversationId,
+        userId: String(user.id),
+        userEmail: user.email,
+        channel: "admin",
+        message: payload.message,
+        response
+      });
+      await storage.logAnalytics({
+        event: "admin_ai_chat_message",
+        userId: user.id,
+        metadata: {
+          conversationId: conversation.id,
+          flags: conversation.moderationFlags
+        },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent")
+      });
+      broadcast("ai-chat", { type: "ai_chat_updated", conversation });
+      res.json({ response, conversationId: conversation.id, conversation });
     } catch (error) {
       console.error("Admin AI chat error:", error);
-      res.status(500).json({ message: "Failed to get chat response", error: getErrorMessage(error) });
+      res.status(400).json({ message: "Failed to get chat response", error: getErrorMessage(error) });
     }
   });
   app2.get("/api/admin/roles", authenticateToken, requireSuperAdmin, (req, res) => {
-    const search = String(req.query.search ?? "").toLowerCase();
-    const roles = getAdminRoles().filter((role) => {
-      if (!search) return true;
-      return role.name.toLowerCase().includes(search) || role.description.toLowerCase().includes(search);
-    }).map((role) => ({
+    const search = normalizeSearchQuery(req.query.search);
+    const roles = searchAndRank(getAdminRoles(), search, (role) => [
+      role.id,
+      role.name,
+      role.description,
+      role.permissions
+    ]).map((role) => ({
       ...role,
       isSystem: isCoreAdminRole(role.id)
     }));
@@ -6778,12 +7484,17 @@ async function registerRoutes(app2) {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
       const status = String(req.query.status ?? "").toLowerCase();
-      const search = String(req.query.search ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search);
       const allSubscribers = await storage.getAllSubscribers();
-      const filtered = allSubscribers.filter((subscriber) => {
+      const filtered = searchAndRank(allSubscribers, search, (subscriber) => [
+        subscriber.email,
+        subscriber.name,
+        subscriber.preferences,
+        subscriber.source,
+        subscriber.status
+      ]).filter((subscriber) => {
         const matchesStatus = !status || subscriber.status === status;
-        const matchesSearch = !search || subscriber.email.toLowerCase().includes(search) || (subscriber.name || "").toLowerCase().includes(search);
-        return matchesStatus && matchesSearch;
+        return matchesStatus;
       });
       const safePage = Number.isFinite(page) && page > 0 ? page : 1;
       const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 100) : 50;
@@ -6829,6 +7540,46 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to fetch messages" });
     }
   });
+  app2.get("/api/admin/messages", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { page, limit, offset } = parsePagination(req.query.page, req.query.limit, 100);
+      const search = normalizeSearchQuery(req.query.search);
+      const status = normalizeSearchQuery(req.query.status);
+      const allMessages = await storage.getAllMessages();
+      const filtered = searchAndRank(allMessages, search, (message) => [
+        message.name,
+        message.email,
+        message.phone,
+        message.subject,
+        message.message
+      ]).filter((message) => {
+        if (status === "unread") return !message.isRead;
+        if (status === "read") return Boolean(message.isRead);
+        return true;
+      });
+      res.json({
+        messages: filtered.slice(offset, offset + limit),
+        total: filtered.length,
+        unread: allMessages.filter((message) => !message.isRead).length,
+        page,
+        limit
+      });
+    } catch (error) {
+      console.error("Admin messages fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch messages" });
+    }
+  });
+  app2.put("/api/admin/messages/:id/read", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const message = await storage.markMessageRead(id);
+      res.json(message);
+    } catch (error) {
+      console.error("Admin message read error:", error);
+      res.status(500).json({ message: "Failed to mark message as read" });
+    }
+  });
   app2.put("/api/messages/:id/read", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
@@ -6842,15 +7593,40 @@ async function registerRoutes(app2) {
   });
   app2.post("/api/chat", async (req, res) => {
     try {
-      const { message } = req.body;
-      if (!message) {
-        return res.status(400).json({ message: "Message is required" });
-      }
-      const response = await getChatResponse(message);
-      res.json({ response });
+      const payload = chatRequestSchema.parse(req.body);
+      const requester = getOptionalAuthenticatedUser(req);
+      const existing = payload.conversationId ? getAiChatConversation(payload.conversationId) : void 0;
+      const response = await getChatResponse(payload.message, {
+        channel: "public",
+        platformContext: await buildAiPlatformContext(),
+        history: existing?.messages.map((item) => ({
+          role: item.role === "system" ? "assistant" : item.role,
+          content: item.content
+        }))
+      });
+      const conversation = appendAiConversationTurn({
+        conversationId: payload.conversationId,
+        userId: requester ? String(requester.id) : null,
+        userEmail: requester?.email ?? null,
+        channel: "public",
+        message: payload.message,
+        response
+      });
+      await storage.logAnalytics({
+        event: "public_ai_chat_message",
+        userId: requester?.id ?? null,
+        metadata: {
+          conversationId: conversation.id,
+          flags: conversation.moderationFlags
+        },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent")
+      });
+      broadcast("ai-chat", { type: "ai_chat_updated", conversation });
+      res.json({ response, conversationId: conversation.id });
     } catch (error) {
       console.error("Chat error:", error);
-      res.status(500).json({ message: "Failed to get chat response", error: getErrorMessage(error) });
+      res.status(400).json({ message: "Failed to get chat response", error: getErrorMessage(error) });
     }
   });
   return httpServer;
@@ -7103,7 +7879,7 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   const startTime = Date.now();
   const requestPath = req.path;
-  const requestId = randomUUID2();
+  const requestId = randomUUID3();
   res.setHeader("X-Request-Id", requestId);
   let responseBody;
   const originalJson = res.json.bind(res);

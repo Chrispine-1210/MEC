@@ -10,7 +10,7 @@ import {
   type EventComment, type InsertEventComment, type EventReaction, type InsertEventReaction
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, asc, and, or, like, count, sql } from "drizzle-orm";
+import { eq, desc, asc, and, or, ilike, count, sql } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -227,10 +227,10 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(scholarships.isActive, true),
           or(
-            like(scholarships.title, `%${query}%`),
-            like(scholarships.description, `%${query}%`),
-            like(scholarships.institution, `%${query}%`),
-            like(scholarships.country, `%${query}%`)
+            ilike(scholarships.title, `%${query}%`),
+            ilike(scholarships.description, `%${query}%`),
+            ilike(scholarships.institution, `%${query}%`),
+            ilike(scholarships.country, `%${query}%`)
           )
         )
       )
@@ -282,10 +282,10 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(jobs.isActive, true),
           or(
-            like(jobs.title, `%${query}%`),
-            like(jobs.description, `%${query}%`),
-            like(jobs.company, `%${query}%`),
-            like(jobs.location, `%${query}%`)
+            ilike(jobs.title, `%${query}%`),
+            ilike(jobs.description, `%${query}%`),
+            ilike(jobs.company, `%${query}%`),
+            ilike(jobs.location, `%${query}%`)
           )
         )
       )
@@ -446,9 +446,9 @@ export class DatabaseStorage implements IStorage {
       .from(blogPosts)
       .where(
         or(
-          like(blogPosts.title, `%${query}%`),
-          like(blogPosts.content, `%${query}%`),
-          like(blogPosts.category, `%${query}%`)
+          ilike(blogPosts.title, `%${query}%`),
+          ilike(blogPosts.content, `%${query}%`),
+          ilike(blogPosts.category, `%${query}%`)
         )
       )
       .orderBy(desc(blogPosts.createdAt));
@@ -569,10 +569,10 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(events.status, "published"),
           or(
-            like(events.title, `%${query}%`),
-            like(events.description, `%${query}%`),
-            like(events.category, `%${query}%`),
-            like(events.location, `%${query}%`),
+            ilike(events.title, `%${query}%`),
+            ilike(events.description, `%${query}%`),
+            ilike(events.category, `%${query}%`),
+            ilike(events.location, `%${query}%`),
           ),
         ),
       )

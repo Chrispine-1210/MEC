@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Users, UserPlus, ShieldCheck } from "lucide-react";
 import type { User } from "@shared/schema";
+import { getInitialUrlSearchParam } from "@/hooks/use-url-search-param";
 
 const createSchema = insertUserSchema.extend({
   password: z.string().min(8, "Password must be at least 8 characters"),
@@ -33,7 +34,7 @@ const roleColors: Record<string, string> = {
 export default function UsersPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => getInitialUrlSearchParam());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const { toast } = useToast();
@@ -242,7 +243,11 @@ export default function UsersPage() {
         data={data?.users || []}
         loading={isLoading}
         pagination={{ page, limit, total: data?.total || 0, onPageChange: setPage, onLimitChange: setLimit }}
-        onSearch={setSearch}
+        searchPlaceholder="Search users by name, email, role, or region..."
+        onSearch={(value) => {
+          setSearch(value);
+          setPage(1);
+        }}
       />
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); }}>

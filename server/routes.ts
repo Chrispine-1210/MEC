@@ -22,7 +22,7 @@ import {
   insertSubscriberSchema,
 } from "@shared/schema";
 import bcrypt from "bcryptjs";
-import { randomBytes } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 import fs from "fs";
 import jwt from "jsonwebtoken";
 import multer from "multer";
@@ -53,8 +53,10 @@ import {
   getScholarshipMeta,
   getTeamMeta,
   getUserMeta,
+  getAiChatConversation,
   isCoreAdminRole,
   isNotificationRead,
+  listAiChatConversations,
   markNotificationRead,
   markNotificationsRead,
   setBlogMeta,
@@ -63,9 +65,13 @@ import {
   setScholarshipMeta,
   setTeamMeta,
   setUserMeta,
+  closeAiChatConversation,
+  upsertAiChatConversation,
   updateAdminSettings,
   upsertAdminRole,
   deleteAdminRole,
+  type AiChatConversation,
+  type AiChatMessage,
 } from "./admin-state";
 import {
   approvePayoutRequest,
@@ -91,6 +97,7 @@ import {
   updateReferralCampaign,
   verifyStripeWebhookEvent,
 } from "./referral-payments";
+import { normalizeSearchQuery, parsePagination, searchAndRank } from "./search";
 
 const JWT_SECRET = env.JWT_SECRET;
 
@@ -152,6 +159,11 @@ const publicApplicationRequestSchema = z.object({
   status: z.enum(["pending", "submitted", "in_review"]).default("pending"),
   documents: z.record(z.unknown()).optional(),
   notes: z.string().trim().max(4000).optional(),
+});
+
+const chatRequestSchema = z.object({
+  message: z.string().trim().min(1).max(2000),
+  conversationId: z.string().trim().min(8).max(120).optional(),
 });
 
 const eventPayloadSchema = z.object({
@@ -478,6 +490,17 @@ const toAdminJob = (job: any) => {
     createdBy: job.createdBy ? String(job.createdBy) : null,
     createdAt: job.createdAt ?? null,
     updatedAt: job.updatedAt ?? null,
+  };
+};
+
+const toPublicJob = (job: any) => {
+  const meta = getJobMeta(job.id);
+  return {
+    ...job,
+    imageUrl: meta.featuredImage ?? job.imageUrl ?? null,
+    salaryRange: meta.salaryRange ?? null,
+    applicationUrl: meta.applicationUrl ?? null,
+    region: meta.region ?? null,
   };
 };
 
@@ -1001,6 +1024,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Admin realtime event error:", error);
     }
+  };
+
+  const buildAiPlatformContext = async () => {
+    const [scholarshipsList, jobsList, partnersList, blogList] = await Promise.all([
+      storage.getActiveScholarships(),
+      storage.getActiveJobs(),
+      storage.getActivePartners(),
+      storage.getPublishedBlogPosts(),
+    ]);
+
+    const scholarshipsContext = scholarshipsList
+      .slice(0, 8)
+      .map((item) => `Scholarship: ${item.title} at ${item.institution}, ${item.country}; category ${item.category}; deadline ${item.deadline}`)
+      .join("\n");
+    const jobsContext = jobsList
+      .slice(0, 8)
+      .map((item) => `Job: ${item.title} at ${item.company}, ${item.location}; type ${item.jobType}; deadline ${item.deadline ?? "open"}`)
+      .join("\n");
+    const partnersContext = partnersList
+      .map(toPublicPartner)
+      .slice(0, 8)
+      .map((item) => `Partner: ${item.name}; ${item.country ?? "Global"}; ${item.partnershipType ?? "partner"}; video ${item.videoUrl ? "available" : "not listed"}`)
+      .join("\n");
+    const blogContext = blogList
+      .slice(0, 5)
+      .map((item) => `Blog: ${item.title}; category ${item.category}`)
+      .join("\n");
+
+    return [scholarshipsContext, jobsContext, partnersContext, blogContext]
+      .filter(Boolean)
+      .join("\n");
+  };
+
+  const detectChatFlags = (message: string) => {
+    const normalized = normalizeSearchQuery(message);
+    const flags: string[] = [];
+    if (/(urgent|emergency|asap|immediately|deadline today)/.test(normalized)) flags.push("urgent");
+    if (/(visa|passport|immigration|payment|refund|fees?|bank|money)/.test(normalized)) flags.push("sensitive");
+    if (/(angry|complaint|scam|fraud|lawsuit|legal|police)/.test(normalized)) flags.push("escalation");
+    return flags;
+  };
+
+  const buildConversationSummary = (messages: AiChatMessage[]) => {
+    const lastUserMessage = [...messages].reverse().find((item) => item.role === "user");
+    return lastUserMessage?.content.slice(0, 180) ?? "AI chat conversation";
+  };
+
+  const appendAiConversationTurn = ({
+    conversationId,
+    userId,
+    userEmail,
+    channel,
+    message,
+    response,
+  }: {
+    conversationId?: string;
+    userId: string | null;
+    userEmail?: string | null;
+    channel: "public" | "admin";
+    message: string;
+    response: string;
+  }) => {
+    const now = new Date().toISOString();
+    const id = conversationId || randomUUID();
+    const existing = getAiChatConversation(id);
+    const messages: AiChatMessage[] = [
+      ...(existing?.messages ?? []),
+      { role: "user", content: message, createdAt: now },
+      { role: "assistant", content: response, createdAt: new Date().toISOString() },
+    ];
+    const flags = Array.from(new Set([...(existing?.moderationFlags ?? []), ...detectChatFlags(message)]));
+
+    return upsertAiChatConversation({
+      id,
+      userId,
+      userEmail,
+      channel,
+      messages,
+      summary: buildConversationSummary(messages),
+      isActive: true,
+      moderationFlags: flags,
+      createdAt: existing?.createdAt ?? now,
+      lastMessageAt: now,
+    });
   };
 
   const uploadsDir = path.resolve(import.meta.dirname, "..", "uploads");
@@ -1558,6 +1665,132 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/search', async (req, res) => {
+    try {
+      const query = normalizeSearchQuery(req.query.q ?? req.query.search);
+      if (query.length < 2) {
+        return res.json({ query, results: [], total: 0 });
+      }
+
+      const [scholarshipsList, jobsList, partnersList, blogList, eventsList, teamList] = await Promise.all([
+        storage.getActiveScholarships(),
+        storage.getActiveJobs(),
+        storage.getActivePartners(),
+        storage.getPublishedBlogPosts(),
+        storage.getPublishedEvents(),
+        storage.getActiveTeamMembers(),
+      ]);
+
+      const results = [
+        ...searchAndRank(scholarshipsList, query, (item) => [
+          item.title,
+          item.description,
+          item.institution,
+          item.country,
+          item.category,
+          item.requirements as any,
+        ]).slice(0, 8).map((item) => ({
+          id: item.id,
+          type: "scholarship",
+          title: item.title,
+          description: item.description,
+          href: `/scholarships/${item.id}`,
+          category: item.category,
+          imageUrl: item.imageUrl,
+        })),
+        ...searchAndRank(jobsList, query, (item) => [
+          item.title,
+          item.description,
+          item.company,
+          item.location,
+          item.jobType,
+          item.requirements as any,
+        ]).slice(0, 8).map((item) => ({
+          id: item.id,
+          type: "job",
+          title: item.title,
+          description: item.description,
+          href: `/jobs/${item.id}`,
+          category: item.jobType,
+          imageUrl: getJobMeta(item.id).featuredImage ?? null,
+        })),
+        ...searchAndRank(partnersList.map(toPublicPartner), query, (item) => [
+          item.name,
+          item.description,
+          item.country,
+          item.partnershipType,
+          item.ranking,
+        ]).slice(0, 8).map((item) => ({
+          id: item.id,
+          type: "partner",
+          title: item.name,
+          description: item.description,
+          href: `/partners/${item.id}`,
+          category: item.partnershipType ?? item.country,
+          imageUrl: item.logoUrl,
+        })),
+        ...searchAndRank(blogList, query, (item) => [
+          item.title,
+          item.excerpt,
+          item.content,
+          item.category,
+          item.tags,
+        ]).slice(0, 8).map((item) => ({
+          id: item.id,
+          type: "blog",
+          title: item.title,
+          description: item.excerpt ?? item.content,
+          href: `/blog/${item.id}`,
+          category: item.category,
+          imageUrl: item.imageUrl,
+        })),
+        ...searchAndRank(eventsList, query, (item) => [
+          item.title,
+          item.summary,
+          item.description,
+          item.category,
+          item.location,
+          item.tags,
+        ]).slice(0, 6).map((item) => ({
+          id: item.id,
+          type: "event",
+          title: item.title,
+          description: item.summary ?? item.description,
+          href: `/events/${item.slug || item.id}`,
+          category: item.category,
+          imageUrl: item.coverImage,
+        })),
+        ...searchAndRank(teamList, query, (item) => [
+          item.name,
+          item.position,
+          item.bio,
+          item.email,
+        ]).slice(0, 6).map((item) => ({
+          id: item.id,
+          type: "team",
+          title: item.name,
+          description: item.position,
+          href: "/team",
+          category: "Team",
+          imageUrl: item.imageUrl,
+        })),
+      ].slice(0, 30);
+
+      await storage.logAnalytics({
+        event: "site_search",
+        userId: getOptionalAuthenticatedUser(req)?.id ?? null,
+        metadata: { query, total: results.length },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+
+      res.json({ query, results, total: results.length });
+    } catch (error) {
+      console.error("Site search error:", error);
+      res.status(500).json({ message: "Failed to search content" });
+    }
+  });
+
   // Scholarships routes
   app.get('/api/scholarships', async (req, res) => {
     try {
@@ -1574,8 +1807,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/scholarships/search', async (req, res) => {
     try {
-      const q = req.query.q ?? req.query.p0;
-      if (!q || typeof q !== 'string') {
+      const q = normalizeSearchQuery(req.query.q ?? req.query.p0);
+      if (q.length < 2) {
         return res.status(400).json({ message: 'Search query is required' });
       }
       
@@ -1665,7 +1898,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const jobs = isAdmin(requester)
         ? await storage.getAllJobs()
         : await storage.getActiveJobs();
-      res.json(jobs);
+      res.json(jobs.map(toPublicJob));
     } catch (error) {
       console.error('Jobs fetch error:', error);
       res.status(500).json({ message: 'Failed to fetch jobs' });
@@ -1674,13 +1907,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/jobs/search', async (req, res) => {
     try {
-      const q = req.query.q ?? req.query.p0;
-      if (!q || typeof q !== 'string') {
+      const q = normalizeSearchQuery(req.query.q ?? req.query.p0);
+      if (q.length < 2) {
         return res.status(400).json({ message: 'Search query is required' });
       }
       
       const jobs = await storage.searchJobs(q);
-      res.json(jobs);
+      res.json(jobs.map(toPublicJob));
     } catch (error) {
       console.error('Job search error:', error);
       res.status(500).json({ message: 'Failed to search jobs' });
@@ -1697,7 +1930,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isVisible = job && (isAdmin(requester) || job.isActive !== false);
 
       if (!isVisible) return res.status(404).json({ message: 'Job not found' });
-      res.json(job);
+      res.json(toPublicJob(job));
     } catch (error) {
       console.error('Job detail fetch error:', error);
       res.status(500).json({ message: 'Failed to fetch job' });
@@ -2063,8 +2296,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/blog-posts/search', async (req, res) => {
     try {
-      const q = req.query.q ?? req.query.p0;
-      if (!q || typeof q !== 'string') {
+      const q = normalizeSearchQuery(req.query.q ?? req.query.p0);
+      if (q.length < 2) {
         return res.status(400).json({ message: 'Search query is required' });
       }
       
@@ -2292,7 +2525,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? await storage.getAllEvents()
         : await storage.getPublishedEvents();
 
-      const search = String(req.query.search ?? req.query.q ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search ?? req.query.q);
       const category = String(req.query.category ?? "").toLowerCase();
       const location = String(req.query.location ?? "").toLowerCase();
       const type = String(req.query.type ?? "").toLowerCase();
@@ -2302,15 +2535,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const date = String(req.query.date ?? "").toLowerCase();
 
       const enriched = await Promise.all(allEvents.map(toPublicEvent));
-      const filtered = enriched.filter((event) => {
+      const searchMatched = searchAndRank(enriched, search, (event) => [
+        event.title,
+        event.summary,
+        event.description,
+        event.category,
+        event.location,
+        event.eventType,
+        event.tags,
+      ]);
+      const filtered = searchMatched.filter((event) => {
         const runtimeStatus = String(event.runtimeStatus ?? "").toLowerCase();
         const startsAt = new Date(event.startAt).getTime();
-        const matchesSearch =
-          !search ||
-          event.title.toLowerCase().includes(search) ||
-          event.description.toLowerCase().includes(search) ||
-          event.category.toLowerCase().includes(search) ||
-          event.location.toLowerCase().includes(search);
         const matchesCategory = !category || event.category.toLowerCase() === category;
         const matchesLocation = !location || event.location.toLowerCase().includes(location);
         const matchesType = !type || event.eventType.toLowerCase().includes(type);
@@ -2335,7 +2571,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           (date === "week" && startsAt <= Date.now() + 7 * 24 * 60 * 60 * 1000) ||
           (date === "month" && startsAt <= Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-        return matchesSearch && matchesCategory && matchesLocation && matchesType && matchesFormat && matchesPrice && matchesStatus && matchesDate;
+        return matchesCategory && matchesLocation && matchesType && matchesFormat && matchesPrice && matchesStatus && matchesDate;
       });
 
       res.json(filtered);
@@ -2347,8 +2583,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/events/search', async (req, res) => {
     try {
-      const q = req.query.q ?? req.query.p0;
-      if (!q || typeof q !== 'string') {
+      const q = normalizeSearchQuery(req.query.q ?? req.query.p0);
+      if (q.length < 2) {
         return res.status(400).json({ message: 'Search query is required' });
       }
       const events = await storage.searchEvents(q);
@@ -2946,12 +3182,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  const releaseWorker = setInterval(() => {
-    releaseEligibleCommissions().catch((error) => {
-      console.error('Scheduled commission release error:', error);
-    });
-  }, env.REFERRAL_RELEASE_WORKER_MS);
-  releaseWorker.unref?.();
+  const shouldRunReferralReleaseWorker =
+    env.REFERRAL_RELEASE_WORKER_ENABLED ?? env.NODE_ENV === "production";
+
+  if (shouldRunReferralReleaseWorker) {
+    const releaseWorker = setInterval(() => {
+      releaseEligibleCommissions().catch((error) => {
+        if (isTransientDbConnectivityError(error)) {
+          console.warn(
+            `[referrals] Scheduled commission release skipped after a transient database connection issue: ${getErrorMessage(error)}`,
+          );
+          return;
+        }
+
+        console.error('Scheduled commission release error:', error);
+      });
+    }, env.REFERRAL_RELEASE_WORKER_MS);
+    releaseWorker.unref?.();
+  } else {
+    console.info(
+      `[referrals] Scheduled commission release worker disabled in ${env.NODE_ENV}. Set REFERRAL_RELEASE_WORKER_ENABLED=true to run it locally.`,
+    );
+  }
 
   // Admin routes (shared backend)
   const paginate = <T,>(items: T[], page: number, limit: number) => {
@@ -2959,6 +3211,242 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const start = (page - 1) * limit;
     return { items: items.slice(start, start + limit), total };
   };
+
+  const compactText = (value: unknown, fallback = "") => {
+    const text =
+      typeof value === "string"
+        ? value
+        : value === null || value === undefined
+          ? fallback
+          : JSON.stringify(value);
+
+    return text.replace(/\s+/g, " ").trim().slice(0, 180);
+  };
+
+  app.get('/api/admin/search', authenticateToken, requireAdminPortal, async (req, res) => {
+    try {
+      const query = normalizeSearchQuery(req.query.q ?? req.query.search);
+      const requester = getAuthenticatedUser(req);
+      const canSearchSensitive = isAdmin(requester);
+
+      if (query.length < 2) {
+        return res.json({ query, results: [], total: 0 });
+      }
+
+      const [
+        scholarships,
+        jobs,
+        partners,
+        blogPosts,
+        teamMembers,
+        events,
+        users,
+        applications,
+        messages,
+      ] = await Promise.all([
+        storage.getAllScholarships(),
+        storage.getAllJobs(),
+        storage.getAllPartners(),
+        storage.getAllBlogPosts(),
+        storage.getAllTeamMembers(),
+        storage.getAllEvents(),
+        canSearchSensitive ? storage.getAllUsers() : Promise.resolve([]),
+        canSearchSensitive ? storage.getAllApplications() : Promise.resolve([]),
+        canSearchSensitive ? storage.getAllMessages() : Promise.resolve([]),
+      ]);
+      const usersById = new Map(users.map((user) => [user.id, user]));
+
+      const results = [
+        ...searchAndRank(scholarships.map(toAdminScholarship), query, (item) => [
+          item.title,
+          item.description,
+          item.institution,
+          item.region,
+          item.category,
+          item.status,
+          item.requirements,
+        ]).slice(0, 8).map((item) => ({
+          id: item.id,
+          type: "scholarship",
+          title: item.title,
+          description: `${item.institution || "Scholarship"} • ${item.region || "Global"} • ${item.status}`,
+          href: `/admin/scholarships?search=${encodeURIComponent(item.title)}`,
+          category: item.category,
+          status: item.status,
+        })),
+        ...searchAndRank(jobs.map(toAdminJob), query, (item) => [
+          item.title,
+          item.description,
+          item.company,
+          item.location,
+          item.region,
+          item.jobType,
+          item.status,
+          item.requirements,
+        ]).slice(0, 8).map((item) => ({
+          id: item.id,
+          type: "job",
+          title: item.title,
+          description: `${item.company || "Job"} • ${item.location || item.region || "Global"} • ${item.status}`,
+          href: `/admin/jobs?search=${encodeURIComponent(item.title)}`,
+          category: item.jobType,
+          status: item.status,
+        })),
+        ...searchAndRank(partners.map(toAdminPartner), query, (item) => [
+          item.name,
+          item.description,
+          item.website,
+          item.region,
+          item.partnershipType,
+          item.videoTitle,
+          item.videoDescription,
+        ]).slice(0, 8).map((item) => ({
+          id: item.id,
+          type: "partner",
+          title: item.name,
+          description: `${item.partnershipType || "Partner"} • ${item.region || "Global"}`,
+          href: `/admin/partners?search=${encodeURIComponent(item.name)}`,
+          category: item.partnershipType,
+          status: item.isActive ? "active" : "inactive",
+        })),
+        ...searchAndRank(blogPosts.map(toAdminBlogPost), query, (item) => [
+          item.title,
+          item.excerpt,
+          item.content,
+          item.category,
+          item.tags,
+          item.status,
+        ]).slice(0, 8).map((item) => ({
+          id: item.id,
+          type: "blog",
+          title: item.title,
+          description: `${item.category || "Blog"} • ${item.status}`,
+          href: `/admin/blog?search=${encodeURIComponent(item.title)}`,
+          category: item.category,
+          status: item.status,
+        })),
+        ...searchAndRank(teamMembers.map(toAdminTeamMember), query, (item) => [
+          item.name,
+          item.position,
+          item.bio,
+          item.email,
+          item.department,
+          item.linkedIn,
+          item.twitter,
+        ]).slice(0, 6).map((item) => ({
+          id: item.id,
+          type: "team",
+          title: item.name,
+          description: `${item.position || "Team member"}${item.department ? ` • ${item.department}` : ""}`,
+          href: `/admin/team?search=${encodeURIComponent(item.name)}`,
+          category: item.department || "Team",
+          status: item.isActive ? "active" : "inactive",
+        })),
+        ...searchAndRank(await Promise.all(events.map(toAdminEvent)), query, (item) => [
+          item.title,
+          item.summary,
+          item.description,
+          item.location,
+          item.category,
+          item.status,
+          item.tags,
+        ]).slice(0, 6).map((item) => ({
+          id: item.id,
+          type: "event",
+          title: item.title,
+          description: `${item.category || "Event"} • ${item.location || "Location TBA"} • ${item.status}`,
+          href: `/admin/activity?search=${encodeURIComponent(item.title)}`,
+          category: item.category,
+          status: item.status,
+        })),
+        ...searchAndRank(users.map(toAdminUser), query, (item) => [
+          item.username,
+          item.email,
+          item.firstName,
+          item.lastName,
+          item.role,
+          item.region,
+        ]).slice(0, 6).map((item) => ({
+          id: item.id,
+          type: "user",
+          title: `${item.firstName} ${item.lastName}`.trim() || item.username,
+          description: `${item.email} • ${item.role}`,
+          href: `/admin/users?search=${encodeURIComponent(item.email || item.username)}`,
+          category: item.role,
+          status: item.isActive ? "active" : "inactive",
+        })),
+        ...searchAndRank(applications, query, (item) => [
+          item.id,
+          item.type,
+          item.status,
+          usersById.get(item.userId)?.firstName,
+          usersById.get(item.userId)?.lastName,
+          usersById.get(item.userId)?.email,
+          item.documents as any,
+          item.referenceId,
+        ]).slice(0, 6).map((item: any) => {
+          const applicantName =
+            compactText(`${usersById.get(item.userId)?.firstName ?? ""} ${usersById.get(item.userId)?.lastName ?? ""}`) ||
+            compactText(usersById.get(item.userId)?.email) ||
+            `Application ${item.id}`;
+          return {
+            id: String(item.id),
+            type: "application",
+            title: applicantName,
+            description: `${item.type || "Application"} • ${item.status || "pending"}`,
+            href: `/admin/applications?search=${encodeURIComponent(applicantName)}`,
+            category: item.type,
+            status: item.status,
+          };
+        }),
+        ...searchAndRank(messages, query, (item) => [
+          item.name,
+          item.email,
+          item.phone,
+          item.subject,
+          item.message,
+          item.isRead ? "read" : "unread",
+        ]).slice(0, 6).map((item) => ({
+          id: String(item.id),
+          type: "message",
+          title: item.subject || `Message from ${item.name}`,
+          description: `${item.name} • ${item.email} • ${compactText(item.message)}`,
+          href: `/admin/messages?search=${encodeURIComponent(item.email || item.name)}`,
+          category: "Message",
+          status: item.isRead ? "read" : "unread",
+        })),
+        ...searchAndRank(listAiChatConversations(), query, (item) => [
+          item.id,
+          item.userEmail,
+          item.channel,
+          item.summary,
+          item.moderationFlags,
+          item.messages.map((message) => message.content),
+        ]).slice(0, 6).map((item) => ({
+          id: item.id,
+          type: "ai",
+          title: item.summary || "AI conversation",
+          description: `${item.channel} chat • ${item.messages.length} messages`,
+          href: `/admin/ai-chat?search=${encodeURIComponent(item.summary || item.id)}`,
+          category: item.channel,
+          status: item.isActive ? "active" : "closed",
+        })),
+      ].slice(0, 40);
+
+      await storage.logAnalytics({
+        event: "admin_global_search",
+        userId: requester.id,
+        metadata: { query, total: results.length },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+
+      res.json({ query, results, total: results.length });
+    } catch (error) {
+      console.error("Admin global search error:", error);
+      res.status(500).json({ message: "Failed to search admin content" });
+    }
+  });
 
   app.get('/api/admin/dashboard/stats', authenticateToken, requireAdminPortal, async (_req, res) => {
     try {
@@ -3013,7 +3501,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalPartners: partners.length,
         totalBlogPosts: blogPosts.length,
         totalApplications: applications.length,
-        totalActiveChats: 0,
+        totalActiveChats: listAiChatConversations().filter((conversation) => conversation.isActive).length,
         activeScholarships: activeScholarships.length,
         activeJobs: activeJobs.length,
         pendingApplications,
@@ -3059,15 +3547,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
-      const search = String(req.query.search ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search);
 
       const allUsers = await storage.getAllUsers();
-      const filtered = search
-        ? allUsers.filter((user) =>
-            user.username.toLowerCase().includes(search) ||
-            user.email.toLowerCase().includes(search),
-          )
-        : allUsers;
+      const filtered = searchAndRank(allUsers, search, (user) => [
+        user.username,
+        user.email,
+        user.firstName,
+        user.lastName,
+        user.role,
+        getUserMeta(user.id).region,
+      ]);
 
       const { items, total } = paginate(filtered, page, limit);
       res.json({ users: items.map(toAdminUser), total });
@@ -3206,19 +3696,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
-      const search = String(req.query.search ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search);
       const statusFilter = String(req.query.status ?? "").toLowerCase();
 
       const allScholarships = await storage.getAllScholarships();
       const mapped = allScholarships.map(toAdminScholarship);
-      const filtered = mapped.filter((item) => {
-        const matchesSearch =
-          !search ||
-          item.title.toLowerCase().includes(search) ||
-          item.description.toLowerCase().includes(search) ||
-          item.institution.toLowerCase().includes(search);
+      const filtered = searchAndRank(mapped, search, (item) => [
+        item.title,
+        item.description,
+        item.institution,
+        item.category,
+        item.region,
+        item.requirements,
+        item.eligibility,
+      ]).filter((item) => {
         const matchesStatus = !statusFilter || item.status === statusFilter;
-        return matchesSearch && matchesStatus;
+        return matchesStatus;
       });
 
       const { items, total } = paginate(filtered, page, limit);
@@ -3348,18 +3841,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
-      const search = String(req.query.search ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search);
       const statusFilter = String(req.query.status ?? "").toLowerCase();
 
       const allJobs = await storage.getAllJobs();
       const mapped = allJobs.map(toAdminJob);
-      const filtered = mapped.filter((item) => {
-        const matchesSearch =
-          !search ||
-          item.title.toLowerCase().includes(search) ||
-          item.company.toLowerCase().includes(search);
+      const filtered = searchAndRank(mapped, search, (item) => [
+        item.title,
+        item.description,
+        item.company,
+        item.location,
+        item.region,
+        item.jobType,
+        item.requirements,
+        item.benefits,
+      ]).filter((item) => {
         const matchesStatus = !statusFilter || item.status === statusFilter;
-        return matchesSearch && matchesStatus;
+        return matchesStatus;
       });
 
       const { items, total } = paginate(filtered, page, limit);
@@ -3491,14 +3989,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
-      const search = String(req.query.search ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search);
 
       const allPartners = await storage.getAllPartners();
       const mapped = allPartners.map(toAdminPartner);
-      const filtered = mapped.filter((item) => {
-        if (!search) return true;
-        return item.name.toLowerCase().includes(search);
-      });
+      const filtered = searchAndRank(mapped, search, (item) => [
+        item.name,
+        item.description,
+        item.region,
+        item.partnershipType,
+        item.website,
+        item.videoTitle,
+        item.videoDescription,
+        item.contactEmail,
+      ]);
 
       const { items, total } = paginate(filtered, page, limit);
       res.json({ partners: items, total });
@@ -3628,18 +4132,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
-      const search = String(req.query.search ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search);
       const statusFilter = String(req.query.status ?? "").toLowerCase();
 
       const allPosts = await storage.getAllBlogPosts();
       const mapped = allPosts.map(toAdminBlogPost);
-      const filtered = mapped.filter((item) => {
-        const matchesSearch =
-          !search ||
-          item.title.toLowerCase().includes(search) ||
-          item.content.toLowerCase().includes(search);
+      const filtered = searchAndRank(mapped, search, (item) => [
+        item.title,
+        item.excerpt,
+        item.content,
+        item.category,
+        item.tags,
+        item.slug,
+      ]).filter((item) => {
         const matchesStatus = !statusFilter || item.status === statusFilter;
-        return matchesSearch && matchesStatus;
+        return matchesStatus;
       });
 
       const { items, total } = paginate(filtered, page, limit);
@@ -3752,11 +4259,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
-      const search = String(req.query.search ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search);
 
       const allMembers = await storage.getAllTeamMembers();
       const mapped = allMembers.map(toAdminTeamMember);
-      const filtered = mapped.filter((item) => !search || item.name.toLowerCase().includes(search));
+      const filtered = searchAndRank(mapped, search, (item) => [
+        item.name,
+        item.position,
+        item.department,
+        item.bio,
+        item.email,
+      ]);
 
       const { items, total } = paginate(filtered, page, limit);
       res.json({ members: items, total });
@@ -3866,7 +4379,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
-      const search = String(req.query.search ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search);
       const statusFilter = String(req.query.status ?? "").toLowerCase();
 
       const allEvents = await storage.getAllEvents();
@@ -4057,7 +4570,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
-      const search = String(req.query.search ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search);
       const statusFilter = String(req.query.status ?? "").toLowerCase();
 
       const allApplications = await storage.getAllApplications();
@@ -4084,12 +4597,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       const searched = search
-        ? enriched.filter((app) =>
-            app.applicantName.toLowerCase().includes(search) ||
-            app.applicantEmail.toLowerCase().includes(search) ||
-            app.opportunityTitle.toLowerCase().includes(search) ||
-            app.opportunityType.toLowerCase().includes(search),
-          )
+        ? searchAndRank(enriched, search, (app) => [
+            app.applicantName,
+            app.applicantEmail,
+            app.opportunityTitle,
+            app.opportunityType,
+            app.status,
+            app.coverLetter,
+          ])
         : enriched;
 
       const { items, total } = paginate(searched, page, limit);
@@ -4102,7 +4617,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/admin/applications/export', authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const search = String(req.query.search ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search);
       const statusFilter = String(req.query.status ?? "").toLowerCase();
 
       const allApplications = await storage.getAllApplications();
@@ -4130,12 +4645,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       const searched = search
-        ? enriched.filter((app) =>
-            app.applicantName.toLowerCase().includes(search) ||
-            app.applicantEmail.toLowerCase().includes(search) ||
-            app.opportunityTitle.toLowerCase().includes(search) ||
-            app.opportunityType.toLowerCase().includes(search),
-          )
+        ? searchAndRank(enriched, search, (app) => [
+            app.applicantName,
+            app.applicantEmail,
+            app.opportunityTitle,
+            app.opportunityType,
+            app.status,
+          ])
         : enriched;
 
       const headers = [
@@ -4283,12 +4799,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/ai-chat/conversations', authenticateToken, requireAdmin, (_req, res) => {
-    res.json({ conversations: [], total: 0 });
+  app.get('/api/admin/ai-chat/conversations', authenticateToken, requireAdmin, (req, res) => {
+    const { page, limit, offset } = parsePagination(req.query.page, req.query.limit, 100);
+    const search = normalizeSearchQuery(req.query.search);
+    const channel = normalizeSearchQuery(req.query.channel);
+    const flag = normalizeSearchQuery(req.query.flag);
+    const status = normalizeSearchQuery(req.query.status);
+
+    const filtered = searchAndRank(listAiChatConversations(), search, (conversation) => [
+      conversation.id,
+      conversation.userId,
+      conversation.userEmail,
+      conversation.channel,
+      conversation.summary,
+      conversation.moderationFlags,
+      conversation.messages.map((item) => item.content),
+    ]).filter((conversation) => {
+      const matchesChannel = !channel || conversation.channel === channel;
+      const matchesFlag =
+        !flag ||
+        ((flag === "any" || flag === "flagged") && conversation.moderationFlags.length > 0) ||
+        conversation.moderationFlags.includes(flag);
+      const matchesStatus =
+        !status ||
+        (status === "active" && conversation.isActive) ||
+        (status === "closed" && !conversation.isActive);
+      return matchesChannel && matchesFlag && matchesStatus;
+    });
+
+    res.json({
+      conversations: filtered.slice(offset, offset + limit),
+      total: filtered.length,
+      page,
+      limit,
+    });
   });
 
-  app.get('/api/admin/ai-chat/conversations/:id', authenticateToken, requireAdmin, (_req, res) => {
-    res.status(404).json({ message: "Conversation not found" });
+  app.get('/api/admin/ai-chat/conversations/:id', authenticateToken, requireAdmin, (req, res) => {
+    const conversation = getAiChatConversation(req.params.id);
+    if (!conversation) return res.status(404).json({ message: "Conversation not found" });
+    res.json(conversation);
+  });
+
+  app.put('/api/admin/ai-chat/conversations/:id/close', authenticateToken, requireAdmin, async (req, res) => {
+    const conversation = closeAiChatConversation(req.params.id);
+    if (!conversation) return res.status(404).json({ message: "Conversation not found" });
+
+    await storage.logAnalytics({
+      event: "admin_ai_chat_closed",
+      userId: getAuthenticatedUser(req).id,
+      metadata: { conversationId: conversation.id },
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent"),
+    });
+
+    broadcast("ai-chat", { type: "ai_chat_updated", conversation });
+    res.json(conversation);
   });
 
   app.get('/api/admin/ai/conversations', authenticateToken, requireAdmin, (req, res) => {
@@ -4297,25 +4863,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/admin/ai/chat', authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const { message } = req.body;
-      if (!message) return res.status(400).json({ message: "Message is required" });
-      const response = await getChatResponse(String(message));
-      res.json({ response });
+      const payload = chatRequestSchema.parse(req.body);
+      const user = getAuthenticatedUser(req);
+      const existing = payload.conversationId ? getAiChatConversation(payload.conversationId) : undefined;
+      const response = await getChatResponse(payload.message, {
+        channel: "admin",
+        platformContext: await buildAiPlatformContext(),
+        history: existing?.messages.map((item) => ({
+          role: item.role === "system" ? "assistant" : item.role,
+          content: item.content,
+        })),
+      });
+      const conversation = appendAiConversationTurn({
+        conversationId: payload.conversationId,
+        userId: String(user.id),
+        userEmail: user.email,
+        channel: "admin",
+        message: payload.message,
+        response,
+      });
+
+      await storage.logAnalytics({
+        event: "admin_ai_chat_message",
+        userId: user.id,
+        metadata: {
+          conversationId: conversation.id,
+          flags: conversation.moderationFlags,
+        },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+
+      broadcast("ai-chat", { type: "ai_chat_updated", conversation });
+      res.json({ response, conversationId: conversation.id, conversation });
     } catch (error) {
       console.error("Admin AI chat error:", error);
-      res.status(500).json({ message: "Failed to get chat response", error: getErrorMessage(error) });
+      res.status(400).json({ message: "Failed to get chat response", error: getErrorMessage(error) });
     }
   });
 
   app.get('/api/admin/roles', authenticateToken, requireSuperAdmin, (req, res) => {
-    const search = String(req.query.search ?? "").toLowerCase();
-    const roles = getAdminRoles().filter((role) => {
-      if (!search) return true;
-      return (
-        role.name.toLowerCase().includes(search) ||
-        role.description.toLowerCase().includes(search)
-      );
-    }).map((role) => ({
+    const search = normalizeSearchQuery(req.query.search);
+    const roles = searchAndRank(getAdminRoles(), search, (role) => [
+      role.id,
+      role.name,
+      role.description,
+      role.permissions,
+    ]).map((role) => ({
       ...role,
       isSystem: isCoreAdminRole(role.id),
     }));
@@ -4882,16 +5476,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
       const status = String(req.query.status ?? "").toLowerCase();
-      const search = String(req.query.search ?? "").toLowerCase();
+      const search = normalizeSearchQuery(req.query.search);
 
       const allSubscribers = await storage.getAllSubscribers();
-      const filtered = allSubscribers.filter((subscriber) => {
+      const filtered = searchAndRank(allSubscribers, search, (subscriber) => [
+        subscriber.email,
+        subscriber.name,
+        subscriber.preferences,
+        subscriber.source,
+        subscriber.status,
+      ]).filter((subscriber) => {
         const matchesStatus = !status || subscriber.status === status;
-        const matchesSearch =
-          !search ||
-          subscriber.email.toLowerCase().includes(search) ||
-          (subscriber.name || "").toLowerCase().includes(search);
-        return matchesStatus && matchesSearch;
+        return matchesStatus;
       });
       const safePage = Number.isFinite(page) && page > 0 ? page : 1;
       const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 100) : 50;
@@ -4942,6 +5538,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/admin/messages', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { page, limit, offset } = parsePagination(req.query.page, req.query.limit, 100);
+      const search = normalizeSearchQuery(req.query.search);
+      const status = normalizeSearchQuery(req.query.status);
+      const allMessages = await storage.getAllMessages();
+      const filtered = searchAndRank(allMessages, search, (message) => [
+        message.name,
+        message.email,
+        message.phone,
+        message.subject,
+        message.message,
+      ]).filter((message) => {
+        if (status === "unread") return !message.isRead;
+        if (status === "read") return Boolean(message.isRead);
+        return true;
+      });
+
+      res.json({
+        messages: filtered.slice(offset, offset + limit),
+        total: filtered.length,
+        unread: allMessages.filter((message) => !message.isRead).length,
+        page,
+        limit,
+      });
+    } catch (error) {
+      console.error("Admin messages fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch messages" });
+    }
+  });
+
+  app.put('/api/admin/messages/:id/read', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const message = await storage.markMessageRead(id);
+      res.json(message);
+    } catch (error) {
+      console.error("Admin message read error:", error);
+      res.status(500).json({ message: "Failed to mark message as read" });
+    }
+  });
+
   app.put('/api/messages/:id/read', authenticateToken, requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
@@ -4957,16 +5596,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AI Chat route
   app.post('/api/chat', async (req, res) => {
     try {
-      const { message } = req.body;
-      if (!message) {
-        return res.status(400).json({ message: 'Message is required' });
-      }
+      const payload = chatRequestSchema.parse(req.body);
+      const requester = getOptionalAuthenticatedUser(req);
+      const existing = payload.conversationId ? getAiChatConversation(payload.conversationId) : undefined;
+      const response = await getChatResponse(payload.message, {
+        channel: "public",
+        platformContext: await buildAiPlatformContext(),
+        history: existing?.messages.map((item) => ({
+          role: item.role === "system" ? "assistant" : item.role,
+          content: item.content,
+        })),
+      });
+      const conversation = appendAiConversationTurn({
+        conversationId: payload.conversationId,
+        userId: requester ? String(requester.id) : null,
+        userEmail: requester?.email ?? null,
+        channel: "public",
+        message: payload.message,
+        response,
+      });
 
-      const response = await getChatResponse(message);
-      res.json({ response });
+      await storage.logAnalytics({
+        event: "public_ai_chat_message",
+        userId: requester?.id ?? null,
+        metadata: {
+          conversationId: conversation.id,
+          flags: conversation.moderationFlags,
+        },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+
+      broadcast("ai-chat", { type: "ai_chat_updated", conversation });
+      res.json({ response, conversationId: conversation.id });
     } catch (error) {
       console.error('Chat error:', error);
-      res.status(500).json({ message: 'Failed to get chat response', error: getErrorMessage(error) });
+      res.status(400).json({ message: 'Failed to get chat response', error: getErrorMessage(error) });
     }
   });
 

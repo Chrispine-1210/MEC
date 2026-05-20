@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -33,7 +33,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Inbox,
+  X,
 } from "lucide-react";
+import { useDebouncedValue } from "@/hooks/use-debounce";
 
 interface Column {
   key: string;
@@ -71,6 +73,8 @@ interface DataTableProps {
   onExport?: () => void;
   className?: string;
   emptyState?: React.ReactNode;
+  searchPlaceholder?: string;
+  getRowId?: (row: any, index: number) => string;
   actions?: Array<{
     label: string;
     icon?: React.ReactNode;
@@ -100,9 +104,12 @@ export default function DataTable({
   onExport,
   className,
   emptyState,
+  searchPlaceholder = "Search by name, title, category, status...",
+  getRowId,
   actions = [],
 }: DataTableProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebouncedValue(searchQuery, 300);
   const [sortConfig, setSortConfig] = useState<{
     column: string;
     direction: "asc" | "desc";
@@ -111,10 +118,16 @@ export default function DataTable({
   const showActionsColumn = Boolean(onRowAction || actions.length > 0);
   const tableColumnCount = columns.length + (selectable ? 1 : 0) + (showActionsColumn ? 1 : 0);
 
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    onSearch?.(query);
-  };
+  useEffect(() => {
+    onSearch?.(debouncedSearchQuery.trim());
+  }, [debouncedSearchQuery, onSearch]);
+
+  useEffect(() => {
+    setSelectedRows(new Set());
+  }, [data]);
+
+  const rowId = (row: any, index: number) =>
+    getRowId?.(row, index) ?? String(row?.id ?? row?._id ?? index);
 
   const handleSort = (column: string) => {
     const direction =
@@ -130,7 +143,7 @@ export default function DataTable({
     if (selectedRows.size === data.length) {
       setSelectedRows(new Set());
     } else {
-      setSelectedRows(new Set(data.map((_, index) => index.toString())));
+      setSelectedRows(new Set(data.map((row, index) => rowId(row, index))));
     }
   };
 
@@ -145,9 +158,7 @@ export default function DataTable({
   };
 
   const handleBulkAction = (action: string) => {
-    const selectedData = Array.from(selectedRows).map(index => 
-      data[parseInt(index)]
-    );
+    const selectedData = data.filter((row, index) => selectedRows.has(rowId(row, index)));
     onBulkAction?.(action, selectedData);
     setSelectedRows(new Set());
   };
@@ -235,12 +246,24 @@ export default function DataTable({
               <div className="relative w-full sm:w-auto">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search..."
+                  placeholder={searchPlaceholder}
                   value={searchQuery}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  className="pl-10 w-full sm:w-64"
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 pr-9 w-full sm:w-80"
                   data-testid="table-search"
                 />
+                {searchQuery && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2"
+                    onClick={() => setSearchQuery("")}
+                    aria-label="Clear search"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                )}
               </div>
             )}
             
@@ -360,20 +383,22 @@ export default function DataTable({
               ) : data.length === 0 ? (
                 <EmptyState />
               ) : (
-                data.map((row, index) => (
+                data.map((row, index) => {
+                  const id = rowId(row, index);
+                  return (
                   <tr
-                    key={index}
+                    key={id}
                     className={`hover:bg-muted/40 ${
                       onRowClick ? "cursor-pointer" : ""
-                    } ${selectedRows.has(index.toString()) ? "bg-primary/10" : ""}`}
+                    } ${selectedRows.has(id) ? "bg-primary/10" : ""}`}
                     onClick={onRowClick ? () => onRowClick(row) : undefined}
                     data-testid={`table-row-${index}`}
                   >
                     {selectable && (
                       <td className="px-4 py-3">
                         <Checkbox
-                          checked={selectedRows.has(index.toString())}
-                          onCheckedChange={() => handleSelectRow(index.toString())}
+                          checked={selectedRows.has(id)}
+                          onCheckedChange={() => handleSelectRow(id)}
                           onClick={(e) => e.stopPropagation()}
                           data-testid={`select-row-${index}`}
                         />
@@ -456,7 +481,8 @@ export default function DataTable({
                       </td>
                     )}
                   </tr>
-                ))
+                );
+                })
               )}
             </tbody>
           </table>

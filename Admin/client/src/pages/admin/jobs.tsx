@@ -19,13 +19,14 @@ import { useCreateAction } from "@/hooks/use-create-action";
 import MediaAssetPicker from "@/components/admin/MediaAssetPicker";
 import { getMediaPreviewUrl } from "@/lib/media-assets";
 import RichTextEditor from "@/components/admin/RichTextEditor";
+import { getInitialUrlSearchParam } from "@/hooks/use-url-search-param";
 
 const formSchema = insertJobOpportunitySchema;
 
 export default function JobsPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => getInitialUrlSearchParam());
   const [status, setStatus] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<JobOpportunity | null>(null);
@@ -500,7 +501,11 @@ export default function JobsPage() {
           onPageChange: setPage,
           onLimitChange: setLimit,
         }}
-        onSearch={setSearch}
+        searchPlaceholder="Search jobs by title, company, location, type, requirements, or benefits..."
+        onSearch={(value) => {
+          setSearch(value);
+          setPage(1);
+        }}
       />
     </div>
   );

@@ -11,7 +11,7 @@ const CONTENT_ROUTES = [
   "/admin/team",
   "/admin/media",
 ];
-const ADMIN_ONLY_ROUTES = ["/admin/users", "/admin/applications", "/admin/analytics", "/admin/activity", "/admin/ai-chat"];
+const ADMIN_ONLY_ROUTES = ["/admin/users", "/admin/applications", "/admin/messages", "/admin/analytics", "/admin/activity", "/admin/ai-chat"];
 const SUPER_ADMIN_ROUTES = ["/admin/roles", "/admin/settings"];
 
 const routeRoles = new Map<string, AdminRole[]>();

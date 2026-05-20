@@ -6,6 +6,16 @@ const optionalEnvString = z.preprocess(
   z.string().optional(),
 );
 
+const optionalEnvBoolean = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return undefined;
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return value;
+}, z.boolean().optional());
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.coerce.number().int().positive().default(5000),
@@ -23,10 +33,15 @@ const envSchema = z.object({
   EMAIL_API_URL: optionalEnvString,
   EMAIL_API_KEY: optionalEnvString,
   ADMIN_NOTIFICATION_EMAIL: optionalEnvString,
+  REDIS_URL: optionalEnvString,
+  SENTRY_DSN: optionalEnvString,
+  SENTRY_ENVIRONMENT: optionalEnvString,
+  SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).optional(),
   STRIPE_SECRET_KEY: optionalEnvString,
   STRIPE_WEBHOOK_SECRET: optionalEnvString,
   STRIPE_DEFAULT_CURRENCY: z.string().length(3).default("USD"),
   REFERRAL_PAYOUT_MIN_AMOUNT: z.coerce.number().int().positive().default(2500),
+  REFERRAL_RELEASE_WORKER_ENABLED: optionalEnvBoolean,
   REFERRAL_RELEASE_WORKER_MS: z.coerce.number().int().positive().default(900_000),
 });
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { SEO } from "@/components/SEO";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,27 +7,57 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessageCircle, ShieldAlert, Zap, History, Bot, User, Eye, RefreshCw } from "lucide-react";
+import { MessageCircle, ShieldAlert, Zap, History, Bot, User, Eye, RefreshCw, XCircle } from "lucide-react";
 import DataTable from "@/components/admin/DataTable";
-import { authFetch } from "@/lib/queryClient";
+import { authFetch, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { getInitialUrlSearchParam } from "@/hooks/use-url-search-param";
 
 export default function AiChatPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [search, setSearch] = useState(() => getInitialUrlSearchParam());
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "closed">("all");
+  const [flagFilter, setFlagFilter] = useState<"all" | "flagged">("all");
   const [selectedConversation, setSelectedConversation] = useState<any>(null);
+  const { toast } = useToast();
 
   const { data, isLoading, refetch } = useQuery<{ conversations: any[], total: number }>({
-    queryKey: ["/api/admin/ai-chat/conversations", page, limit],
+    queryKey: ["/api/admin/ai-chat/conversations", page, limit, search, statusFilter, flagFilter],
     queryFn: async () => {
-      const response = await authFetch(`/api/admin/ai-chat/conversations?page=${page}&limit=${limit}`);
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+        search,
+      });
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      if (flagFilter === "flagged") params.set("flag", "any");
+      const response = await authFetch(`/api/admin/ai-chat/conversations?${params.toString()}`);
       if (!response.ok) throw new Error("Failed to fetch conversations");
       return response.json();
     },
     refetchInterval: 30000,
   });
 
+  const closeConversationMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await authFetch(`/api/admin/ai-chat/conversations/${id}/close`, { method: "PUT" });
+      if (!response.ok) throw new Error("Failed to close conversation");
+      return response.json();
+    },
+    onSuccess: (conversation) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/ai-chat/conversations"] });
+      setSelectedConversation((current: any) => current?.id === conversation.id ? conversation : current);
+      toast({ title: "Conversation closed", description: "The AI chat session has been marked as closed." });
+    },
+    onError: () => {
+      toast({ title: "Close failed", description: "Could not close this AI conversation.", variant: "destructive" });
+    },
+  });
+
   const activeCount = data?.conversations?.filter(c => c.isActive).length ?? 0;
   const totalMessages = data?.conversations?.reduce((acc, c) => acc + (c.messages?.length || 0), 0) ?? 0;
+  const flaggedCount = data?.conversations?.filter(c => c.moderationFlags?.length > 0).length ?? 0;
 
   const columns = [
     {
@@ -53,6 +83,17 @@ export default function AiChatPage() {
       )
     },
     {
+      key: "moderationFlags",
+      header: "Flags",
+      render: (value: string[]) => (
+        <div className="flex flex-wrap gap-1">
+          {value?.length ? value.map((flag) => (
+            <Badge key={flag} className="border-0 bg-warning/15 text-warning text-xs capitalize">{flag}</Badge>
+          )) : <span className="text-xs text-muted-foreground">None</span>}
+        </div>
+      )
+    },
+    {
       key: "isActive",
       header: "Status",
       render: (value: boolean) => (
@@ -69,16 +110,29 @@ export default function AiChatPage() {
     },
     {
       key: "actions",
-      header: "View",
+      header: "Actions",
       render: (_: any, row: any) => (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 w-7 p-0 hover:bg-primary/10 hover:text-primary"
-          onClick={() => setSelectedConversation(row)}
-        >
-          <Eye className="h-3.5 w-3.5" />
-        </Button>
+        <div className="flex justify-end gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0 hover:bg-primary/10 hover:text-primary"
+            onClick={() => setSelectedConversation(row)}
+          >
+            <Eye className="h-3.5 w-3.5" />
+          </Button>
+          {row.isActive && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 p-0 hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => closeConversationMutation.mutate(row.id)}
+              disabled={closeConversationMutation.isPending}
+            >
+              <XCircle className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
       )
     }
   ];
@@ -109,7 +163,7 @@ export default function AiChatPage() {
           { title: "Total Conversations", value: data?.total ?? 0, icon: History, color: "from-primary to-chart-4", description: "All time" },
           { title: "Active Now", value: activeCount, icon: Zap, color: "from-success to-accent", description: "Live sessions" },
           { title: "Total Messages", value: totalMessages, icon: MessageCircle, color: "from-info to-primary", description: "Processed" },
-          { title: "Flagged Content", value: 0, icon: ShieldAlert, color: "from-warning to-destructive", description: "Needs review" },
+          { title: "Flagged Content", value: flaggedCount, icon: ShieldAlert, color: "from-warning to-destructive", description: "Needs review" },
         ].map(({ title, value, icon: Icon, color, description }) => (
           <Card key={title} className="overflow-hidden hover:shadow-md transition-shadow">
             <CardContent className="p-0">
@@ -152,12 +206,44 @@ export default function AiChatPage() {
           <CardDescription>All AI chat sessions with message counts and status</CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-4 flex flex-wrap gap-2">
+            {(["all", "active", "closed"] as const).map((status) => (
+              <Button
+                key={status}
+                type="button"
+                variant={statusFilter === status ? "default" : "outline"}
+                size="sm"
+                className="capitalize"
+                onClick={() => {
+                  setStatusFilter(status);
+                  setPage(1);
+                }}
+              >
+                {status}
+              </Button>
+            ))}
+            <Button
+              type="button"
+              variant={flagFilter === "flagged" ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                setFlagFilter(flagFilter === "flagged" ? "all" : "flagged");
+                setPage(1);
+              }}
+            >
+              Flagged
+            </Button>
+          </div>
           <DataTable
             columns={columns}
             data={data?.conversations || []}
             loading={isLoading}
             pagination={{ page, limit, total: data?.total || 0, onPageChange: setPage, onLimitChange: setLimit }}
-            onSearch={() => {}}
+            searchPlaceholder="Search conversations by user, message, summary, channel, or flag..."
+            onSearch={(value) => {
+              setSearch(value);
+              setPage(1);
+            }}
           />
           {!isLoading && (!data?.conversations || data.conversations.length === 0) && (
             <div className="text-center py-12 text-muted-foreground/70">
@@ -178,9 +264,16 @@ export default function AiChatPage() {
               Conversation Details
             </DialogTitle>
             <DialogDescription>
-              Session: <code className="text-xs">{selectedConversation?.userId?.slice(0, 16)}...</code>
+              Session: <code className="text-xs">{(selectedConversation?.userId || selectedConversation?.id || "anon").slice(0, 16)}...</code>
             </DialogDescription>
           </DialogHeader>
+          {selectedConversation?.moderationFlags?.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {selectedConversation.moderationFlags.map((flag: string) => (
+                <Badge key={flag} className="border-0 bg-warning/15 text-warning capitalize">{flag}</Badge>
+              ))}
+            </div>
+          )}
           <ScrollArea className="max-h-96">
             {selectedConversation?.messages?.length > 0 ? (
               <div className="space-y-3 pr-3">
@@ -199,6 +292,19 @@ export default function AiChatPage() {
               <p className="text-center text-muted-foreground/70 py-8 text-sm">No messages in this conversation</p>
             )}
           </ScrollArea>
+          {selectedConversation?.isActive && (
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                className="gap-2 text-destructive hover:text-destructive"
+                onClick={() => closeConversationMutation.mutate(selectedConversation.id)}
+                disabled={closeConversationMutation.isPending}
+              >
+                <XCircle className="h-4 w-4" />
+                Close Conversation
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

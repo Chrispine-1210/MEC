@@ -16,6 +16,7 @@ import { Plus, Building2, Pencil, Trash2 } from "lucide-react";
 import { z } from "zod";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateAction } from "@/hooks/use-create-action";
+import { getInitialUrlSearchParam } from "@/hooks/use-url-search-param";
 import MediaAssetPicker from "@/components/admin/MediaAssetPicker";
 import { getMediaPreviewUrl } from "@/lib/media-assets";
 import RichTextEditor from "@/components/admin/RichTextEditor";
@@ -25,7 +26,7 @@ const formSchema = insertPartnerInstitutionSchema;
 export default function PartnersPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => getInitialUrlSearchParam());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPartner, setEditingPartner] = useState<PartnerInstitution | null>(null);
   const { toast } = useToast();
@@ -497,7 +498,11 @@ export default function PartnersPage() {
           onPageChange: setPage,
           onLimitChange: setLimit,
         }}
-        onSearch={setSearch}
+        searchPlaceholder="Search partners by name, country, category, website, video, or contact..."
+        onSearch={(value) => {
+          setSearch(value);
+          setPage(1);
+        }}
       />
     </div>
   );
