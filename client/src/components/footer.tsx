@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import NewsletterSignup from "@/components/newsletter-signup";
+import { socialLinks } from "@/lib/social-links";
 import {
   MapPin,
   Phone,
@@ -152,10 +153,10 @@ export default function Footer() {
 
           <div className="flex items-center gap-3">
             {[
-              { href: "https://facebook.com", icon: Facebook, label: "Facebook" },
-              { href: "https://twitter.com", icon: Twitter, label: "Twitter" },
-              { href: "https://instagram.com", icon: Instagram, label: "Instagram" },
-              { href: "https://www.linkedin.com/in/mtendere-education-consult-478133298/", icon: Linkedin, label: "LinkedIn" },
+              { href: socialLinks.x, icon: Twitter, label: "X" },
+              { href: socialLinks.instagram, icon: Instagram, label: "Instagram" },
+              { href: socialLinks.facebook, icon: Facebook, label: "Facebook" },
+              { href: socialLinks.linkedin, icon: Linkedin, label: "LinkedIn" },
             ].map((social) => (
               <a
                 key={social.label}

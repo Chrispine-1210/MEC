@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, GraduationCap } from "lucide-react";
 import type { Scholarship } from "@shared/schema";
 import { useCreateAction } from "@/hooks/use-create-action";
+import { getInitialUrlSearchParam } from "@/hooks/use-url-search-param";
 import MediaAssetPicker from "@/components/admin/MediaAssetPicker";
 import { getMediaPreviewUrl } from "@/lib/media-assets";
 import RichTextEditor from "@/components/admin/RichTextEditor";
@@ -25,7 +26,7 @@ const formSchema = insertScholarshipSchema;
 export default function ScholarshipsPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => getInitialUrlSearchParam());
   const [status, setStatus] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingScholarship, setEditingScholarship] = useState<Scholarship | null>(null);
@@ -471,7 +472,11 @@ export default function ScholarshipsPage() {
           onPageChange: setPage,
           onLimitChange: setLimit,
         }}
-        onSearch={setSearch}
+        searchPlaceholder="Search scholarships by title, institution, eligibility, category, or region..."
+        onSearch={(value) => {
+          setSearch(value);
+          setPage(1);
+        }}
       />
     </div>
   );

@@ -21,6 +21,7 @@ import Applications from "@/pages/admin/applications";
 import Analytics from "@/pages/admin/analytics";
 import Activity from "@/pages/admin/activity";
 import AiChat from "@/pages/admin/ai-chat";
+import Messages from "@/pages/admin/messages";
 import Settings from "@/pages/admin/settings";
 import Media from "@/pages/admin/media";
 import AuthPage from "@/pages/auth";
@@ -207,6 +208,7 @@ function AdminRouter() {
         <Route path="/admin/applications" component={Applications} />
         <Route path="/admin/analytics" component={Analytics} />
         <Route path="/admin/activity" component={Activity} />
+        <Route path="/admin/messages" component={Messages} />
         <Route path="/admin/media" component={Media} />
         <Route path="/admin/ai-chat" component={AiChat} />
         <Route path="/admin/settings" component={Settings} />

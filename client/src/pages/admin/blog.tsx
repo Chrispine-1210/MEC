@@ -4,7 +4,6 @@ import { SEO } from "@/components/SEO";
 import { authFetch, queryClient, apiRequest } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertBlogPostSchema } from "@shared/schema";
 import { z } from "zod";
 import DataTable from "@/components/admin/DataTable";
 import { Button } from "@/components/ui/button";
@@ -16,11 +15,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, BookOpen, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import type { BlogPost } from "@shared/schema";
-import { Editor } from "@tinymce/tinymce-react";
 import { useCreateAction } from "@/hooks/use-create-action";
+import RichTextEditor from "@/components/admin/RichTextEditor";
 
-const formSchema = insertBlogPostSchema;
+const formSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  content: z.string().min(1, "Content is required"),
+  excerpt: z.string().optional().nullable(),
+  slug: z.string().optional(),
+  category: z.string().min(1, "Category is required"),
+  status: z.enum(["draft", "published", "archived"]).default("draft"),
+  featuredImage: z.string().optional().nullable(),
+});
+
+type BlogFormValues = z.infer<typeof formSchema>;
+type AdminBlogPost = BlogFormValues & {
+  id: string;
+  createdAt?: string | Date | null;
+};
 
 export default function BlogPage() {
   const [page, setPage] = useState(1);
@@ -28,7 +40,7 @@ export default function BlogPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingPost, setEditingPost] = useState<BlogPost | null>(null);
+  const [editingPost, setEditingPost] = useState<AdminBlogPost | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
 
@@ -63,7 +75,7 @@ export default function BlogPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: z.infer<typeof formSchema>) =>
+    mutationFn: (data: BlogFormValues) =>
       apiRequest("POST", "/api/admin/blog", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/blog"] });
@@ -77,7 +89,7 @@ export default function BlogPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<z.infer<typeof formSchema>> }) =>
+    mutationFn: ({ id, data }: { id: string; data: Partial<BlogFormValues> }) =>
       apiRequest("PUT", `/api/admin/blog/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/blog"] });
@@ -102,7 +114,7 @@ export default function BlogPage() {
     },
   });
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<BlogFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       title: "",
@@ -115,7 +127,7 @@ export default function BlogPage() {
     },
   });
 
-  const handleEdit = (post: BlogPost) => {
+  const handleEdit = (post: AdminBlogPost) => {
     setEditingPost(post);
     form.reset({
       title: post.title,
@@ -135,7 +147,7 @@ export default function BlogPage() {
     }
   };
 
-  const onSubmit = (data: z.infer<typeof formSchema>) => {
+  const onSubmit = (data: BlogFormValues) => {
     if (editingPost) {
       updateMutation.mutate({ id: editingPost.id, data });
     } else {
@@ -178,7 +190,7 @@ export default function BlogPage() {
     {
       key: "actions",
       header: "",
-      render: (_: unknown, row: BlogPost) => (
+      render: (_: unknown, row: AdminBlogPost) => (
         <div className="flex gap-1">
           <Button variant="ghost" size="sm" onClick={() => handleEdit(row)} className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary">
             <Pencil className="h-3.5 w-3.5" />
@@ -260,24 +272,11 @@ export default function BlogPage() {
                   <FormItem>
                     <FormLabel>Content</FormLabel>
                     <FormControl>
-                      <Editor
-                        apiKey={import.meta.env.VITE_TINYMCE_API_KEY}
-                        init={{
-                          height: 500,
-                          menubar: true,
-                          plugins: [
-                            'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
-                            'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
-                            'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount'
-                          ],
-                          toolbar: 'undo redo | blocks | ' +
-                            'bold italic forecolor | alignleft aligncenter ' +
-                            'alignright alignjustify | bullist numlist outdent indent | ' +
-                            'removeformat | help',
-                          content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px }'
-                        }}
+                      <RichTextEditor
                         value={field.value}
-                        onEditorChange={(content: string) => field.onChange(content)}
+                        onChange={field.onChange}
+                        minHeight={520}
+                        placeholder="Write the full article with headings, lists, links, images, and calls to action..."
                       />
                     </FormControl>
                     <FormMessage />

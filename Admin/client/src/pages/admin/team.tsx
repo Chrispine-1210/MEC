@@ -18,13 +18,14 @@ import { useCreateAction } from "@/hooks/use-create-action";
 import MediaAssetPicker from "@/components/admin/MediaAssetPicker";
 import { getMediaPreviewUrl } from "@/lib/media-assets";
 import RichTextEditor from "@/components/admin/RichTextEditor";
+import { getInitialUrlSearchParam } from "@/hooks/use-url-search-param";
 
 const formSchema = insertTeamMemberSchema;
 
 export default function TeamPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => getInitialUrlSearchParam());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const { toast } = useToast();
@@ -217,7 +218,17 @@ export default function TeamPage() {
           </DialogContent>
         </Dialog>
       </div>
-      <DataTable columns={columns} data={data?.members || []} loading={isLoading} pagination={{ page, limit, total: data?.total || 0, onPageChange: setPage, onLimitChange: setLimit }} onSearch={setSearch} />
+      <DataTable
+        columns={columns}
+        data={data?.members || []}
+        loading={isLoading}
+        pagination={{ page, limit, total: data?.total || 0, onPageChange: setPage, onLimitChange: setLimit }}
+        searchPlaceholder="Search team by name, role, department, bio, or email..."
+        onSearch={(value) => {
+          setSearch(value);
+          setPage(1);
+        }}
+      />
     </div>
   );
 }

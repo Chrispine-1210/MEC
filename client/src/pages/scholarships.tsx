@@ -14,6 +14,7 @@ import type { ApiScholarship } from "@/lib/api-types";
 import { getGovernedBackgroundImage } from "@/lib/image-governance";
 import { publicContentQueryOptions } from "@/lib/realtime-content";
 import { truncateRichText } from "@/lib/rich-text";
+import { useDebouncedValue } from "@/hooks/use-debounce";
 import { 
   Search, 
   Filter, 
@@ -24,7 +25,8 @@ import {
   ExternalLink,
   BookOpen,
   Globe,
-  Clock
+  Clock,
+  X
 } from "lucide-react";
 
 type Scholarship = ApiScholarship;
@@ -52,6 +54,7 @@ export default function Scholarships() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [currentVideo, setCurrentVideo] = useState(0);
   const [isPlayingVideo, setIsPlayingVideo] = useState(true);
+  const debouncedSearchQuery = useDebouncedValue(searchQuery.trim(), 300);
 
   const { data: scholarships, isLoading } = useQuery<Scholarship[]>({
     queryKey: ["/api/scholarships"],
@@ -59,8 +62,8 @@ export default function Scholarships() {
   });
 
   const { data: searchResults, isLoading: isSearching } = useQuery<Scholarship[]>({
-    queryKey: ["/api/scholarships/search", { q: searchQuery }],
-    enabled: searchQuery.length > 2,
+    queryKey: ["/api/scholarships/search", { q: debouncedSearchQuery }],
+    enabled: debouncedSearchQuery.length >= 2,
     ...publicContentQueryOptions,
   });
 
@@ -68,7 +71,7 @@ export default function Scholarships() {
     setCurrentVideo((prev) => (prev + 1) % videoSources.length);
   };
 
-  const displayScholarships = searchQuery.length > 2 ? searchResults : scholarships;
+  const displayScholarships = debouncedSearchQuery.length >= 2 ? searchResults : scholarships;
   const categories = [...new Set(scholarships?.map(s => s.category) || [])];
 
   const filteredScholarships = displayScholarships?.filter(scholarship => 
@@ -142,6 +145,18 @@ export default function Scholarships() {
                 <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
                   <div className="loading-spinner"></div>
                 </div>
+              )}
+              {searchQuery && !isSearching && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-2 top-1/2 h-9 w-9 -translate-y-1/2 text-muted-foreground"
+                  onClick={() => setSearchQuery("")}
+                  aria-label="Clear scholarship search"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
               )}
             </div>
           </div>
@@ -219,7 +234,7 @@ export default function Scholarships() {
         <div className="mb-6">
           <p className="text-muted-foreground">
             Showing {filteredScholarships?.length || 0} scholarship{filteredScholarships?.length !== 1 ? 's' : ''}
-            {searchQuery && ` for "${searchQuery}"`}
+            {debouncedSearchQuery && ` for "${debouncedSearchQuery}"`}
             {selectedCategory && ` in ${selectedCategory}`}
           </p>
         </div>

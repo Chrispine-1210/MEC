@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import GlobalSearch from "@/components/global-search";
 import { 
   Menu, 
   X, 
@@ -213,6 +214,8 @@ export default function ExpandingNav() {
             ))}
           </div>
 
+          <GlobalSearch className="hidden w-56 2xl:w-72 xl:block" />
+
           {/* User Actions */}
           <div className="hidden lg:flex items-center space-x-4">
             {user ? (
@@ -290,6 +293,9 @@ export default function ExpandingNav() {
         {isOpen && (
           <div className="lg:hidden animate-slide-in">
             <div className="px-2 pt-2 pb-3 space-y-1 bg-card border-t border-border/60">
+              <div className="px-1 pb-2">
+                <GlobalSearch onNavigate={closeMenu} placeholder="Search scholarships, jobs, blogs..." />
+              </div>
               {navItems.map((item) => (
                 <div key={item.label}>
                   {item.dropdown ? (

@@ -7,8 +7,8 @@ import { authFetch, apiRequest, queryClient } from "@/lib/queryClient";
 import { canCreateContent, canManageUsers, canUseAiAssistant } from "@/lib/admin-rbac";
 import { useToast } from "@/hooks/use-toast";
 import { useAdminRealtime } from "@/hooks/use-admin-realtime";
+import AdminGlobalSearch from "@/components/admin/AdminGlobalSearch";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -28,7 +28,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
   Menu,
-  Search,
   Bell,
   User as UserIcon,
   Settings,
@@ -65,7 +64,6 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { toast } = useToast();
   const { isConnected } = useAdminRealtime();
-  const [searchQuery, setSearchQuery] = useState("");
   const [notifOpen, setNotifOpen] = useState(false);
 
   const { data: notifData, isLoading: notifLoading } = useQuery<{ notifications: AdminNotification[]; total: number }>({
@@ -103,13 +101,6 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/admin/notifications"] }),
   });
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      toast({ title: "Search", description: `Searching for: ${searchQuery}` });
-    }
-  };
 
   const handleLogout = async () => {
     try {
@@ -150,18 +141,7 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
             <Menu className="h-5 w-5" />
           </Button>
 
-          <form onSubmit={handleSearch} className="hidden sm:flex items-center">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Search users, content, applications..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 w-72 xl:w-80 bg-muted/60 border-border/70 focus:bg-background transition-colors"
-              />
-            </div>
-          </form>
+          <AdminGlobalSearch className="hidden sm:block w-72 xl:w-96" />
         </div>
 
         {/* Right side */}
@@ -366,18 +346,7 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
 
       {/* Mobile search */}
       <div className="sm:hidden px-4 pb-3">
-        <form onSubmit={handleSearch}>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 w-full bg-muted/60"
-            />
-          </div>
-        </form>
+        <AdminGlobalSearch placeholder="Search Admin..." />
       </div>
     </header>
   );

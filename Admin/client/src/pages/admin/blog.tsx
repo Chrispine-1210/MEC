@@ -21,13 +21,14 @@ import { useCreateAction } from "@/hooks/use-create-action";
 import MediaAssetPicker from "@/components/admin/MediaAssetPicker";
 import { getMediaPreviewUrl } from "@/lib/media-assets";
 import RichTextEditor from "@/components/admin/RichTextEditor";
+import { getInitialUrlSearchParam } from "@/hooks/use-url-search-param";
 
 const formSchema = insertBlogPostSchema;
 
 export default function BlogPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => getInitialUrlSearchParam());
   const [status, setStatus] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPost, setEditingPost] = useState<BlogPost | null>(null);
@@ -267,7 +268,17 @@ export default function BlogPage() {
           </DialogContent>
         </Dialog>
       </div>
-      <DataTable columns={columns} data={data?.posts || []} loading={isLoading} pagination={{ page, limit, total: data?.total || 0, onPageChange: setPage, onLimitChange: setLimit }} onSearch={setSearch} />
+      <DataTable
+        columns={columns}
+        data={data?.posts || []}
+        loading={isLoading}
+        pagination={{ page, limit, total: data?.total || 0, onPageChange: setPage, onLimitChange: setLimit }}
+        searchPlaceholder="Search blog posts by title, content, category, tags, or slug..."
+        onSearch={(value) => {
+          setSearch(value);
+          setPage(1);
+        }}
+      />
     </div>
   );
 }

@@ -301,7 +301,11 @@ export default function RolesPage() {
         data={data?.roles || []}
         loading={isLoading}
         pagination={{ page, limit: 10, total: data?.total || 0, onPageChange: setPage, onLimitChange: () => {} }}
-        onSearch={setSearch}
+        searchPlaceholder="Search roles by name, description, or permission..."
+        onSearch={(value) => {
+          setSearch(value);
+          setPage(1);
+        }}
       />
     </div>
   );

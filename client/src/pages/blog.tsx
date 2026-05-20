@@ -14,7 +14,8 @@ import type { ApiBlogPost } from "@/lib/api-types";
 import { getGovernedBackgroundImage } from "@/lib/image-governance";
 import { publicContentQueryOptions } from "@/lib/realtime-content";
 import { richTextToPlainText, truncateRichText } from "@/lib/rich-text";
-import { Search, Calendar, Heart, ArrowRight, BookOpen } from "lucide-react";
+import { useDebouncedValue } from "@/hooks/use-debounce";
+import { Search, Calendar, Heart, ArrowRight, BookOpen, X } from "lucide-react";
 
 const getReadingTime = (content: string) =>
   Math.max(1, Math.ceil(richTextToPlainText(content).split(/\s+/).filter(Boolean).length / 200));
@@ -22,6 +23,7 @@ const getReadingTime = (content: string) =>
 export default function Blog() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const debouncedSearchQuery = useDebouncedValue(searchQuery.trim(), 300);
 
   const { data: posts, isLoading } = useQuery<ApiBlogPost[]>({
     queryKey: ["/api/blog-posts"],
@@ -29,12 +31,12 @@ export default function Blog() {
   });
 
   const { data: searchResults, isLoading: isSearching } = useQuery<ApiBlogPost[]>({
-    queryKey: ["/api/blog-posts/search", { q: searchQuery }],
-    enabled: searchQuery.length > 2,
+    queryKey: ["/api/blog-posts/search", { q: debouncedSearchQuery }],
+    enabled: debouncedSearchQuery.length >= 2,
     ...publicContentQueryOptions,
   });
 
-  const displayPosts = searchQuery.length > 2 ? searchResults : posts;
+  const displayPosts = debouncedSearchQuery.length >= 2 ? searchResults : posts;
   const categoryOptions = [
     "All",
     ...Array.from(new Set((posts || []).map((post) => post.category).filter(Boolean))).sort(),
@@ -85,8 +87,20 @@ export default function Blog() {
               placeholder="Search articles..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-12 pr-4 py-6 text-lg bg-card text-foreground border-0 rounded-xl shadow-2xl"
+              className="pl-12 pr-12 py-6 text-lg bg-card text-foreground border-0 rounded-xl shadow-2xl"
             />
+            {searchQuery && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-2 top-1/2 h-9 w-9 -translate-y-1/2 text-muted-foreground"
+                onClick={() => setSearchQuery("")}
+                aria-label="Clear article search"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
       </section>

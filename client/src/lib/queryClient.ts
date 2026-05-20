@@ -28,6 +28,25 @@ export async function apiRequest(
   return res;
 }
 
+const getAuthToken = () => {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("token");
+};
+
+export const authFetch = (input: RequestInfo | URL, init: RequestInit = {}) => {
+  const headers = new Headers(init.headers);
+  const token = getAuthToken();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  return fetch(input, {
+    ...init,
+    headers,
+    credentials: init.credentials ?? "include",
+  });
+};
+
 type UnauthorizedBehavior = "returnNull" | "throw";
 export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
@@ -35,7 +54,7 @@ export const getQueryFn: <T>(options: {
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
     const [url, ...params] = queryKey as unknown[];
-    const token = localStorage.getItem("token");
+    const token = getAuthToken();
     let finalUrl = String(url);
 
     if (params.length > 0) {

@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
+import { getInitialUrlSearchParam } from "@/hooks/use-url-search-param";
 import DataTable from "@/components/admin/DataTable";
 import { ClipboardList, CheckCircle, XCircle, Clock, AlertCircle, Eye, ChevronRight } from "lucide-react";
 import type { Application } from "@shared/schema";
@@ -40,7 +41,7 @@ const statCardStyles: Record<string, { card: string; icon: string }> = {
 export default function ApplicationsPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => getInitialUrlSearchParam());
   const [status, setStatus] = useState("");
   const [selectedApp, setSelectedApp] = useState<AdminApplication | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
@@ -265,6 +266,7 @@ export default function ApplicationsPage() {
         data={data?.applications || []}
         loading={isLoading}
         pagination={{ page, limit, total: data?.total || 0, onPageChange: setPage, onLimitChange: setLimit }}
+        searchPlaceholder="Search applications by applicant, email, opportunity, type, status, or cover note..."
         onSearch={(value) => {
           setSearch(value);
           setPage(1);

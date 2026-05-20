@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { socialLinks } from "@/lib/social-links";
 import { 
   MapPin, 
   Phone, 
@@ -450,18 +451,23 @@ export default function Contact() {
                 Connect with us on social media for the latest scholarship updates and educational tips.
               </p>
               <div className="flex justify-center md:justify-start space-x-6">
-                <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="text-muted-foreground/70 hover:text-mtendere-blue transition-colors">
-                  <Facebook className="w-8 h-8" />
-                </a>
-                <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-muted-foreground/70 hover:text-mtendere-blue/80 transition-colors">
-                  <Twitter className="w-8 h-8" />
-                </a>
-                <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-muted-foreground/70 hover:text-mtendere-orange transition-colors">
-                  <Instagram className="w-8 h-8" />
-                </a>
-                <a href="https://www.linkedin.com/in/mtendere-education-consult-478133298/" target="_blank" rel="noopener noreferrer" className="text-muted-foreground/70 hover:text-mtendere-blue transition-colors">
-                  <Linkedin className="w-8 h-8" />
-                </a>
+                {[
+                  { href: socialLinks.x, icon: Twitter, label: "X", hoverClass: "hover:text-mtendere-blue/80" },
+                  { href: socialLinks.instagram, icon: Instagram, label: "Instagram", hoverClass: "hover:text-mtendere-orange" },
+                  { href: socialLinks.facebook, icon: Facebook, label: "Facebook", hoverClass: "hover:text-mtendere-blue" },
+                  { href: socialLinks.linkedin, icon: Linkedin, label: "LinkedIn", hoverClass: "hover:text-mtendere-blue" },
+                ].map((social) => (
+                  <a
+                    key={social.label}
+                    href={social.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={social.label}
+                    className={`text-muted-foreground/70 transition-colors ${social.hoverClass}`}
+                  >
+                    <social.icon className="w-8 h-8" />
+                  </a>
+                ))}
               </div>
             </div>
             

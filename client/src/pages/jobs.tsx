@@ -14,6 +14,7 @@ import type { ApiJob } from "@/lib/api-types";
 import { getGovernedBackgroundImage } from "@/lib/image-governance";
 import { publicContentQueryOptions } from "@/lib/realtime-content";
 import { truncateRichText } from "@/lib/rich-text";
+import { useDebouncedValue } from "@/hooks/use-debounce";
 import { 
   Search, 
   Filter, 
@@ -25,7 +26,8 @@ import {
   Building,
   Clock,
   Wifi,
-  Users
+  Users,
+  X
 } from "lucide-react";
 
 interface Job {
@@ -48,6 +50,7 @@ export default function Jobs() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("");
+  const debouncedSearchQuery = useDebouncedValue(searchQuery.trim(), 300);
 
   const { data: jobs, isLoading } = useQuery<ApiJob[]>({
     queryKey: ["/api/jobs"],
@@ -55,12 +58,12 @@ export default function Jobs() {
   });
 
   const { data: searchResults, isLoading: isSearching } = useQuery<ApiJob[]>({
-    queryKey: ["/api/jobs/search", { q: searchQuery }],
-    enabled: searchQuery.length > 2,
+    queryKey: ["/api/jobs/search", { q: debouncedSearchQuery }],
+    enabled: debouncedSearchQuery.length >= 2,
     ...publicContentQueryOptions,
   });
 
-  const displayJobs = searchQuery.length > 2 ? searchResults : jobs;
+  const displayJobs = debouncedSearchQuery.length >= 2 ? searchResults : jobs;
   const jobTypes = [...new Set(jobs?.map(j => j.jobType) || [])];
   const locations = [...new Set(jobs?.map(j => j.location) || [])];
 
@@ -138,6 +141,18 @@ export default function Jobs() {
                   <div className="loading-spinner"></div>
                 </div>
               )}
+              {searchQuery && !isSearching && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-2 top-1/2 h-9 w-9 -translate-y-1/2 text-muted-foreground"
+                  onClick={() => setSearchQuery("")}
+                  aria-label="Clear job search"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -202,7 +217,7 @@ export default function Jobs() {
         <div className="mb-6">
           <p className="text-muted-foreground">
             Showing {filteredJobs?.length || 0} job{filteredJobs?.length !== 1 ? 's' : ''}
-            {searchQuery && ` for "${searchQuery}"`}
+            {debouncedSearchQuery && ` for "${debouncedSearchQuery}"`}
             {selectedType && ` in ${selectedType}`}
             {selectedLocation && ` at ${selectedLocation}`}
           </p>

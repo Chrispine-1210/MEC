@@ -54,6 +54,26 @@ export type UserMeta = {
   region?: string;
 };
 
+export type AiChatMessage = {
+  role: "user" | "assistant" | "system";
+  content: string;
+  createdAt: string;
+};
+
+export type AiChatConversation = {
+  id: string;
+  userId: string | null;
+  userEmail?: string | null;
+  channel: "public" | "admin";
+  messages: AiChatMessage[];
+  summary: string | null;
+  isActive: boolean;
+  moderationFlags: string[];
+  createdAt: string;
+  updatedAt: string;
+  lastMessageAt: string;
+};
+
 export type AdminRole = {
   id: string;
   name: string;
@@ -86,6 +106,7 @@ type AdminState = {
   partners: Record<string, PartnerMeta>;
   blogPosts: Record<string, BlogMeta>;
   teamMembers: Record<string, TeamMeta>;
+  aiConversations: Record<string, AiChatConversation>;
   roles: AdminRole[];
   settings: AdminSettings;
   readNotificationIds: string[];
@@ -204,6 +225,7 @@ const createDefaultState = (): AdminState => ({
   partners: {},
   blogPosts: {},
   teamMembers: {},
+  aiConversations: {},
   roles: DEFAULT_ROLES,
   settings: {
     platformName: "Mtendere Education Platform",
@@ -263,6 +285,7 @@ const loadState = (): AdminState => {
       partners: parsed.partners ?? {},
       blogPosts: parsed.blogPosts ?? {},
       teamMembers: parsed.teamMembers ?? {},
+      aiConversations: parsed.aiConversations ?? {},
       roles: normalizeAdminRoles(parsed.roles),
       settings: {
         ...createDefaultState().settings,
@@ -295,7 +318,13 @@ const saveState = () => {
 const updateCollectionItem = <T extends Record<string, unknown>>(
   collection: keyof Pick<
     AdminState,
-    "users" | "scholarships" | "jobs" | "partners" | "blogPosts" | "teamMembers"
+    | "users"
+    | "scholarships"
+    | "jobs"
+    | "partners"
+    | "blogPosts"
+    | "teamMembers"
+    | "aiConversations"
   >,
   id: string | number,
   value: T,
@@ -319,7 +348,13 @@ const updateCollectionItem = <T extends Record<string, unknown>>(
 const deleteCollectionItem = (
   collection: keyof Pick<
     AdminState,
-    "users" | "scholarships" | "jobs" | "partners" | "blogPosts" | "teamMembers"
+    | "users"
+    | "scholarships"
+    | "jobs"
+    | "partners"
+    | "blogPosts"
+    | "teamMembers"
+    | "aiConversations"
   >,
   id: string | number,
 ) => {
@@ -390,6 +425,48 @@ export const getTeamMeta = (id: string | number) => {
 export const setTeamMeta = (id: string | number, value: TeamMeta) =>
   updateCollectionItem("teamMembers", id, value);
 export const deleteTeamMeta = (id: string | number) => deleteCollectionItem("teamMembers", id);
+
+export const getAiChatConversation = (id: string) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.aiConversations[id];
+};
+
+export const listAiChatConversations = () => {
+  refreshStateFromDiskIfChanged();
+  return Object.values(cachedState.aiConversations).sort(
+    (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime(),
+  );
+};
+
+export const upsertAiChatConversation = (
+  conversation: Omit<AiChatConversation, "updatedAt"> & Partial<Pick<AiChatConversation, "updatedAt">>,
+) => {
+  const now = nowIso();
+  const previous = getAiChatConversation(conversation.id);
+  const nextConversation: AiChatConversation = {
+    ...previous,
+    ...conversation,
+    messages: conversation.messages.slice(-40),
+    moderationFlags: Array.from(new Set(conversation.moderationFlags ?? [])),
+    createdAt: previous?.createdAt ?? conversation.createdAt ?? now,
+    updatedAt: now,
+    lastMessageAt: conversation.lastMessageAt ?? now,
+  };
+
+  updateCollectionItem("aiConversations", conversation.id, nextConversation);
+  return nextConversation;
+};
+
+export const closeAiChatConversation = (id: string) => {
+  const conversation = getAiChatConversation(id);
+  if (!conversation) return null;
+
+  return upsertAiChatConversation({
+    ...conversation,
+    isActive: false,
+    lastMessageAt: nowIso(),
+  });
+};
 
 export const getAdminRoles = () => {
   refreshStateFromDiskIfChanged();

@@ -15,12 +15,14 @@ import DataTable from "@/components/admin/DataTable";
 import { ClipboardList, CheckCircle, XCircle, Clock, AlertCircle, Eye, ChevronRight } from "lucide-react";
 import type { Application } from "@shared/schema";
 
-type AdminApplication = Application & {
+type AdminApplication = Omit<Application, "id"> & {
+  id: string;
   applicantName?: string;
   applicantEmail?: string;
   opportunityTitle?: string;
   opportunityType?: string;
   coverLetter?: string;
+  createdAt?: string | Date | null;
 };
 
 const statusConfig: Record<string, { color: string; icon: any; label: string }> = {
@@ -268,7 +270,7 @@ export default function ApplicationsPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Applied</span>
-                  <span className="text-sm">{new Date(selectedApp.createdAt).toLocaleString()}</span>
+                  <span className="text-sm">{selectedApp.createdAt ? new Date(selectedApp.createdAt).toLocaleString() : "-"}</span>
                 </div>
               </div>
 
