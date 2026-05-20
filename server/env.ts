@@ -19,6 +19,7 @@ const optionalEnvBoolean = z.preprocess((value) => {
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.coerce.number().int().positive().default(5000),
+  ADMIN_PORT: z.coerce.number().int().positive().default(5174),
   JWT_SECRET: z.string().min(1, "JWT_SECRET is required"),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),

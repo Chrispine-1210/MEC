@@ -11,6 +11,7 @@ import { log, setupVite } from "./vite";
 const app = express();
 const isProduction = env.NODE_ENV === "production";
 const port = env.PORT;
+const adminPort = env.ADMIN_PORT;
 app.disable("x-powered-by");
 
 app.use(
@@ -75,14 +76,14 @@ const developmentOrigins = isProduction
       "http://localhost:3000",
       "http://localhost:5000",
       "http://localhost:5173",
-      "http://localhost:5174",
+      `http://localhost:${adminPort}`,
       "http://127.0.0.1:3000",
       "http://127.0.0.1:5000",
       "http://127.0.0.1:5173",
-      "http://127.0.0.1:5174",
+      `http://127.0.0.1:${adminPort}`,
       "http://0.0.0.0:5000",
       "http://0.0.0.0:5173",
-      "http://0.0.0.0:5174",
+      `http://0.0.0.0:${adminPort}`,
     ];
 
 const allowedOrigins = new Set(
@@ -92,6 +93,9 @@ const allowedOrigins = new Set(
     `http://localhost:${port}`,
     `http://127.0.0.1:${port}`,
     `http://0.0.0.0:${port}`,
+    `http://localhost:${adminPort}`,
+    `http://127.0.0.1:${adminPort}`,
+    `http://0.0.0.0:${adminPort}`,
   ]
     .map(normalizeOrigin)
     .filter(Boolean) as string[],
