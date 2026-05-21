@@ -49,7 +49,7 @@ export default defineConfig({
 
   server: {
     port: adminPort,
-    strictPort: false,
+    strictPort: true,
     fs: {
       allow: [".."],
     },
