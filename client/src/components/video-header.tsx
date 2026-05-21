@@ -36,14 +36,14 @@ const getYouTubeId = (url: string) => {
   return null;
 };
 
-const buildEmbedUrl = (url: string, shouldAutoplay: boolean) => {
+const buildEmbedUrl = (url: string, shouldAutoplay: boolean, shouldMute: boolean) => {
   const youtubeId = getYouTubeId(url);
   if (!youtubeId) return null;
 
   const params = new URLSearchParams({
     autoplay: shouldAutoplay ? "1" : "0",
-    mute: "1",
-    controls: "0",
+    mute: shouldMute ? "1" : "0",
+    controls: shouldMute ? "0" : "1",
     disablekb: "1",
     enablejsapi: "1",
     loop: "1",
@@ -72,7 +72,7 @@ export default function VideoHeader() {
 
   const current = partnerVideos[currentVideo] ?? null;
   const directVideo = current && isDirectVideoUrl(current.videoUrl) ? current.videoUrl : null;
-  const embedUrl = current && !directVideo ? buildEmbedUrl(current.videoUrl, isPlaying) : null;
+  const embedUrl = current && !directVideo ? buildEmbedUrl(current.videoUrl, isPlaying, isMuted) : null;
   const hasVideos = partnerVideos.length > 0;
 
   useEffect(() => {
@@ -218,7 +218,8 @@ export default function VideoHeader() {
           />
         )}
 
-        <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/45 to-black/75" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/82 via-black/46 to-black/22" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/28" />
       </div>
 
       <div className="absolute bottom-6 left-6 z-20 flex items-center space-x-3">
@@ -234,17 +235,15 @@ export default function VideoHeader() {
               {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
             </Button>
 
-            {directVideo && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-white hover:bg-card/20 hover:text-mtendere-orange"
-                onClick={handleMuteToggle}
-                aria-label={isMuted ? "Unmute hero video" : "Mute hero video"}
-              >
-                {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-              </Button>
-            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-white hover:bg-card/20 hover:text-mtendere-orange"
+              onClick={handleMuteToggle}
+              aria-label={isMuted ? "Unmute hero video" : "Mute hero video"}
+            >
+              {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+            </Button>
 
             {directVideo && (
               <>
@@ -282,30 +281,32 @@ export default function VideoHeader() {
 
       <div className="video-content">
         <div
-          className={`mx-auto max-w-5xl px-6 text-center text-white transition-opacity duration-300 ${
+          className={`video-copy text-white transition-opacity duration-300 ${
             isTransitioning ? "opacity-0" : "opacity-100"
           }`}
         >
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/30 bg-card/15 px-4 py-1.5 text-sm font-semibold text-white backdrop-blur-sm">
+          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/30 bg-black/20 px-4 py-1.5 text-sm font-semibold text-white shadow-lg backdrop-blur-md">
             <span className="h-2 w-2 animate-pulse rounded-full bg-mtendere-orange" />
+            {isMuted ? "Muted preview" : "Sound on"}
+            <span className="h-1 w-1 rounded-full bg-white/50" />
             {current?.country || "Global partner network"}
           </div>
 
-          <p className="mb-3 text-base font-bold uppercase tracking-[0.25em] text-mtendere-orange drop-shadow md:text-lg">
+          <p className="mb-3 text-sm font-bold uppercase tracking-[0.22em] text-mtendere-orange drop-shadow md:text-base">
             {current?.partnerName || "Mtendere Education Consult"}
           </p>
 
-          <h1 className="mb-5 text-4xl font-black leading-tight drop-shadow-lg md:text-6xl lg:text-7xl">
+          <h1 className="mb-5 max-w-4xl text-4xl font-black leading-tight drop-shadow-lg md:text-6xl lg:text-7xl">
             {current?.title || "Your Gateway to "}
             {!current && <span className="text-mtendere-orange">Global Education</span>}
           </h1>
 
-          <p className="mx-auto mb-10 max-w-3xl text-lg font-medium leading-relaxed text-white/90 drop-shadow md:text-xl">
+          <p className="mb-8 max-w-2xl text-base font-medium leading-relaxed text-white/90 drop-shadow md:text-xl">
             {current?.description ||
               "We connect ambitious students with administered partner institutions, scholarships, jobs, and career pathways from one governed platform."}
           </p>
 
-          <div className="flex flex-col justify-center gap-4 sm:flex-row">
+          <div className="flex flex-col gap-4 sm:flex-row">
             <Button
               asChild
               size="lg"

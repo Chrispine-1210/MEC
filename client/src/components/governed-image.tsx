@@ -119,8 +119,8 @@ export default function GovernedImage({
     <figure className={cn("relative", className)}>
       <div
         className={cn(
-          "group relative overflow-hidden bg-muted shadow-sm",
-          "after:pointer-events-none after:absolute after:inset-0 after:bg-gradient-to-t after:from-black/5 after:to-transparent",
+          "group relative overflow-hidden bg-muted media-depth ring-1 ring-black/5",
+          "after:pointer-events-none after:absolute after:inset-0 after:bg-gradient-to-t after:from-black/12 after:via-black/0 after:to-white/5",
           wrapperClassName,
         )}
         style={{ aspectRatio }}

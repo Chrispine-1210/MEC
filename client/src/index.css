@@ -244,8 +244,10 @@
 /* Video header styles */
 .video-header {
   position: relative;
-  height: 100vh;
+  min-height: 100svh;
   overflow: hidden;
+  isolation: isolate;
+  background-color: hsl(var(--mtendere-dark));
 }
 
 .video-overlay {
@@ -262,10 +264,28 @@
 .video-content {
   position: relative;
   z-index: 2;
-  height: 100%;
+  min-height: 100svh;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: clamp(7rem, 13vh, 9rem) clamp(1.25rem, 6vw, 5rem) clamp(5.75rem, 12vh, 8rem);
+}
+
+.video-copy {
+  max-width: min(48rem, 100%);
+  text-align: left;
+  text-shadow: 0 3px 24px rgba(0, 0, 0, 0.48);
+}
+
+.video-copy h1,
+.video-copy p {
+  text-wrap: balance;
+}
+
+@media (max-width: 640px) {
+  .video-content {
+    padding: 6.5rem 1.25rem 6.25rem;
+  }
 }
 
 /* Carousel styles */
@@ -559,6 +579,55 @@
 
 .shadow-strong {
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.media-depth {
+  box-shadow: 0 22px 55px -34px rgba(15, 23, 42, 0.72), 0 10px 28px -24px rgba(15, 23, 42, 0.5);
+}
+
+.cta-depth {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 26px 70px -42px rgba(15, 23, 42, 0.8);
+}
+
+section[style*="background-image"] {
+  isolation: isolate;
+  background-color: hsl(var(--mtendere-dark));
+  background-blend-mode: multiply;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 -80px 140px -100px rgba(0, 0, 0, 0.8);
+}
+
+section[style*="background-image"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.14), transparent 30%),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.28), transparent 44%, rgba(0, 0, 0, 0.2));
+  mix-blend-mode: soft-light;
+}
+
+section[style*="background-image"] > .container,
+section[style*="background-image"] > div[class*="container"] {
+  position: relative;
+  z-index: 10;
+}
+
+section[style*="background-image"] h1,
+section[style*="background-image"] h2,
+section[style*="background-image"] p {
+  text-shadow: 0 3px 22px rgba(0, 0, 0, 0.38);
+}
+
+section.text-white {
+  isolation: isolate;
+}
+
+section.text-white h1,
+section.text-white h2,
+section.text-white p {
+  text-shadow: 0 3px 22px rgba(0, 0, 0, 0.36);
 }
 
 @media (prefers-reduced-motion: reduce) {
