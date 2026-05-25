@@ -164,7 +164,7 @@ export default function VideoHeader() {
       setCurrentTime(0);
       setDuration(0);
       setIsTransitioning(false);
-    }, 300);
+    }, 520);
   }
 
   const handleVideoSelect = (index: number) => {
@@ -176,7 +176,7 @@ export default function VideoHeader() {
       setCurrentTime(0);
       setDuration(0);
       setIsTransitioning(false);
-    }, 300);
+    }, 520);
   };
 
   const formatTime = (time: number) => {
@@ -281,7 +281,7 @@ export default function VideoHeader() {
 
       <div className="video-content">
         <div
-          className={`video-copy text-white transition-opacity duration-300 ${
+          className={`video-copy hero-panel rounded-3xl p-5 text-white transition-opacity duration-700 md:p-7 ${
             isTransitioning ? "opacity-0" : "opacity-100"
           }`}
         >

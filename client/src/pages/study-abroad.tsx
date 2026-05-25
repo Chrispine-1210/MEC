@@ -94,7 +94,7 @@ export default function StudyAbroad() {
         }}
       >
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/93 to-mtendere-green/82" />
-        <div className="container relative z-10 mx-auto px-4 text-center max-w-4xl">
+        <div className="container hero-panel hero-safe-copy relative z-10 mx-auto max-w-4xl rounded-3xl px-4 py-8 text-center md:p-10">
           <Badge className="mb-6 bg-card/20 text-white border-white/30 px-5 py-1.5 text-xs font-bold uppercase tracking-widest">
             Global Education
           </Badge>
@@ -118,13 +118,13 @@ export default function StudyAbroad() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-3 gap-6 mt-16 max-w-2xl mx-auto">
+          <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-4 sm:grid-cols-3">
             {[
               { value: "50+", label: "Countries" },
               { value: "200+", label: "Universities" },
               { value: "94%", label: "Visa Approval" },
             ].map((s) => (
-              <div key={s.label} className="bg-card/15 backdrop-blur-sm rounded-2xl p-4 text-center border border-white/20">
+              <div key={s.label} className="rounded-2xl border border-white/20 bg-card/15 p-4 text-center shadow-lg backdrop-blur-sm">
                 <div className="text-3xl font-extrabold text-mtendere-orange mb-1">{s.value}</div>
                 <div className="text-sm font-semibold opacity-90">{s.label}</div>
               </div>
@@ -134,7 +134,7 @@ export default function StudyAbroad() {
       </section>
 
       {/* Why Study Abroad */}
-      <section className="py-20 bg-card">
+      <section className="section-shell bg-card py-20">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Why Study Abroad?</h2>
@@ -147,7 +147,7 @@ export default function StudyAbroad() {
               { icon: Star, title: "Career Advantage", desc: "International graduates earn 40% more on average and are promoted faster in their careers.", color: "text-mtendere-orange", bg: "bg-mtendere-orange/10" },
               { icon: Users, title: "Cultural Growth", desc: "Immerse yourself in new cultures, languages, and worldviews that shape you as a global citizen.", color: "text-mtendere-blue", bg: "bg-mtendere-blue/10" },
             ].map((w) => (
-              <Card key={w.title} className="text-center hover:shadow-xl transition-all group border-none bg-muted/40">
+              <Card key={w.title} className="premium-card group border-none bg-muted/40 text-center transition-all">
                 <CardContent className="pt-8">
                   <div className={`w-16 h-16 ${w.bg} rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform`}>
                     <w.icon className={`w-8 h-8 ${w.color}`} />
@@ -162,7 +162,7 @@ export default function StudyAbroad() {
       </section>
 
       {/* Study Destinations */}
-      <section className="py-20 bg-muted/40">
+      <section className="section-shell bg-muted/40 py-20">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <Badge variant="outline" className="mb-3 text-mtendere-blue border-mtendere-blue px-4 py-1 uppercase tracking-wider text-xs font-bold">
@@ -174,7 +174,7 @@ export default function StudyAbroad() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {DESTINATIONS.map((d) => (
-              <Card key={d.country} className="overflow-hidden group hover:shadow-2xl transition-all duration-500 border-none">
+              <Card key={d.country} className="premium-card group overflow-hidden border-none transition-all duration-500">
                 <div className="relative h-48 overflow-hidden">
                   <GovernedImage
                     module="program"
@@ -209,7 +209,7 @@ export default function StudyAbroad() {
       </section>
 
       {/* Process */}
-      <section className="py-20 bg-card">
+      <section className="section-shell bg-card py-20">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Our 6-Step Process</h2>
@@ -217,7 +217,7 @@ export default function StudyAbroad() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {PROCESS.map((p) => (
-              <div key={p.step} className="flex gap-4 p-6 bg-muted/40 rounded-2xl hover:shadow-lg transition-all group">
+              <div key={p.step} className="premium-card group flex gap-4 rounded-2xl bg-muted/40 p-6 transition-all">
                 <div className="flex-shrink-0">
                   <div className="w-14 h-14 bg-gradient-to-br from-mtendere-blue to-mtendere-green rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-md">
                     <p.icon className="w-7 h-7 text-white" />
@@ -235,7 +235,7 @@ export default function StudyAbroad() {
       </section>
 
       {/* FAQ */}
-      <section className="py-20 bg-muted/40">
+      <section className="section-shell bg-muted/40 py-20">
         <div className="container mx-auto px-4 max-w-3xl">
           <div className="text-center mb-14">
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Frequently Asked Questions</h2>
@@ -255,7 +255,7 @@ export default function StudyAbroad() {
 
       {/* CTA */}
       <section
-        className="py-24 text-white text-center relative overflow-hidden"
+        className="cta-depth relative overflow-hidden py-24 text-center text-white"
         style={{
           backgroundImage: getGovernedBackgroundImage({
             module: "program",
@@ -268,7 +268,7 @@ export default function StudyAbroad() {
         }}
       >
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/92 to-mtendere-green/88 z-0" />
-        <div className="container relative z-10 mx-auto px-4 max-w-2xl">
+        <div className="container hero-panel relative z-10 mx-auto max-w-2xl rounded-3xl px-4 py-8 md:p-10">
           <h2 className="text-4xl md:text-5xl font-extrabold mb-4 drop-shadow-lg">Your Global Future Starts Here</h2>
           <p className="text-xl opacity-95 mb-8 font-semibold drop-shadow">
             Book a free consultation with our study abroad specialists today.

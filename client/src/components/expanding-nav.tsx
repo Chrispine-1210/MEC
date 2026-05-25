@@ -136,7 +136,9 @@ export default function ExpandingNav() {
     <nav 
       ref={navRef}
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        isScrolled ? 'bg-background/95 shadow-lg border-b border-border/70' : 'bg-background/80 backdrop-blur-sm border-b border-border/50'
+        isScrolled
+          ? 'border-b border-border/70 bg-background/95 shadow-[0_18px_45px_-32px_rgba(15,23,42,0.55)] backdrop-blur-xl'
+          : 'border-b border-white/60 bg-background/82 shadow-[0_12px_35px_-34px_rgba(15,23,42,0.45)] backdrop-blur-xl'
       }`}
     >
       <div className="container mx-auto px-4">
@@ -170,7 +172,7 @@ export default function ExpandingNav() {
                     
                     {/* Mega Menu */}
                     {activeDropdown === item.dropdown && item.megaMenu && (
-                      <div className="absolute left-0 mt-2 w-96 bg-card rounded-lg shadow-xl border border-border/60 animate-scale-in">
+                      <div className="absolute left-0 mt-2 w-96 overflow-hidden rounded-xl border border-border/70 bg-card/95 shadow-[0_28px_80px_-42px_rgba(15,23,42,0.72)] backdrop-blur-xl animate-scale-in">
                         <div className="p-6 grid grid-cols-2 gap-6">
                           {item.megaMenu.sections.map((section) => (
                             <div key={section.title}>
@@ -233,7 +235,7 @@ export default function ExpandingNav() {
                 </Button>
                 
                 {activeDropdown === 'user' && (
-                  <div className="absolute right-0 mt-2 w-48 bg-card rounded-lg shadow-xl border border-border/60 animate-scale-in">
+                  <div className="absolute right-0 mt-2 w-48 overflow-hidden rounded-xl border border-border/70 bg-card/95 shadow-[0_28px_80px_-42px_rgba(15,23,42,0.72)] backdrop-blur-xl animate-scale-in">
                     <div className="p-2">
                       <Link
                         href="/dashboard"
@@ -292,7 +294,7 @@ export default function ExpandingNav() {
         {/* Mobile Navigation */}
         {isOpen && (
           <div className="lg:hidden animate-slide-in">
-            <div className="px-2 pt-2 pb-3 space-y-1 bg-card border-t border-border/60">
+            <div className="mt-2 space-y-1 rounded-b-2xl border border-border/70 bg-card/95 px-2 pb-4 pt-3 shadow-[0_28px_80px_-48px_rgba(15,23,42,0.7)] backdrop-blur-xl">
               <div className="px-1 pb-2">
                 <GlobalSearch onNavigate={closeMenu} placeholder="Search scholarships, jobs, blogs..." />
               </div>

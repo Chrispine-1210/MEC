@@ -27,6 +27,7 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
+  const [itemsPerView, setItemsPerView] = useState(1);
   const carouselRef = useRef<HTMLDivElement>(null);
 
   // Combine all items into carousel format
@@ -76,24 +77,39 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
   ];
 
   const totalSlides = carouselItems.length;
-  const itemsPerView = window.innerWidth >= 1024 ? 3 : window.innerWidth >= 768 ? 2 : 1;
+  const pageCount = Math.max(1, Math.ceil(totalSlides / itemsPerView));
+
+  useEffect(() => {
+    const updateItemsPerView = () => {
+      const width = window.innerWidth;
+      setItemsPerView(width >= 1024 ? 3 : width >= 768 ? 2 : 1);
+    };
+
+    updateItemsPerView();
+    window.addEventListener("resize", updateItemsPerView);
+    return () => window.removeEventListener("resize", updateItemsPerView);
+  }, []);
 
   useEffect(() => {
     if (isAutoPlaying && totalSlides > 0) {
       const interval = setInterval(() => {
-        setCurrentSlide(prev => (prev + 1) % Math.ceil(totalSlides / itemsPerView));
+        setCurrentSlide(prev => (prev + 1) % pageCount);
       }, 5000);
       return () => clearInterval(interval);
     }
-  }, [isAutoPlaying, totalSlides, itemsPerView]);
+  }, [isAutoPlaying, totalSlides, pageCount]);
+
+  useEffect(() => {
+    setCurrentSlide((current) => Math.min(current, pageCount - 1));
+  }, [pageCount]);
 
   const nextSlide = () => {
-    setCurrentSlide(prev => (prev + 1) % Math.ceil(totalSlides / itemsPerView));
+    setCurrentSlide(prev => (prev + 1) % pageCount);
     setIsAutoPlaying(false);
   };
 
   const prevSlide = () => {
-    setCurrentSlide(prev => prev === 0 ? Math.ceil(totalSlides / itemsPerView) - 1 : prev - 1);
+    setCurrentSlide(prev => prev === 0 ? pageCount - 1 : prev - 1);
     setIsAutoPlaying(false);
   };
 
@@ -359,19 +375,22 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
       >
         <div 
           className="flex transition-transform duration-500 ease-in-out"
-          style={{ 
-            transform: `translateX(-${currentSlide * (100 / Math.ceil(totalSlides / itemsPerView))}%)`,
-            width: `${Math.ceil(totalSlides / itemsPerView) * 100}%`
+          style={{
+            transform: `translateX(-${currentSlide * (100 / pageCount)}%)`,
+            width: `${pageCount * 100}%`,
           }}
         >
-          {Array.from({ length: Math.ceil(totalSlides / itemsPerView) }).map((_, slideIndex) => (
+          {Array.from({ length: pageCount }).map((_, slideIndex) => (
             <div 
               key={slideIndex}
-              className="flex space-x-6"
-              style={{ width: `${100 / Math.ceil(totalSlides / itemsPerView)}%` }}
+              className="grid min-w-0 gap-6 px-1"
+              style={{
+                width: `${100 / pageCount}%`,
+                gridTemplateColumns: `repeat(${itemsPerView}, minmax(0, 1fr))`,
+              }}
             >
               {carouselItems.slice(slideIndex * itemsPerView, (slideIndex + 1) * itemsPerView).map((item) => (
-                <div key={`${item.type}-${item.id}`} className={`${itemsPerView === 1 ? 'w-full' : itemsPerView === 2 ? 'w-1/2' : 'w-1/3'} flex-shrink-0`}>
+                <div key={`${item.type}-${item.id}`} className="min-w-0">
                   {renderCarouselItem(item)}
                 </div>
               ))}
@@ -381,7 +400,7 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
       </div>
 
       {/* Navigation Arrows */}
-      {Math.ceil(totalSlides / itemsPerView) > 1 && (
+      {pageCount > 1 && (
         <>
           <Button
             variant="outline"
@@ -404,9 +423,9 @@ export default function InteractiveCarousel({ scholarships, jobs, testimonials }
       )}
 
       {/* Slide Indicators */}
-      {Math.ceil(totalSlides / itemsPerView) > 1 && (
+      {pageCount > 1 && (
         <div className="flex justify-center space-x-2 mt-6">
-          {Array.from({ length: Math.ceil(totalSlides / itemsPerView) }).map((_, index) => (
+          {Array.from({ length: pageCount }).map((_, index) => (
             <button
               key={index}
               className={`w-3 h-3 rounded-full transition-all duration-300 ${

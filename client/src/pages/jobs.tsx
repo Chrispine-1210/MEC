@@ -118,7 +118,7 @@ export default function Jobs() {
       >
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-green/90 to-mtendere-blue/90 z-0" />
         <div className="container relative z-10 mx-auto px-4">
-          <div className="max-w-3xl mx-auto text-center">
+          <div className="hero-panel hero-safe-copy mx-auto max-w-3xl rounded-3xl p-7 text-center md:p-10">
             <h1 className="text-5xl md:text-6xl font-bold mb-6 drop-shadow-2xl">
               Discover Your Next Career Opportunity
             </h1>
@@ -160,7 +160,7 @@ export default function Jobs() {
 
       <div className="container mx-auto px-4 py-12">
       {/* Filters */}
-      <div className="mb-8">
+      <div className="premium-card mb-8 rounded-2xl p-6">
         <div className="flex flex-wrap items-center gap-4 mb-4">
             <div className="flex items-center space-x-2">
               <Filter className="w-5 h-5 text-muted-foreground" />
@@ -244,7 +244,7 @@ export default function Jobs() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {filteredJobs?.map((job, idx) => {
               return (
-                <Card key={idx}>
+                <Card key={idx} className="premium-card group overflow-hidden">
                   <div className="relative">
                     <GovernedImage
                       module="job"

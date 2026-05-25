@@ -121,7 +121,7 @@ export default function ResumeBuilding() {
         }}
       >
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/93 via-mtendere-blue/85 to-mtendere-green/80" />
-        <div className="container relative z-10 mx-auto px-4 text-center max-w-4xl">
+        <div className="container hero-panel hero-safe-copy relative z-10 mx-auto max-w-4xl rounded-3xl px-4 py-8 text-center md:p-10">
           <Badge className="mb-6 bg-card/20 text-white border-white/30 px-5 py-1.5 text-xs font-bold uppercase tracking-widest">
             Professional Resume Services
           </Badge>
@@ -146,13 +146,13 @@ export default function ResumeBuilding() {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-6 mt-16 max-w-2xl mx-auto">
+          <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-4 sm:grid-cols-3">
             {[
               { value: "94%", label: "Interview Success Rate" },
               { value: "500+", label: "Resumes Written" },
               { value: "48h", label: "Average Turnaround" },
             ].map((s) => (
-              <div key={s.label} className="bg-card/15 backdrop-blur-sm rounded-2xl p-4 text-center border border-white/20">
+              <div key={s.label} className="rounded-2xl border border-white/20 bg-card/15 p-4 text-center shadow-lg backdrop-blur-sm">
                 <div className="text-3xl font-extrabold text-mtendere-orange mb-1">{s.value}</div>
                 <div className="text-sm font-semibold opacity-90">{s.label}</div>
               </div>
@@ -162,7 +162,7 @@ export default function ResumeBuilding() {
       </section>
 
       {/* Services */}
-      <section className="py-20 bg-card">
+      <section className="section-shell bg-card py-20">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <Badge variant="outline" className="mb-3 text-mtendere-blue border-mtendere-blue px-4 py-1 uppercase tracking-wider text-xs font-bold">
@@ -225,7 +225,7 @@ export default function ResumeBuilding() {
                 bullets: ["Brand identity development", "Professional bio writing", "Online presence audit", "Thought leadership strategy"],
               },
             ].map((s) => (
-              <Card key={s.title} className="h-full hover:shadow-xl transition-all duration-300 group border-none bg-muted/40">
+              <Card key={s.title} className="premium-card group h-full border-none bg-muted/40 transition-all duration-300">
                 <CardHeader>
                   <div className={`w-14 h-14 ${s.bg} rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
                     <s.icon className={`w-7 h-7 ${s.color}`} />
@@ -250,7 +250,7 @@ export default function ResumeBuilding() {
       </section>
 
       {/* Process */}
-      <section className="py-20 bg-muted/40">
+      <section className="section-shell bg-muted/40 py-20">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">How It Works</h2>
@@ -275,7 +275,7 @@ export default function ResumeBuilding() {
       </section>
 
       {/* Packages */}
-      <section id="packages" className="py-20 bg-card">
+      <section id="packages" className="section-shell bg-card py-20">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <Badge variant="outline" className="mb-3 text-mtendere-blue border-mtendere-blue px-4 py-1 uppercase tracking-wider text-xs font-bold">
@@ -287,7 +287,7 @@ export default function ResumeBuilding() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             {PACKAGES.map((pkg) => (
-              <Card key={pkg.name} className={`relative flex flex-col border-t-4 ${pkg.color} hover:shadow-2xl transition-all duration-300 ${pkg.badge === "Most Popular" ? "scale-105 shadow-xl" : ""}`}>
+              <Card key={pkg.name} className={`premium-card relative flex flex-col border-t-4 ${pkg.color} transition-all duration-300 ${pkg.badge === "Most Popular" ? "scale-105 shadow-xl" : ""}`}>
                 {pkg.badge && (
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2">
                     <Badge className={`px-4 py-1 text-sm font-bold ${pkg.badge === "Most Popular" ? "bg-mtendere-green" : "bg-mtendere-orange"}`}>
@@ -322,7 +322,7 @@ export default function ResumeBuilding() {
       </section>
 
       {/* Testimonials */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-white via-white to-mtendere-gray py-20">
+      <section className="section-shell relative overflow-hidden bg-gradient-to-br from-white via-white to-mtendere-gray py-20">
         <div className="absolute left-12 top-10 h-48 w-48 rounded-full bg-mtendere-orange/10 blur-3xl" />
         <div className="absolute right-12 top-16 h-56 w-56 rounded-full bg-mtendere-blue/10 blur-3xl" />
         <div className="container relative mx-auto px-4">
@@ -336,7 +336,7 @@ export default function ResumeBuilding() {
                 const name = testimonial.authorName || "Mtendere Student";
 
                 return (
-                  <div key={testimonial.id} className="rounded-2xl border border-border/70 bg-card p-8 shadow-lg">
+                  <div key={testimonial.id} className="premium-card rounded-2xl bg-card p-8">
                     <div className="flex items-center gap-1 mb-4">
                       {[...Array(5)].map((_, i) => (
                         <Star
@@ -382,7 +382,7 @@ export default function ResumeBuilding() {
       </section>
 
       {/* FAQ */}
-      <section className="py-20 bg-card">
+      <section className="section-shell bg-card py-20">
         <div className="container mx-auto px-4 max-w-3xl">
           <div className="text-center mb-14">
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Frequently Asked Questions</h2>
@@ -404,7 +404,7 @@ export default function ResumeBuilding() {
 
       {/* CTA */}
       <section
-        className="py-20 text-white text-center relative overflow-hidden"
+        className="cta-depth relative overflow-hidden py-20 text-center text-white"
         style={{
           backgroundImage: getGovernedBackgroundImage({
             module: "job",
@@ -417,7 +417,7 @@ export default function ResumeBuilding() {
         }}
       >
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/93 to-mtendere-green/85 z-0" />
-        <div className="container relative z-10 mx-auto px-4 max-w-2xl">
+        <div className="container hero-panel relative z-10 mx-auto max-w-2xl rounded-3xl px-4 py-8 md:p-10">
           <h2 className="text-4xl md:text-5xl font-extrabold mb-4 drop-shadow-lg">Ready to Transform Your Career?</h2>
           <p className="text-xl opacity-95 mb-8 drop-shadow font-semibold">
             Book a free 15-minute consultation today and take the first step toward your dream job.

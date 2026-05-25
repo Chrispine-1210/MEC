@@ -123,7 +123,7 @@ export default function Scholarships() {
       >
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/90 to-mtendere-green/90 z-0" />
         <div className="container relative z-10 mx-auto px-4">
-          <div className="max-w-3xl mx-auto text-center">
+          <div className="hero-panel hero-safe-copy mx-auto max-w-3xl rounded-3xl p-7 text-center md:p-10">
             <h1 className="text-5xl md:text-6xl font-bold mb-6 drop-shadow-2xl">
               Find Your Perfect Scholarship
             </h1>
@@ -164,10 +164,10 @@ export default function Scholarships() {
       </section>
 
       {/* Video Section */}
-      <section className="py-20 bg-mtendere-gray">
+      <section className="section-shell bg-mtendere-gray py-20">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto">
-            <div className="mb-8 overflow-hidden rounded-2xl border border-border/60 bg-card shadow-2xl">
+            <div className="media-depth mb-8 overflow-hidden rounded-2xl border border-border/60 bg-card">
               <video
                 src={videoSources[currentVideo].url}
                 className="w-full h-96 object-cover"
@@ -177,7 +177,7 @@ export default function Scholarships() {
                 key={currentVideo}
               />
             </div>
-            <div className="bg-card rounded-xl shadow-lg p-8">
+            <div className="premium-card rounded-xl p-8">
               <h3 className="text-2xl font-bold text-mtendere-blue mb-2">
                 {videoSources[currentVideo].title}
               </h3>
@@ -202,7 +202,7 @@ export default function Scholarships() {
 
       <div className="container mx-auto px-4 py-16">
         {/* Filters Section with Background */}
-        <div className="mb-12 bg-gradient-to-r from-mtendere-blue/5 to-mtendere-green/5 rounded-2xl p-8 shadow-md">
+        <div className="premium-card mb-12 rounded-2xl bg-gradient-to-r from-mtendere-blue/5 to-mtendere-green/5 p-8">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center space-x-2">
               <Filter className="w-5 h-5 text-mtendere-blue font-bold" />
@@ -259,7 +259,7 @@ export default function Scholarships() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredScholarships?.map((scholarship, index) => (
-              <Card key={scholarship.id} className="hover:shadow-2xl transition-all duration-500 overflow-hidden group border-none bg-card shadow-md flex flex-col">
+              <Card key={scholarship.id} className="premium-card group flex flex-col overflow-hidden border-none bg-card transition-all duration-500">
                 <div className="relative h-48 overflow-hidden">
                   <GovernedImage
                     module="scholarship"

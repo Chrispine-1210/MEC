@@ -42,16 +42,18 @@ export default function Referrals() {
       <ExpandingNav />
       <section className="mt-16 bg-gradient-to-r from-mtendere-blue to-mtendere-green py-16 text-white">
         <div className="container mx-auto max-w-6xl px-4">
-          <h1 className="text-4xl font-bold md:text-5xl">Referral Program</h1>
-          <p className="mt-4 max-w-2xl text-white/85">
-            Share Mtendere with students and families who need clearer education guidance, then track rewards from your
-            dashboard.
-          </p>
+          <div className="hero-panel max-w-3xl rounded-3xl p-6 md:p-8">
+            <h1 className="text-4xl font-bold md:text-5xl">Referral Program</h1>
+            <p className="mt-4 max-w-2xl text-white/85">
+              Share Mtendere with students and families who need clearer education guidance, then track rewards from your
+              dashboard.
+            </p>
+          </div>
         </div>
       </section>
 
       <main className="container mx-auto max-w-6xl px-4 py-10">
-        <Card>
+        <Card className="premium-card">
           <CardHeader>
             <CardTitle className="text-mtendere-blue">Your referral workspace</CardTitle>
             <CardDescription>Invite, track, and request payouts from one connected page.</CardDescription>

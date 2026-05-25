@@ -167,7 +167,7 @@ export default function EventDetail() {
               Events
             </Link>
           </Button>
-          <div className="max-w-4xl">
+          <div className="hero-panel hero-safe-copy max-w-4xl rounded-3xl p-7 md:p-10">
             <div className="mb-5 flex flex-wrap gap-2">
               <EventStatusBadge event={event} />
               <Badge className="bg-white/12 text-white">{event.category}</Badge>
@@ -197,7 +197,7 @@ export default function EventDetail() {
         </div>
       </section>
 
-      <section className="bg-card py-8">
+      <section className="section-shell bg-card py-8">
         <div className="container mx-auto max-w-6xl px-4">
           <div className="grid gap-4 md:grid-cols-4">
             <Metric icon={Calendar} label="Date" value={formatDate(event.startAt)} />
@@ -211,7 +211,7 @@ export default function EventDetail() {
       <main className="py-16">
         <div className="container mx-auto grid max-w-6xl gap-8 px-4 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="space-y-8">
-            <Card className="border border-border/60 shadow-sm">
+            <Card className="premium-card">
               <CardHeader>
                 <CardTitle className="text-2xl text-mtendere-blue">About this event</CardTitle>
               </CardHeader>
@@ -321,7 +321,7 @@ export default function EventDetail() {
           </div>
 
           <aside className="space-y-6">
-            <Card className="sticky top-24 border border-border/60 shadow-sm">
+            <Card className="premium-card sticky top-24">
               <CardHeader>
                 <CardTitle className="text-xl text-mtendere-blue">Event actions</CardTitle>
               </CardHeader>
@@ -343,7 +343,7 @@ export default function EventDetail() {
               </CardContent>
             </Card>
 
-            <Card className="border border-border/60 shadow-sm">
+            <Card className="premium-card">
               <CardHeader>
                 <CardTitle className="text-xl text-mtendere-blue">Live indicators</CardTitle>
               </CardHeader>
@@ -356,7 +356,7 @@ export default function EventDetail() {
             </Card>
 
             {relatedEvents.length > 0 && (
-              <Card className="border border-border/60 shadow-sm">
+              <Card className="premium-card">
                 <CardHeader>
                   <CardTitle className="text-xl text-mtendere-blue">Related events</CardTitle>
                 </CardHeader>
@@ -388,7 +388,7 @@ function EventStatusBadge({ event }: { event: ApiEvent }) {
 
 function Metric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
-    <Card className="border border-border/60 shadow-sm">
+    <Card className="premium-card">
       <CardContent className="p-5">
         <Icon className="mb-3 h-5 w-5 text-mtendere-orange" />
         <p className="text-xs font-semibold uppercase text-muted-foreground">{label}</p>
@@ -410,7 +410,7 @@ function InfoBlock({ icon: Icon, label, value }: { icon: LucideIcon; label: stri
 
 function Timeline({ title, items, empty }: { title: string; items: Array<Record<string, unknown>>; empty: string }) {
   return (
-    <Card className="border border-border/60 shadow-sm">
+    <Card className="premium-card">
       <CardHeader>
         <CardTitle className="text-2xl text-mtendere-blue">{title}</CardTitle>
       </CardHeader>

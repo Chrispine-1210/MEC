@@ -233,9 +233,6 @@ export default function PartnerDetail() {
           />
         </div>
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/95 via-mtendere-blue/88 to-mtendere-green/84" />
-        <div className="absolute -left-20 top-10 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
-        <div className="absolute bottom-0 right-0 h-72 w-72 rounded-full bg-mtendere-orange/20 blur-3xl" />
-
         <div className="container relative z-10 mx-auto max-w-6xl px-4">
           <Button asChild variant="ghost" className="mb-6 -ml-3 text-white hover:bg-card/20">
             <Link href="/partners">
@@ -245,7 +242,7 @@ export default function PartnerDetail() {
           </Button>
 
           <div className="grid gap-10 lg:grid-cols-[minmax(0,1.15fr)_380px] lg:items-end">
-            <div className="max-w-4xl">
+            <div className="hero-panel hero-safe-copy max-w-4xl rounded-3xl p-7 md:p-10">
               <div className="mb-4 flex flex-wrap items-center gap-3">
                 <Badge className="bg-mtendere-orange font-semibold text-white">Partner Institution</Badge>
                 <Badge variant="outline" className="border-white/35 bg-white/10 text-white">
@@ -453,7 +450,7 @@ export default function PartnerDetail() {
               </div>
             </section>
 
-            <section className="rounded-3xl bg-gradient-to-r from-mtendere-blue to-mtendere-green p-8 text-white">
+            <section className="cta-depth rounded-3xl bg-gradient-to-r from-mtendere-blue to-mtendere-green p-8 text-white">
               <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
                 <div className="max-w-2xl">
                   <h2 className="text-2xl font-bold">Ready to turn partner research into a real shortlist?</h2>

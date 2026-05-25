@@ -107,9 +107,9 @@ export default function Home() {
       <VideoHeader />
 
       {/* Featured Content Carousel */}
-      <section className="py-16 bg-mtendere-gray">
+      <section className="section-shell bg-mtendere-gray py-20">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
+          <div className="section-heading mx-auto mb-12 text-center">
             <h2 className="text-3xl md:text-4xl font-bold text-mtendere-blue mb-4">
               Featured Opportunities
             </h2>
@@ -125,7 +125,7 @@ export default function Home() {
           />
 
           <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto">
-            <Card className="border-0 shadow-sm hover:shadow-lg transition-shadow">
+            <Card className="premium-card border-0">
               <CardContent className="p-6 text-center space-y-3">
                 <GraduationCap className="w-8 h-8 text-mtendere-blue mx-auto" />
                 <p className="font-semibold text-mtendere-blue">Browse Scholarships</p>
@@ -137,7 +137,7 @@ export default function Home() {
                 </Button>
               </CardContent>
             </Card>
-            <Card className="border-0 shadow-sm hover:shadow-lg transition-shadow">
+            <Card className="premium-card border-0">
               <CardContent className="p-6 text-center space-y-3">
                 <Briefcase className="w-8 h-8 text-mtendere-green mx-auto" />
                 <p className="font-semibold text-mtendere-green">Find Job Openings</p>
@@ -149,7 +149,7 @@ export default function Home() {
                 </Button>
               </CardContent>
             </Card>
-            <Card className="border-0 shadow-sm hover:shadow-lg transition-shadow">
+            <Card className="premium-card border-0">
               <CardContent className="p-6 text-center space-y-3">
                 <Trophy className="w-8 h-8 text-mtendere-orange mx-auto" />
                 <p className="font-semibold text-mtendere-orange">Share Your Story</p>
@@ -166,12 +166,9 @@ export default function Home() {
       </section>
 
       {/* Blog Section */}
-      <section className="py-24 bg-card relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-mtendere-blue/5 rounded-full -mr-32 -mt-32 blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-mtendere-green/5 rounded-full -ml-48 -mb-48 blur-3xl" />
-        
+      <section className="section-shell bg-card py-24">
         <div className="container mx-auto px-4 relative z-10">
-          <div className="text-center mb-16">
+          <div className="section-heading mx-auto mb-16 text-center">
             <Badge variant="outline" className="mb-4 text-mtendere-blue border-mtendere-blue px-4 py-1 uppercase tracking-wider text-xs font-bold">
               Insights & Updates
             </Badge>
@@ -187,7 +184,7 @@ export default function Home() {
           {blogHighlights.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
               {blogHighlights.map((post: any) => (
-                <Card key={post.id} className="group flex flex-col h-full hover:shadow-2xl transition-all duration-500 overflow-hidden border-none bg-mtendere-gray/30 backdrop-blur-sm">
+                <Card key={post.id} className="group premium-card flex h-full flex-col overflow-hidden border-none bg-mtendere-gray/30 backdrop-blur-sm">
                 <div className="relative h-64 overflow-hidden">
                   <GovernedImage
                     module="blog"
@@ -258,7 +255,7 @@ export default function Home() {
 
       {/* Testimonials Section */}
       <section
-        className="py-24 text-white relative overflow-hidden"
+        className="cta-depth relative overflow-hidden py-24 text-white"
         style={{
           backgroundImage: getGovernedBackgroundImage({
             module: "testimonial",
@@ -272,7 +269,7 @@ export default function Home() {
       >
         <div className="absolute inset-0 bg-gradient-to-br from-mtendere-dark/93 to-mtendere-blue/85 z-0" />
         <div className="container relative z-10 mx-auto px-4">
-          <div className="text-center mb-16">
+          <div className="section-heading mx-auto mb-16 text-center">
             <Badge className="mb-4 bg-card/20 text-white border-white/30 px-5 py-1.5 text-xs font-bold uppercase tracking-widest">
               Student Success Stories
             </Badge>
@@ -292,7 +289,7 @@ export default function Home() {
                 const name = testimonial.authorName || "Mtendere Student";
 
                 return (
-                  <div key={testimonial.id} className="bg-card/10 backdrop-blur-sm border border-white/20 rounded-2xl p-8 hover:bg-card/15 transition-all duration-300 group">
+                  <div key={testimonial.id} className="group rounded-2xl border border-white/20 bg-card/10 p-8 shadow-[0_24px_70px_-48px_rgba(0,0,0,0.82)] backdrop-blur-sm transition-all duration-300 hover:bg-card/15">
                     <div className="flex items-center gap-1 mb-5">
                       {[...Array(5)].map((_, i) => (
                         <Star
@@ -334,9 +331,9 @@ export default function Home() {
       </section>
 
       {/* Team Section */}
-      <section id="team" className="py-24 bg-mtendere-gray/40 relative">
+      <section id="team" className="section-shell bg-mtendere-gray/40 py-24">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
+          <div className="section-heading mx-auto mb-16 text-center">
             <Badge variant="outline" className="mb-4 text-mtendere-green border-mtendere-green px-4 py-1 uppercase tracking-wider text-xs font-bold">
               Expert Team
             </Badge>
@@ -358,7 +355,7 @@ export default function Home() {
                       <TeamMemberDialog
                         member={member}
                         trigger={
-                          <Card className="h-full cursor-pointer text-center transition-all duration-300 hover:shadow-lg group">
+                          <Card className="group premium-card h-full cursor-pointer text-center transition-all duration-300">
                             <CardContent className="flex flex-col items-center p-6">
                               <TeamPortrait
                                 member={member}
@@ -405,7 +402,7 @@ export default function Home() {
 
       {/* Stats Banner */}
       <section
-        className="py-16 relative overflow-hidden text-white"
+        className="cta-depth relative overflow-hidden py-16 text-white"
         style={{
           backgroundImage: getGovernedBackgroundImage({
             module: "misc",
@@ -439,9 +436,9 @@ export default function Home() {
       </section>
 
       {/* Services Section */}
-      <section className="py-24 bg-card">
+      <section className="section-shell bg-card py-24">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
+          <div className="section-heading mx-auto mb-16 text-center">
             <Badge variant="outline" className="mb-4 text-mtendere-orange border-mtendere-orange px-4 py-1 uppercase tracking-wider text-xs font-bold">
               What We Do
             </Badge>
@@ -529,7 +526,7 @@ export default function Home() {
                 btnClass: "bg-mtendere-orange hover:bg-mtendere-orange/90 text-white",
               },
             ].map((s) => (
-              <Card key={s.title} className={`hover:shadow-2xl transition-all duration-500 border-t-4 ${s.border} group flex flex-col`}>
+              <Card key={s.title} className={`premium-card group flex flex-col border-t-4 transition-all duration-500 ${s.border}`}>
                 <CardHeader>
                   <div className={`w-14 h-14 ${s.bg} rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
                     <s.icon className={`w-7 h-7 ${s.color}`} />
@@ -558,7 +555,7 @@ export default function Home() {
 
       {/* Call to Action */}
       <section
-        className="py-24 relative overflow-hidden text-white text-center"
+        className="cta-depth relative overflow-hidden py-24 text-center text-white"
         style={{
           backgroundImage: getGovernedBackgroundImage({
             module: "misc",
@@ -571,7 +568,8 @@ export default function Home() {
         }}
       >
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/90 to-mtendere-green/85 z-0" />
-        <div className="container relative z-10 mx-auto px-4 max-w-3xl">
+        <div className="container relative z-10 mx-auto max-w-3xl px-4">
+          <div className="hero-panel rounded-3xl p-7 md:p-10">
           <Badge className="mb-5 bg-card/20 text-white border-white/30 px-5 py-1.5 text-xs font-bold uppercase tracking-widest">
             Your Journey Starts Now
           </Badge>
@@ -592,6 +590,7 @@ export default function Home() {
                 Contact an Advisor
               </Button>
             </Link>
+          </div>
           </div>
         </div>
       </section>

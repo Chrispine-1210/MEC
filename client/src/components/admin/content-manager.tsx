@@ -230,7 +230,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
       case 'scholarships':
         return (
           <>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <Label htmlFor="title">Title</Label>
                 <Input
@@ -262,7 +262,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid gap-4 md:grid-cols-3">
               <div>
                 <Label htmlFor="country">Country</Label>
                 <Input
@@ -293,7 +293,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <Label htmlFor="category">Category</Label>
                 <Input
@@ -318,7 +318,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
       case 'jobs':
         return (
           <>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <Label htmlFor="title">Job Title</Label>
                 <Input
@@ -350,7 +350,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid gap-4 md:grid-cols-3">
               <div>
                 <Label htmlFor="location">Location</Label>
                 <Input
@@ -381,7 +381,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
               </div>
             </div>
 
-            <div className="flex items-center space-x-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
               <div className="flex items-center space-x-2">
                 <Switch
                   id="isRemote"
@@ -447,7 +447,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <Label htmlFor="category">Category</Label>
                 <Input
@@ -665,7 +665,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-mtendere-blue">{getTitle()}</h1>
           <p className="text-muted-foreground">Manage {contentType} content</p>
@@ -677,7 +677,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
       </div>
 
       {/* Search and Filters */}
-      <div className="flex items-center space-x-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
           <Input
@@ -703,7 +703,7 @@ export default function ContentManager({ contentType }: ContentManagerProps) {
           </CardHeader>
           <CardContent className="space-y-4">
             {renderFormFields()}
-            <div className="flex justify-end space-x-2">
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button variant="outline" onClick={handleCancel}>
                 <X className="w-4 h-4 mr-2" />
                 Cancel

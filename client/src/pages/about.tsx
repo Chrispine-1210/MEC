@@ -181,12 +181,9 @@ export default function About() {
           />
         </div>
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/95 via-mtendere-blue/88 to-mtendere-green/82" />
-        <div className="absolute -left-24 top-10 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
-        <div className="absolute bottom-0 right-0 h-72 w-72 rounded-full bg-mtendere-orange/20 blur-3xl" />
-
         <div className="container relative z-10 mx-auto max-w-6xl px-4">
           <div className="grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_360px] lg:items-center">
-            <div className="max-w-4xl">
+            <div className="hero-panel hero-safe-copy max-w-4xl rounded-3xl p-7 md:p-10">
               <Badge className="mb-4 bg-white/10 px-4 py-1 text-white">About Mtendere</Badge>
               <h1 className="text-4xl font-bold leading-tight md:text-6xl">
                 A clearer, more human path from ambition to opportunity
@@ -214,7 +211,7 @@ export default function About() {
               </div>
             </div>
 
-            <Card className="border-white/15 bg-white/10 text-white shadow-2xl backdrop-blur-sm">
+            <Card className="hero-panel border-white/15 bg-white/10 text-white">
               <CardHeader>
                 <CardTitle className="text-xl text-white">What students should expect from us</CardTitle>
                 <CardDescription className="text-white/75">
@@ -238,11 +235,11 @@ export default function About() {
         </div>
       </section>
 
-      <section className="bg-card py-14">
+      <section className="section-shell bg-card py-14">
         <div className="container mx-auto max-w-6xl px-4">
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             {stats.map(({ icon: Icon, label, value }) => (
-              <Card key={label} className="border border-border/60 text-center shadow-sm">
+              <Card key={label} className="premium-card text-center">
                 <CardContent className="p-6">
                   <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-mtendere-blue/10">
                     <Icon className="h-6 w-6 text-mtendere-blue" />
@@ -256,7 +253,7 @@ export default function About() {
         </div>
       </section>
 
-      <section className="py-20">
+      <section className="section-shell py-20">
         <div className="container mx-auto max-w-6xl px-4">
           <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_360px]">
             <div>
@@ -268,7 +265,7 @@ export default function About() {
               </h2>
               <div className="mt-6 grid gap-5">
                 {storyBlocks.map((block) => (
-                  <Card key={block.title} className="border border-border/60 shadow-sm">
+                  <Card key={block.title} className="premium-card">
                     <CardContent className="p-6">
                       <h3 className="text-lg font-semibold text-mtendere-blue">{block.title}</h3>
                       <p className="mt-3 text-base leading-8 text-muted-foreground">{block.description}</p>
@@ -278,7 +275,7 @@ export default function About() {
               </div>
             </div>
 
-            <Card className="border border-border/60 bg-gradient-to-br from-mtendere-blue/5 via-card to-mtendere-green/10 shadow-sm">
+            <Card className="premium-card bg-gradient-to-br from-mtendere-blue/5 via-card to-mtendere-green/10">
               <CardHeader>
                 <CardTitle className="text-xl text-mtendere-blue">What good support should feel like</CardTitle>
               </CardHeader>
@@ -295,7 +292,7 @@ export default function About() {
         </div>
       </section>
 
-      <section className="bg-mtendere-gray/60 py-20">
+      <section className="section-shell bg-mtendere-gray/60 py-20">
         <div className="container mx-auto max-w-6xl px-4">
           <div className="mb-12 text-center">
             <Badge variant="outline" className="border-mtendere-green/20 text-mtendere-green">
@@ -309,7 +306,7 @@ export default function About() {
 
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             {timeline.map(({ phase, title, description, icon: Icon }) => (
-              <Card key={title} className="border border-border/60 shadow-sm">
+              <Card key={title} className="premium-card">
                 <CardHeader>
                   <div className="mb-3 flex items-center justify-between">
                     <div className="flex h-11 w-11 items-center justify-center rounded-full bg-mtendere-green/10">
@@ -330,7 +327,7 @@ export default function About() {
         </div>
       </section>
 
-      <section className="py-20">
+      <section className="section-shell py-20">
         <div className="container mx-auto max-w-6xl px-4">
           <div className="mb-12 text-center">
             <Badge variant="outline" className="border-mtendere-blue/20 text-mtendere-blue">
@@ -344,7 +341,7 @@ export default function About() {
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-4">
             {serviceModel.map(({ title, description, icon: Icon, href, cta, outcome }) => (
-                <Card key={title} className="border border-border/60 shadow-sm">
+                <Card key={title} className="premium-card">
                   <CardHeader>
                     <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-mtendere-blue/10">
                       <Icon className="h-5 w-5 text-mtendere-blue" />
@@ -369,7 +366,7 @@ export default function About() {
         </div>
       </section>
 
-      <section className="bg-card py-20">
+      <section className="section-shell bg-card py-20">
         <div className="container mx-auto max-w-6xl px-4">
           <div className="grid gap-10 lg:grid-cols-[320px_minmax(0,1fr)]">
             <div>
@@ -385,7 +382,7 @@ export default function About() {
 
             <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
               {values.map(({ title, description, icon: Icon }) => (
-                <Card key={title} className="border border-border/60 shadow-sm">
+                <Card key={title} className="premium-card">
                   <CardHeader>
                     <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-mtendere-orange/10">
                       <Icon className="h-5 w-5 text-mtendere-orange" />
@@ -404,7 +401,7 @@ export default function About() {
 
       <section className="py-16">
         <div className="container mx-auto max-w-5xl px-4">
-          <Card className="border-0 bg-gradient-to-r from-mtendere-blue to-mtendere-green text-white shadow-xl">
+          <Card className="cta-depth border-0 bg-gradient-to-r from-mtendere-blue to-mtendere-green text-white">
             <CardContent className="flex flex-col gap-5 p-8 md:flex-row md:items-center md:justify-between">
               <div className="max-w-2xl">
                 <h2 className="text-2xl font-bold">Need clarity on where to start?</h2>
@@ -424,7 +421,7 @@ export default function About() {
         </div>
       </section>
 
-      <section id="team" className="py-20">
+      <section id="team" className="section-shell py-20">
         <div className="container mx-auto max-w-6xl px-4">
           <div className="mb-12 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
@@ -466,7 +463,7 @@ export default function About() {
         </div>
       </section>
 
-      <section className="bg-mtendere-gray/60 py-20">
+      <section className="section-shell bg-mtendere-gray/60 py-20">
         <div className="container mx-auto max-w-6xl px-4">
           <div className="mb-12 text-center">
             <Badge variant="outline" className="border-mtendere-green/20 text-mtendere-green">
@@ -480,7 +477,7 @@ export default function About() {
 
           {featuredTestimonial ? (
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-              <Card className="border border-border/60 shadow-sm">
+              <Card className="premium-card">
                 <CardContent className="p-8">
                   <Badge variant="outline" className="mb-4 border-mtendere-blue/20 text-mtendere-blue">
                     Featured story
@@ -524,7 +521,7 @@ export default function About() {
               </Card>
 
               <div className="space-y-4">
-                <Card className="border border-border/60 bg-gradient-to-br from-mtendere-blue/5 via-card to-mtendere-green/10 shadow-sm">
+                <Card className="premium-card bg-gradient-to-br from-mtendere-blue/5 via-card to-mtendere-green/10">
                   <CardContent className="p-5">
                     <p className="text-sm font-semibold uppercase tracking-[0.2em] text-mtendere-blue/70">What students often say</p>
                     <p className="mt-3 text-sm leading-7 text-foreground/80">
@@ -534,7 +531,7 @@ export default function About() {
                   </CardContent>
                 </Card>
                 {supportingTestimonials.map((testimonial) => (
-                  <Card key={testimonial.id} className="border border-border/60 shadow-sm">
+                  <Card key={testimonial.id} className="premium-card">
                     <CardContent className="p-5">
                       <div className="mb-3 flex items-center gap-1">
                         {[...Array(5)].map((_, index) => (
@@ -573,7 +570,7 @@ export default function About() {
         </div>
       </section>
 
-      <section className="relative overflow-hidden py-24 text-white">
+      <section className="cta-depth relative overflow-hidden py-24 text-white">
         <div className="absolute inset-0">
           <GovernedImage
             module="misc"
@@ -586,7 +583,7 @@ export default function About() {
           />
         </div>
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/92 to-mtendere-green/90" />
-        <div className="container relative z-10 mx-auto max-w-5xl px-4 text-center">
+        <div className="container hero-panel relative z-10 mx-auto max-w-5xl rounded-3xl px-4 py-8 text-center md:p-10">
           <h2 className="text-4xl font-bold md:text-5xl">Ready to build your next chapter with us?</h2>
           <p className="mx-auto mt-5 max-w-2xl text-lg text-white/85">
             Whether you are exploring scholarships, university applications, or career planning, Mtendere can help you

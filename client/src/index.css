@@ -109,12 +109,14 @@
     min-height: 100%;
     @apply font-sans antialiased bg-background text-foreground;
     color-scheme: light;
+    overflow-x: hidden;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
   }
 
   #root {
     min-height: 100%;
+    overflow-x: hidden;
   }
 
   ::selection {
@@ -250,6 +252,12 @@
   background-color: hsl(var(--mtendere-dark));
 }
 
+.video-header iframe,
+.video-header video {
+  transform: translateZ(0);
+  will-change: transform, opacity;
+}
+
 .video-overlay {
   position: absolute;
   top: 0;
@@ -275,6 +283,7 @@
   max-width: min(48rem, 100%);
   text-align: left;
   text-shadow: 0 3px 24px rgba(0, 0, 0, 0.48);
+  transform: translateZ(0);
 }
 
 .video-copy h1,
@@ -581,12 +590,108 @@
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
 
+.section-shell {
+  position: relative;
+  overflow: hidden;
+}
+
+.section-shell:before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 12% 0%, hsl(var(--mtendere-blue) / 0.08), transparent 30%),
+    radial-gradient(circle at 88% 18%, hsl(var(--mtendere-green) / 0.08), transparent 28%);
+  opacity: 0.9;
+}
+
+.section-shell > .container,
+.section-shell > div[class*="container"] {
+  position: relative;
+  z-index: 1;
+}
+
+.section-heading {
+  max-width: 52rem;
+  text-wrap: balance;
+}
+
+.section-heading p {
+  text-wrap: pretty;
+}
+
+.premium-card {
+  border: 1px solid hsl(var(--border) / 0.7);
+  background:
+    linear-gradient(180deg, hsl(var(--card) / 0.98), hsl(var(--card) / 0.92)),
+    radial-gradient(circle at 0% 0%, hsl(var(--mtendere-blue) / 0.08), transparent 34%);
+  box-shadow: 0 22px 60px -42px rgba(15, 23, 42, 0.7);
+}
+
+.premium-card:hover {
+  box-shadow: 0 30px 80px -48px rgba(15, 23, 42, 0.86);
+}
+
 .media-depth {
   box-shadow: 0 22px 55px -34px rgba(15, 23, 42, 0.72), 0 10px 28px -24px rgba(15, 23, 42, 0.5);
 }
 
 .cta-depth {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 26px 70px -42px rgba(15, 23, 42, 0.8);
+}
+
+.hero-panel {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.2));
+  box-shadow: 0 28px 90px -54px rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(14px);
+}
+
+.hero-safe-copy {
+  max-width: 62rem;
+  text-wrap: balance;
+}
+
+.hero-safe-copy p {
+  text-wrap: pretty;
+}
+
+section[class*="bg-card"] {
+  background-image:
+    linear-gradient(180deg, hsl(var(--card)), hsl(var(--background))),
+    radial-gradient(circle at 100% 0%, hsl(var(--mtendere-blue) / 0.045), transparent 28%);
+}
+
+section[class*="bg-mtendere-gray"],
+section[class*="bg-muted"] {
+  background-image:
+    radial-gradient(circle at 8% 8%, hsl(var(--mtendere-blue) / 0.06), transparent 28%),
+    radial-gradient(circle at 92% 16%, hsl(var(--mtendere-green) / 0.06), transparent 26%);
+}
+
+section[class*="bg-gradient-to"][class*="text-white"] {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 20px 70px -55px rgba(15, 23, 42, 0.8);
+}
+
+section[class*="bg-gradient-to"][class*="text-white"]:before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(0, 0, 0, 0.18), transparent 42%),
+    radial-gradient(circle at 88% 18%, rgba(255, 255, 255, 0.16), transparent 32%);
+}
+
+section[class*="bg-gradient-to"][class*="text-white"] > .container,
+section[class*="bg-gradient-to"][class*="text-white"] > div[class*="container"] {
+  position: relative;
+  z-index: 2;
 }
 
 section[style*="background-image"] {
@@ -604,7 +709,8 @@ section[style*="background-image"]::before {
   pointer-events: none;
   background:
     radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.14), transparent 30%),
-    linear-gradient(90deg, rgba(0, 0, 0, 0.28), transparent 44%, rgba(0, 0, 0, 0.2));
+    linear-gradient(90deg, rgba(0, 0, 0, 0.38), transparent 44%, rgba(0, 0, 0, 0.24)),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.18), transparent 42%, rgba(0, 0, 0, 0.32));
   mix-blend-mode: soft-light;
 }
 
@@ -628,6 +734,19 @@ section.text-white h1,
 section.text-white h2,
 section.text-white p {
   text-shadow: 0 3px 22px rgba(0, 0, 0, 0.36);
+}
+
+@media (max-width: 768px) {
+  section[style*="background-image"]::before {
+    background:
+      linear-gradient(to bottom, rgba(0, 0, 0, 0.36), rgba(0, 0, 0, 0.12) 42%, rgba(0, 0, 0, 0.42)),
+      linear-gradient(90deg, rgba(0, 0, 0, 0.42), transparent 70%);
+    mix-blend-mode: normal;
+  }
+
+  .hero-panel {
+    backdrop-filter: blur(10px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

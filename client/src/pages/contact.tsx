@@ -120,9 +120,9 @@ export default function Contact() {
       <ExpandingNav />
       
       {/* Hero Section */}
-      <section className="bg-gradient-to-r from-mtendere-blue to-mtendere-green text-white py-16">
+      <section className="bg-gradient-to-r from-mtendere-blue to-mtendere-green py-20 text-white">
         <div className="container mx-auto px-4">
-          <div className="max-w-3xl mx-auto text-center">
+          <div className="hero-panel hero-safe-copy mx-auto max-w-3xl rounded-3xl p-7 text-center md:p-10">
             <h1 className="text-4xl md:text-5xl font-bold mb-6">
               Get in Touch
             </h1>
@@ -130,16 +130,16 @@ export default function Contact() {
               Have questions about our services? Ready to start your educational journey? 
               We're here to help you every step of the way.
             </p>
-            <div className="flex justify-center space-x-8 text-sm opacity-90 font-bold drop-shadow-md">
-              <div className="text-center">
+            <div className="grid grid-cols-1 gap-4 text-sm font-bold opacity-90 drop-shadow-md sm:grid-cols-3">
+              <div className="rounded-xl border border-white/15 bg-white/10 p-4 text-center shadow-lg backdrop-blur-sm">
                 <div className="text-2xl font-bold">8AM-5PM</div>
                 <div className="uppercase tracking-tighter">Weekdays</div>
               </div>
-              <div className="text-center">
+              <div className="rounded-xl border border-white/15 bg-white/10 p-4 text-center shadow-lg backdrop-blur-sm">
                 <div className="text-2xl font-bold">9AM-1PM</div>
                 <div className="uppercase tracking-tighter">Saturday</div>
               </div>
-              <div className="text-center">
+              <div className="rounded-xl border border-white/15 bg-white/10 p-4 text-center shadow-lg backdrop-blur-sm">
                 <div className="text-2xl font-bold">50+</div>
                 <div className="uppercase tracking-tighter">Countries</div>
               </div>
@@ -163,7 +163,7 @@ export default function Contact() {
 
             <div className="space-y-6">
               {contactInfo.map((info, index) => (
-                <Card key={index} className="hover:shadow-lg transition-shadow duration-300">
+                <Card key={index} className="premium-card">
                   <CardContent className="p-6">
                     <div className="flex items-start space-x-4">
                       <div className={`w-12 h-12 ${info.color} bg-muted/40 rounded-full flex items-center justify-center flex-shrink-0`}>
@@ -186,7 +186,7 @@ export default function Contact() {
             </div>
 
             {/* Office Hours */}
-            <Card className="mt-6">
+            <Card className="premium-card mt-6">
               <CardHeader>
                 <CardTitle className="flex items-center text-mtendere-blue">
                   <Clock className="w-5 h-5 mr-2" />
@@ -214,7 +214,7 @@ export default function Contact() {
 
           {/* Contact Form */}
           <div className="lg:col-span-2">
-            <Card className="shadow-lg">
+            <Card className="premium-card">
               <CardHeader>
                 <CardTitle className="text-2xl text-mtendere-blue">
                   Send Us a Message
@@ -341,7 +341,7 @@ export default function Contact() {
         </div>
 
         {/* FAQ Section */}
-        <section className="mt-16">
+        <section className="section-shell mt-16">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-mtendere-blue mb-4">
               Frequently Asked Questions
@@ -352,7 +352,7 @@ export default function Contact() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <Card className="hover:shadow-lg transition-shadow duration-300">
+            <Card className="premium-card">
               <CardHeader>
                 <CardTitle className="text-lg text-mtendere-blue">
                   How do I apply for scholarships?
@@ -367,7 +367,7 @@ export default function Contact() {
               </CardContent>
             </Card>
 
-            <Card className="hover:shadow-lg transition-shadow duration-300">
+            <Card className="premium-card">
               <CardHeader>
                 <CardTitle className="text-lg text-mtendere-blue">
                   What services do you offer?
@@ -381,7 +381,7 @@ export default function Contact() {
               </CardContent>
             </Card>
 
-            <Card className="hover:shadow-lg transition-shadow duration-300">
+            <Card className="premium-card">
               <CardHeader>
                 <CardTitle className="text-lg text-mtendere-blue">
                   Is there a fee for your services?
@@ -395,7 +395,7 @@ export default function Contact() {
               </CardContent>
             </Card>
 
-            <Card className="hover:shadow-lg transition-shadow duration-300">
+            <Card className="premium-card">
               <CardHeader>
                 <CardTitle className="text-lg text-mtendere-blue">
                   How long does the application process take?
@@ -410,7 +410,7 @@ export default function Contact() {
               </CardContent>
             </Card>
 
-            <Card className="hover:shadow-lg transition-shadow duration-300">
+            <Card className="premium-card">
               <CardHeader>
                 <CardTitle className="text-lg text-mtendere-blue">
                   Do you offer support after placement?
@@ -424,7 +424,7 @@ export default function Contact() {
               </CardContent>
             </Card>
 
-            <Card className="hover:shadow-lg transition-shadow duration-300">
+            <Card className="premium-card">
               <CardHeader>
                 <CardTitle className="text-lg text-mtendere-blue">
                   Can international students apply?
@@ -441,7 +441,7 @@ export default function Contact() {
         </section>
 
         {/* Social Media & Emergency Contact */}
-        <section className="mt-16 bg-mtendere-gray rounded-2xl p-8">
+        <section className="premium-card mt-16 rounded-2xl bg-mtendere-gray p-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
             <div className="text-center md:text-left">
               <h2 className="text-2xl font-bold text-mtendere-blue mb-4">

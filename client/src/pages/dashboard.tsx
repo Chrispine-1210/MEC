@@ -77,10 +77,10 @@ export default function Dashboard() {
       <ExpandingNav />
 
       {/* Header Section */}
-      <section className="bg-gradient-to-r from-mtendere-blue to-mtendere-green text-white py-12">
+      <section className="bg-gradient-to-r from-mtendere-blue to-mtendere-green py-16 text-white">
         <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row items-center gap-6">
-            <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+          <div className="hero-panel flex flex-col items-center gap-6 rounded-3xl p-6 md:flex-row md:p-8">
+            <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/20 shadow-lg shadow-black/10">
               <User className="w-10 h-10" />
             </div>
             <div className="text-center md:text-left">

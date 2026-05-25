@@ -410,7 +410,7 @@ export default function BlogDetail() {
           </Button>
 
           <div className="grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_390px] lg:items-end">
-            <div className="max-w-4xl">
+            <div className="hero-panel hero-safe-copy max-w-4xl rounded-3xl p-7 md:p-10">
               <div className="mb-4 flex flex-wrap items-center gap-3">
                 <Badge className="bg-mtendere-orange font-bold text-white">{post.category}</Badge>
                 <Badge variant="outline" className="border-white/30 bg-white/10 text-white">
@@ -587,13 +587,13 @@ export default function BlogDetail() {
             </section>
 
             {callout && (
-              <section className="rounded-3xl bg-mtendere-blue p-8 text-white">
+              <section className="cta-depth rounded-3xl bg-mtendere-blue p-8 text-white">
                 <p className="text-sm uppercase tracking-[0.25em] text-white/65">Key insight</p>
                 <p className="mt-3 max-w-3xl text-2xl font-semibold leading-relaxed">"{callout.text}"</p>
               </section>
             )}
 
-            <article className="rounded-3xl border border-border/60 bg-card p-6 shadow-sm md:p-10">
+            <article className="premium-card rounded-3xl bg-card p-6 md:p-10">
               {isRichArticle ? (
                 <RichContent html={post.content} />
               ) : (

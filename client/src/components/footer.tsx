@@ -24,10 +24,11 @@ import logoImg from "@assets/mtendere-logo.svg";
 
 export default function Footer() {
   return (
-    <footer className="border-t border-border/60 bg-card text-foreground">
+    <footer className="border-t border-border/60 bg-card text-foreground shadow-[0_-24px_80px_-70px_rgba(15,23,42,0.7)]">
       {/* Newsletter Strip */}
-      <div className="bg-gradient-to-r from-mtendere-blue to-mtendere-green text-white">
-        <div className="container mx-auto px-4 py-8">
+      <div className="relative overflow-hidden bg-gradient-to-r from-mtendere-blue to-mtendere-green text-white">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_12%_0%,rgba(255,255,255,0.2),transparent_30%),linear-gradient(135deg,rgba(0,0,0,0.18),transparent_45%)]" />
+        <div className="container relative z-10 mx-auto px-4 py-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div>
               <h3 className="text-xl font-bold mb-1">Stay Updated with Opportunities</h3>

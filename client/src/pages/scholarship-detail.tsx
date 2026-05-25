@@ -242,7 +242,7 @@ export default function ScholarshipDetail() {
           </Button>
 
           <div className="grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_360px] lg:items-end">
-            <div className="max-w-4xl">
+            <div className="hero-panel hero-safe-copy max-w-4xl rounded-3xl p-7 md:p-10">
               <div className="mb-4 flex flex-wrap items-center gap-3">
                 <Badge className="bg-mtendere-orange text-white font-semibold">{resolved.category}</Badge>
                 {daysLeft !== null && daysLeft <= 30 && daysLeft > 0 && (

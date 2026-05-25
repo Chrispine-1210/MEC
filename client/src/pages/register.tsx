@@ -101,8 +101,9 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-mtendere-blue to-mtendere-green flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-mtendere-blue via-mtendere-blue to-mtendere-green p-4">
+      <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(0,0,0,0.30),rgba(0,0,0,0.05)_45%,rgba(0,0,0,0.34))]" />
+      <Card className="premium-card relative z-10 w-full max-w-md rounded-3xl border-white/20 bg-card/95 backdrop-blur-xl">
         <CardHeader className="text-center">
           <div className="font-bold text-2xl text-mtendere-blue mb-4">
             Mtendere <span className="text-mtendere-green">Education</span>
@@ -119,7 +120,7 @@ export default function Register() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="firstName">First Name</Label>
                 <Input
@@ -254,7 +255,7 @@ export default function Register() {
 
             <Button
               type="submit"
-              className="w-full bg-mtendere-green hover:bg-mtendere-green/90"
+              className="h-11 w-full bg-mtendere-green font-bold text-white hover:bg-mtendere-green/90"
               disabled={isLoading}
             >
               {isLoading ? (

@@ -5,8 +5,8 @@ import logoImg from "@assets/mtendere-logo.svg";
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-mtendere-blue/5 to-mtendere-green/5 flex flex-col items-center justify-center p-6 text-center">
-      <div className="max-w-lg w-full">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-mtendere-blue/5 via-background to-mtendere-green/10 p-6 text-center">
+      <div className="premium-card w-full max-w-lg rounded-3xl p-7 md:p-10">
         <div className="mb-8">
           <Link href="/">
             <img

@@ -91,7 +91,7 @@ export default function Partners() {
       >
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/90 to-mtendere-green/90 z-0" />
         <div className="container relative z-10 mx-auto px-4">
-          <div className="max-w-4xl mx-auto text-center">
+          <div className="hero-panel hero-safe-copy mx-auto max-w-4xl rounded-3xl p-7 text-center md:p-10">
             <h1 className="text-5xl md:text-6xl font-bold mb-6 drop-shadow-2xl">
               Our Trusted Education Partners
             </h1>
@@ -120,16 +120,16 @@ export default function Partners() {
                 </Button>
               )}
             </div>
-            <div className="flex justify-center space-x-8 text-sm opacity-95 drop-shadow-lg">
-              <div className="bg-card/10 backdrop-blur rounded-xl p-6">
+            <div className="grid grid-cols-1 gap-4 text-sm opacity-95 drop-shadow-lg sm:grid-cols-3">
+              <div className="rounded-xl border border-white/15 bg-card/10 p-5 shadow-lg backdrop-blur">
                 <div className="text-3xl font-bold">200+</div>
                 <div className="font-semibold">Universities</div>
               </div>
-              <div className="bg-card/10 backdrop-blur rounded-xl p-6">
+              <div className="rounded-xl border border-white/15 bg-card/10 p-5 shadow-lg backdrop-blur">
                 <div className="text-3xl font-bold">50+</div>
                 <div className="font-semibold">Countries</div>
               </div>
-              <div className="bg-card/10 backdrop-blur rounded-xl p-6">
+              <div className="rounded-xl border border-white/15 bg-card/10 p-5 shadow-lg backdrop-blur">
                 <div className="text-3xl font-bold">10K+</div>
                 <div className="font-semibold">Students Placed</div>
               </div>
@@ -141,7 +141,7 @@ export default function Partners() {
       <div className="container mx-auto px-4 py-12">
         {featuredPartners.length > 0 && (
           <section className="mb-16">
-            <div className="text-center mb-12">
+            <div className="section-heading mx-auto mb-12 text-center">
               <h2 className="text-3xl font-bold text-mtendere-blue mb-4">
                 Featured Partners
               </h2>
@@ -152,7 +152,7 @@ export default function Partners() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
               {featuredPartners.map((partner, idx) => (
-                <Card key={partner.id} className="text-center hover:shadow-xl transition-shadow duration-300 border-2 border-mtendere-blue/20">
+                <Card key={partner.id} className="premium-card text-center transition-all duration-300">
                   <CardHeader className="pb-4">
                     <GovernedImage
                       module="partner"
@@ -213,7 +213,7 @@ export default function Partners() {
 
         {/* All Partners */}
         <section>
-          <div className="text-center mb-12">
+          <div className="section-heading mx-auto mb-12 text-center">
             <h2 className="text-3xl font-bold text-mtendere-blue mb-4">
               All Partners
             </h2>
@@ -242,7 +242,7 @@ export default function Partners() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredPartners?.map((partner, idx) => {
                 return (
-                <Card key={partner.id} className="hover:shadow-2xl transition-all duration-500 overflow-hidden group border-none bg-card shadow-md flex flex-col">
+                <Card key={partner.id} className="premium-card group flex flex-col overflow-hidden border-none bg-card transition-all duration-500">
                   <div className="relative h-44 overflow-hidden">
                     <GovernedImage
                       module="partner"
@@ -321,7 +321,7 @@ export default function Partners() {
         </section>
 
         {/* Partnership Benefits */}
-        <section className="mt-16 bg-mtendere-gray rounded-2xl p-8">
+        <section className="premium-card mt-16 rounded-2xl bg-mtendere-gray p-8">
           <div className="text-center mb-8">
             <h2 className="text-2xl font-bold text-mtendere-blue mb-4">
               Partnership Benefits

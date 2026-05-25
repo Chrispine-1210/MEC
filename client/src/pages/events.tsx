@@ -144,7 +144,7 @@ export default function Events() {
         </div>
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/95 via-mtendere-blue/86 to-mtendere-green/84" />
         <div className="container relative z-10 mx-auto max-w-6xl px-4">
-          <div className="max-w-3xl">
+          <div className="hero-panel hero-safe-copy max-w-3xl rounded-3xl p-7 md:p-10">
             <Badge className="mb-5 bg-white/12 px-4 py-1 text-white">Events</Badge>
             <h1 className="text-4xl font-bold leading-tight md:text-6xl">
               Learn, connect, and move your next decision forward
@@ -157,7 +157,7 @@ export default function Events() {
         </div>
       </section>
 
-      <section className="border-b border-border/60 bg-card py-6">
+      <section className="border-b border-border/60 bg-card/92 py-6 shadow-[0_16px_45px_-38px_rgba(15,23,42,0.4)] backdrop-blur-xl">
         <div className="container mx-auto max-w-6xl px-4">
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_160px_150px_150px_150px_150px]">
             <div className="relative">
@@ -206,7 +206,7 @@ export default function Events() {
         </div>
       </section>
 
-      <section className="py-10">
+      <section className="section-shell py-10">
         <div className="container mx-auto max-w-6xl px-4">
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <Metric label="Events" value={events.length} icon={Calendar} />
@@ -313,7 +313,7 @@ function FilterSelect({
 
 function Metric({ label, value, icon: Icon }: { label: string; value: number; icon: LucideIcon }) {
   return (
-    <Card className="border border-border/60 shadow-sm">
+    <Card className="premium-card">
       <CardContent className="p-5">
         <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-mtendere-blue/10">
           <Icon className="h-5 w-5 text-mtendere-blue" />
@@ -359,7 +359,7 @@ function EventGroup({
 function EventCard({ event, featured = false, onShare }: { event: ApiEvent; featured?: boolean; onShare: () => void }) {
   const href = `/events/${event.slug || event.id}`;
   return (
-    <Card className="group overflow-hidden border border-border/60 shadow-sm transition-shadow hover:shadow-lg">
+    <Card className="premium-card group overflow-hidden transition-all">
       <div className={featured ? "grid md:grid-cols-[45%_minmax(0,1fr)]" : ""}>
         <Link href={href}>
           <div className="relative h-64 overflow-hidden bg-mtendere-gray">
@@ -438,7 +438,7 @@ function EventCard({ event, featured = false, onShare }: { event: ApiEvent; feat
 function CompactRail({ title, icon: Icon, events }: { title: string; icon: LucideIcon; events: ApiEvent[] }) {
   if (events.length === 0) return null;
   return (
-    <Card className="border border-border/60 shadow-sm">
+    <Card className="premium-card">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-mtendere-blue">
           <Icon className="h-5 w-5 text-mtendere-orange" />

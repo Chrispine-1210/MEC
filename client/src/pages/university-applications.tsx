@@ -110,7 +110,7 @@ export default function UniversityApplications() {
         }}
       >
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-green/93 to-mtendere-blue/85" />
-        <div className="container relative z-10 mx-auto px-4 text-center max-w-4xl">
+        <div className="container hero-panel hero-safe-copy relative z-10 mx-auto max-w-4xl rounded-3xl px-4 py-8 text-center md:p-10">
           <Badge className="mb-6 bg-card/20 text-white border-white/30 px-5 py-1.5 text-xs font-bold uppercase tracking-widest">
             Admissions Excellence
           </Badge>
@@ -136,7 +136,7 @@ export default function UniversityApplications() {
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-16">
             {STATS.map((s) => (
-              <div key={s.label} className="bg-card/15 backdrop-blur-sm rounded-2xl p-4 text-center border border-white/20">
+              <div key={s.label} className="rounded-2xl border border-white/20 bg-card/15 p-4 text-center shadow-lg backdrop-blur-sm">
                 <div className="text-3xl font-extrabold text-mtendere-orange mb-1">{s.value}</div>
                 <div className="text-xs font-semibold opacity-90">{s.label}</div>
               </div>
@@ -146,7 +146,7 @@ export default function UniversityApplications() {
       </section>
 
       {/* Services */}
-      <section className="py-20 bg-card">
+      <section className="section-shell bg-card py-20">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <Badge variant="outline" className="mb-3 text-mtendere-green border-mtendere-green px-4 py-1 uppercase tracking-wider text-xs font-bold">
@@ -158,7 +158,7 @@ export default function UniversityApplications() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {SERVICES.map((s) => (
-              <Card key={s.title} className="hover:shadow-xl transition-all group border-none bg-muted/40">
+              <Card key={s.title} className="premium-card group border-none bg-muted/40 transition-all">
                 <CardHeader>
                   <div className={`w-14 h-14 ${s.bg} rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
                     <s.icon className={`w-7 h-7 ${s.color}`} />
@@ -175,7 +175,7 @@ export default function UniversityApplications() {
       </section>
 
       {/* Universities We Work With */}
-      <section className="py-20 bg-muted/40">
+      <section className="section-shell bg-muted/40 py-20">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Universities We've Helped You Enter</h2>
@@ -183,7 +183,7 @@ export default function UniversityApplications() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {TOP_UNIVERSITIES.map((u) => (
-              <Card key={u.name} className="overflow-hidden group hover:shadow-2xl transition-all duration-500 border-none">
+              <Card key={u.name} className="premium-card group overflow-hidden border-none transition-all duration-500">
                 <div className="relative h-40 overflow-hidden">
                   <GovernedImage
                     module="partner"
@@ -218,7 +218,7 @@ export default function UniversityApplications() {
       </section>
 
       {/* Process */}
-      <section className="py-20 bg-card">
+      <section className="section-shell bg-card py-20">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Our Application Process</h2>
@@ -226,7 +226,7 @@ export default function UniversityApplications() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
             {PROCESS.map((p) => (
-              <div key={p.step} className="flex gap-4 p-6 bg-muted/40 rounded-2xl hover:shadow-lg transition-all">
+              <div key={p.step} className="premium-card flex gap-4 rounded-2xl bg-muted/40 p-6 transition-all">
                 <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-mtendere-blue to-mtendere-green rounded-full flex items-center justify-center text-white font-black text-sm shadow">
                   {p.step}
                 </div>
@@ -241,7 +241,7 @@ export default function UniversityApplications() {
       </section>
 
       {/* FAQ */}
-      <section className="py-20 bg-muted/40">
+      <section className="section-shell bg-muted/40 py-20">
         <div className="container mx-auto px-4 max-w-3xl">
           <div className="text-center mb-14">
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Common Questions</h2>
@@ -259,7 +259,7 @@ export default function UniversityApplications() {
 
       {/* CTA */}
       <section
-        className="py-24 text-white text-center relative overflow-hidden"
+        className="cta-depth relative overflow-hidden py-24 text-center text-white"
         style={{
           backgroundImage: getGovernedBackgroundImage({
             module: "program",
@@ -272,7 +272,7 @@ export default function UniversityApplications() {
         }}
       >
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-green/92 to-mtendere-blue/88 z-0" />
-        <div className="container relative z-10 mx-auto px-4 max-w-2xl">
+        <div className="container hero-panel relative z-10 mx-auto max-w-2xl rounded-3xl px-4 py-8 md:p-10">
           <h2 className="text-4xl md:text-5xl font-extrabold mb-4 drop-shadow-lg">Ready to Apply?</h2>
           <p className="text-xl opacity-95 mb-8 font-semibold drop-shadow">Book your free consultation and let's map your path to your dream university.</p>
           <Link href="/contact">

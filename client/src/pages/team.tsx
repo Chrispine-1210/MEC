@@ -45,7 +45,7 @@ export default function Team() {
       >
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/95 via-mtendere-blue/82 to-mtendere-green/84" />
         <div className="container relative z-10 mx-auto max-w-6xl px-4">
-          <div className="max-w-3xl">
+          <div className="hero-panel hero-safe-copy max-w-3xl rounded-3xl p-7 md:p-10">
             <Badge className="mb-5 bg-white/12 px-4 py-1 text-white">Our Team</Badge>
             <h1 className="text-4xl font-bold leading-tight md:text-6xl">
               The people guiding Mtendere Education Consult
@@ -73,11 +73,11 @@ export default function Team() {
         </div>
       </section>
 
-      <section className="bg-card py-12">
+      <section className="section-shell bg-card py-12">
         <div className="container mx-auto max-w-6xl px-4">
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             {teamStats.map(({ label, value, icon: Icon }) => (
-              <Card key={label} className="border border-border/60 shadow-sm">
+              <Card key={label} className="premium-card">
                 <CardContent className="p-5">
                   <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-lg bg-mtendere-blue/10">
                     <Icon className="h-5 w-5 text-mtendere-blue" />
@@ -91,7 +91,7 @@ export default function Team() {
         </div>
       </section>
 
-      <section className="py-20">
+      <section className="section-shell py-20">
         <div className="container mx-auto max-w-6xl px-4">
           <div className="mb-12 max-w-3xl">
             <Badge variant="outline" className="border-mtendere-blue/20 text-mtendere-blue">
@@ -120,7 +120,7 @@ export default function Team() {
         </div>
       </section>
 
-      <section className="bg-mtendere-gray/60 py-20">
+      <section className="section-shell bg-mtendere-gray/60 py-20">
         <div className="container mx-auto max-w-6xl px-4">
           <div className="mb-12 max-w-3xl">
             <Badge variant="outline" className="border-mtendere-green/20 text-mtendere-green">
@@ -143,7 +143,7 @@ export default function Team() {
 
       <section className="py-16">
         <div className="container mx-auto max-w-5xl px-4">
-          <Card className="border-0 bg-gradient-to-r from-mtendere-blue to-mtendere-green text-white shadow-xl">
+          <Card className="cta-depth border-0 bg-gradient-to-r from-mtendere-blue to-mtendere-green text-white">
             <CardContent className="flex flex-col gap-5 p-8 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="text-2xl font-bold">Work with Mtendere's team</h2>

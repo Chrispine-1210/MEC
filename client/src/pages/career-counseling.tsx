@@ -120,7 +120,7 @@ export default function CareerCounseling() {
         }}
       >
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-orange/90 to-mtendere-blue/88" />
-        <div className="container relative z-10 mx-auto px-4 text-center max-w-4xl">
+        <div className="container hero-panel hero-safe-copy relative z-10 mx-auto max-w-4xl rounded-3xl px-4 py-8 text-center md:p-10">
           <Badge className="mb-6 bg-card/20 text-white border-white/30 px-5 py-1.5 text-xs font-bold uppercase tracking-widest">
             Career Strategy
           </Badge>
@@ -144,13 +144,13 @@ export default function CareerCounseling() {
             </a>
           </div>
 
-          <div className="grid grid-cols-3 gap-6 mt-16 max-w-2xl mx-auto">
+          <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-4 sm:grid-cols-3">
             {[
               { value: "500+", label: "Clients Guided" },
               { value: "85%", label: "Career Goal Achieved" },
               { value: "50+", label: "Industries Covered" },
             ].map((s) => (
-              <div key={s.label} className="bg-card/15 backdrop-blur-sm rounded-2xl p-4 text-center border border-white/20">
+              <div key={s.label} className="rounded-2xl border border-white/20 bg-card/15 p-4 text-center shadow-lg backdrop-blur-sm">
                 <div className="text-3xl font-extrabold text-white mb-1">{s.value}</div>
                 <div className="text-xs font-semibold opacity-90">{s.label}</div>
               </div>
@@ -160,7 +160,7 @@ export default function CareerCounseling() {
       </section>
 
       {/* Services */}
-      <section className="py-20 bg-card">
+      <section className="section-shell bg-card py-20">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <Badge variant="outline" className="mb-3 text-mtendere-orange border-mtendere-orange px-4 py-1 uppercase tracking-wider text-xs font-bold">
@@ -171,7 +171,7 @@ export default function CareerCounseling() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {COUNSELING_SERVICES.map((s) => (
-              <Card key={s.title} className="hover:shadow-xl transition-all group border-none bg-muted/40">
+              <Card key={s.title} className="premium-card group border-none bg-muted/40 transition-all">
                 <CardHeader>
                   <div className={`w-14 h-14 ${s.bg} rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
                     <s.icon className={`w-7 h-7 ${s.color}`} />
@@ -188,7 +188,7 @@ export default function CareerCounseling() {
       </section>
 
       {/* Sessions/Packages */}
-      <section id="sessions" className="py-20 bg-muted/40">
+      <section id="sessions" className="section-shell bg-muted/40 py-20">
         <div className="container mx-auto px-4">
           <div className="text-center mb-14">
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Session Packages</h2>
@@ -196,7 +196,7 @@ export default function CareerCounseling() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             {SESSIONS.map((s) => (
-              <Card key={s.name} className={`flex flex-col ${s.popular ? "border-mtendere-green border-2 shadow-2xl scale-105" : ""} hover:shadow-xl transition-all`}>
+              <Card key={s.name} className={`premium-card flex flex-col transition-all ${s.popular ? "scale-105 border-2 border-mtendere-green shadow-2xl" : ""}`}>
                 {s.popular && (
                   <div className="text-center -mt-4">
                     <Badge className="bg-mtendere-green text-white font-bold px-4 py-1">Most Popular</Badge>
@@ -233,7 +233,7 @@ export default function CareerCounseling() {
       </section>
 
       {/* Success Stories */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-white via-white to-mtendere-gray py-20">
+      <section className="section-shell relative overflow-hidden bg-gradient-to-br from-white via-white to-mtendere-gray py-20">
         <div className="absolute left-1/2 top-0 h-56 w-56 -translate-x-1/2 rounded-full bg-mtendere-blue/10 blur-3xl" />
         <div className="absolute right-0 top-20 h-48 w-48 rounded-full bg-mtendere-orange/10 blur-3xl" />
         <div className="container relative mx-auto px-4">
@@ -248,7 +248,7 @@ export default function CareerCounseling() {
                 const name = testimonial.authorName || "Mtendere Student";
 
                 return (
-                  <div key={testimonial.id} className="rounded-2xl border border-border/70 bg-card p-8 shadow-lg">
+                  <div key={testimonial.id} className="premium-card rounded-2xl bg-card p-8">
                     <div className="flex items-center gap-1 mb-5">
                       {[...Array(5)].map((_, i) => (
                         <Star
@@ -294,7 +294,7 @@ export default function CareerCounseling() {
       </section>
 
       {/* FAQ */}
-      <section className="py-20 bg-card">
+      <section className="section-shell bg-card py-20">
         <div className="container mx-auto px-4 max-w-3xl">
           <div className="text-center mb-14">
             <h2 className="text-4xl font-extrabold text-mtendere-blue mb-4">Frequently Asked Questions</h2>
@@ -312,7 +312,7 @@ export default function CareerCounseling() {
 
       {/* CTA */}
       <section
-        className="py-24 text-white text-center relative overflow-hidden"
+        className="cta-depth relative overflow-hidden py-24 text-center text-white"
         style={{
           backgroundImage: getGovernedBackgroundImage({
             module: "job",
@@ -325,7 +325,7 @@ export default function CareerCounseling() {
         }}
       >
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-orange/92 to-mtendere-blue/88 z-0" />
-        <div className="container relative z-10 mx-auto px-4 max-w-2xl">
+        <div className="container hero-panel relative z-10 mx-auto max-w-2xl rounded-3xl px-4 py-8 md:p-10">
           <h2 className="text-4xl md:text-5xl font-extrabold mb-4 drop-shadow-lg">Take Control of Your Career</h2>
           <p className="text-xl opacity-95 mb-8 font-semibold drop-shadow">Don't leave your career to chance. Book a counseling session today and start building the career you deserve.</p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">

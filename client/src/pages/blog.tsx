@@ -55,7 +55,7 @@ export default function Blog() {
 
       {/* Hero */}
       <section
-        className="relative py-28 text-white overflow-hidden"
+        className="relative overflow-hidden py-28 text-white"
         style={{
           backgroundImage: getGovernedBackgroundImage({
             module: "blog",
@@ -69,6 +69,7 @@ export default function Blog() {
       >
         <div className="absolute inset-0 bg-gradient-to-r from-mtendere-blue/92 to-mtendere-green/85 z-0" />
         <div className="container relative z-10 mx-auto px-4 text-center">
+          <div className="hero-panel hero-safe-copy mx-auto rounded-3xl p-7 md:p-10">
           <Badge className="mb-4 bg-card/20 text-white border-white/30 px-4 py-1 text-sm font-bold uppercase tracking-widest">
             Insights & Updates
           </Badge>
@@ -102,11 +103,12 @@ export default function Blog() {
               </Button>
             )}
           </div>
+          </div>
         </div>
       </section>
 
       {/* Category Tabs */}
-      <section className="bg-card border-b sticky top-16 z-30 shadow-sm">
+      <section className="sticky top-16 z-30 border-b border-border/70 bg-card/92 shadow-[0_16px_45px_-36px_rgba(15,23,42,0.42)] backdrop-blur-xl">
         <div className="container mx-auto px-4">
           <div className="flex space-x-1 overflow-x-auto py-3">
             {categoryOptions.map((cat) => (
@@ -126,7 +128,8 @@ export default function Blog() {
         </div>
       </section>
 
-      <div className="container mx-auto px-4 py-16">
+      <section className="section-shell py-16">
+      <div className="container mx-auto px-4">
         {isLoading || isSearching ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[...Array(6)].map((_, i) => (
@@ -158,7 +161,7 @@ export default function Blog() {
             {/* Featured Article */}
             {featured && (
               <Link href={`/blog/${featured.id}`}>
-                <div className="mb-14 group cursor-pointer rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 bg-card border">
+                <div className="premium-card group mb-14 cursor-pointer overflow-hidden rounded-2xl bg-card transition-all duration-300">
                   <div className="md:flex">
                     <div className="md:w-1/2 h-72 md:h-auto overflow-hidden">
                       <GovernedImage
@@ -212,7 +215,7 @@ export default function Blog() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {rest.map((post, i) => (
                   <Link key={post.id} href={`/blog/${post.id}`}>
-                    <Card className="group h-full flex flex-col cursor-pointer hover:shadow-2xl transition-all duration-500 overflow-hidden border-none bg-muted/40">
+                    <Card className="premium-card group flex h-full cursor-pointer flex-col overflow-hidden border-none bg-muted/40 transition-all duration-500">
                       <div className="relative h-52 overflow-hidden">
                         <GovernedImage
                           module="blog"
@@ -265,10 +268,11 @@ export default function Blog() {
           </>
         )}
       </div>
+      </section>
 
       {/* Newsletter CTA */}
       <section
-        className="py-20 text-white text-center relative overflow-hidden"
+        className="cta-depth relative overflow-hidden py-20 text-center text-white"
         style={{
           backgroundImage: getGovernedBackgroundImage({
             module: "blog",
@@ -281,12 +285,14 @@ export default function Blog() {
         }}
       >
         <div className="absolute inset-0 bg-mtendere-blue/85 z-0" />
-        <div className="container relative z-10 mx-auto px-4 max-w-2xl">
+        <div className="container relative z-10 mx-auto max-w-2xl px-4">
+          <div className="hero-panel rounded-3xl p-7 md:p-10">
           <h2 className="text-3xl md:text-4xl font-bold mb-4 drop-shadow-lg">Stay Updated</h2>
           <p className="text-lg mb-8 opacity-90">
             Get the latest scholarship opportunities, career tips, and success stories delivered to your inbox.
           </p>
           <NewsletterSignup source="blog" compact className="mx-auto" />
+          </div>
         </div>
       </section>
       <Footer />
