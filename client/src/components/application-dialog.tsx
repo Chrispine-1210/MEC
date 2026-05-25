@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, FileText, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { resolveApiUrl } from "@/lib/api-base";
 import { apiRequest } from "@/lib/queryClient";
 
 type ApplicationDialogProps = {
@@ -24,6 +25,12 @@ type ApplicationDialogProps = {
   referenceId: number;
   title: string;
   trigger: ReactNode;
+  customFields?: Array<{
+    name: string;
+    label: string;
+    type?: "text" | "textarea";
+    required?: boolean;
+  }>;
 };
 
 type UploadedDocument = {
@@ -33,7 +40,7 @@ type UploadedDocument = {
   type: string;
 };
 
-export default function ApplicationDialog({ type, referenceId, title, trigger }: ApplicationDialogProps) {
+export default function ApplicationDialog({ type, referenceId, title, trigger, customFields = [] }: ApplicationDialogProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -44,16 +51,44 @@ export default function ApplicationDialog({ type, referenceId, title, trigger }:
   const [phone, setPhone] = useState("");
   const [portfolioUrl, setPortfolioUrl] = useState("");
   const [notes, setNotes] = useState("");
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [coverLetterFile, setCoverLetterFile] = useState<File | null>(null);
   const [consent, setConsent] = useState(false);
+  const draftKey = `mtendere-application-draft-${type}-${referenceId}`;
+
+  useEffect(() => {
+    if (!open || typeof window === "undefined") return;
+    const raw = localStorage.getItem(draftKey);
+    if (!raw) return;
+    try {
+      const draft = JSON.parse(raw) as Record<string, any>;
+      setFullName(draft.fullName || "");
+      setEmail(draft.email || "");
+      setPhone(draft.phone || "");
+      setPortfolioUrl(draft.portfolioUrl || "");
+      setNotes(draft.notes || "");
+      setAnswers(draft.answers || {});
+    } catch {
+      localStorage.removeItem(draftKey);
+    }
+  }, [draftKey, open]);
 
   const resetForm = () => {
     setPortfolioUrl("");
     setNotes("");
+    setAnswers({});
     setCvFile(null);
     setCoverLetterFile(null);
     setConsent(false);
+  };
+
+  const saveDraft = () => {
+    localStorage.setItem(
+      draftKey,
+      JSON.stringify({ fullName, email, phone, portfolioUrl, notes, answers, savedAt: new Date().toISOString() }),
+    );
+    toast({ title: "Draft saved", description: "Your application draft is stored on this device." });
   };
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -85,7 +120,7 @@ export default function ApplicationDialog({ type, referenceId, title, trigger }:
     }
 
     const token = localStorage.getItem("token");
-    const response = await fetch("/api/application-assets", {
+    const response = await fetch(resolveApiUrl("/api/application-assets"), {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: formData,
@@ -130,6 +165,11 @@ export default function ApplicationDialog({ type, referenceId, title, trigger }:
             email,
             phone,
           },
+          answers,
+          workflow: {
+            source: "public",
+            draftSaved: Boolean(localStorage.getItem(draftKey)),
+          },
         },
       });
 
@@ -139,6 +179,7 @@ export default function ApplicationDialog({ type, referenceId, title, trigger }:
         description: "Your application is now saved in your dashboard.",
       });
       resetForm();
+      localStorage.removeItem(draftKey);
       setOpen(false);
     } catch (error) {
       toast({
@@ -222,6 +263,34 @@ export default function ApplicationDialog({ type, referenceId, title, trigger }:
             />
           </div>
 
+          {customFields.length > 0 && (
+            <div className="rounded-lg border border-border/60 p-4">
+              <p className="mb-3 text-sm font-semibold text-foreground">Opportunity-specific questions</p>
+              <div className="space-y-4">
+                {customFields.map((field) => (
+                  <div key={field.name} className="space-y-2">
+                    <Label htmlFor={`application-custom-${field.name}`}>{field.label}</Label>
+                    {field.type === "textarea" ? (
+                      <Textarea
+                        id={`application-custom-${field.name}`}
+                        value={answers[field.name] || ""}
+                        onChange={(event) => setAnswers((prev) => ({ ...prev, [field.name]: event.target.value }))}
+                        required={field.required}
+                      />
+                    ) : (
+                      <Input
+                        id={`application-custom-${field.name}`}
+                        value={answers[field.name] || ""}
+                        onChange={(event) => setAnswers((prev) => ({ ...prev, [field.name]: event.target.value }))}
+                        required={field.required}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor={`application-notes-${type}-${referenceId}`}>Application notes</Label>
             <Textarea
@@ -249,7 +318,10 @@ export default function ApplicationDialog({ type, referenceId, title, trigger }:
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting}>
+            <Button type="button" variant="outline" onClick={saveDraft} disabled={isSubmitting}>
+              Save draft
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={isSubmitting}>
               Cancel
             </Button>
             <Button type="submit" className="bg-mtendere-blue font-bold hover:bg-mtendere-blue/90" disabled={isSubmitting}>

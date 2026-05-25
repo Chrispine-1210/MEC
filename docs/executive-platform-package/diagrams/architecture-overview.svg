@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="920" viewBox="0 0 1600 920">
+  <rect width="1600" height="920" fill="#f8fafc"/>
+  <text x="80" y="90" font-family="Aptos, Arial" font-size="42" font-weight="700" fill="#111827">Mtendere Education Platform Architecture</text>
+  <text x="80" y="132" font-family="Aptos, Arial" font-size="22" fill="#475569">Client experience, admin operations, API services, data domains, security, and integrations</text>
+  <g font-family="Aptos, Arial" font-size="20" fill="#111827">
+    <rect x="80" y="190" width="290" height="130" rx="18" fill="#2563eb"/><text x="112" y="238" fill="#fff" font-weight="700">Public Platform</text><text x="112" y="275" fill="#dbeafe">React + Vite</text><text x="112" y="305" fill="#dbeafe">Student journeys</text>
+    <rect x="80" y="380" width="290" height="130" rx="18" fill="#059669"/><text x="112" y="428" fill="#fff" font-weight="700">Admin System</text><text x="112" y="465" fill="#d1fae5">React command center</text><text x="112" y="495" fill="#d1fae5">RBAC workbench</text>
+    <rect x="480" y="285" width="300" height="140" rx="18" fill="#fff" stroke="#cbd5e1"/><text x="512" y="333" font-weight="700">Express API Layer</text><text x="512" y="370" fill="#475569">REST endpoints</text><text x="512" y="400" fill="#475569">Validation, uploads, search</text>
+    <rect x="880" y="160" width="300" height="120" rx="18" fill="#fff" stroke="#cbd5e1"/><text x="912" y="208" font-weight="700">Security Controls</text><text x="912" y="245" fill="#475569">JWT, bcrypt, RBAC, Helmet</text>
+    <rect x="880" y="330" width="300" height="120" rx="18" fill="#fff" stroke="#cbd5e1"/><text x="912" y="378" font-weight="700">Operational Services</text><text x="912" y="415" fill="#475569">Email queue, WebSocket, AI</text>
+    <rect x="880" y="500" width="300" height="120" rx="18" fill="#fff" stroke="#cbd5e1"/><text x="912" y="548" font-weight="700">Payments + Referrals</text><text x="912" y="585" fill="#475569">Stripe, wallets, ledger</text>
+    <rect x="1280" y="285" width="240" height="140" rx="18" fill="#111827"/><text x="1312" y="333" fill="#fff" font-weight="700">PostgreSQL / Neon</text><text x="1312" y="370" fill="#cbd5e1">47 mapped tables</text><text x="1312" y="400" fill="#cbd5e1">Drizzle ORM</text>
+  </g>
+  <g stroke="#64748b" stroke-width="4" fill="none">
+    <path d="M370 255 H480"/>
+    <path d="M370 445 H430 V355 H480"/>
+    <path d="M780 355 H880"/>
+    <path d="M1180 220 H1230 V355 H1280"/>
+    <path d="M1180 390 H1280"/>
+    <path d="M1180 560 H1230 V425 H1280"/>
+  </g>
+</svg>

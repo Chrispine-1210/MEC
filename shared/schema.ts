@@ -87,8 +87,27 @@ export const partners = pgTable("partners", {
   name: text("name").notNull(),
   description: text("description").notNull(),
   logoUrl: text("logo_url"),
+  coverImage: text("cover_image"),
   website: text("website"),
+  contactName: text("contact_name"),
+  contactEmail: varchar("contact_email", { length: 255 }),
+  contactPhone: varchar("contact_phone", { length: 40 }),
+  socialLinks: jsonb("social_links").$type<Record<string, string> | null>(),
+  industryCategory: varchar("industry_category", { length: 120 }),
+  partnershipLevel: varchar("partnership_level", { length: 120 }),
+  sponsorshipTier: varchar("sponsorship_tier", { length: 120 }),
+  status: varchar("status", { length: 40 }).default("active"),
   country: text("country"),
+  region: text("region"),
+  address: text("address"),
+  documents: jsonb("documents").$type<Array<Record<string, unknown>> | null>(),
+  agreements: jsonb("agreements").$type<Array<Record<string, unknown>> | null>(),
+  notes: text("notes"),
+  internalComments: text("internal_comments"),
+  linkedEvents: jsonb("linked_events").$type<Array<Record<string, unknown>> | null>(),
+  linkedSponsorships: jsonb("linked_sponsorships").$type<Array<Record<string, unknown>> | null>(),
+  linkedOpportunities: jsonb("linked_opportunities").$type<Array<Record<string, unknown>> | null>(),
+  partnershipHistory: jsonb("partnership_history").$type<Array<Record<string, unknown>> | null>(),
   studentCount: integer("student_count"),
   ranking: text("ranking"),
   programs: jsonb("programs"),
@@ -159,6 +178,7 @@ export const events = pgTable(
     description: text("description").notNull(),
     category: varchar("category", { length: 100 }).notNull().default("General"),
     eventType: varchar("event_type", { length: 80 }).notNull().default("Information Session"),
+    organizer: text("organizer"),
     location: text("location").notNull().default("Lilongwe, Malawi"),
     venueName: text("venue_name"),
     address: text("address"),
@@ -170,18 +190,25 @@ export const events = pgTable(
     priceAmount: integer("price_amount").default(0),
     currency: varchar("currency", { length: 10 }).default("MWK"),
     capacity: integer("capacity"),
+    rsvpEnabled: boolean("rsvp_enabled").default(true),
     startAt: timestamp("start_at").notNull(),
     endAt: timestamp("end_at").notNull(),
     registrationDeadline: timestamp("registration_deadline"),
     coverImage: text("cover_image"),
     videoUrl: text("video_url"),
     tags: text("tags").array(),
+    ticketTypes: jsonb("ticket_types").$type<Array<Record<string, unknown>> | null>(),
+    customFields: jsonb("custom_fields").$type<Array<Record<string, unknown>> | null>(),
     agenda: jsonb("agenda").$type<Array<Record<string, unknown>> | null>(),
     speakers: jsonb("speakers").$type<Array<Record<string, unknown>> | null>(),
     sponsors: jsonb("sponsors").$type<Array<Record<string, unknown>> | null>(),
+    partners: jsonb("partners").$type<Array<Record<string, unknown>> | null>(),
     faqs: jsonb("faqs").$type<Array<Record<string, unknown>> | null>(),
     resources: jsonb("resources").$type<Array<Record<string, unknown>> | null>(),
+    attachments: jsonb("attachments").$type<Array<Record<string, unknown>> | null>(),
     gallery: jsonb("gallery").$type<Array<Record<string, unknown>> | null>(),
+    seoMeta: jsonb("seo_meta").$type<Record<string, unknown> | null>(),
+    socialMeta: jsonb("social_meta").$type<Record<string, unknown> | null>(),
     status: varchar("status", { length: 40 }).notNull().default("draft"),
     isFeatured: boolean("is_featured").default(false),
     isRecommended: boolean("is_recommended").default(false),
@@ -213,12 +240,17 @@ export const eventRegistrations = pgTable(
     email: varchar("email", { length: 255 }).notNull(),
     phone: varchar("phone", { length: 40 }),
     organization: text("organization"),
+    ticketType: varchar("ticket_type", { length: 120 }),
     status: varchar("status", { length: 40 }).notNull().default("pending"),
     ticketCode: varchar("ticket_code", { length: 80 }).notNull().unique(),
     attendanceStatus: varchar("attendance_status", { length: 40 }).notNull().default("registered"),
     answers: jsonb("answers").$type<Record<string, unknown> | null>(),
     reminderOptIn: boolean("reminder_opt_in").default(true),
+    source: varchar("source", { length: 80 }).default("public"),
+    qrPayload: jsonb("qr_payload").$type<Record<string, unknown> | null>(),
+    approvalNotes: text("approval_notes"),
     checkedInAt: timestamp("checked_in_at"),
+    checkedOutAt: timestamp("checked_out_at"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
@@ -226,6 +258,89 @@ export const eventRegistrations = pgTable(
     eventIdx: index("event_registrations_event_idx").on(table.eventId),
     emailIdx: index("event_registrations_email_idx").on(table.email),
     statusIdx: index("event_registrations_status_idx").on(table.status),
+  }),
+);
+
+export const eventTicketTypes = pgTable(
+  "event_ticket_types",
+  {
+    id: serial("id").primaryKey(),
+    eventId: integer("event_id").notNull(),
+    name: varchar("name", { length: 120 }).notNull(),
+    description: text("description"),
+    priceAmount: integer("price_amount").default(0),
+    currency: varchar("currency", { length: 10 }).default("MWK"),
+    capacity: integer("capacity"),
+    salesStartAt: timestamp("sales_start_at"),
+    salesEndAt: timestamp("sales_end_at"),
+    isActive: boolean("is_active").default(true),
+    sortOrder: integer("sort_order").default(0),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    eventIdx: index("event_ticket_types_event_idx").on(table.eventId),
+  }),
+);
+
+export const eventMediaAssets = pgTable(
+  "event_media_assets",
+  {
+    id: serial("id").primaryKey(),
+    eventId: integer("event_id").notNull(),
+    assetType: varchar("asset_type", { length: 40 }).notNull().default("image"),
+    url: text("url").notNull(),
+    altText: text("alt_text"),
+    caption: text("caption"),
+    metadata: jsonb("metadata").$type<Record<string, unknown> | null>(),
+    sortOrder: integer("sort_order").default(0),
+    isFeatured: boolean("is_featured").default(false),
+    uploadedBy: integer("uploaded_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    eventIdx: index("event_media_assets_event_idx").on(table.eventId),
+  }),
+);
+
+export const eventDocuments = pgTable(
+  "event_documents",
+  {
+    id: serial("id").primaryKey(),
+    eventId: integer("event_id").notNull(),
+    title: text("title").notNull(),
+    documentType: varchar("document_type", { length: 80 }).default("attachment"),
+    fileUrl: text("file_url").notNull(),
+    version: integer("version").default(1),
+    accessLevel: varchar("access_level", { length: 40 }).default("public"),
+    uploadedBy: integer("uploaded_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    eventIdx: index("event_documents_event_idx").on(table.eventId),
+  }),
+);
+
+export const eventNotificationPlans = pgTable(
+  "event_notification_plans",
+  {
+    id: serial("id").primaryKey(),
+    eventId: integer("event_id").notNull(),
+    channel: varchar("channel", { length: 40 }).notNull().default("email"),
+    templateKey: varchar("template_key", { length: 120 }).notNull(),
+    audience: varchar("audience", { length: 80 }).notNull().default("registrants"),
+    scheduledFor: timestamp("scheduled_for"),
+    status: varchar("status", { length: 40 }).notNull().default("draft"),
+    metadata: jsonb("metadata").$type<Record<string, unknown> | null>(),
+    createdBy: integer("created_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    eventIdx: index("event_notification_plans_event_idx").on(table.eventId),
+    statusIdx: index("event_notification_plans_status_idx").on(table.status),
   }),
 );
 
@@ -262,6 +377,192 @@ export const eventReactions = pgTable(
   },
   (table) => ({
     eventIdx: index("event_reactions_event_idx").on(table.eventId),
+  }),
+);
+
+export const partnerActivities = pgTable(
+  "partner_activities",
+  {
+    id: serial("id").primaryKey(),
+    partnerId: integer("partner_id").notNull(),
+    activityType: varchar("activity_type", { length: 80 }).notNull().default("note"),
+    subject: text("subject").notNull(),
+    notes: text("notes"),
+    outcome: text("outcome"),
+    dueAt: timestamp("due_at"),
+    completedAt: timestamp("completed_at"),
+    ownerId: integer("owner_id"),
+    metadata: jsonb("metadata").$type<Record<string, unknown> | null>(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    partnerIdx: index("partner_activities_partner_idx").on(table.partnerId),
+    dueIdx: index("partner_activities_due_idx").on(table.dueAt),
+  }),
+);
+
+export const partnerDocuments = pgTable(
+  "partner_documents",
+  {
+    id: serial("id").primaryKey(),
+    partnerId: integer("partner_id").notNull(),
+    title: text("title").notNull(),
+    documentType: varchar("document_type", { length: 80 }).default("agreement"),
+    fileUrl: text("file_url").notNull(),
+    version: integer("version").default(1),
+    accessLevel: varchar("access_level", { length: 40 }).default("admin"),
+    expiresAt: timestamp("expires_at"),
+    uploadedBy: integer("uploaded_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    partnerIdx: index("partner_documents_partner_idx").on(table.partnerId),
+    expiresIdx: index("partner_documents_expires_idx").on(table.expiresAt),
+  }),
+);
+
+export const sponsorships = pgTable(
+  "sponsorships",
+  {
+    id: serial("id").primaryKey(),
+    partnerId: integer("partner_id").notNull(),
+    eventId: integer("event_id"),
+    title: text("title").notNull(),
+    tier: varchar("tier", { length: 120 }),
+    amount: integer("amount").default(0),
+    currency: varchar("currency", { length: 10 }).default("MWK"),
+    contributionType: varchar("contribution_type", { length: 80 }).default("financial"),
+    status: varchar("status", { length: 40 }).default("prospect"),
+    startsAt: timestamp("starts_at"),
+    endsAt: timestamp("ends_at"),
+    benefits: jsonb("benefits").$type<Array<Record<string, unknown>> | null>(),
+    metrics: jsonb("metrics").$type<Record<string, unknown> | null>(),
+    createdBy: integer("created_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    partnerIdx: index("sponsorships_partner_idx").on(table.partnerId),
+    eventIdx: index("sponsorships_event_idx").on(table.eventId),
+    statusIdx: index("sponsorships_status_idx").on(table.status),
+  }),
+);
+
+export const partnerOpportunities = pgTable(
+  "partner_opportunities",
+  {
+    id: serial("id").primaryKey(),
+    partnerId: integer("partner_id").notNull(),
+    title: text("title").notNull(),
+    opportunityType: varchar("opportunity_type", { length: 80 }).default("collaboration"),
+    stage: varchar("stage", { length: 80 }).default("discovery"),
+    valueAmount: integer("value_amount").default(0),
+    currency: varchar("currency", { length: 10 }).default("MWK"),
+    probability: integer("probability").default(0),
+    closeDate: timestamp("close_date"),
+    ownerId: integer("owner_id"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    partnerIdx: index("partner_opportunities_partner_idx").on(table.partnerId),
+    stageIdx: index("partner_opportunities_stage_idx").on(table.stage),
+  }),
+);
+
+export const partnerFinancialRecords = pgTable(
+  "partner_financial_records",
+  {
+    id: serial("id").primaryKey(),
+    partnerId: integer("partner_id").notNull(),
+    sponsorshipId: integer("sponsorship_id"),
+    recordType: varchar("record_type", { length: 80 }).default("contribution"),
+    amount: integer("amount").notNull().default(0),
+    currency: varchar("currency", { length: 10 }).default("MWK"),
+    status: varchar("status", { length: 40 }).default("pledged"),
+    recordedAt: timestamp("recorded_at").defaultNow(),
+    notes: text("notes"),
+    createdBy: integer("created_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    partnerIdx: index("partner_financial_records_partner_idx").on(table.partnerId),
+    sponsorshipIdx: index("partner_financial_records_sponsorship_idx").on(table.sponsorshipId),
+  }),
+);
+
+export const permissions = pgTable(
+  "permissions",
+  {
+    id: serial("id").primaryKey(),
+    role: varchar("role", { length: 80 }).notNull(),
+    permission: varchar("permission", { length: 120 }).notNull(),
+    resource: varchar("resource", { length: 120 }).notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    rolePermissionIdx: uniqueIndex("permissions_role_permission_idx").on(table.role, table.permission, table.resource),
+  }),
+);
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id"),
+    channel: varchar("channel", { length: 40 }).default("in_app"),
+    title: text("title").notNull(),
+    message: text("message").notNull(),
+    status: varchar("status", { length: 40 }).default("unread"),
+    metadata: jsonb("metadata").$type<Record<string, unknown> | null>(),
+    createdAt: timestamp("created_at").defaultNow(),
+    readAt: timestamp("read_at"),
+  },
+  (table) => ({
+    userIdx: index("notifications_user_idx").on(table.userId),
+    statusIdx: index("notifications_status_idx").on(table.status),
+  }),
+);
+
+export const webhookSubscriptions = pgTable(
+  "webhook_subscriptions",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    targetUrl: text("target_url").notNull(),
+    eventTypes: text("event_types").array(),
+    secretHash: text("secret_hash"),
+    status: varchar("status", { length: 40 }).default("active"),
+    createdBy: integer("created_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    statusIdx: index("webhook_subscriptions_status_idx").on(table.status),
+  }),
+);
+
+export const webhookDeliveries = pgTable(
+  "webhook_deliveries",
+  {
+    id: serial("id").primaryKey(),
+    subscriptionId: integer("subscription_id").notNull(),
+    eventType: varchar("event_type", { length: 120 }).notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    responseStatus: integer("response_status"),
+    responseBody: text("response_body"),
+    attempts: integer("attempts").default(0),
+    status: varchar("status", { length: 40 }).default("pending"),
+    nextAttemptAt: timestamp("next_attempt_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+    deliveredAt: timestamp("delivered_at"),
+  },
+  (table) => ({
+    subscriptionIdx: index("webhook_deliveries_subscription_idx").on(table.subscriptionId),
+    statusIdx: index("webhook_deliveries_status_idx").on(table.status),
   }),
 );
 
@@ -482,6 +783,171 @@ export const savedItems = pgTable("saved_items", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const moduleWorkflows = pgTable(
+  "module_workflows",
+  {
+    id: serial("id").primaryKey(),
+    module: varchar("module", { length: 80 }).notNull(),
+    referenceId: integer("reference_id"),
+    workflowType: varchar("workflow_type", { length: 80 }).notNull().default("review"),
+    status: varchar("status", { length: 50 }).notNull().default("open"),
+    stage: varchar("stage", { length: 120 }),
+    priority: varchar("priority", { length: 30 }).default("normal"),
+    assignedTo: integer("assigned_to"),
+    dueAt: timestamp("due_at"),
+    payload: jsonb("payload").$type<Record<string, unknown> | null>(),
+    createdBy: integer("created_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    moduleIdx: index("module_workflows_module_idx").on(table.module),
+    statusIdx: index("module_workflows_status_idx").on(table.status),
+    referenceIdx: index("module_workflows_reference_idx").on(table.module, table.referenceId),
+  }),
+);
+
+export const applicationReviews = pgTable(
+  "application_reviews",
+  {
+    id: serial("id").primaryKey(),
+    applicationId: integer("application_id").notNull(),
+    reviewerId: integer("reviewer_id"),
+    stage: varchar("stage", { length: 120 }).notNull().default("review"),
+    status: varchar("status", { length: 50 }).notNull().default("pending"),
+    score: integer("score"),
+    comments: text("comments"),
+    criteria: jsonb("criteria").$type<Array<Record<string, unknown>> | null>(),
+    interviewAt: timestamp("interview_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    applicationIdx: index("application_reviews_application_idx").on(table.applicationId),
+    reviewerIdx: index("application_reviews_reviewer_idx").on(table.reviewerId),
+  }),
+);
+
+export const applicationDocuments = pgTable(
+  "application_documents",
+  {
+    id: serial("id").primaryKey(),
+    applicationId: integer("application_id").notNull(),
+    documentType: varchar("document_type", { length: 120 }).notNull(),
+    fileUrl: text("file_url").notNull(),
+    originalName: text("original_name"),
+    status: varchar("status", { length: 50 }).notNull().default("received"),
+    version: integer("version").notNull().default(1),
+    accessLevel: varchar("access_level", { length: 40 }).notNull().default("admin"),
+    metadata: jsonb("metadata").$type<Record<string, unknown> | null>(),
+    uploadedBy: integer("uploaded_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    applicationIdx: index("application_documents_application_idx").on(table.applicationId),
+    statusIdx: index("application_documents_status_idx").on(table.status),
+  }),
+);
+
+export const contentRevisions = pgTable(
+  "content_revisions",
+  {
+    id: serial("id").primaryKey(),
+    module: varchar("module", { length: 80 }).notNull(),
+    referenceId: integer("reference_id").notNull(),
+    version: integer("version").notNull().default(1),
+    title: text("title"),
+    snapshot: jsonb("snapshot").$type<Record<string, unknown> | null>(),
+    changeSummary: text("change_summary"),
+    createdBy: integer("created_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    contentIdx: index("content_revisions_content_idx").on(table.module, table.referenceId),
+  }),
+);
+
+export const scheduledReports = pgTable(
+  "scheduled_reports",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    module: varchar("module", { length: 80 }).notNull(),
+    cadence: varchar("cadence", { length: 40 }).notNull().default("weekly"),
+    recipients: jsonb("recipients").$type<string[] | null>(),
+    format: varchar("format", { length: 20 }).notNull().default("pdf"),
+    filters: jsonb("filters").$type<Record<string, unknown> | null>(),
+    isActive: boolean("is_active").default(true),
+    nextRunAt: timestamp("next_run_at"),
+    lastRunAt: timestamp("last_run_at"),
+    createdBy: integer("created_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    moduleIdx: index("scheduled_reports_module_idx").on(table.module),
+    nextRunIdx: index("scheduled_reports_next_run_idx").on(table.nextRunAt),
+  }),
+);
+
+export const userSessions = pgTable(
+  "user_sessions",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").notNull(),
+    sessionHash: varchar("session_hash", { length: 128 }).notNull(),
+    device: text("device"),
+    ipAddress: varchar("ip_address", { length: 45 }),
+    userAgent: text("user_agent"),
+    status: varchar("status", { length: 40 }).notNull().default("active"),
+    lastSeenAt: timestamp("last_seen_at").defaultNow(),
+    expiresAt: timestamp("expires_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    userIdx: index("user_sessions_user_idx").on(table.userId),
+    hashIdx: uniqueIndex("user_sessions_hash_idx").on(table.sessionHash),
+  }),
+);
+
+export const permissionAuditLogs = pgTable(
+  "permission_audit_logs",
+  {
+    id: serial("id").primaryKey(),
+    actorId: integer("actor_id"),
+    targetUserId: integer("target_user_id"),
+    roleId: varchar("role_id", { length: 120 }),
+    permission: varchar("permission", { length: 120 }),
+    action: varchar("action", { length: 80 }).notNull(),
+    before: jsonb("before").$type<Record<string, unknown> | null>(),
+    after: jsonb("after").$type<Record<string, unknown> | null>(),
+    ipAddress: varchar("ip_address", { length: 45 }),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    actorIdx: index("permission_audit_actor_idx").on(table.actorId),
+    targetIdx: index("permission_audit_target_idx").on(table.targetUserId),
+  }),
+);
+
+export const moduleAnalyticsSnapshots = pgTable(
+  "module_analytics_snapshots",
+  {
+    id: serial("id").primaryKey(),
+    module: varchar("module", { length: 80 }).notNull(),
+    periodStart: timestamp("period_start").notNull(),
+    periodEnd: timestamp("period_end").notNull(),
+    metrics: jsonb("metrics").$type<Record<string, unknown>>().notNull(),
+    generatedBy: integer("generated_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    modulePeriodIdx: index("module_analytics_module_period_idx").on(table.module, table.periodStart, table.periodEnd),
+  }),
+);
+
 export const messages = pgTable("messages", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -527,6 +993,14 @@ export const usersRelations = relations(users, ({ many }) => ({
   payoutRequests: many(payoutRequests),
   analytics: many(analytics),
   savedItems: many(savedItems),
+  moduleWorkflows: many(moduleWorkflows),
+  applicationReviews: many(applicationReviews),
+  applicationDocuments: many(applicationDocuments),
+  contentRevisions: many(contentRevisions),
+  scheduledReports: many(scheduledReports),
+  userSessions: many(userSessions),
+  permissionAuditLogs: many(permissionAuditLogs),
+  moduleAnalyticsSnapshots: many(moduleAnalyticsSnapshots),
 }));
 
 export const scholarshipsRelations = relations(scholarships, ({ one }) => ({
@@ -543,11 +1017,13 @@ export const jobsRelations = relations(jobs, ({ one }) => ({
   }),
 }));
 
-export const applicationsRelations = relations(applications, ({ one }) => ({
+export const applicationsRelations = relations(applications, ({ one, many }) => ({
   user: one(users, {
     fields: [applications.userId],
     references: [users.id],
   }),
+  reviews: many(applicationReviews),
+  documents: many(applicationDocuments),
 }));
 
 export const testimonialsRelations = relations(testimonials, ({ one }) => ({
@@ -582,8 +1058,20 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
     references: [users.id],
   }),
   registrations: many(eventRegistrations),
+  ticketTypes: many(eventTicketTypes),
+  mediaAssets: many(eventMediaAssets),
+  documents: many(eventDocuments),
+  notificationPlans: many(eventNotificationPlans),
   comments: many(eventComments),
   reactions: many(eventReactions),
+}));
+
+export const partnersRelations = relations(partners, ({ many }) => ({
+  activities: many(partnerActivities),
+  documents: many(partnerDocuments),
+  sponsorships: many(sponsorships),
+  opportunities: many(partnerOpportunities),
+  financialRecords: many(partnerFinancialRecords),
 }));
 
 export const eventRegistrationsRelations = relations(eventRegistrations, ({ one }) => ({
@@ -593,6 +1081,46 @@ export const eventRegistrationsRelations = relations(eventRegistrations, ({ one 
   }),
   user: one(users, {
     fields: [eventRegistrations.userId],
+    references: [users.id],
+  }),
+}));
+
+export const eventTicketTypesRelations = relations(eventTicketTypes, ({ one }) => ({
+  event: one(events, {
+    fields: [eventTicketTypes.eventId],
+    references: [events.id],
+  }),
+}));
+
+export const eventMediaAssetsRelations = relations(eventMediaAssets, ({ one }) => ({
+  event: one(events, {
+    fields: [eventMediaAssets.eventId],
+    references: [events.id],
+  }),
+  uploader: one(users, {
+    fields: [eventMediaAssets.uploadedBy],
+    references: [users.id],
+  }),
+}));
+
+export const eventDocumentsRelations = relations(eventDocuments, ({ one }) => ({
+  event: one(events, {
+    fields: [eventDocuments.eventId],
+    references: [events.id],
+  }),
+  uploader: one(users, {
+    fields: [eventDocuments.uploadedBy],
+    references: [users.id],
+  }),
+}));
+
+export const eventNotificationPlansRelations = relations(eventNotificationPlans, ({ one }) => ({
+  event: one(events, {
+    fields: [eventNotificationPlans.eventId],
+    references: [events.id],
+  }),
+  creator: one(users, {
+    fields: [eventNotificationPlans.createdBy],
     references: [users.id],
   }),
 }));
@@ -615,6 +1143,66 @@ export const eventReactionsRelations = relations(eventReactions, ({ one }) => ({
   }),
   user: one(users, {
     fields: [eventReactions.userId],
+    references: [users.id],
+  }),
+}));
+
+export const partnerActivitiesRelations = relations(partnerActivities, ({ one }) => ({
+  partner: one(partners, {
+    fields: [partnerActivities.partnerId],
+    references: [partners.id],
+  }),
+  owner: one(users, {
+    fields: [partnerActivities.ownerId],
+    references: [users.id],
+  }),
+}));
+
+export const partnerDocumentsRelations = relations(partnerDocuments, ({ one }) => ({
+  partner: one(partners, {
+    fields: [partnerDocuments.partnerId],
+    references: [partners.id],
+  }),
+  uploader: one(users, {
+    fields: [partnerDocuments.uploadedBy],
+    references: [users.id],
+  }),
+}));
+
+export const sponsorshipsRelations = relations(sponsorships, ({ one, many }) => ({
+  partner: one(partners, {
+    fields: [sponsorships.partnerId],
+    references: [partners.id],
+  }),
+  event: one(events, {
+    fields: [sponsorships.eventId],
+    references: [events.id],
+  }),
+  financialRecords: many(partnerFinancialRecords),
+}));
+
+export const partnerOpportunitiesRelations = relations(partnerOpportunities, ({ one }) => ({
+  partner: one(partners, {
+    fields: [partnerOpportunities.partnerId],
+    references: [partners.id],
+  }),
+  owner: one(users, {
+    fields: [partnerOpportunities.ownerId],
+    references: [users.id],
+  }),
+}));
+
+export const partnerFinancialRecordsRelations = relations(partnerFinancialRecords, ({ one }) => ({
+  partner: one(partners, {
+    fields: [partnerFinancialRecords.partnerId],
+    references: [partners.id],
+  }),
+  sponsorship: one(sponsorships, {
+    fields: [partnerFinancialRecords.sponsorshipId],
+    references: [sponsorships.id],
+  }),
+  creator: one(users, {
+    fields: [partnerFinancialRecords.createdBy],
     references: [users.id],
   }),
 }));
@@ -773,6 +1361,78 @@ export const savedItemsRelations = relations(savedItems, ({ one }) => ({
   }),
 }));
 
+export const moduleWorkflowsRelations = relations(moduleWorkflows, ({ one }) => ({
+  assignee: one(users, {
+    fields: [moduleWorkflows.assignedTo],
+    references: [users.id],
+  }),
+  creator: one(users, {
+    fields: [moduleWorkflows.createdBy],
+    references: [users.id],
+  }),
+}));
+
+export const applicationReviewsRelations = relations(applicationReviews, ({ one }) => ({
+  application: one(applications, {
+    fields: [applicationReviews.applicationId],
+    references: [applications.id],
+  }),
+  reviewer: one(users, {
+    fields: [applicationReviews.reviewerId],
+    references: [users.id],
+  }),
+}));
+
+export const applicationDocumentsRelations = relations(applicationDocuments, ({ one }) => ({
+  application: one(applications, {
+    fields: [applicationDocuments.applicationId],
+    references: [applications.id],
+  }),
+  uploader: one(users, {
+    fields: [applicationDocuments.uploadedBy],
+    references: [users.id],
+  }),
+}));
+
+export const contentRevisionsRelations = relations(contentRevisions, ({ one }) => ({
+  creator: one(users, {
+    fields: [contentRevisions.createdBy],
+    references: [users.id],
+  }),
+}));
+
+export const scheduledReportsRelations = relations(scheduledReports, ({ one }) => ({
+  creator: one(users, {
+    fields: [scheduledReports.createdBy],
+    references: [users.id],
+  }),
+}));
+
+export const userSessionsRelations = relations(userSessions, ({ one }) => ({
+  user: one(users, {
+    fields: [userSessions.userId],
+    references: [users.id],
+  }),
+}));
+
+export const permissionAuditLogsRelations = relations(permissionAuditLogs, ({ one }) => ({
+  actor: one(users, {
+    fields: [permissionAuditLogs.actorId],
+    references: [users.id],
+  }),
+  target: one(users, {
+    fields: [permissionAuditLogs.targetUserId],
+    references: [users.id],
+  }),
+}));
+
+export const moduleAnalyticsSnapshotsRelations = relations(moduleAnalyticsSnapshots, ({ one }) => ({
+  generator: one(users, {
+    fields: [moduleAnalyticsSnapshots.generatedBy],
+    references: [users.id],
+  }),
+}));
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -842,6 +1502,31 @@ export const insertEventRegistrationSchema = createInsertSchema(eventRegistratio
   createdAt: true,
   updatedAt: true,
   checkedInAt: true,
+  checkedOutAt: true,
+});
+
+export const insertEventTicketTypeSchema = createInsertSchema(eventTicketTypes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertEventMediaAssetSchema = createInsertSchema(eventMediaAssets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertEventDocumentSchema = createInsertSchema(eventDocuments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertEventNotificationPlanSchema = createInsertSchema(eventNotificationPlans).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 export const insertEventCommentSchema = createInsertSchema(eventComments).omit({
@@ -854,6 +1539,58 @@ export const insertEventCommentSchema = createInsertSchema(eventComments).omit({
 export const insertEventReactionSchema = createInsertSchema(eventReactions).omit({
   id: true,
   createdAt: true,
+});
+
+export const insertPartnerActivitySchema = createInsertSchema(partnerActivities).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPartnerDocumentSchema = createInsertSchema(partnerDocuments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertSponsorshipSchema = createInsertSchema(sponsorships).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPartnerOpportunitySchema = createInsertSchema(partnerOpportunities).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPartnerFinancialRecordSchema = createInsertSchema(partnerFinancialRecords).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPermissionSchema = createInsertSchema(permissions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  createdAt: true,
+  readAt: true,
+});
+
+export const insertWebhookSubscriptionSchema = createInsertSchema(webhookSubscriptions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertWebhookDeliverySchema = createInsertSchema(webhookDeliveries).omit({
+  id: true,
+  createdAt: true,
+  deliveredAt: true,
 });
 
 export const insertReferralSchema = createInsertSchema(referrals).omit({
@@ -940,6 +1677,50 @@ export const insertSavedItemSchema = createInsertSchema(savedItems).omit({
   createdAt: true,
 });
 
+export const insertModuleWorkflowSchema = createInsertSchema(moduleWorkflows).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertApplicationReviewSchema = createInsertSchema(applicationReviews).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertApplicationDocumentSchema = createInsertSchema(applicationDocuments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertContentRevisionSchema = createInsertSchema(contentRevisions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertScheduledReportSchema = createInsertSchema(scheduledReports).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertUserSessionSchema = createInsertSchema(userSessions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPermissionAuditLogSchema = createInsertSchema(permissionAuditLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertModuleAnalyticsSnapshotSchema = createInsertSchema(moduleAnalyticsSnapshots).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertMessageSchema = createInsertSchema(messages).omit({
   id: true,
   createdAt: true,
@@ -976,10 +1757,36 @@ export type Event = typeof events.$inferSelect;
 export type InsertEvent = z.infer<typeof insertEventSchema>;
 export type EventRegistration = typeof eventRegistrations.$inferSelect;
 export type InsertEventRegistration = z.infer<typeof insertEventRegistrationSchema>;
+export type EventTicketType = typeof eventTicketTypes.$inferSelect;
+export type InsertEventTicketType = z.infer<typeof insertEventTicketTypeSchema>;
+export type EventMediaAsset = typeof eventMediaAssets.$inferSelect;
+export type InsertEventMediaAsset = z.infer<typeof insertEventMediaAssetSchema>;
+export type EventDocument = typeof eventDocuments.$inferSelect;
+export type InsertEventDocument = z.infer<typeof insertEventDocumentSchema>;
+export type EventNotificationPlan = typeof eventNotificationPlans.$inferSelect;
+export type InsertEventNotificationPlan = z.infer<typeof insertEventNotificationPlanSchema>;
 export type EventComment = typeof eventComments.$inferSelect;
 export type InsertEventComment = z.infer<typeof insertEventCommentSchema>;
 export type EventReaction = typeof eventReactions.$inferSelect;
 export type InsertEventReaction = z.infer<typeof insertEventReactionSchema>;
+export type PartnerActivity = typeof partnerActivities.$inferSelect;
+export type InsertPartnerActivity = z.infer<typeof insertPartnerActivitySchema>;
+export type PartnerDocument = typeof partnerDocuments.$inferSelect;
+export type InsertPartnerDocument = z.infer<typeof insertPartnerDocumentSchema>;
+export type Sponsorship = typeof sponsorships.$inferSelect;
+export type InsertSponsorship = z.infer<typeof insertSponsorshipSchema>;
+export type PartnerOpportunity = typeof partnerOpportunities.$inferSelect;
+export type InsertPartnerOpportunity = z.infer<typeof insertPartnerOpportunitySchema>;
+export type PartnerFinancialRecord = typeof partnerFinancialRecords.$inferSelect;
+export type InsertPartnerFinancialRecord = z.infer<typeof insertPartnerFinancialRecordSchema>;
+export type Permission = typeof permissions.$inferSelect;
+export type InsertPermission = z.infer<typeof insertPermissionSchema>;
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type WebhookSubscription = typeof webhookSubscriptions.$inferSelect;
+export type InsertWebhookSubscription = z.infer<typeof insertWebhookSubscriptionSchema>;
+export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
+export type InsertWebhookDelivery = z.infer<typeof insertWebhookDeliverySchema>;
 export type Referral = typeof referrals.$inferSelect;
 export type InsertReferral = z.infer<typeof insertReferralSchema>;
 export type ReferralCampaign = typeof referralCampaigns.$inferSelect;
@@ -1012,6 +1819,22 @@ export type Analytics = typeof analytics.$inferSelect;
 export type InsertAnalytics = z.infer<typeof insertAnalyticsSchema>;
 export type SavedItem = typeof savedItems.$inferSelect;
 export type InsertSavedItem = z.infer<typeof insertSavedItemSchema>;
+export type ModuleWorkflow = typeof moduleWorkflows.$inferSelect;
+export type InsertModuleWorkflow = z.infer<typeof insertModuleWorkflowSchema>;
+export type ApplicationReview = typeof applicationReviews.$inferSelect;
+export type InsertApplicationReview = z.infer<typeof insertApplicationReviewSchema>;
+export type ApplicationDocument = typeof applicationDocuments.$inferSelect;
+export type InsertApplicationDocument = z.infer<typeof insertApplicationDocumentSchema>;
+export type ContentRevision = typeof contentRevisions.$inferSelect;
+export type InsertContentRevision = z.infer<typeof insertContentRevisionSchema>;
+export type ScheduledReport = typeof scheduledReports.$inferSelect;
+export type InsertScheduledReport = z.infer<typeof insertScheduledReportSchema>;
+export type UserSession = typeof userSessions.$inferSelect;
+export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
+export type PermissionAuditLog = typeof permissionAuditLogs.$inferSelect;
+export type InsertPermissionAuditLog = z.infer<typeof insertPermissionAuditLogSchema>;
+export type ModuleAnalyticsSnapshot = typeof moduleAnalyticsSnapshots.$inferSelect;
+export type InsertModuleAnalyticsSnapshot = z.infer<typeof insertModuleAnalyticsSnapshotSchema>;
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Subscriber = typeof subscribers.$inferSelect;

@@ -88,6 +88,7 @@ export default function Footer() {
                 { href: "/about", label: "About Us" },
                 { href: "/team", label: "Our Team" },
                 { href: "/partners", label: "Our Partners" },
+                { href: "/partnership-opportunities", label: "Partner With Us" },
                 { href: "/events", label: "Events" },
                 { href: "/blog", label: "Blog & News" },
                 { href: "/contact", label: "Contact Us" },

@@ -1,3 +1,5 @@
+import { resolveApiUrl } from "./api-base";
+
 // Upload API functionality
 export const uploadApi = {
   async uploadFile(file: File): Promise<Response> {
@@ -10,7 +12,7 @@ export const uploadApi = {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    return fetch('/api/admin/upload', {
+    return fetch(resolveApiUrl("/api/admin/upload"), {
       method: 'POST',
       headers,
       body: formData,
@@ -30,7 +32,7 @@ export const uploadApi = {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    return fetch('/api/admin/upload/multiple', {
+    return fetch(resolveApiUrl("/api/admin/upload/multiple"), {
       method: 'POST',
       headers,
       body: formData,

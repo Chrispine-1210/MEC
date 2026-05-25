@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { type User } from "@shared/schema";
+import { resolveWebSocketUrl } from "@/lib/api-base";
 import { queryClient } from "@/lib/queryClient";
 
 type AdminRealtimeContextValue = {
@@ -59,11 +60,8 @@ export function AdminRealtimeProvider({ children }: { children: React.ReactNode 
     };
 
     const connect = () => {
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const tokenFromStorage = localStorage.getItem("token");
-      socket = new WebSocket(
-        `${protocol}//${window.location.host}/ws${tokenFromStorage ? `?token=${encodeURIComponent(tokenFromStorage)}` : ""}`,
-      );
+      socket = new WebSocket(resolveWebSocketUrl("/ws", tokenFromStorage));
 
       socket.onopen = () => {
         if (!isMounted || !socket) return;

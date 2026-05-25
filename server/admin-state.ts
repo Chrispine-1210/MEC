@@ -4,15 +4,62 @@ import path from "path";
 export type AdminContentStatus = "draft" | "published" | "archived";
 
 export type ScholarshipMeta = {
+  slug?: string;
+  shortDescription?: string;
+  fullContent?: string;
+  bannerImage?: string;
   eligibility?: string;
+  scholarshipType?: string;
+  fundingType?: string;
+  eligibilityCriteria?: string;
+  countryRestrictions?: string[];
+  academicRequirements?: string[];
+  openingDate?: string;
+  fundingAmount?: string;
+  sponsorOrganization?: string;
+  benefits?: string[];
+  applicationSteps?: string[];
+  requiredDocuments?: string[];
+  faq?: Array<Record<string, unknown>>;
+  brochures?: Array<Record<string, unknown>>;
+  videoEmbeds?: Array<Record<string, unknown>>;
+  tags?: string[];
+  seoMeta?: Record<string, unknown>;
+  socialMeta?: Record<string, unknown>;
+  applicationForm?: Array<Record<string, unknown>>;
+  conditionalRules?: Array<Record<string, unknown>>;
+  reviewPipeline?: Array<Record<string, unknown>>;
+  visibilitySchedule?: Record<string, unknown>;
+  automationHooks?: Record<string, unknown>;
+  analytics?: Record<string, unknown>;
   status?: AdminContentStatus;
   isPremium?: boolean;
+  isFeatured?: boolean;
   paymentStatus?: string;
   featuredImage?: string;
   region?: string;
 };
 
 export type JobMeta = {
+  slug?: string;
+  department?: string;
+  responsibilities?: string[];
+  qualifications?: string[];
+  skills?: string[];
+  experienceLevel?: string;
+  employmentType?: string;
+  salaryMin?: string;
+  salaryMax?: string;
+  attachments?: Array<Record<string, unknown>>;
+  seoMeta?: Record<string, unknown>;
+  socialMeta?: Record<string, unknown>;
+  tags?: string[];
+  isFeatured?: boolean;
+  pipelineStages?: Array<Record<string, unknown>>;
+  emailTemplates?: Array<Record<string, unknown>>;
+  recruiterNotes?: Array<Record<string, unknown>>;
+  automationHooks?: Record<string, unknown>;
+  analytics?: Record<string, unknown>;
   salaryRange?: string;
   applicationUrl?: string;
   status?: AdminContentStatus;
@@ -27,10 +74,31 @@ export type JobMeta = {
 export type PartnerMeta = {
   partnershipType?: string;
   logo?: string;
+  coverImage?: string;
+  contactName?: string;
   contactEmail?: string;
   contactPhone?: string;
   address?: string;
   region?: string;
+  country?: string;
+  industryCategory?: string;
+  partnershipLevel?: string;
+  sponsorshipTier?: string;
+  status?: string;
+  socialLinks?: Record<string, string>;
+  documents?: Array<Record<string, unknown>>;
+  agreements?: Array<Record<string, unknown>>;
+  notes?: string;
+  internalComments?: string;
+  linkedEvents?: Array<Record<string, unknown>>;
+  linkedSponsorships?: Array<Record<string, unknown>>;
+  linkedOpportunities?: Array<Record<string, unknown>>;
+  partnershipHistory?: Array<Record<string, unknown>>;
+  activities?: Array<Record<string, unknown>>;
+  meetings?: Array<Record<string, unknown>>;
+  reminders?: Array<Record<string, unknown>>;
+  financialRecords?: Array<Record<string, unknown>>;
+  performanceMetrics?: Record<string, unknown>;
   videoUrl?: string;
   videoTitle?: string;
   videoDescription?: string;
@@ -41,6 +109,20 @@ export type PartnerMeta = {
 
 export type BlogMeta = {
   slug?: string;
+  gallery?: Array<Record<string, unknown>>;
+  videos?: Array<Record<string, unknown>>;
+  pullQuotes?: string[];
+  tables?: Array<Record<string, unknown>>;
+  codeBlocks?: Array<Record<string, unknown>>;
+  seoMeta?: Record<string, unknown>;
+  socialMeta?: Record<string, unknown>;
+  structuredData?: Record<string, unknown>;
+  readingTimeMinutes?: number;
+  revisionHistory?: Array<Record<string, unknown>>;
+  relatedPosts?: Array<Record<string, unknown>>;
+  authorProfile?: Record<string, unknown>;
+  scheduledAt?: string;
+  automationHooks?: Record<string, unknown>;
   status?: AdminContentStatus;
   featuredImage?: string;
 };
@@ -48,10 +130,50 @@ export type BlogMeta = {
 export type TeamMeta = {
   department?: string;
   profileImage?: string;
+  title?: string;
+  biography?: string;
+  cvUrl?: string;
+  skills?: string[];
+  achievements?: string[];
+  certifications?: string[];
+  socialLinks?: Record<string, string>;
+  contactInfo?: Record<string, unknown>;
+  visibility?: "public" | "internal" | "hidden";
+  leadershipLevel?: string;
+  displayGroup?: string;
 };
 
 export type UserMeta = {
   region?: string;
+  bio?: string;
+  avatar?: string;
+  socialLinks?: Record<string, string>;
+  preferences?: Record<string, unknown>;
+  notificationPreferences?: Record<string, unknown>;
+  savedItems?: Array<Record<string, unknown>>;
+  activityLogs?: Array<Record<string, unknown>>;
+  loginHistory?: Array<Record<string, unknown>>;
+  deviceHistory?: Array<Record<string, unknown>>;
+  verification?: Record<string, unknown>;
+  suspendedAt?: string | null;
+  suspensionReason?: string | null;
+};
+
+export type ApplicationMeta = {
+  workflowType?: "scholarship" | "job" | "partner" | "event" | "contact" | string;
+  stage?: string;
+  score?: number;
+  reviewerComments?: Array<Record<string, unknown>>;
+  reviewHistory?: Array<Record<string, unknown>>;
+  documents?: Array<Record<string, unknown>>;
+  verificationChecks?: Array<Record<string, unknown>>;
+  interviewSchedule?: Array<Record<string, unknown>>;
+  shortlist?: boolean;
+  pipeline?: Array<Record<string, unknown>>;
+  pdfUrl?: string;
+  notificationHistory?: Array<Record<string, unknown>>;
+  automationHooks?: Record<string, unknown>;
+  analytics?: Record<string, unknown>;
 };
 
 export type AiChatMessage = {
@@ -106,6 +228,7 @@ type AdminState = {
   partners: Record<string, PartnerMeta>;
   blogPosts: Record<string, BlogMeta>;
   teamMembers: Record<string, TeamMeta>;
+  applications: Record<string, ApplicationMeta>;
   aiConversations: Record<string, AiChatConversation>;
   roles: AdminRole[];
   settings: AdminSettings;
@@ -225,6 +348,7 @@ const createDefaultState = (): AdminState => ({
   partners: {},
   blogPosts: {},
   teamMembers: {},
+  applications: {},
   aiConversations: {},
   roles: DEFAULT_ROLES,
   settings: {
@@ -285,6 +409,7 @@ const loadState = (): AdminState => {
       partners: parsed.partners ?? {},
       blogPosts: parsed.blogPosts ?? {},
       teamMembers: parsed.teamMembers ?? {},
+      applications: parsed.applications ?? {},
       aiConversations: parsed.aiConversations ?? {},
       roles: normalizeAdminRoles(parsed.roles),
       settings: {
@@ -324,6 +449,7 @@ const updateCollectionItem = <T extends Record<string, unknown>>(
     | "partners"
     | "blogPosts"
     | "teamMembers"
+    | "applications"
     | "aiConversations"
   >,
   id: string | number,
@@ -354,6 +480,7 @@ const deleteCollectionItem = (
     | "partners"
     | "blogPosts"
     | "teamMembers"
+    | "applications"
     | "aiConversations"
   >,
   id: string | number,
@@ -425,6 +552,15 @@ export const getTeamMeta = (id: string | number) => {
 export const setTeamMeta = (id: string | number, value: TeamMeta) =>
   updateCollectionItem("teamMembers", id, value);
 export const deleteTeamMeta = (id: string | number) => deleteCollectionItem("teamMembers", id);
+
+export const getApplicationMeta = (id: string | number) => {
+  refreshStateFromDiskIfChanged();
+  return cachedState.applications[String(id)] ?? {};
+};
+export const setApplicationMeta = (id: string | number, value: ApplicationMeta) =>
+  updateCollectionItem("applications", id, value);
+export const deleteApplicationMeta = (id: string | number) =>
+  deleteCollectionItem("applications", id);
 
 export const getAiChatConversation = (id: string) => {
   refreshStateFromDiskIfChanged();

@@ -495,6 +495,10 @@ export default function JobDetail() {
                   type="job"
                   referenceId={id}
                   title={resolved.title}
+                  customFields={[
+                    { name: "availability", label: "Earliest availability", required: true },
+                    { name: "fitSummary", label: "Why are you a strong fit for this role?", type: "textarea", required: true },
+                  ]}
                   trigger={
                     <Button className="w-full bg-mtendere-green font-bold hover:bg-mtendere-green/90">
                       Apply Now

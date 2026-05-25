@@ -4,7 +4,7 @@
   "type": "module",
   "license": "MIT",
   "engines": {
-    "node": ">=20 <25"
+    "node": ">=20 <23"
   },
   "scripts": {
     "dev:server": "cross-env NODE_ENV=development NODE_OPTIONS=--dns-result-order=ipv4first tsx watch server/index.ts",
@@ -13,12 +13,16 @@
     "dev:Admin": "npm run dev:admin",
     "dev:all": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"npm run dev:admin\"",
     "dev": "npm run dev:server",
-    "build:client": "vite build",
-    "build:admin": "npm run build --prefix ./Admin",
-    "build:admin:vercel": "cross-env ADMIN_BUILD_OUT_DIR=dist/client/admin npm run build --prefix ./Admin",
+    "build:client": "cross-env NODE_OPTIONS=--max-old-space-size=4096 vite build",
+    "build:admin": "cross-env NODE_OPTIONS=--max-old-space-size=4096 npm run build --prefix ./Admin",
+    "build:admin:vercel": "cross-env NODE_OPTIONS=--max-old-space-size=4096 ADMIN_BUILD_OUT_DIR=dist/client/admin VITE_ADMIN_BASE_PATH=/admin/ npm run build --prefix ./Admin",
     "build:vercel": "npm run build:client && npm run build:admin:vercel && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "build": "npm run build:client && npm run build:admin && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "cross-env NODE_ENV=production node dist/index.js",
+    "pm2:start": "pm2 start ecosystem.config.cjs --env production",
+    "pm2:reload": "pm2 reload ecosystem.config.cjs --env production",
+    "pm2:logs": "pm2 logs mec-api",
+    "pm2:save": "pm2 save",
     "check": "tsc --pretty false",
     "db:push": "drizzle-kit push",
     "seed:partner-videos": "tsx -r dotenv/config server/seed-partner-videos.ts"

@@ -8,6 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.resolve(__dirname, ".env"), quiet: true });
+dotenv.config({ path: path.resolve(__dirname, "client", `.env.${process.env.NODE_ENV || "development"}`), override: false, quiet: true });
 
 const configuredClientPort = Number(process.env.CLIENT_PORT ?? process.env.VITE_CLIENT_PORT ?? 5173);
 const clientPort = Number.isFinite(configuredClientPort) && configuredClientPort > 0
@@ -17,11 +18,13 @@ const configuredApiPort = Number(process.env.PORT ?? 5000);
 const apiPort = Number.isFinite(configuredApiPort) && configuredApiPort > 0
   ? configuredApiPort
   : 5000;
-const apiTarget = `http://localhost:${apiPort}`;
-const wsTarget = `ws://localhost:${apiPort}`;
+const devApiHost = process.env.DEV_API_HOST ?? "127.0.0.1";
+const apiTarget = `http://${devApiHost}:${apiPort}`;
+const wsTarget = `ws://${devApiHost}:${apiPort}`;
 
 export default defineConfig({
   root: path.resolve(__dirname, "client"),
+  envDir: path.resolve(__dirname, "client"),
 
   plugins: [react()],
   assetsInclude: ["**/*.JPG", "**/*.JPEG", "**/*.PNG", "**/*.WEBP"],

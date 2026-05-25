@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { resolveWebSocketUrl } from "@/lib/api-base";
 
 interface WebSocketMessage {
   type: string;
@@ -27,10 +28,7 @@ export function useWebSocket(channels: string[] = []) {
         return;
       }
 
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const socket = new WebSocket(
-        `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`,
-      );
+      const socket = new WebSocket(resolveWebSocketUrl("/ws", token));
       socketRef.current = socket;
 
       socket.onopen = () => {

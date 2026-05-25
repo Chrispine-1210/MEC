@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { resolveApiUrl } from "./api-base";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -19,7 +20,7 @@ export const authFetch = (input: RequestInfo | URL, init: RequestInit = {}) => {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  return fetch(input, {
+  return fetch(resolveApiUrl(input), {
     ...init,
     headers,
     credentials: init.credentials ?? "include",
@@ -40,7 +41,7 @@ export async function apiRequest(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const res = await fetch(url, {
+  const res = await fetch(resolveApiUrl(url), {
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,

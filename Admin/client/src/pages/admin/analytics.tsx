@@ -5,7 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Users as UsersIcon, FileText, GraduationCap, Briefcase, Building2, BookOpen, BarChart2 } from "lucide-react";
+import { TrendingUp, Users as UsersIcon, FileText, GraduationCap, Briefcase, Building2, BookOpen, BarChart2, CalendarDays } from "lucide-react";
 
 const COLORS = [
   "hsl(var(--chart-1))",
@@ -28,6 +28,7 @@ export default function AnalyticsPage() {
   const contentData = stats ? [
     { name: "Scholarships", total: stats.totalScholarships || 0, published: stats.activeScholarships || 0, draft: Math.max(0, (stats.totalScholarships || 0) - (stats.activeScholarships || 0)) },
     { name: "Jobs", total: stats.totalJobs || 0, published: stats.activeJobs || 0, draft: Math.max(0, (stats.totalJobs || 0) - (stats.activeJobs || 0)) },
+    { name: "Events", total: stats.totalEvents || 0, published: stats.publishedEvents || 0, draft: Math.max(0, (stats.totalEvents || 0) - (stats.publishedEvents || 0)) },
     { name: "Blog Posts", total: stats.totalBlogPosts || 0, published: stats.publishedPosts || 0, draft: Math.max(0, (stats.totalBlogPosts || 0) - (stats.publishedPosts || 0)) },
     { name: "Partners", total: stats.totalPartners || 0, published: stats.totalPartners || 0, draft: 0 },
   ] : [];
@@ -44,6 +45,7 @@ export default function AnalyticsPage() {
     { title: "Active Scholarships", value: stats?.activeScholarships ?? 0, icon: <GraduationCap className="h-5 w-5" />, color: "bg-success" },
     { title: "Open Jobs", value: stats?.activeJobs ?? 0, icon: <Briefcase className="h-5 w-5" />, color: "bg-warning" },
     { title: "Total Applications", value: stats?.totalApplications ?? 0, icon: <FileText className="h-5 w-5" />, color: "bg-info" },
+    { title: "Events", value: stats?.totalEvents ?? 0, icon: <CalendarDays className="h-5 w-5" />, color: "bg-primary" },
     { title: "Partners", value: stats?.totalPartners ?? 0, icon: <Building2 className="h-5 w-5" />, color: "bg-accent" },
     { title: "Blog Posts", value: stats?.publishedPosts ?? 0, icon: <BookOpen className="h-5 w-5" />, color: "bg-chart-4" },
   ];
@@ -66,7 +68,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
         {kpiCards.map((kpi) => (
           <Card key={kpi.title} className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
@@ -151,9 +153,10 @@ export default function AnalyticsPage() {
           {isLoading ? <Skeleton className="h-40 w-full" /> : (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
-                { label: "Total Content Items", value: (stats?.totalScholarships || 0) + (stats?.totalJobs || 0) + (stats?.totalPartners || 0), badge: "All" },
+                { label: "Total Content Items", value: (stats?.totalScholarships || 0) + (stats?.totalJobs || 0) + (stats?.totalEvents || 0) + (stats?.totalPartners || 0), badge: "All" },
                 { label: "Pending Applications", value: stats?.pendingApplications || 0, badge: "Needs Action", badgeColor: "bg-warning/15 text-warning" },
-                { label: "Published Content", value: (stats?.activeScholarships || 0) + (stats?.activeJobs || 0) + (stats?.publishedPosts || 0), badge: "Live" },
+                { label: "Published Content", value: (stats?.activeScholarships || 0) + (stats?.activeJobs || 0) + (stats?.publishedEvents || 0) + (stats?.publishedPosts || 0), badge: "Live" },
+                { label: "Event Registrations", value: stats?.eventRegistrations || 0, badge: "Events" },
                 { label: "Active Chats", value: stats?.totalActiveChats || 0, badge: "AI" },
               ].map(({ label, value, badge, badgeColor }) => (
                 <div key={label} className="p-4 rounded-lg border bg-muted/40 text-center">

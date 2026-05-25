@@ -17,6 +17,7 @@ import {
   Sparkles,
   Building2,
   BookOpen,
+  CalendarDays,
   Clock,
   BarChart3,
 } from "lucide-react";
@@ -105,6 +106,7 @@ export default function AdminDashboard() {
   const contentBarData = stats ? [
     { name: "Scholarships", total: stats.totalScholarships || 0, published: stats.activeScholarships || 0 },
     { name: "Jobs", total: stats.totalJobs || 0, published: stats.activeJobs || 0 },
+    { name: "Events", total: stats.totalEvents || 0, published: stats.publishedEvents || 0 },
     { name: "Blog Posts", total: stats.totalBlogPosts || 0, published: stats.publishedPosts || 0 },
     { name: "Partners", total: stats.totalPartners || 0, published: stats.totalPartners || 0 },
   ] : [];
@@ -150,6 +152,9 @@ export default function AdminDashboard() {
         </div>
         <div className="xl:col-span-2">
           <StatCard title="Applications" value={stats?.totalApplications ?? 0} description={`${stats?.pendingApplications ?? 0} pending review`} icon={<FileText className="h-6 w-6" />} color="purple" loading={isLoading} />
+        </div>
+        <div className="xl:col-span-2">
+          <StatCard title="Events" value={stats?.totalEvents ?? 0} description={`${stats?.eventRegistrations ?? 0} registrations`} icon={<CalendarDays className="h-6 w-6" />} color="blue" loading={isLoading} />
         </div>
         <div className="xl:col-span-2">
           <StatCard title="Partners" value={stats?.totalPartners ?? 0} description="Partner institutions" icon={<Building2 className="h-6 w-6" />} color="teal" loading={isLoading} />

@@ -19,6 +19,7 @@ import Jobs from "@/pages/jobs";
 import JobDetail from "@/pages/job-detail";
 import Partners from "@/pages/partners";
 import PartnerDetail from "@/pages/partner-detail";
+import PartnershipOpportunities from "@/pages/partnership-opportunities";
 import Events from "@/pages/events";
 import EventDetail from "@/pages/event-detail";
 import About from "@/pages/about";
@@ -48,6 +49,7 @@ function Router() {
       <Route path="/jobs" component={Jobs} />
       <Route path="/partners/:id" component={PartnerDetail} />
       <Route path="/partners" component={Partners} />
+      <Route path="/partnership-opportunities" component={PartnershipOpportunities} />
       <Route path="/events/:id" component={EventDetail} />
       <Route path="/events" component={Events} />
       <Route path="/about" component={About} />

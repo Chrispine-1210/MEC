@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useAuth } from "./use-auth";
+import { resolveWebSocketUrl } from "@/lib/api-base";
 import { queryClient } from "@/lib/queryClient";
 
 interface WebSocketContextType {
@@ -33,20 +34,17 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     const defaultChannels = [
       "scholarships",
       "jobs",
-      "applications",
       "partners",
       "testimonials",
       "blog-posts",
       "team-members",
       "events",
-      "user_activity",
       "announcements",
     ];
 
     const connect = () => {
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const token = localStorage.getItem("token");
-      const wsUrl = `${protocol}//${window.location.host}/ws${token ? `?token=${encodeURIComponent(token)}` : ""}`;
+      const wsUrl = resolveWebSocketUrl("/ws", token);
       
       ws = new WebSocket(wsUrl);
       

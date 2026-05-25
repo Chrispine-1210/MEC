@@ -1,5 +1,10 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import path from "path";
 import { z } from "zod";
+
+const nodeEnv = process.env.NODE_ENV || "development";
+dotenv.config({ path: path.resolve(process.cwd(), ".env"), quiet: true });
+dotenv.config({ path: path.resolve(process.cwd(), `.env.${nodeEnv}`), override: true, quiet: true });
 
 const optionalEnvString = z.preprocess(
   (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
@@ -18,6 +23,7 @@ const optionalEnvBoolean = z.preprocess((value) => {
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+  HOST: optionalEnvString,
   PORT: z.coerce.number().int().positive().default(5000),
   ADMIN_PORT: z.coerce.number().int().positive().default(5174),
   JWT_SECRET: z.string().min(1, "JWT_SECRET is required"),

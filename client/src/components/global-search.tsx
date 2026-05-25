@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDebouncedValue } from "@/hooks/use-debounce";
+import { resolveApiUrl } from "@/lib/api-base";
 import { cn } from "@/lib/utils";
 
 type GlobalSearchResult = {
@@ -73,7 +74,7 @@ export default function GlobalSearch({
   const { data, isFetching } = useQuery<GlobalSearchResponse>({
     queryKey: ["/api/search", debouncedQuery],
     queryFn: async () => {
-      const response = await fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}`, {
+      const response = await fetch(resolveApiUrl(`/api/search?q=${encodeURIComponent(debouncedQuery)}`), {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Search failed");

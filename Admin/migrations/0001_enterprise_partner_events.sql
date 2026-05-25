@@ -1,0 +1,16 @@
+ALTER TABLE "partner_institutions" ADD COLUMN IF NOT EXISTS "cover_image" text;
+ALTER TABLE "partner_institutions" ADD COLUMN IF NOT EXISTS "contact_name" text;
+ALTER TABLE "partner_institutions" ADD COLUMN IF NOT EXISTS "social_links" jsonb;
+ALTER TABLE "partner_institutions" ADD COLUMN IF NOT EXISTS "industry_category" text;
+ALTER TABLE "partner_institutions" ADD COLUMN IF NOT EXISTS "partnership_level" text;
+ALTER TABLE "partner_institutions" ADD COLUMN IF NOT EXISTS "sponsorship_tier" text;
+ALTER TABLE "partner_institutions" ADD COLUMN IF NOT EXISTS "status" text DEFAULT 'active';
+ALTER TABLE "partner_institutions" ADD COLUMN IF NOT EXISTS "country" text DEFAULT 'Global';
+ALTER TABLE "partner_institutions" ADD COLUMN IF NOT EXISTS "documents" jsonb;
+ALTER TABLE "partner_institutions" ADD COLUMN IF NOT EXISTS "agreements" jsonb;
+ALTER TABLE "partner_institutions" ADD COLUMN IF NOT EXISTS "notes" text;
+ALTER TABLE "partner_institutions" ADD COLUMN IF NOT EXISTS "internal_comments" text;
+ALTER TABLE "partner_institutions" ADD COLUMN IF NOT EXISTS "linked_events" jsonb;
+ALTER TABLE "partner_institutions" ADD COLUMN IF NOT EXISTS "linked_sponsorships" jsonb;
+ALTER TABLE "partner_institutions" ADD COLUMN IF NOT EXISTS "linked_opportunities" jsonb;
+ALTER TABLE "partner_institutions" ADD COLUMN IF NOT EXISTS "partnership_history" jsonb;

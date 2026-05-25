@@ -5,6 +5,10 @@ export const dashboardApi = {
   getStats: () => apiRequest("GET", "/api/admin/dashboard/stats"),
 };
 
+export const ecosystemApi = {
+  getOverview: () => apiRequest("GET", "/api/admin/ecosystem/overview"),
+};
+
 // Users API
 export const usersApi = {
   getUsers: (params?: { page?: number; limit?: number; search?: string }) => {
@@ -33,6 +37,10 @@ export const scholarshipsApi = {
   },
   createScholarship: (data: any) => apiRequest("POST", "/api/admin/scholarships", data),
   updateScholarship: (id: string, data: any) => apiRequest("PUT", `/api/admin/scholarships/${id}`, data),
+  duplicateScholarship: (id: string) => apiRequest("POST", `/api/admin/scholarships/${id}/duplicate`),
+  setStatus: (id: string, status: string) => apiRequest("PATCH", `/api/admin/scholarships/${id}/status`, { status }),
+  getAnalytics: () => apiRequest("GET", "/api/admin/scholarships/analytics"),
+  getReport: () => apiRequest("GET", "/api/admin/scholarships/reports/summary"),
   deleteScholarship: (id: string) => apiRequest("DELETE", `/api/admin/scholarships/${id}`),
 };
 
@@ -49,7 +57,29 @@ export const jobsApi = {
   },
   createJob: (data: any) => apiRequest("POST", "/api/admin/jobs", data),
   updateJob: (id: string, data: any) => apiRequest("PUT", `/api/admin/jobs/${id}`, data),
+  duplicateJob: (id: string) => apiRequest("POST", `/api/admin/jobs/${id}/duplicate`),
+  setStatus: (id: string, status: string) => apiRequest("PATCH", `/api/admin/jobs/${id}/status`, { status }),
+  getAnalytics: () => apiRequest("GET", "/api/admin/jobs/analytics"),
+  getReport: () => apiRequest("GET", "/api/admin/jobs/reports/summary"),
   deleteJob: (id: string) => apiRequest("DELETE", `/api/admin/jobs/${id}`),
+};
+
+export const eventsApi = {
+  getEvents: (params?: { page?: number; limit?: number; search?: string; status?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set("page", params.page.toString());
+    if (params?.limit) searchParams.set("limit", params.limit.toString());
+    if (params?.search) searchParams.set("search", params.search);
+    if (params?.status) searchParams.set("status", params.status);
+
+    return apiRequest("GET", `/api/admin/events?${searchParams.toString()}`);
+  },
+  createEvent: (data: any) => apiRequest("POST", "/api/admin/events", data),
+  updateEvent: (id: number | string, data: any) => apiRequest("PUT", `/api/admin/events/${id}`, data),
+  duplicateEvent: (id: number | string) => apiRequest("POST", `/api/admin/events/${id}/duplicate`),
+  setStatus: (id: number | string, status: string) => apiRequest("PATCH", `/api/admin/events/${id}/status`, { status }),
+  getAnalytics: () => apiRequest("GET", "/api/admin/events/analytics"),
+  getReport: () => apiRequest("GET", "/api/admin/events/reports/summary"),
 };
 
 // Partners API
@@ -65,6 +95,11 @@ export const partnersApi = {
   createPartner: (data: any) => apiRequest("POST", "/api/admin/partners", data),
   updatePartner: (id: string, data: any) => apiRequest("PUT", `/api/admin/partners/${id}`, data),
   deletePartner: (id: string) => apiRequest("DELETE", `/api/admin/partners/${id}`),
+  getAnalytics: () => apiRequest("GET", "/api/admin/partners/analytics/summary"),
+  getCrm: (id: string) => apiRequest("GET", `/api/admin/partners/${id}/crm`),
+  addActivity: (id: string, data: any) => apiRequest("POST", `/api/admin/partners/${id}/activities`, data),
+  addDocument: (id: string, data: any) => apiRequest("POST", `/api/admin/partners/${id}/documents`, data),
+  addFinancialRecord: (id: string, data: any) => apiRequest("POST", `/api/admin/partners/${id}/financial-records`, data),
 };
 
 // Blog API
@@ -80,6 +115,9 @@ export const blogApi = {
   },
   createPost: (data: any) => apiRequest("POST", "/api/admin/blog", data),
   updatePost: (id: string, data: any) => apiRequest("PUT", `/api/admin/blog/${id}`, data),
+  duplicatePost: (id: string) => apiRequest("POST", `/api/admin/blog/${id}/duplicate`),
+  setStatus: (id: string, status: string) => apiRequest("PATCH", `/api/admin/blog/${id}/status`, { status }),
+  getAnalytics: () => apiRequest("GET", "/api/admin/blog/analytics"),
   deletePost: (id: string) => apiRequest("DELETE", `/api/admin/blog/${id}`),
 };
 
@@ -95,6 +133,8 @@ export const teamApi = {
   },
   createMember: (data: any) => apiRequest("POST", "/api/admin/team", data),
   updateMember: (id: string, data: any) => apiRequest("PUT", `/api/admin/team/${id}`, data),
+  setStatus: (id: string, isActive: boolean) => apiRequest("PATCH", `/api/admin/team/${id}/status`, { isActive }),
+  getAnalytics: () => apiRequest("GET", "/api/admin/team/analytics"),
   deleteMember: (id: string) => apiRequest("DELETE", `/api/admin/team/${id}`),
 };
 
@@ -109,7 +149,10 @@ export const applicationsApi = {
     
     return apiRequest("GET", `/api/admin/applications?${searchParams.toString()}`);
   },
+  getAnalytics: () => apiRequest("GET", "/api/admin/applications/analytics"),
+  getReport: () => apiRequest("GET", "/api/admin/applications/reports/summary"),
   updateApplication: (id: string, data: any) => apiRequest("PUT", `/api/admin/applications/${id}`, data),
+  addComment: (id: string, data: any) => apiRequest("POST", `/api/admin/applications/${id}/comments`, data),
   deleteApplication: (id: string) => apiRequest("DELETE", `/api/admin/applications/${id}`),
 };
 

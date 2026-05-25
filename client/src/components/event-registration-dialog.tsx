@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -33,13 +34,18 @@ export default function EventRegistrationDialog({ event, trigger }: EventRegistr
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [ticketUrl, setTicketUrl] = useState("");
+  const ticketTypes = getTicketTypes(event);
+  const customFields = getCustomFields(event);
   const [formData, setFormData] = useState({
     fullName: user ? `${user.firstName} ${user.lastName}` : "",
     email: user?.email ?? "",
     phone: user?.phone ?? "",
     organization: "",
+    ticketType: ticketTypes[0]?.name ?? "",
     notes: "",
   });
+  const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
+  const missingRequiredField = customFields.some((field) => field.required && !String(customAnswers[field.key] ?? "").trim());
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -48,7 +54,9 @@ export default function EventRegistrationDialog({ event, trigger }: EventRegistr
         email: formData.email,
         phone: formData.phone || null,
         organization: formData.organization || null,
-        answers: formData.notes ? { notes: formData.notes } : null,
+        ticketType: formData.ticketType || null,
+        source: "public_event_page",
+        answers: buildAnswers(formData.notes, customAnswers),
         reminderOptIn: true,
       });
       return (await response.json()) as RegistrationResponse;
@@ -161,6 +169,37 @@ export default function EventRegistrationDialog({ event, trigger }: EventRegistr
               </div>
             </div>
 
+            {ticketTypes.length > 0 && (
+              <div>
+                <Label>Ticket type</Label>
+                <Select value={formData.ticketType} onValueChange={(ticketType) => setFormData((prev) => ({ ...prev, ticketType }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select ticket type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ticketTypes.map((ticket) => (
+                      <SelectItem key={ticket.name} value={ticket.name}>
+                        {ticket.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {customFields.length > 0 && (
+              <div className="space-y-4 rounded-lg border border-border/70 bg-muted/20 p-4">
+                {customFields.map((field) => (
+                  <DynamicField
+                    key={field.key}
+                    field={field}
+                    value={customAnswers[field.key] ?? ""}
+                    onChange={(value) => setCustomAnswers((prev) => ({ ...prev, [field.key]: value }))}
+                  />
+                ))}
+              </div>
+            )}
+
             <div>
               <Label htmlFor={`event-notes-${event.id}`}>Notes</Label>
               <Textarea
@@ -174,7 +213,7 @@ export default function EventRegistrationDialog({ event, trigger }: EventRegistr
 
             <Button
               onClick={() => mutation.mutate()}
-              disabled={mutation.isPending || isClosed || !formData.fullName || !formData.email}
+              disabled={mutation.isPending || isClosed || !formData.fullName || !formData.email || missingRequiredField}
               className="w-full bg-mtendere-orange font-bold text-white hover:bg-mtendere-orange/90"
             >
               {mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Ticket className="mr-2 h-4 w-4" />}
@@ -185,4 +224,121 @@ export default function EventRegistrationDialog({ event, trigger }: EventRegistr
       </DialogContent>
     </Dialog>
   );
+}
+
+type NormalizedTicket = {
+  name: string;
+  label: string;
+};
+
+type NormalizedCustomField = {
+  key: string;
+  label: string;
+  type: string;
+  required: boolean;
+  options: string[];
+};
+
+function getTicketTypes(event: ApiEvent): NormalizedTicket[] {
+  return (event.ticketTypes ?? [])
+    .map((ticket, index) => {
+      const name = String(ticket.name ?? ticket.id ?? ticket.label ?? `ticket-${index + 1}`).trim();
+      if (!name) return null;
+      const price = ticket.price ?? ticket.amount ?? ticket.priceAmount;
+      const currency = String(ticket.currency ?? event.currency ?? "").trim();
+      const labelParts = [String(ticket.label ?? ticket.title ?? name)];
+      if (price !== undefined && price !== null && String(price) !== "") {
+        labelParts.push(`${currency} ${price}`.trim());
+      }
+      return { name, label: labelParts.join(" - ") };
+    })
+    .filter(Boolean) as NormalizedTicket[];
+}
+
+function getCustomFields(event: ApiEvent): NormalizedCustomField[] {
+  return (event.customFields ?? [])
+    .map((field, index) => {
+      const key = String(field.name ?? field.key ?? field.id ?? `field-${index + 1}`).trim();
+      if (!key) return null;
+      const rawOptions = field.options;
+      const options = Array.isArray(rawOptions)
+        ? rawOptions.map((item) => String(item)).filter(Boolean)
+        : String(rawOptions ?? "")
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean);
+      return {
+        key,
+        label: String(field.label ?? field.title ?? key),
+        type: String(field.type ?? (options.length ? "select" : "text")).toLowerCase(),
+        required: Boolean(field.required),
+        options,
+      };
+    })
+    .filter(Boolean) as NormalizedCustomField[];
+}
+
+function DynamicField({
+  field,
+  value,
+  onChange,
+}: {
+  field: NormalizedCustomField;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const label = `${field.label}${field.required ? " *" : ""}`;
+  if (field.type === "select" && field.options.length > 0) {
+    return (
+      <div>
+        <Label>{label}</Label>
+        <Select value={value} onValueChange={onChange}>
+          <SelectTrigger>
+            <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
+          </SelectTrigger>
+          <SelectContent>
+            {field.options.map((option) => (
+              <SelectItem key={option} value={option}>
+                {option}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+
+  if (field.type === "textarea" || field.type === "long_text") {
+    return (
+      <div>
+        <Label>{label}</Label>
+        <Textarea value={value} onChange={(event) => onChange(event.target.value)} rows={3} />
+      </div>
+    );
+  }
+
+  if (field.type === "checkbox" || field.type === "boolean") {
+    return (
+      <label className="flex items-center gap-3 rounded-md border bg-card p-3 text-sm font-medium">
+        <input type="checkbox" checked={value === "yes"} onChange={(event) => onChange(event.target.checked ? "yes" : "no")} />
+        {label}
+      </label>
+    );
+  }
+
+  return (
+    <div>
+      <Label>{label}</Label>
+      <Input type={field.type === "number" ? "number" : field.type === "email" ? "email" : "text"} value={value} onChange={(event) => onChange(event.target.value)} />
+    </div>
+  );
+}
+
+function buildAnswers(notes: string, customAnswers: Record<string, string>) {
+  const answers: Record<string, string> = {};
+  if (notes.trim()) answers.notes = notes.trim();
+  Object.entries(customAnswers).forEach(([key, value]) => {
+    if (String(value).trim()) answers[key] = String(value).trim();
+  });
+  return Object.keys(answers).length ? answers : null;
 }

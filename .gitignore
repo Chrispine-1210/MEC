@@ -2,3 +2,9 @@ node_modules
 .env
 .env.*
 !.env.example
+!client/.env.production.example
+!Admin/.env.production.example
+logs/*
+!logs/
+!logs/pm2/
+!logs/pm2/.gitkeep

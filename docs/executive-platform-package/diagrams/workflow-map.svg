@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <rect width="1600" height="900" fill="#ffffff"/>
+  <text x="80" y="86" font-family="Aptos, Arial" font-size="42" font-weight="700" fill="#111827">End-to-End Platform Workflow</text>
+  <text x="80" y="126" font-family="Aptos, Arial" font-size="22" fill="#475569">From discovery to application review, reporting, and operational governance</text>
+  <g font-family="Aptos, Arial" font-size="18">
+    <rect x="80" y="250" width="168" height="98" rx="16" fill="#eff6ff" stroke="#cbd5e1"/><text x="104" y="302" font-weight="700" fill="#111827">Discover</text><rect x="292" y="250" width="168" height="98" rx="16" fill="#ecfdf5" stroke="#cbd5e1"/><text x="316" y="302" font-weight="700" fill="#111827">Search and filter</text><rect x="504" y="250" width="168" height="98" rx="16" fill="#eff6ff" stroke="#cbd5e1"/><text x="528" y="302" font-weight="700" fill="#111827">Apply or register</text><rect x="716" y="250" width="168" height="98" rx="16" fill="#ecfdf5" stroke="#cbd5e1"/><text x="740" y="302" font-weight="700" fill="#111827">Track status</text><rect x="928" y="250" width="168" height="98" rx="16" fill="#eff6ff" stroke="#cbd5e1"/><text x="952" y="302" font-weight="700" fill="#111827">Admin triage</text><rect x="1140" y="250" width="168" height="98" rx="16" fill="#ecfdf5" stroke="#cbd5e1"/><text x="1164" y="302" font-weight="700" fill="#111827">Review and decide</text><rect x="1352" y="250" width="168" height="98" rx="16" fill="#eff6ff" stroke="#cbd5e1"/><text x="1376" y="302" font-weight="700" fill="#111827">Notify and report</text>
+  </g>
+  <g stroke="#f59e0b" stroke-width="4" fill="none">
+    <path d="M248 299 H292"/><path d="M460 299 H504"/><path d="M672 299 H716"/><path d="M884 299 H928"/><path d="M1096 299 H1140"/><path d="M1308 299 H1352"/>
+  </g>
+  <g font-family="Aptos, Arial" font-size="20" fill="#111827">
+    <rect x="120" y="540" width="380" height="170" rx="18" fill="#f8fafc" stroke="#cbd5e1"/><text x="152" y="590" font-weight="700">Client value</text><text x="152" y="632" fill="#475569">Faster discovery, guided applications, mobile-ready student access, and visible progress.</text>
+    <rect x="610" y="540" width="380" height="170" rx="18" fill="#f8fafc" stroke="#cbd5e1"/><text x="642" y="590" font-weight="700">Admin value</text><text x="642" y="632" fill="#475569">Review queues, status control, scoring, permissions, analytics, and content governance.</text>
+    <rect x="1100" y="540" width="380" height="170" rx="18" fill="#f8fafc" stroke="#cbd5e1"/><text x="1132" y="590" font-weight="700">Leadership value</text><text x="1132" y="632" fill="#475569">Operational visibility, standardized workflows, scalable reporting, and modernization proof.</text>
+  </g>
+</svg>

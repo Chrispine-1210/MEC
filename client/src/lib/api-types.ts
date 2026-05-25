@@ -14,6 +14,9 @@ export interface ApiUser {
 export interface ApiScholarship {
   id: number;
   title: string;
+  slug?: string;
+  shortDescription?: string | null;
+  fullContent?: string | null;
   description: string;
   institution: string;
   country: string;
@@ -23,6 +26,25 @@ export interface ApiScholarship {
   requirements: string[] | null;
   category: string;
   imageUrl?: string | null;
+  bannerImage?: string | null;
+  scholarshipType?: string | null;
+  fundingType?: string | null;
+  eligibilityCriteria?: string | null;
+  countryRestrictions?: string[] | null;
+  academicRequirements?: string[] | null;
+  openingDate?: string | null;
+  fundingAmount?: string | null;
+  sponsorOrganization?: string | null;
+  benefits?: string[] | null;
+  applicationSteps?: string[] | null;
+  requiredDocuments?: string[] | null;
+  faq?: Array<Record<string, unknown>> | null;
+  brochures?: Array<Record<string, unknown>> | null;
+  videoEmbeds?: Array<Record<string, unknown>> | null;
+  seoMeta?: Record<string, unknown> | null;
+  socialMeta?: Record<string, unknown> | null;
+  isFeatured?: boolean | null;
+  tags?: string[] | null;
   isActive: boolean | null;
   createdBy: number;
   createdAt: string | null;
@@ -32,12 +54,22 @@ export interface ApiScholarship {
 export interface ApiJob {
   id: number;
   title: string;
+  slug?: string;
   description: string;
   company: string;
+  department?: string | null;
   location: string;
   salary: number | null;
   currency: string | null;
   jobType: string;
+  employmentType?: string | null;
+  experienceLevel?: string | null;
+  responsibilities?: string[] | null;
+  qualifications?: string[] | null;
+  skills?: string[] | null;
+  salaryRange?: string | null;
+  salaryMin?: string | null;
+  salaryMax?: string | null;
   requirements: string[] | null;
   benefits: string[] | null;
   isRemote: boolean | null;
@@ -47,6 +79,11 @@ export interface ApiJob {
   createdAt: string | null;
   updatedAt: string | null;
   imageUrl?: string | null;
+  attachments?: Array<Record<string, unknown>> | null;
+  seoMeta?: Record<string, unknown> | null;
+  socialMeta?: Record<string, unknown> | null;
+  tags?: string[] | null;
+  isFeatured?: boolean | null;
 }
 
 export interface ApiApplication {
@@ -57,6 +94,15 @@ export interface ApiApplication {
   status: string;
   documents?: Record<string, unknown> | null;
   notes?: string | null;
+  meta?: {
+    stage?: string;
+    score?: number;
+    shortlist?: boolean;
+    reviewerComments?: Array<Record<string, unknown>>;
+    reviewHistory?: Array<Record<string, unknown>>;
+    documents?: Array<Record<string, unknown>>;
+    interviewSchedule?: Array<Record<string, unknown>>;
+  } | null;
   submittedAt: string;
   updatedAt: string;
 }
@@ -66,8 +112,21 @@ export interface ApiPartner {
   name: string;
   description: string;
   logoUrl?: string | null;
+  coverImage?: string | null;
   website?: string | null;
+  contactName?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  socialLinks?: Record<string, string> | null;
+  industryCategory?: string | null;
+  partnershipLevel?: string | null;
+  sponsorshipTier?: string | null;
+  status?: string | null;
   country: string | null;
+  region?: string | null;
+  address?: string | null;
+  linkedEvents?: Array<Record<string, unknown>> | null;
+  partnershipHistory?: Array<Record<string, unknown>> | null;
   studentCount?: number | null;
   ranking?: string | null;
   partnershipType?: string | null;
@@ -153,6 +212,7 @@ export interface ApiEvent {
   description: string;
   category: string;
   eventType: string;
+  organizer?: string | null;
   location: string;
   venueName?: string | null;
   address?: string | null;
@@ -164,18 +224,25 @@ export interface ApiEvent {
   priceAmount: number | null;
   currency: string | null;
   capacity: number | null;
+  rsvpEnabled?: boolean | null;
   startAt: string;
   endAt: string;
   registrationDeadline?: string | null;
   coverImage?: string | null;
   videoUrl?: string | null;
   tags?: string[] | null;
+  ticketTypes?: Array<Record<string, unknown>> | null;
+  customFields?: Array<Record<string, unknown>> | null;
   agenda?: Array<Record<string, unknown>> | null;
   speakers?: Array<Record<string, unknown>> | null;
   sponsors?: Array<Record<string, unknown>> | null;
+  partners?: Array<Record<string, unknown>> | null;
   faqs?: Array<Record<string, unknown>> | null;
   resources?: Array<Record<string, unknown>> | null;
+  attachments?: Array<Record<string, unknown>> | null;
   gallery?: Array<Record<string, unknown>> | null;
+  seoMeta?: Record<string, unknown> | null;
+  socialMeta?: Record<string, unknown> | null;
   status: string;
   runtimeStatus?: "upcoming" | "live" | "past" | "draft" | "archived" | "cancelled" | string;
   isFeatured: boolean | null;
@@ -205,12 +272,17 @@ export interface ApiEventRegistration {
   email: string;
   phone?: string | null;
   organization?: string | null;
+  ticketType?: string | null;
   status: string;
   ticketCode: string;
   attendanceStatus: string;
   answers?: Record<string, unknown> | null;
   reminderOptIn: boolean | null;
+  source?: string | null;
+  qrPayload?: Record<string, unknown> | null;
+  approvalNotes?: string | null;
   checkedInAt?: string | null;
+  checkedOutAt?: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 }

@@ -137,6 +137,10 @@ export default function EventDetail() {
   const agenda = event.agenda || [];
   const speakers = event.speakers || [];
   const sponsors = event.sponsors || [];
+  const eventPartners = event.partners || [];
+  const ticketTypes = event.ticketTypes || [];
+  const attachments = event.attachments || [];
+  const gallery = event.gallery || [];
   const faqs = event.faqs || [];
   const resources = event.resources || [];
   const comments = event.comments || [];
@@ -222,6 +226,8 @@ export default function EventDetail() {
 
             <Timeline title="Agenda" items={agenda} empty="Agenda details will be published soon." />
 
+            {ticketTypes.length > 0 && <TicketOptions tickets={ticketTypes} currency={event.currency || "MWK"} />}
+
             {speakers.length > 0 && (
               <Card className="border border-border/60 shadow-sm">
                 <CardHeader>
@@ -237,6 +243,10 @@ export default function EventDetail() {
                   ))}
                 </CardContent>
               </Card>
+            )}
+
+            {eventPartners.length > 0 && (
+              <PartnerStrip partners={eventPartners} />
             )}
 
             <Card className="border border-border/60 shadow-sm">
@@ -260,12 +270,20 @@ export default function EventDetail() {
               </CardContent>
             </Card>
 
+            {gallery.length > 0 && (
+              <GalleryGrid gallery={gallery} event={event} />
+            )}
+
             {(resources.length > 0 || sponsors.length > 0 || faqs.length > 0) && (
               <div className="grid gap-6 lg:grid-cols-3">
                 <ResourceCard title="Resources" icon={FileText} items={resources} empty="Resources will appear after the event." />
                 <ResourceCard title="Sponsors" icon={ShieldCheck} items={sponsors} empty="Sponsor details coming soon." />
                 <ResourceCard title="FAQs" icon={MessageSquare} items={faqs} empty="FAQs coming soon." />
               </div>
+            )}
+
+            {attachments.length > 0 && (
+              <AttachmentList attachments={attachments} />
             )}
 
             <Card className="border border-border/60 shadow-sm">
@@ -430,6 +448,127 @@ function Timeline({ title, items, empty }: { title: string; items: Array<Record<
             ))}
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function TicketOptions({ tickets, currency }: { tickets: Array<Record<string, unknown>>; currency: string }) {
+  return (
+    <Card className="premium-card">
+      <CardHeader>
+        <CardTitle className="text-2xl text-mtendere-blue">Tickets and participation options</CardTitle>
+        <CardDescription>Select the best participation path during registration.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4 md:grid-cols-2">
+        {tickets.map((ticket, index) => {
+          const price = ticket.price ?? ticket.amount ?? ticket.priceAmount;
+          return (
+            <div key={String(ticket.name ?? ticket.id ?? index)} className="rounded-lg border border-border/60 p-4">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <p className="font-bold text-foreground">{String(ticket.label ?? ticket.title ?? ticket.name ?? "Ticket")}</p>
+                <Badge className="bg-mtendere-blue text-white">{price ? `${String(ticket.currency ?? currency)} ${price}` : "Free"}</Badge>
+              </div>
+              {ticket.description ? <p className="text-sm leading-6 text-muted-foreground">{String(ticket.description)}</p> : null}
+              {ticket.capacity ? <p className="mt-2 text-xs font-semibold text-muted-foreground">Capacity: {String(ticket.capacity)}</p> : null}
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PartnerStrip({ partners }: { partners: Array<Record<string, unknown>> }) {
+  return (
+    <Card className="border border-border/60 shadow-sm">
+      <CardHeader>
+        <CardTitle className="text-2xl text-mtendere-blue">Partners and collaborators</CardTitle>
+        <CardDescription>Organizations supporting this event.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4 md:grid-cols-2">
+        {partners.map((partner, index) => (
+          <div key={String(partner.id ?? partner.name ?? index)} className="flex items-center gap-3 rounded-lg border border-border/60 p-4">
+            {partner.logo || partner.logoUrl ? (
+              <GovernedImage
+                module="partner"
+                src={String(partner.logo ?? partner.logoUrl)}
+                title={String(partner.name ?? partner.organization ?? "Partner")}
+                variant="logo"
+                aspectRatio="1 / 1"
+                fit="contain"
+                className="h-full"
+                wrapperClassName="h-12 w-12 rounded-lg border bg-card p-1 shadow-none"
+              />
+            ) : (
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-mtendere-blue/10">
+                <ShieldCheck className="h-5 w-5 text-mtendere-blue" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="truncate font-semibold text-foreground">{String(partner.name ?? partner.organization ?? "Partner")}</p>
+              <p className="truncate text-sm text-muted-foreground">{String(partner.role ?? partner.tier ?? partner.type ?? "Collaborator")}</p>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function GalleryGrid({ gallery, event }: { gallery: Array<Record<string, unknown>>; event: ApiEvent }) {
+  return (
+    <Card className="premium-card">
+      <CardHeader>
+        <CardTitle className="text-2xl text-mtendere-blue">Event gallery</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {gallery.slice(0, 9).map((item, index) => (
+          <GovernedImage
+            key={String(item.id ?? item.src ?? item.url ?? index)}
+            module="event"
+            src={String(item.src ?? item.url ?? item.image ?? "")}
+            title={String(item.alt ?? item.title ?? event.title)}
+            category={event.category}
+            variant="card"
+            aspectRatio="4 / 3"
+            index={index}
+            className="h-full"
+            wrapperClassName="rounded-lg shadow-none"
+          />
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function AttachmentList({ attachments }: { attachments: Array<Record<string, unknown>> }) {
+  return (
+    <Card className="border border-border/60 shadow-sm">
+      <CardHeader>
+        <CardTitle className="text-2xl text-mtendere-blue">Downloads and documents</CardTitle>
+        <CardDescription>Brochures, agendas, certificates, and supporting PDFs.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3 md:grid-cols-2">
+        {attachments.map((attachment, index) => {
+          const title = String(attachment.title ?? attachment.name ?? `Attachment ${index + 1}`);
+          const url = String(attachment.url ?? attachment.href ?? "");
+          return (
+            <a
+              key={String(attachment.id ?? title)}
+              href={url || undefined}
+              target={url ? "_blank" : undefined}
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 rounded-lg border border-border/60 p-4 transition hover:bg-muted/40"
+            >
+              <FileText className="h-5 w-5 shrink-0 text-mtendere-orange" />
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-foreground">{title}</p>
+                <p className="text-sm text-muted-foreground">{String(attachment.type ?? "PDF / document")}</p>
+              </div>
+            </a>
+          );
+        })}
       </CardContent>
     </Card>
   );

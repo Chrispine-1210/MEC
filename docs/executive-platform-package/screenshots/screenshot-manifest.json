@@ -1,0 +1,287 @@
+{
+  "generatedAt": "2026-05-25T11:01:39.020Z",
+  "publicBaseUrl": "http://localhost:5180",
+  "adminBaseUrl": "http://localhost:5174",
+  "screenshots": [
+    {
+      "file": "public-homepage-desktop.png",
+      "path": "/",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "public-scholarships-desktop.png",
+      "path": "/scholarships",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "public-scholarship-application-form.png",
+      "path": "/scholarships",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "public-jobs-desktop.png",
+      "path": "/jobs",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "public-events-desktop.png",
+      "path": "/events",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "public-partners-desktop.png",
+      "path": "/partners",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "public-blog-desktop.png",
+      "path": "/blog",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "public-team-desktop.png",
+      "path": "/team",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "public-contact-desktop.png",
+      "path": "/contact",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "public-login-desktop.png",
+      "path": "/login",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "public-dashboard-desktop.png",
+      "path": "/dashboard",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "public-homepage-mobile.png",
+      "path": "/",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "file": "public-scholarships-mobile.png",
+      "path": "/scholarships",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "file": "public-events-mobile.png",
+      "path": "/events",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "file": "admin-auth-login.png",
+      "path": "/admin/auth",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "admin-dashboard.png",
+      "path": "/admin/dashboard",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "admin-ecosystem-command-center.png",
+      "path": "/admin/ecosystem",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "admin-scholarships-management.png",
+      "path": "/admin/scholarships",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "admin-jobs-management.png",
+      "path": "/admin/jobs",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "admin-events-management.png",
+      "path": "/admin/events",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "admin-partners-crm.png",
+      "path": "/admin/partners",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "admin-blog-management.png",
+      "path": "/admin/blog",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "admin-team-management.png",
+      "path": "/admin/team",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "admin-users-management.png",
+      "path": "/admin/users",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "admin-roles-permissions.png",
+      "path": "/admin/roles",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "admin-applications-pipeline.png",
+      "path": "/admin/applications",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "admin-applications-review-dialog.png",
+      "path": "/admin/applications",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "admin-analytics.png",
+      "path": "/admin/analytics",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "admin-activity.png",
+      "path": "/admin/activity",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "admin-messages-inbox.png",
+      "path": "/admin/messages",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "admin-media-governance.png",
+      "path": "/admin/media",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "admin-ai-chat-monitoring.png",
+      "path": "/admin/ai-chat",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "admin-settings-security.png",
+      "path": "/admin/settings",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      }
+    },
+    {
+      "file": "admin-dashboard-mobile.png",
+      "path": "/admin/dashboard",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "file": "admin-partners-mobile.png",
+      "path": "/admin/partners",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    }
+  ]
+}

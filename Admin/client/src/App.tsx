@@ -10,8 +10,10 @@ import { type User } from "@shared/schema";
 import NotFound from "@/pages/not-found";
 import AdminLayout from "@/components/admin/AdminLayout";
 import Dashboard from "@/pages/admin/dashboard";
+import Ecosystem from "@/pages/admin/ecosystem";
 import Scholarships from "@/pages/admin/scholarships";
 import Jobs from "@/pages/admin/jobs";
+import Events from "@/pages/admin/events";
 import Partners from "@/pages/admin/partners";
 import Blog from "@/pages/admin/blog";
 import Team from "@/pages/admin/team";
@@ -198,8 +200,10 @@ function AdminRouter() {
       <Switch>
         <Route path="/admin" component={Dashboard} />
         <Route path="/admin/dashboard" component={Dashboard} />
+        <Route path="/admin/ecosystem" component={Ecosystem} />
         <Route path="/admin/scholarships" component={Scholarships} />
         <Route path="/admin/jobs" component={Jobs} />
+        <Route path="/admin/events" component={Events} />
         <Route path="/admin/partners" component={Partners} />
         <Route path="/admin/blog" component={Blog} />
         <Route path="/admin/team" component={Team} />

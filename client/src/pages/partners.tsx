@@ -320,6 +320,22 @@ export default function Partners() {
           )}
         </section>
 
+        <section className="premium-card mt-16 grid gap-6 rounded-2xl border border-mtendere-blue/10 bg-card p-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+          <div>
+            <Badge className="mb-4 bg-mtendere-green text-white">Partnership Opportunities</Badge>
+            <h2 className="text-2xl font-bold text-mtendere-blue">Collaborate through events, sponsorships, education pathways, and community programs</h2>
+            <p className="mt-3 max-w-3xl text-muted-foreground">
+              Organizations can work with Mtendere through public events, sponsor packages, academic partnerships, technology enablement, and measurable social impact programs.
+            </p>
+          </div>
+          <Button asChild className="bg-mtendere-orange font-bold text-white hover:bg-mtendere-orange/90">
+            <Link href="/partnership-opportunities">
+              <Globe className="mr-2 h-4 w-4" />
+              Explore Opportunities
+            </Link>
+          </Button>
+        </section>
+
         {/* Partnership Benefits */}
         <section className="premium-card mt-16 rounded-2xl bg-mtendere-gray p-8">
           <div className="text-center mb-8">

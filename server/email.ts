@@ -7,6 +7,9 @@ type EmailCategory =
   | "subscription_confirmation"
   | "application_confirmation"
   | "application_status_update"
+  | "event_registration_confirmation"
+  | "event_registration_status_update"
+  | "partner_onboarding"
   | "contact_acknowledgement"
   | "admin_notification"
   | "newsletter";
@@ -300,6 +303,84 @@ export const sendApplicationStatusUpdate = (input: {
     },
   });
 };
+
+export const sendEventRegistrationConfirmation = (input: {
+  email: string;
+  name: string;
+  eventTitle: string;
+  eventDate: string;
+  ticketUrl: string;
+  status: string;
+}) =>
+  enqueueEmail({
+    to: input.email,
+    subject: `Event registration received: ${input.eventTitle}`,
+    category: "event_registration_confirmation",
+    text: `Your registration for ${input.eventTitle} is ${input.status}. Ticket: ${input.ticketUrl}`,
+    html: renderMtendereEmail({
+      title: "Event registration received",
+      preheader: `Your event registration is ${input.status.replace(/_/g, " ")}.`,
+      body: `
+        <p>Hello ${escapeHtml(input.name)},</p>
+        <p>Your registration for <strong>${escapeHtml(input.eventTitle)}</strong> has been received.</p>
+        <p><strong>Date:</strong> ${escapeHtml(input.eventDate)}</p>
+        <p><strong>Status:</strong> ${escapeHtml(input.status.replace(/_/g, " "))}</p>
+        <p>Keep your ticket code ready for check-in. If your registration requires approval, the Mtendere team will update you after review.</p>
+      `,
+      cta: { href: input.ticketUrl, label: "Open event ticket" },
+    }),
+    metadata: { eventTitle: input.eventTitle, status: input.status },
+  });
+
+export const sendEventRegistrationStatusUpdate = (input: {
+  email: string;
+  name: string;
+  eventTitle: string;
+  status: string;
+  ticketUrl?: string;
+  notes?: string | null;
+}) =>
+  enqueueEmail({
+    to: input.email,
+    subject: `Event registration update: ${input.eventTitle}`,
+    category: "event_registration_status_update",
+    text: `Your registration for ${input.eventTitle} is now ${input.status}.`,
+    html: renderMtendereEmail({
+      title: "Event registration updated",
+      preheader: `Your event registration is now ${input.status.replace(/_/g, " ")}.`,
+      body: `
+        <p>Hello ${escapeHtml(input.name)},</p>
+        <p>Your registration for <strong>${escapeHtml(input.eventTitle)}</strong> is now <strong>${escapeHtml(input.status.replace(/_/g, " "))}</strong>.</p>
+        ${input.notes ? `<p><strong>Admin note:</strong> ${escapeHtml(input.notes)}</p>` : ""}
+      `,
+      cta: input.ticketUrl ? { href: input.ticketUrl, label: "Open ticket" } : undefined,
+    }),
+    metadata: { eventTitle: input.eventTitle, status: input.status },
+  });
+
+export const sendPartnerOnboardingEmail = (input: {
+  email: string;
+  organizationName: string;
+  contactName?: string | null;
+  adminUrl: string;
+}) =>
+  enqueueEmail({
+    to: input.email,
+    subject: `Welcome to Mtendere partnerships: ${input.organizationName}`,
+    category: "partner_onboarding",
+    text: `Welcome ${input.organizationName}. Your partnership profile has been created: ${input.adminUrl}`,
+    html: renderMtendereEmail({
+      title: "Partnership profile created",
+      preheader: "Your organization has been added to the Mtendere partner ecosystem.",
+      body: `
+        <p>Hello ${escapeHtml(input.contactName || "there")},</p>
+        <p><strong>${escapeHtml(input.organizationName)}</strong> has been added to the Mtendere partnerships workspace.</p>
+        <p>Our team can now coordinate linked events, sponsorships, agreements, documents, and follow-up activity from one operational record.</p>
+      `,
+      cta: { href: input.adminUrl, label: "Review partnership workspace" },
+    }),
+    metadata: { organizationName: input.organizationName },
+  });
 
 export const sendContactAcknowledgement = (input: {
   email: string;

@@ -9,7 +9,9 @@ const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, "..");
 
 dotenv.config({ path: path.resolve(rootDir, ".env"), quiet: true });
+dotenv.config({ path: path.resolve(rootDir, `.env.${process.env.NODE_ENV || "development"}`), override: false, quiet: true });
 dotenv.config({ path: path.resolve(__dirname, ".env"), override: false, quiet: true });
+dotenv.config({ path: path.resolve(__dirname, `.env.${process.env.NODE_ENV || "development"}`), override: false, quiet: true });
 
 const configuredAdminPort = Number(process.env.ADMIN_PORT ?? process.env.VITE_ADMIN_PORT ?? 5174);
 const adminPort = Number.isFinite(configuredAdminPort) && configuredAdminPort > 0
@@ -18,9 +20,17 @@ const adminPort = Number.isFinite(configuredAdminPort) && configuredAdminPort > 
 const adminBuildOutDir = process.env.ADMIN_BUILD_OUT_DIR
   ? path.resolve(rootDir, process.env.ADMIN_BUILD_OUT_DIR)
   : path.resolve(rootDir, "dist", "admin");
+const configuredApiPort = Number(process.env.PORT ?? 5000);
+const apiPort = Number.isFinite(configuredApiPort) && configuredApiPort > 0
+  ? configuredApiPort
+  : 5000;
+const devApiHost = process.env.DEV_API_HOST ?? "127.0.0.1";
+const apiTarget = `http://${devApiHost}:${apiPort}`;
+const wsTarget = `ws://${devApiHost}:${apiPort}`;
 
 export default defineConfig({
   root: path.resolve(__dirname, "client"),
+  envDir: __dirname,
   plugins: [react()],
 
   resolve: {
@@ -45,7 +55,7 @@ export default defineConfig({
     },
   },
 
-  base: "/admin/",
+  base: process.env.VITE_ADMIN_BASE_PATH || "/admin/",
 
   server: {
     port: adminPort,
@@ -58,12 +68,12 @@ export default defineConfig({
       "Cross-Origin-Opener-Policy": "same-origin",
     },
     proxy: {
-      "/api": "http://localhost:5000",
-      "/auth": "http://localhost:5000",
-      "/uploads": "http://localhost:5000",
-      "/media-assets": "http://localhost:5000",
+      "/api": apiTarget,
+      "/auth": apiTarget,
+      "/uploads": apiTarget,
+      "/media-assets": apiTarget,
       "/ws": {
-        target: "ws://localhost:5000",
+        target: wsTarget,
         ws: true,
       },
     },

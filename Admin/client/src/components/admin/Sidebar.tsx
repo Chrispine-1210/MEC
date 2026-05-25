@@ -15,6 +15,7 @@ import {
   GraduationCap,
   Briefcase,
   Building2,
+  CalendarDays,
   FileText,
   UserCheck,
   Image,
@@ -28,6 +29,7 @@ import {
   Bot,
   Flame,
   ChevronRight,
+  Network,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -60,6 +62,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
 
   const navigationItems = [
     { name: "Dashboard", href: "/admin", icon: LayoutDashboard, description: "Overview and stats" },
+    { name: "Ecosystem", href: "/admin/ecosystem", icon: Network, description: "Unified operations", badge: "Ops" },
     { name: "Analytics", href: "/admin/analytics", icon: BarChart3, description: "Performance metrics" },
     { name: "Activity", href: "/admin/activity", icon: Flame, description: "Track your progress", badge: "New" },
   ];
@@ -67,6 +70,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
   const contentManagement = [
     { name: "Scholarships", href: "/admin/scholarships", icon: GraduationCap, description: "Manage scholarships", count: stats?.totalScholarships },
     { name: "Job Opportunities", href: "/admin/jobs", icon: Briefcase, description: "Manage job postings", count: stats?.totalJobs },
+    { name: "Events", href: "/admin/events", icon: CalendarDays, description: "Events and registrations", count: stats?.totalEvents },
     { name: "Partners", href: "/admin/partners", icon: Building2, description: "Educational partners", count: stats?.totalPartners },
     { name: "Blog Posts", href: "/admin/blog", icon: FileText, description: "Content management", count: stats?.publishedPosts },
     { name: "Team Members", href: "/admin/team", icon: UserCheck, description: "Team profiles" },

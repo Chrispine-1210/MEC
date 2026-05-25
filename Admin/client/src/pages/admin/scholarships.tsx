@@ -8,12 +8,13 @@ import { insertScholarshipSchema } from "@shared/schema";
 import { z } from "zod";
 import DataTable from "@/components/admin/DataTable";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, GraduationCap } from "lucide-react";
+import { Archive, BarChart3, Copy, Download, Plus, Pencil, Trash2, GraduationCap } from "lucide-react";
 import type { Scholarship } from "@shared/schema";
 import { useCreateAction } from "@/hooks/use-create-action";
 import { getInitialUrlSearchParam } from "@/hooks/use-url-search-param";
@@ -39,6 +40,15 @@ export default function ScholarshipsPage() {
     queryFn: async () => {
       const response = await authFetch(`/api/admin/scholarships?page=${page}&limit=${limit}&search=${search}&status=${status}`);
       if (!response.ok) throw new Error("Failed to fetch scholarships");
+      return response.json();
+    },
+  });
+
+  const { data: analytics } = useQuery<any>({
+    queryKey: ["/api/admin/scholarships/analytics"],
+    queryFn: async () => {
+      const response = await authFetch("/api/admin/scholarships/analytics");
+      if (!response.ok) throw new Error("Failed to fetch scholarship analytics");
       return response.json();
     },
   });
@@ -86,6 +96,25 @@ export default function ScholarshipsPage() {
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to delete scholarship", variant: "destructive" });
+    },
+  });
+
+  const duplicateMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("POST", `/api/admin/scholarships/${id}/duplicate`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/scholarships"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/scholarships/analytics"] });
+      toast({ title: "Scholarship duplicated", description: "A draft copy is ready for editing." });
+    },
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      apiRequest("PATCH", `/api/admin/scholarships/${id}/status`, { status }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/scholarships"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/scholarships/analytics"] });
+      toast({ title: "Status updated", description: "Scholarship lifecycle status was saved." });
     },
   });
 
@@ -138,6 +167,21 @@ export default function ScholarshipsPage() {
     } else {
       createMutation.mutate(data);
     }
+  };
+
+  const downloadScholarships = async () => {
+    const response = await authFetch("/api/admin/scholarships/export");
+    if (!response.ok) {
+      toast({ title: "Export failed", description: "Could not download scholarship records.", variant: "destructive" });
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `mtendere-scholarships-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const columns = [
@@ -199,6 +243,18 @@ export default function ScholarshipsPage() {
         <div className="flex gap-1">
           <Button variant="ghost" size="sm" onClick={() => handleEdit(row)} className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary" data-testid={`button-edit-${row.id}`}>
             <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => duplicateMutation.mutate(row.id)} className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary" title="Duplicate scholarship">
+            <Copy className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => statusMutation.mutate({ id: row.id, status: row.status === "published" ? "archived" : "published" })}
+            className="h-8 w-8 p-0 hover:bg-warning/10 hover:text-warning"
+            title={row.status === "published" ? "Archive scholarship" : "Publish scholarship"}
+          >
+            <Archive className="h-3.5 w-3.5" />
           </Button>
           <Button variant="ghost" size="sm" onClick={() => handleDelete(row.id)} className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive" data-testid={`button-delete-${row.id}`}>
             <Trash2 className="h-3.5 w-3.5" />
@@ -460,6 +516,24 @@ export default function ScholarshipsPage() {
         </Dialog>
       </div>
 
+      <div className="grid gap-4 md:grid-cols-4">
+        <OperationalMetric title="Published" value={analytics?.publishedScholarships ?? 0} icon={GraduationCap} />
+        <OperationalMetric title="Applications" value={analytics?.applications ?? 0} icon={BarChart3} />
+        <OperationalMetric title="Expiring Soon" value={analytics?.expiringSoon ?? 0} icon={Archive} tone="warning" />
+        <Card className="border-dashed">
+          <CardContent className="flex h-full items-center justify-between p-4">
+            <div>
+              <p className="text-sm text-muted-foreground">Exports</p>
+              <p className="text-lg font-semibold">CSV ready</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={downloadScholarships}>
+              <Download className="mr-2 h-4 w-4" />
+              Export
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
       <DataTable
         columns={columns}
         data={(data as any)?.data || []}
@@ -479,6 +553,22 @@ export default function ScholarshipsPage() {
         }}
       />
     </div>
+  );
+}
+
+function OperationalMetric({ title, value, icon: Icon, tone = "default" }: { title: string; value: number; icon: any; tone?: "default" | "warning" }) {
+  return (
+    <Card>
+      <CardContent className="flex items-center justify-between p-4">
+        <div>
+          <p className="text-sm text-muted-foreground">{title}</p>
+          <p className="text-2xl font-bold text-foreground">{value}</p>
+        </div>
+        <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${tone === "warning" ? "bg-warning/15 text-warning" : "bg-primary/10 text-primary"}`}>
+          <Icon className="h-5 w-5" />
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

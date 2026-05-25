@@ -8,12 +8,13 @@ import { insertJobOpportunitySchema } from "@shared/schema";
 import { z } from "zod";
 import DataTable from "@/components/admin/DataTable";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Briefcase } from "lucide-react";
+import { Archive, BarChart3, Briefcase, CalendarClock, Copy, Download, Plus, Pencil, Trash2 } from "lucide-react";
 import type { JobOpportunity } from "@shared/schema";
 import { useCreateAction } from "@/hooks/use-create-action";
 import MediaAssetPicker from "@/components/admin/MediaAssetPicker";
@@ -39,6 +40,15 @@ export default function JobsPage() {
     queryFn: async () => {
       const response = await authFetch(`/api/admin/jobs?page=${page}&limit=${limit}&search=${search}&status=${status}`);
       if (!response.ok) throw new Error("Failed to fetch jobs");
+      return response.json();
+    },
+  });
+
+  const { data: analytics } = useQuery<any>({
+    queryKey: ["/api/admin/jobs/analytics"],
+    queryFn: async () => {
+      const response = await authFetch("/api/admin/jobs/analytics");
+      if (!response.ok) throw new Error("Failed to fetch job analytics");
       return response.json();
     },
   });
@@ -71,6 +81,25 @@ export default function JobsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/jobs"] });
       toast({ title: "Success", description: "Job deleted successfully" });
+    },
+  });
+
+  const duplicateMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("POST", `/api/admin/jobs/${id}/duplicate`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/jobs/analytics"] });
+      toast({ title: "Job duplicated", description: "A draft copy is ready for editing." });
+    },
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      apiRequest("PATCH", `/api/admin/jobs/${id}/status`, { status }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/jobs/analytics"] });
+      toast({ title: "Status updated", description: "Job lifecycle status was saved." });
     },
   });
 
@@ -129,6 +158,21 @@ export default function JobsPage() {
     }
   };
 
+  const downloadJobs = async () => {
+    const response = await authFetch("/api/admin/jobs/export");
+    if (!response.ok) {
+      toast({ title: "Export failed", description: "Could not download job records.", variant: "destructive" });
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `mtendere-jobs-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const columns = [
     {
       key: "title",
@@ -178,6 +222,18 @@ export default function JobsPage() {
         <div className="flex gap-1">
           <Button variant="ghost" size="sm" onClick={() => handleEdit(row)} className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary" data-testid={`button-edit-${row.id}`}>
             <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => duplicateMutation.mutate(row.id)} className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary" title="Duplicate job">
+            <Copy className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => statusMutation.mutate({ id: row.id, status: row.status === "published" ? "archived" : "published" })}
+            className="h-8 w-8 p-0 hover:bg-warning/10 hover:text-warning"
+            title={row.status === "published" ? "Archive job" : "Publish job"}
+          >
+            <Archive className="h-3.5 w-3.5" />
           </Button>
           <Button variant="ghost" size="sm" onClick={() => handleDelete(row.id)} className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive" data-testid={`button-delete-${row.id}`}>
             <Trash2 className="h-4 w-4 text-destructive" />
@@ -489,6 +545,24 @@ export default function JobsPage() {
         </Dialog>
       </div>
 
+      <div className="grid gap-4 md:grid-cols-4">
+        <OperationalMetric title="Published" value={analytics?.publishedJobs ?? 0} icon={Briefcase} />
+        <OperationalMetric title="Candidates" value={analytics?.applications ?? 0} icon={BarChart3} />
+        <OperationalMetric title="Interviews" value={analytics?.interviews ?? 0} icon={CalendarClock} tone="warning" />
+        <Card className="border-dashed">
+          <CardContent className="flex h-full items-center justify-between p-4">
+            <div>
+              <p className="text-sm text-muted-foreground">Exports</p>
+              <p className="text-lg font-semibold">CSV ready</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={downloadJobs}>
+              <Download className="mr-2 h-4 w-4" />
+              Export
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
       <DataTable
         columns={columns}
         data={(data as any)?.data || []}
@@ -508,6 +582,22 @@ export default function JobsPage() {
         }}
       />
     </div>
+  );
+}
+
+function OperationalMetric({ title, value, icon: Icon, tone = "default" }: { title: string; value: number; icon: any; tone?: "default" | "warning" }) {
+  return (
+    <Card>
+      <CardContent className="flex items-center justify-between p-4">
+        <div>
+          <p className="text-sm text-muted-foreground">{title}</p>
+          <p className="text-2xl font-bold text-foreground">{value}</p>
+        </div>
+        <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${tone === "warning" ? "bg-warning/15 text-warning" : "bg-primary/10 text-primary"}`}>
+          <Icon className="h-5 w-5" />
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

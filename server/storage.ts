@@ -101,7 +101,7 @@ export interface IStorage {
   createEventRegistration(registration: InsertEventRegistration): Promise<EventRegistration>;
   updateEventRegistration(
     id: number,
-    registration: Partial<InsertEventRegistration> & { checkedInAt?: Date },
+    registration: Partial<InsertEventRegistration> & { checkedInAt?: Date; checkedOutAt?: Date },
   ): Promise<EventRegistration>;
   getEventComments(eventId: number, includeModerated?: boolean): Promise<EventComment[]>;
   createEventComment(comment: InsertEventComment): Promise<EventComment>;
@@ -348,14 +348,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPartner(insertPartner: InsertPartner): Promise<Partner> {
-    const [partner] = await db.insert(partners).values(insertPartner).returning();
+    const [partner] = await db.insert(partners).values(insertPartner as typeof partners.$inferInsert).returning();
     return partner;
   }
 
   async updatePartner(id: number, updatePartner: Partial<InsertPartner>): Promise<Partner> {
     const [partner] = await db
       .update(partners)
-      .set({ ...updatePartner, updatedAt: new Date() })
+      .set({ ...(updatePartner as Partial<typeof partners.$inferInsert>), updatedAt: new Date() })
       .where(eq(partners.id, id))
       .returning();
     return partner;
@@ -625,7 +625,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateEventRegistration(
     id: number,
-    updateRegistration: Partial<InsertEventRegistration> & { checkedInAt?: Date },
+    updateRegistration: Partial<InsertEventRegistration> & { checkedInAt?: Date; checkedOutAt?: Date },
   ): Promise<EventRegistration> {
     const [registration] = await db
       .update(eventRegistrations)

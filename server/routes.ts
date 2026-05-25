@@ -1,5 +1,5 @@
 import express, { type CookieOptions, type Express, NextFunction, Request, Response } from "express";
-import { createServer, type Server } from "http";
+import { createServer, type IncomingMessage, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import {
@@ -36,10 +36,14 @@ import {
   sendApplicationConfirmation,
   sendApplicationStatusUpdate,
   sendContactAcknowledgement,
+  sendEventRegistrationConfirmation,
+  sendEventRegistrationStatusUpdate,
+  sendPartnerOnboardingEmail,
   sendSubscriptionConfirmation,
 } from "./email";
 import {
   deleteBlogMeta,
+  deleteApplicationMeta,
   deleteJobMeta,
   deletePartnerMeta,
   deleteScholarshipMeta,
@@ -47,6 +51,7 @@ import {
   deleteUserMeta,
   getAdminRoles,
   getAdminSettings,
+  getApplicationMeta,
   getBlogMeta,
   getJobMeta,
   getPartnerMeta,
@@ -60,6 +65,7 @@ import {
   markNotificationRead,
   markNotificationsRead,
   setBlogMeta,
+  setApplicationMeta,
   setJobMeta,
   setPartnerMeta,
   setScholarshipMeta,
@@ -72,6 +78,11 @@ import {
   deleteAdminRole,
   type AiChatConversation,
   type AiChatMessage,
+  type ApplicationMeta,
+  type BlogMeta,
+  type JobMeta,
+  type ScholarshipMeta,
+  type TeamMeta,
 } from "./admin-state";
 import {
   approvePayoutRequest,
@@ -173,6 +184,7 @@ const eventPayloadSchema = z.object({
   description: z.string().trim().min(10),
   category: z.string().trim().min(1).max(100).default("General"),
   eventType: z.string().trim().min(1).max(80).default("Information Session"),
+  organizer: z.string().trim().max(220).optional().nullable(),
   location: z.string().trim().min(1).max(220).default("Lilongwe, Malawi"),
   venueName: z.string().trim().max(220).optional().nullable(),
   address: z.string().trim().max(400).optional().nullable(),
@@ -184,18 +196,25 @@ const eventPayloadSchema = z.object({
   priceAmount: z.coerce.number().int().min(0).optional().default(0),
   currency: z.string().trim().min(3).max(10).optional().default("MWK"),
   capacity: z.coerce.number().int().positive().nullable().optional(),
+  rsvpEnabled: z.boolean().optional().default(true),
   startAt: z.coerce.date(),
   endAt: z.coerce.date(),
   registrationDeadline: z.coerce.date().nullable().optional(),
   coverImage: z.string().trim().max(1000).optional().nullable(),
   videoUrl: z.string().trim().max(1000).optional().nullable(),
   tags: z.union([z.array(z.string()), z.string()]).optional(),
+  ticketTypes: z.array(z.record(z.unknown())).optional().nullable(),
+  customFields: z.array(z.record(z.unknown())).optional().nullable(),
   agenda: z.array(z.record(z.unknown())).optional().nullable(),
   speakers: z.array(z.record(z.unknown())).optional().nullable(),
   sponsors: z.array(z.record(z.unknown())).optional().nullable(),
+  partners: z.array(z.record(z.unknown())).optional().nullable(),
   faqs: z.array(z.record(z.unknown())).optional().nullable(),
   resources: z.array(z.record(z.unknown())).optional().nullable(),
+  attachments: z.array(z.record(z.unknown())).optional().nullable(),
   gallery: z.array(z.record(z.unknown())).optional().nullable(),
+  seoMeta: z.record(z.unknown()).optional().nullable(),
+  socialMeta: z.record(z.unknown()).optional().nullable(),
   status: z.enum(["draft", "published", "archived", "cancelled"]).default("draft"),
   isFeatured: z.boolean().optional().default(false),
   isRecommended: z.boolean().optional().default(false),
@@ -209,8 +228,10 @@ const eventRegistrationRequestSchema = z.object({
   email: z.string().trim().email().max(255).transform((value) => value.toLowerCase()),
   phone: z.string().trim().max(40).optional().nullable(),
   organization: z.string().trim().max(180).optional().nullable(),
+  ticketType: z.string().trim().max(120).optional().nullable(),
   answers: z.record(z.unknown()).optional().nullable(),
   reminderOptIn: z.boolean().optional().default(true),
+  source: z.string().trim().max(80).optional().default("public"),
 });
 
 const eventCommentRequestSchema = z.object({
@@ -222,12 +243,18 @@ const eventCommentRequestSchema = z.object({
 
 const eventRegistrationReviewSchema = z.object({
   status: z.enum(["pending", "approved", "rejected", "waitlisted", "checked_in", "cancelled"]).optional(),
-  attendanceStatus: z.enum(["registered", "attended", "no_show", "checked_in", "cancelled"]).optional(),
+  attendanceStatus: z.enum(["registered", "attended", "no_show", "checked_in", "checked_out", "cancelled"]).optional(),
+  approvalNotes: z.string().trim().max(2000).optional().nullable(),
 });
 
 const adminApplicationReviewSchema = z.object({
   status: z.enum(["pending", "under_review", "approved", "rejected", "waitlisted"]).optional(),
   reviewNotes: z.string().trim().max(4000).optional(),
+  stage: z.string().trim().max(120).optional(),
+  score: z.coerce.number().int().min(0).max(100).optional(),
+  shortlist: z.boolean().optional(),
+  interviewAt: z.coerce.date().optional().nullable(),
+  verificationChecks: z.array(z.record(z.unknown())).optional(),
 });
 
 const adminSettingsUpdateSchema = z.object({
@@ -249,6 +276,33 @@ const adminRoleInputSchema = z.object({
   isActive: z.boolean().optional().default(true),
 });
 
+const partnerActivityInputSchema = z.object({
+  type: z.string().trim().min(2).max(80).default("note"),
+  subject: z.string().trim().min(2).max(180),
+  notes: z.string().trim().max(4000).optional().default(""),
+  outcome: z.string().trim().max(1000).optional().default(""),
+  dueAt: z.coerce.date().optional().nullable(),
+  completedAt: z.coerce.date().optional().nullable(),
+  owner: z.string().trim().max(120).optional().default("Admin"),
+});
+
+const partnerDocumentInputSchema = z.object({
+  title: z.string().trim().min(2).max(180),
+  type: z.string().trim().max(80).default("agreement"),
+  url: z.string().trim().min(1).max(1000),
+  version: z.coerce.number().int().positive().default(1),
+  accessLevel: z.enum(["admin", "partner", "public"]).default("admin"),
+  expiresAt: z.coerce.date().optional().nullable(),
+});
+
+const partnerFinancialInputSchema = z.object({
+  type: z.string().trim().max(80).default("contribution"),
+  amount: z.coerce.number().int().min(0),
+  currency: z.string().trim().min(3).max(10).default("MWK"),
+  status: z.string().trim().max(40).default("pledged"),
+  notes: z.string().trim().max(1000).optional().default(""),
+});
+
 const adminPermissionIds = new Set([
   "view_dashboard",
   "manage_events",
@@ -263,6 +317,18 @@ const adminPermissionIds = new Set([
   "manage_roles",
   "view_analytics",
   "manage_settings",
+  "create",
+  "read",
+  "update",
+  "delete",
+  "approve",
+  "publish",
+  "export",
+  "archive",
+  "manage_reports",
+  "manage_webhooks",
+  "manage_automation",
+  "manage_security",
 ]);
 
 const normalizeRoleId = (name: string) =>
@@ -276,6 +342,14 @@ const escapeCsvValue = (value: unknown) => {
   const text = value instanceof Date ? value.toISOString() : String(value ?? "");
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 };
+
+const escapeHtml = (value: unknown) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 
 type JwtUser = {
   id: number;
@@ -295,6 +369,7 @@ type MulterRequest = Request & {
 
 type SocketWithSubscriptions = WebSocket & {
   subscriptions?: string[];
+  user?: JwtUser | null;
 };
 
 const getErrorMessage = (error: unknown) => {
@@ -366,6 +441,18 @@ const toAdminUser = (user: {
     lastName: user.lastName,
     role: user.role,
     profileImage: user.profilePicture ?? null,
+    bio: meta.bio ?? "",
+    avatar: meta.avatar ?? user.profilePicture ?? null,
+    socialLinks: meta.socialLinks ?? {},
+    preferences: meta.preferences ?? {},
+    notificationPreferences: meta.notificationPreferences ?? {},
+    savedItems: meta.savedItems ?? [],
+    activityLogs: meta.activityLogs ?? [],
+    loginHistory: meta.loginHistory ?? [],
+    deviceHistory: meta.deviceHistory ?? [],
+    verification: meta.verification ?? {},
+    suspendedAt: meta.suspendedAt ?? null,
+    suspensionReason: meta.suspensionReason ?? null,
     region: meta.region ?? null,
     isActive: user.isActive ?? true,
     lastLogin: null,
@@ -409,6 +496,22 @@ const parseStringArray = (value: unknown) => {
   return undefined;
 };
 
+const parseRecordArray = (value: unknown): Array<Record<string, unknown>> | undefined => {
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item));
+};
+
+const parseRecord = (value: unknown): Record<string, unknown> | undefined => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  return value as Record<string, unknown>;
+};
+
+const parseIsoDateString = (value: unknown): string | undefined => {
+  if (!value) return undefined;
+  const date = value instanceof Date ? value : new Date(String(value));
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+};
+
 const parseOptionalBoolean = (value: unknown): boolean | undefined => {
   if (value === undefined || value === null) return undefined;
   return Boolean(value);
@@ -444,13 +547,168 @@ const parseAnalyticsMeta = (metadata: unknown) => {
   return { type, referenceId };
 };
 
+const compactRecord = <T extends Record<string, unknown>>(record: T) =>
+  Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined)) as Partial<T>;
+
+const buildScholarshipMetaFromBody = (body: Record<string, unknown>, featuredImage?: string): ScholarshipMeta =>
+  compactRecord({
+    slug: typeof body.slug === "string" ? slugify(body.slug) : typeof body.title === "string" ? slugify(body.title) : undefined,
+    shortDescription: typeof body.shortDescription === "string" ? body.shortDescription : undefined,
+    fullContent: typeof body.fullContent === "string" ? body.fullContent : undefined,
+    bannerImage: typeof body.bannerImage === "string" ? body.bannerImage : undefined,
+    eligibility: typeof body.eligibility === "string" ? body.eligibility : undefined,
+    scholarshipType: typeof body.scholarshipType === "string" ? body.scholarshipType : undefined,
+    fundingType: typeof body.fundingType === "string" ? body.fundingType : undefined,
+    eligibilityCriteria: typeof body.eligibilityCriteria === "string" ? body.eligibilityCriteria : undefined,
+    countryRestrictions: parseStringArray(body.countryRestrictions),
+    academicRequirements: parseStringArray(body.academicRequirements),
+    openingDate: parseIsoDateString(body.openingDate),
+    fundingAmount: typeof body.fundingAmount === "string" ? body.fundingAmount : undefined,
+    sponsorOrganization: typeof body.sponsorOrganization === "string" ? body.sponsorOrganization : undefined,
+    benefits: parseStringArray(body.benefits),
+    applicationSteps: parseStringArray(body.applicationSteps),
+    requiredDocuments: parseStringArray(body.requiredDocuments),
+    faq: parseRecordArray(body.faq),
+    brochures: parseRecordArray(body.brochures),
+    videoEmbeds: parseRecordArray(body.videoEmbeds),
+    tags: parseStringArray(body.tags),
+    seoMeta: parseRecord(body.seoMeta),
+    socialMeta: parseRecord(body.socialMeta),
+    applicationForm: parseRecordArray(body.applicationForm),
+    conditionalRules: parseRecordArray(body.conditionalRules),
+    reviewPipeline: parseRecordArray(body.reviewPipeline),
+    visibilitySchedule: parseRecord(body.visibilitySchedule),
+    automationHooks: parseRecord(body.automationHooks),
+    analytics: parseRecord(body.analytics),
+    status: typeof body.status === "string" ? normalizeAdminStatus(body.status) : undefined,
+    isPremium: parseOptionalBoolean(body.isPremium),
+    isFeatured: parseOptionalBoolean(body.isFeatured),
+    paymentStatus: typeof body.paymentStatus === "string" ? body.paymentStatus : undefined,
+    featuredImage,
+    region: typeof body.region === "string" ? body.region : undefined,
+  }) as ScholarshipMeta;
+
+const buildJobMetaFromBody = (body: Record<string, unknown>, featuredImage?: string): JobMeta =>
+  compactRecord({
+    slug: typeof body.slug === "string" ? slugify(body.slug) : typeof body.title === "string" ? slugify(body.title) : undefined,
+    department: typeof body.department === "string" ? body.department : undefined,
+    responsibilities: parseStringArray(body.responsibilities),
+    qualifications: parseStringArray(body.qualifications),
+    skills: parseStringArray(body.skills),
+    experienceLevel: typeof body.experienceLevel === "string" ? body.experienceLevel : undefined,
+    employmentType: typeof body.employmentType === "string" ? body.employmentType : undefined,
+    salaryMin: typeof body.salaryMin === "string" ? body.salaryMin : undefined,
+    salaryMax: typeof body.salaryMax === "string" ? body.salaryMax : undefined,
+    attachments: parseRecordArray(body.attachments),
+    seoMeta: parseRecord(body.seoMeta),
+    socialMeta: parseRecord(body.socialMeta),
+    tags: parseStringArray(body.tags),
+    isFeatured: parseOptionalBoolean(body.isFeatured),
+    pipelineStages: parseRecordArray(body.pipelineStages),
+    emailTemplates: parseRecordArray(body.emailTemplates),
+    recruiterNotes: parseRecordArray(body.recruiterNotes),
+    automationHooks: parseRecord(body.automationHooks),
+    analytics: parseRecord(body.analytics),
+    salaryRange: typeof body.salaryRange === "string" ? body.salaryRange : undefined,
+    applicationUrl: typeof body.applicationUrl === "string" ? body.applicationUrl : undefined,
+    status: typeof body.status === "string" ? normalizeAdminStatus(body.status) : undefined,
+    region: typeof body.region === "string" ? body.region : undefined,
+    isPremium: parseOptionalBoolean(body.isPremium),
+    price: typeof body.price === "string" ? body.price : undefined,
+    paymentStatus: typeof body.paymentStatus === "string" ? body.paymentStatus : undefined,
+    featuredImage,
+    benefits: typeof body.benefits === "string" ? body.benefits : undefined,
+  }) as JobMeta;
+
+const buildBlogMetaFromBody = (body: Record<string, unknown>, featuredImage?: string): BlogMeta =>
+  compactRecord({
+    slug: typeof body.slug === "string" ? slugify(body.slug) : typeof body.title === "string" ? slugify(body.title) : undefined,
+    gallery: parseRecordArray(body.gallery),
+    videos: parseRecordArray(body.videos),
+    pullQuotes: parseStringArray(body.pullQuotes),
+    tables: parseRecordArray(body.tables),
+    codeBlocks: parseRecordArray(body.codeBlocks),
+    seoMeta: parseRecord(body.seoMeta),
+    socialMeta: parseRecord(body.socialMeta),
+    structuredData: parseRecord(body.structuredData),
+    readingTimeMinutes: typeof body.readingTimeMinutes === "number" ? body.readingTimeMinutes : undefined,
+    revisionHistory: parseRecordArray(body.revisionHistory),
+    relatedPosts: parseRecordArray(body.relatedPosts),
+    authorProfile: parseRecord(body.authorProfile),
+    scheduledAt: parseIsoDateString(body.scheduledAt),
+    automationHooks: parseRecord(body.automationHooks),
+    status: typeof body.status === "string" ? normalizeAdminStatus(body.status) : undefined,
+    featuredImage,
+  }) as BlogMeta;
+
+const buildTeamMetaFromBody = (body: Record<string, unknown>, profileImage?: string): TeamMeta =>
+  compactRecord({
+    department: typeof body.department === "string" ? body.department : undefined,
+    profileImage,
+    title: typeof body.title === "string" ? body.title : undefined,
+    biography: typeof body.biography === "string" ? body.biography : undefined,
+    cvUrl: typeof body.cvUrl === "string" ? body.cvUrl : undefined,
+    skills: parseStringArray(body.skills),
+    achievements: parseStringArray(body.achievements),
+    certifications: parseStringArray(body.certifications),
+    socialLinks: parseRecord(body.socialLinks) as Record<string, string> | undefined,
+    contactInfo: parseRecord(body.contactInfo),
+    visibility: typeof body.visibility === "string" ? body.visibility : undefined,
+    leadershipLevel: typeof body.leadershipLevel === "string" ? body.leadershipLevel : undefined,
+    displayGroup: typeof body.displayGroup === "string" ? body.displayGroup : undefined,
+  }) as TeamMeta;
+
+const buildApplicationMetaFromBody = (body: Record<string, unknown>): ApplicationMeta =>
+  compactRecord({
+    workflowType: typeof body.workflowType === "string" ? body.workflowType : undefined,
+    stage: typeof body.stage === "string" ? body.stage : undefined,
+    score: typeof body.score === "number" ? body.score : undefined,
+    reviewerComments: parseRecordArray(body.reviewerComments),
+    reviewHistory: parseRecordArray(body.reviewHistory),
+    documents: parseRecordArray(body.documents),
+    verificationChecks: parseRecordArray(body.verificationChecks),
+    interviewSchedule: parseRecordArray(body.interviewSchedule),
+    shortlist: parseOptionalBoolean(body.shortlist),
+    pipeline: parseRecordArray(body.pipeline),
+    pdfUrl: typeof body.pdfUrl === "string" ? body.pdfUrl : undefined,
+    notificationHistory: parseRecordArray(body.notificationHistory),
+    automationHooks: parseRecord(body.automationHooks),
+    analytics: parseRecord(body.analytics),
+  }) as ApplicationMeta;
+
 const toAdminScholarship = (scholarship: any) => {
   const meta = getScholarshipMeta(scholarship.id);
   return {
     id: String(scholarship.id),
     title: scholarship.title,
+    slug: meta.slug ?? slugify(scholarship.title ?? `scholarship-${scholarship.id}`),
+    shortDescription: meta.shortDescription ?? "",
+    fullContent: meta.fullContent ?? scholarship.description,
     description: scholarship.description,
     eligibility: meta.eligibility ?? "",
+    scholarshipType: meta.scholarshipType ?? "",
+    fundingType: meta.fundingType ?? "",
+    eligibilityCriteria: meta.eligibilityCriteria ?? meta.eligibility ?? "",
+    countryRestrictions: meta.countryRestrictions ?? [],
+    academicRequirements: meta.academicRequirements ?? [],
+    openingDate: meta.openingDate ?? null,
+    fundingAmount: meta.fundingAmount ?? "",
+    sponsorOrganization: meta.sponsorOrganization ?? scholarship.institution,
+    benefits: meta.benefits ?? [],
+    applicationSteps: meta.applicationSteps ?? [],
+    requiredDocuments: meta.requiredDocuments ?? [],
+    faq: meta.faq ?? [],
+    brochures: meta.brochures ?? [],
+    videoEmbeds: meta.videoEmbeds ?? [],
+    tags: meta.tags ?? [],
+    seoMeta: meta.seoMeta ?? {},
+    socialMeta: meta.socialMeta ?? {},
+    applicationForm: meta.applicationForm ?? [],
+    conditionalRules: meta.conditionalRules ?? [],
+    reviewPipeline: meta.reviewPipeline ?? [],
+    visibilitySchedule: meta.visibilitySchedule ?? {},
+    automationHooks: meta.automationHooks ?? {},
+    analytics: meta.analytics ?? {},
     amount: scholarship.amount ? String(scholarship.amount) : "",
     deadline: scholarship.deadline,
     requirements: scholarship.requirements ?? [],
@@ -460,6 +718,7 @@ const toAdminScholarship = (scholarship: any) => {
     isPremium: meta.isPremium ?? false,
     paymentStatus: meta.paymentStatus ?? "unpaid",
     status: normalizeAdminStatus(meta.status, scholarship.isActive),
+    isFeatured: meta.isFeatured ?? false,
     featuredImage: meta.featuredImage ?? scholarship.imageUrl ?? "",
     createdBy: scholarship.createdBy ? String(scholarship.createdBy) : null,
     createdAt: scholarship.createdAt ?? null,
@@ -472,17 +731,36 @@ const toAdminJob = (job: any) => {
   return {
     id: String(job.id),
     title: job.title,
+    slug: meta.slug ?? slugify(job.title ?? `job-${job.id}`),
     description: job.description,
     company: job.company,
+    department: meta.department ?? "",
     location: job.location,
     region: meta.region ?? "Global",
     salaryRange: meta.salaryRange ?? "",
+    salaryMin: meta.salaryMin ?? "",
+    salaryMax: meta.salaryMax ?? "",
     jobType: job.jobType,
+    employmentType: meta.employmentType ?? job.jobType,
+    experienceLevel: meta.experienceLevel ?? "",
+    responsibilities: meta.responsibilities ?? [],
+    qualifications: meta.qualifications ?? [],
+    skills: meta.skills ?? [],
     requirements: job.requirements ?? [],
     benefits: meta.benefits ?? "",
+    attachments: meta.attachments ?? [],
+    seoMeta: meta.seoMeta ?? {},
+    socialMeta: meta.socialMeta ?? {},
+    tags: meta.tags ?? [],
+    pipelineStages: meta.pipelineStages ?? [],
+    emailTemplates: meta.emailTemplates ?? [],
+    recruiterNotes: meta.recruiterNotes ?? [],
+    automationHooks: meta.automationHooks ?? {},
+    analytics: meta.analytics ?? {},
     applicationUrl: meta.applicationUrl ?? "",
     deadline: job.deadline ?? null,
     isPremium: meta.isPremium ?? false,
+    isFeatured: meta.isFeatured ?? false,
     price: meta.price ?? "",
     paymentStatus: meta.paymentStatus ?? "unpaid",
     status: normalizeAdminStatus(meta.status, job.isActive),
@@ -511,12 +789,34 @@ const toAdminPartner = (partner: any) => {
     name: partner.name,
     description: partner.description,
     logo: meta.logo ?? partner.logoUrl ?? "",
+    logoUrl: meta.logo ?? partner.logoUrl ?? "",
+    coverImage: meta.coverImage ?? partner.coverImage ?? "",
     website: partner.website ?? "",
-    contactEmail: meta.contactEmail ?? "",
-    contactPhone: meta.contactPhone ?? "",
-    address: meta.address ?? "",
-    region: meta.region ?? partner.country ?? "Global",
+    contactName: meta.contactName ?? partner.contactName ?? "",
+    contactEmail: meta.contactEmail ?? partner.contactEmail ?? "",
+    contactPhone: meta.contactPhone ?? partner.contactPhone ?? "",
+    address: meta.address ?? partner.address ?? "",
+    country: meta.country ?? partner.country ?? "Global",
+    region: meta.region ?? partner.region ?? partner.country ?? "Global",
+    industryCategory: meta.industryCategory ?? partner.industryCategory ?? "",
+    partnershipLevel: meta.partnershipLevel ?? partner.partnershipLevel ?? "",
+    sponsorshipTier: meta.sponsorshipTier ?? partner.sponsorshipTier ?? "",
+    status: meta.status ?? partner.status ?? (partner.isActive === false ? "inactive" : "active"),
     partnershipType: meta.partnershipType ?? "partner",
+    socialLinks: meta.socialLinks ?? partner.socialLinks ?? {},
+    documents: meta.documents ?? partner.documents ?? [],
+    agreements: meta.agreements ?? partner.agreements ?? [],
+    notes: meta.notes ?? partner.notes ?? "",
+    internalComments: meta.internalComments ?? partner.internalComments ?? "",
+    linkedEvents: meta.linkedEvents ?? partner.linkedEvents ?? [],
+    linkedSponsorships: meta.linkedSponsorships ?? partner.linkedSponsorships ?? [],
+    linkedOpportunities: meta.linkedOpportunities ?? partner.linkedOpportunities ?? [],
+    partnershipHistory: meta.partnershipHistory ?? partner.partnershipHistory ?? [],
+    activities: meta.activities ?? [],
+    meetings: meta.meetings ?? [],
+    reminders: meta.reminders ?? [],
+    financialRecords: meta.financialRecords ?? [],
+    performanceMetrics: meta.performanceMetrics ?? {},
     videoUrl: meta.videoUrl ?? "",
     videoTitle: meta.videoTitle ?? "",
     videoDescription: meta.videoDescription ?? "",
@@ -539,6 +839,20 @@ const toAdminBlogPost = (post: any) => {
     excerpt: post.excerpt ?? "",
     slug: meta.slug ?? `post-${post.id}`,
     featuredImage: meta.featuredImage ?? post.imageUrl ?? "",
+    gallery: meta.gallery ?? [],
+    videos: meta.videos ?? [],
+    pullQuotes: meta.pullQuotes ?? [],
+    tables: meta.tables ?? [],
+    codeBlocks: meta.codeBlocks ?? [],
+    seoMeta: meta.seoMeta ?? {},
+    socialMeta: meta.socialMeta ?? {},
+    structuredData: meta.structuredData ?? {},
+    readingTimeMinutes: meta.readingTimeMinutes ?? Math.max(1, Math.ceil(String(post.content ?? "").split(/\s+/).length / 220)),
+    revisionHistory: meta.revisionHistory ?? [],
+    relatedPosts: meta.relatedPosts ?? [],
+    authorProfile: meta.authorProfile ?? {},
+    scheduledAt: meta.scheduledAt ?? null,
+    automationHooks: meta.automationHooks ?? {},
     category: post.category,
     status: normalizeAdminStatus(meta.status, post.isPublished),
     tags: Array.isArray(post.tags) ? post.tags : [],
@@ -554,12 +868,22 @@ const toAdminTeamMember = (member: any) => {
     id: String(member.id),
     name: member.name,
     position: member.position,
-    bio: member.bio ?? "",
+    title: meta.title ?? member.position,
+    bio: meta.biography ?? member.bio ?? "",
     profileImage: meta.profileImage ?? member.imageUrl ?? "",
     email: member.email ?? "",
     linkedIn: member.linkedin ?? "",
     twitter: member.twitter ?? "",
     department: meta.department ?? "",
+    cvUrl: meta.cvUrl ?? "",
+    skills: meta.skills ?? [],
+    achievements: meta.achievements ?? [],
+    certifications: meta.certifications ?? [],
+    socialLinks: meta.socialLinks ?? {},
+    contactInfo: meta.contactInfo ?? {},
+    visibility: meta.visibility ?? "public",
+    leadershipLevel: meta.leadershipLevel ?? "",
+    displayGroup: meta.displayGroup ?? "",
     isActive: member.isActive ?? true,
     order: member.order ?? 0,
     createdBy: null,
@@ -574,12 +898,63 @@ const toPublicPartner = (partner: any) => {
   return {
     ...partner,
     logoUrl: meta.logo ?? partner.logoUrl ?? null,
+    coverImage: meta.coverImage ?? partner.coverImage ?? null,
     country: meta.region ?? partner.country ?? null,
+    region: meta.region ?? partner.region ?? partner.country ?? null,
+    industryCategory: meta.industryCategory ?? partner.industryCategory ?? null,
+    partnershipLevel: meta.partnershipLevel ?? partner.partnershipLevel ?? null,
+    sponsorshipTier: meta.sponsorshipTier ?? partner.sponsorshipTier ?? null,
     partnershipType: meta.partnershipType ?? "partner",
+    socialLinks: meta.socialLinks ?? partner.socialLinks ?? null,
+    linkedEvents: meta.linkedEvents ?? partner.linkedEvents ?? null,
+    partnershipHistory: meta.partnershipHistory ?? partner.partnershipHistory ?? null,
     videoUrl: meta.videoUrl ?? null,
     videoTitle: meta.videoTitle ?? null,
     videoDescription: meta.videoDescription ?? null,
     isFeatured: meta.isFeatured ?? false,
+  };
+};
+
+const createOperationalRecord = <T extends Record<string, unknown>>(payload: T) => ({
+  id: randomUUID(),
+  ...payload,
+  createdAt: new Date().toISOString(),
+});
+
+const getPartnerCrmSnapshot = (partnerId: number) => {
+  const meta = getPartnerMeta(partnerId);
+  const activities = meta.activities ?? [];
+  const reminders = meta.reminders ?? [];
+  const documents = meta.documents ?? [];
+  const agreements = meta.agreements ?? [];
+  const financialRecords = meta.financialRecords ?? [];
+  const sponsorships = meta.linkedSponsorships ?? [];
+  const opportunities = meta.linkedOpportunities ?? [];
+  const activeReminders = reminders.filter((item) => !item.completedAt);
+  const totalContribution = financialRecords.reduce((sum, item) => {
+    const amount = Number(item.amount ?? 0);
+    return Number.isFinite(amount) ? sum + amount : sum;
+  }, 0);
+
+  return {
+    activities,
+    meetings: meta.meetings ?? [],
+    reminders,
+    activeReminders,
+    documents,
+    agreements,
+    financialRecords,
+    sponsorships,
+    opportunities,
+    performanceMetrics: {
+      totalActivities: activities.length,
+      openFollowUps: activeReminders.length,
+      documentCount: documents.length + agreements.length,
+      sponsorshipCount: sponsorships.length,
+      opportunityCount: opportunities.length,
+      totalContribution,
+      ...(meta.performanceMetrics ?? {}),
+    },
   };
 };
 
@@ -844,14 +1219,58 @@ const clearLoginFailure = (identifier: string) => {
   loginFailures.delete(identifier.toLowerCase());
 };
 
+const publicRealtimeChannels = new Set([
+  "scholarships",
+  "jobs",
+  "partners",
+  "partner-videos",
+  "testimonials",
+  "blog-posts",
+  "team-members",
+  "events",
+  "announcements",
+]);
+
+const adminRealtimeChannels = new Set([
+  "applications",
+  "user_activity",
+  "admin-dashboard",
+  "admin-notifications",
+  "admin-roles",
+  "admin-settings",
+  "ai-chat",
+  "referrals",
+]);
+
+const getWebSocketUser = (req: IncomingMessage): JwtUser | null => {
+  try {
+    const baseUrl = env.VITE_API_URL || env.PUBLIC_APP_URL || "https://api.mtendereeducationconsult.com";
+    const url = new URL(req.url || "/ws", baseUrl);
+    const token = url.searchParams.get("token");
+    if (!token) return null;
+
+    const user = jwt.verify(token, JWT_SECRET) as JwtUser;
+    return isJwtUserInvalidated(user) ? null : user;
+  } catch {
+    return null;
+  }
+};
+
+const canSubscribeToRealtimeChannel = (channel: string, user: JwtUser | null | undefined) => {
+  if (publicRealtimeChannels.has(channel)) return true;
+  if (adminRealtimeChannels.has(channel)) return isAdminPortalUser(user ?? null);
+  return false;
+};
+
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
   // WebSocket setup for real-time updates
   const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
 
-  wss.on("connection", (ws: SocketWithSubscriptions) => {
+  wss.on("connection", (ws: SocketWithSubscriptions, req) => {
     ws.subscriptions = [];
+    ws.user = getWebSocketUser(req);
 
     ws.on("message", (rawMessage: Buffer) => {
       try {
@@ -865,14 +1284,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : Array.isArray(payload.data?.channels)
             ? payload.data.channels
             : [];
+        const allowedChannels = channels
+          .filter((channel): channel is string => typeof channel === "string")
+          .filter((channel) => canSubscribeToRealtimeChannel(channel, ws.user));
 
         if (payload.type === "subscribe") {
-          ws.subscriptions = Array.from(new Set([...(ws.subscriptions ?? []), ...channels]));
+          ws.subscriptions = Array.from(new Set([...(ws.subscriptions ?? []), ...allowedChannels]));
         }
 
         if (payload.type === "unsubscribe") {
           ws.subscriptions = (ws.subscriptions ?? []).filter(
-            (channel) => !channels.includes(channel),
+            (channel) => !allowedChannels.includes(channel),
           );
         }
       } catch (error) {
@@ -2000,7 +2422,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? await storage.getAllApplications()
         : await storage.getUserApplications(authUser.id);
       
-      res.json(applications);
+      res.json(applications.map((application) => ({ ...application, meta: getApplicationMeta(application.id) })));
     } catch (error) {
       console.error('Applications fetch error:', error);
       res.status(500).json({ message: 'Failed to fetch applications' });
@@ -2066,6 +2488,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       const application = await storage.createApplication(applicationData);
+      setApplicationMeta(application.id, {
+        workflowType: payload.type,
+        stage: "submitted",
+        documents:
+          payload.documents && typeof payload.documents === "object"
+            ? Object.entries(payload.documents).map(([key, value]) => ({
+                key,
+                value,
+                status: "received",
+                uploadedAt: new Date().toISOString(),
+              }))
+            : [],
+        reviewHistory: [
+          createOperationalRecord({
+            status: application.status,
+            stage: "submitted",
+            actor: "applicant",
+          }),
+        ],
+        notificationHistory: [],
+      });
       broadcast('applications', { type: 'application_created', application });
       const opportunityTitle = "title" in target ? target.title : "Opportunity";
       const dashboardUrl = `${env.PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`}/dashboard`;
@@ -2103,7 +2546,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userAgent: req.get("user-agent"),
       });
       
-      res.status(201).json(application);
+      res.status(201).json({ ...application, meta: getApplicationMeta(application.id) });
     } catch (error) {
       console.error('Application creation error:', error);
       res.status(400).json({ message: 'Failed to create application', error: getErrorMessage(error) });
@@ -2128,9 +2571,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const application = await storage.updateApplication(id, updateData);
+      const meta = getApplicationMeta(id);
+      setApplicationMeta(id, {
+        ...buildApplicationMetaFromBody(req.body),
+        reviewHistory: [
+          createOperationalRecord({
+            status: application.status,
+            stage: req.body.stage ?? meta.stage ?? "updated",
+            actor: user.id,
+          }),
+          ...(meta.reviewHistory ?? []),
+        ].slice(0, 100),
+      });
       broadcast('applications', { type: 'application_updated', application });
       
-      res.json(application);
+      res.json({ ...application, meta: getApplicationMeta(id) });
     } catch (error) {
       console.error('Application update error:', error);
       res.status(400).json({ message: 'Failed to update application', error: getErrorMessage(error) });
@@ -2618,22 +3073,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         margin: 1,
         width: 220,
       });
+      const safeTitle = escapeHtml(event.title);
+      const safeAttendee = escapeHtml(registration.fullName);
+      const safeLocation = escapeHtml(event.isVirtual ? "Virtual event" : event.location);
+      const safeTicketCode = escapeHtml(registration.ticketCode);
 
       res.setHeader("Content-Type", "text/html");
       res.send(`
         <!doctype html>
         <html>
-          <head><title>${event.title} Ticket</title></head>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>${safeTitle} Ticket</title>
+          </head>
           <body style="font-family: Arial, sans-serif; margin: 0; padding: 32px; background: #f5f7fb; color: #111827;">
             <main style="max-width: 720px; margin: 0 auto; background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 28px;">
               <p style="margin: 0 0 8px; color: #0f766e; font-weight: 700;">Mtendere Event Confirmation</p>
-              <h1 style="margin: 0 0 16px; color: #0f4c81;">${event.title}</h1>
-              <p><strong>Attendee:</strong> ${registration.fullName}</p>
+              <h1 style="margin: 0 0 16px; color: #0f4c81;">${safeTitle}</h1>
+              <p><strong>Attendee:</strong> ${safeAttendee}</p>
               <p><strong>Date:</strong> ${new Date(event.startAt).toLocaleString()}</p>
-              <p><strong>Location:</strong> ${event.isVirtual ? "Virtual event" : event.location}</p>
+              <p><strong>Location:</strong> ${safeLocation}</p>
+              <p><strong>Status:</strong> ${escapeHtml(registration.status.replace(/_/g, " "))}</p>
               <div style="margin-top: 24px; display: grid; gap: 16px; justify-items: center; padding: 18px; border: 2px dashed #f59e0b; text-align: center;">
-                <img src="${qrCode}" alt="QR code for ${registration.ticketCode}" width="220" height="220" style="display:block;">
-                <div style="font-size: 24px; font-weight: 800;">${registration.ticketCode}</div>
+                <img src="${qrCode}" alt="QR code for ${safeTicketCode}" width="220" height="220" style="display:block;">
+                <div style="font-size: 24px; font-weight: 800;">${safeTicketCode}</div>
               </div>
             </main>
           </body>
@@ -2807,11 +3271,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email: payload.email,
         phone: payload.phone ?? null,
         organization: payload.organization ?? null,
+        ticketType: payload.ticketType ?? null,
         status,
         ticketCode: createTicketCode(id),
         attendanceStatus: "registered",
         answers: payload.answers ?? null,
         reminderOptIn: payload.reminderOptIn,
+        source: payload.source ?? "public",
+        qrPayload: {
+          eventId: id,
+          eventTitle: event.title,
+          issuedAt: new Date().toISOString(),
+        },
       }));
 
       await storage.logAnalytics({
@@ -2822,6 +3293,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userAgent: req.get("user-agent"),
       });
       broadcast('events', { type: 'event_registration_created', eventId: id, registration });
+      const ticketUrl = `${env.PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`}/api/events/registrations/${registration.ticketCode}/ticket`;
+      void sendEventRegistrationConfirmation({
+        email: registration.email,
+        name: registration.fullName,
+        eventTitle: event.title,
+        eventDate: new Date(event.startAt).toLocaleString(),
+        ticketUrl,
+        status: registration.status,
+      });
       res.status(201).json({ registration, ticketUrl: `/api/events/registrations/${registration.ticketCode}/ticket` });
     } catch (error) {
       console.error('Event registration error:', error);
@@ -3460,6 +3940,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         jobs,
         partners,
         blogPosts,
+        events,
+        eventRegistrations,
         applications,
         publishedBlogPosts,
         activeScholarships,
@@ -3470,6 +3952,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getAllJobs(),
         storage.getAllPartners(),
         storage.getAllBlogPosts(),
+        storage.getAllEvents(),
+        storage.getAllEventRegistrations(),
         storage.getAllApplications(),
         storage.getPublishedBlogPosts(),
         storage.getActiveScholarships(),
@@ -3504,6 +3988,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalJobs: jobs.length,
         totalPartners: partners.length,
         totalBlogPosts: blogPosts.length,
+        totalEvents: events.length,
+        publishedEvents: events.filter((event) => event.status === "published").length,
+        upcomingEvents: events.filter((event) => deriveEventRuntimeStatus(event) === "upcoming").length,
+        eventRegistrations: eventRegistrations.length,
+        checkedInEventRegistrations: eventRegistrations.filter((registration) =>
+          ["checked_in", "checked_out", "attended"].includes(registration.attendanceStatus),
+        ).length,
         totalApplications: applications.length,
         totalActiveChats: listAiChatConversations().filter((conversation) => conversation.isActive).length,
         activeScholarships: activeScholarships.length,
@@ -3547,6 +4038,148 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/admin/ecosystem/overview', authenticateToken, requireAdminPortal, async (_req, res) => {
+    try {
+      const sourceErrors: string[] = [];
+      const safeList = async <T>(label: string, loader: () => Promise<T[]>): Promise<T[]> => {
+        try {
+          return await loader();
+        } catch (error) {
+          sourceErrors.push(label);
+          console.warn(`Admin ecosystem overview degraded for ${label}:`, getErrorMessage(error));
+          return [];
+        }
+      };
+
+      const [
+        users,
+        scholarships,
+        jobs,
+        partners,
+        blogPosts,
+        teamMembers,
+        events,
+        eventRegistrations,
+        applications,
+        analytics,
+      ] = await Promise.all([
+        safeList("users", () => storage.getAllUsers()),
+        safeList("scholarships", () => storage.getAllScholarships()),
+        safeList("jobs", () => storage.getAllJobs()),
+        safeList("partners", () => storage.getAllPartners()),
+        safeList("blog", () => storage.getAllBlogPosts()),
+        safeList("team", () => storage.getAllTeamMembers()),
+        safeList("events", () => storage.getAllEvents()),
+        safeList("eventRegistrations", () => storage.getAllEventRegistrations()),
+        safeList("applications", () => storage.getAllApplications()),
+        safeList("analytics", () => storage.getAnalytics()),
+      ]);
+
+      const modules = [
+        {
+          id: "scholarships",
+          name: "Scholarships",
+          total: scholarships.length,
+          active: scholarships.filter((item) => item.isActive).length,
+          workflowItems: applications.filter((app) => app.type === "scholarship").length,
+          risk: scholarships.filter((item) => item.isActive && new Date(item.deadline).getTime() < Date.now()).length,
+        },
+        {
+          id: "jobs",
+          name: "Jobs",
+          total: jobs.length,
+          active: jobs.filter((item) => item.isActive).length,
+          workflowItems: applications.filter((app) => app.type === "job").length,
+          risk: jobs.filter((item) => item.isActive && item.deadline && new Date(item.deadline).getTime() < Date.now()).length,
+        },
+        {
+          id: "partners",
+          name: "Partners",
+          total: partners.length,
+          active: partners.filter((item) => item.isActive).length,
+          workflowItems: partners.reduce((sum, item) => sum + ((getPartnerMeta(item.id).activities ?? []).length), 0),
+          risk: partners.filter((item) => (getPartnerMeta(item.id).reminders ?? []).some((reminder) => !reminder.completedAt)).length,
+        },
+        {
+          id: "blog",
+          name: "Blog/CMS",
+          total: blogPosts.length,
+          active: blogPosts.filter((item) => item.isPublished).length,
+          workflowItems: blogPosts.reduce((sum, item) => sum + ((getBlogMeta(item.id).revisionHistory ?? []).length), 0),
+          risk: blogPosts.filter((item) => getBlogMeta(item.id).status === "draft").length,
+        },
+        {
+          id: "team",
+          name: "Team",
+          total: teamMembers.length,
+          active: teamMembers.filter((item) => item.isActive).length,
+          workflowItems: teamMembers.reduce((sum, item) => sum + ((getTeamMeta(item.id).skills ?? []).length), 0),
+          risk: teamMembers.filter((item) => !getTeamMeta(item.id).profileImage && !item.imageUrl).length,
+        },
+        {
+          id: "users",
+          name: "Users",
+          total: users.length,
+          active: users.filter((item) => item.isActive).length,
+          workflowItems: users.reduce((sum, item) => sum + ((getUserMeta(item.id).activityLogs ?? []).length), 0),
+          risk: users.filter((item) => !item.isActive).length,
+        },
+        {
+          id: "applications",
+          name: "Applications",
+          total: applications.length,
+          active: applications.filter((item) => ["pending", "under_review"].includes(item.status)).length,
+          workflowItems: applications.reduce((sum, item) => sum + ((getApplicationMeta(item.id).reviewHistory ?? []).length), 0),
+          risk: applications.filter((item) => item.status === "pending").length,
+        },
+        {
+          id: "events",
+          name: "Events",
+          total: events.length,
+          active: events.filter((item) => item.status === "published").length,
+          workflowItems: eventRegistrations.length,
+          risk: events.filter((item) => item.status === "published" && item.endAt && new Date(item.endAt).getTime() < Date.now()).length,
+        },
+      ];
+
+      const totals = modules.reduce(
+        (acc, module) => ({
+          totalRecords: acc.totalRecords + module.total,
+          activeRecords: acc.activeRecords + module.active,
+          workflowItems: acc.workflowItems + module.workflowItems,
+          riskItems: acc.riskItems + module.risk,
+        }),
+        { totalRecords: 0, activeRecords: 0, workflowItems: 0, riskItems: 0 },
+      );
+
+      res.json({
+        generatedAt: new Date().toISOString(),
+        totals,
+        modules,
+        analyticsEvents: analytics.length,
+        security: {
+          rbacRoles: getAdminRoles().length,
+          permissions: adminPermissionIds.size,
+          auditEvents: analytics.filter((item) => item.event.startsWith("admin_")).length,
+        },
+        automationReadiness: {
+          notifications: true,
+          webhooks: true,
+          scheduledReports: true,
+          queueReady: true,
+          aiReady: true,
+        },
+        sourceHealth: {
+          degraded: sourceErrors.length > 0,
+          unavailable: sourceErrors,
+        },
+      });
+    } catch (error) {
+      console.error("Admin ecosystem overview error:", error);
+      res.status(500).json({ message: "Failed to fetch ecosystem overview" });
+    }
+  });
+
   app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
     try {
       const page = Number(req.query.page ?? 1);
@@ -3571,7 +4204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+  app.get('/api/admin/users/:id(\\d+)', authenticateToken, requireAdmin, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -3620,7 +4253,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+  app.put('/api/admin/users/:id(\\d+)', authenticateToken, requireAdmin, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -3664,7 +4297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+  app.delete('/api/admin/users/:id(\\d+)', authenticateToken, requireAdmin, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -3693,6 +4326,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Admin user delete error:", error);
       res.status(500).json({ message: "Failed to delete user" });
+    }
+  });
+
+  app.patch('/api/admin/users/:id(\\d+)/status', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const requester = getAuthenticatedUser(req);
+      if (id === requester.id && req.body.isActive === false) {
+        return res.status(400).json({ message: "You cannot suspend your own account" });
+      }
+      const target = await storage.getUser(id);
+      if (!target) return res.status(404).json({ message: "User not found" });
+      if (target.role === "super_admin" && requester.role !== "super_admin") {
+        return res.status(403).json({ message: "Only a super administrator can suspend super admin users" });
+      }
+      const isActive = req.body.isActive !== false;
+      const user = await storage.updateUser(id, { isActive });
+      setUserMeta(id, {
+        suspendedAt: isActive ? null : new Date().toISOString(),
+        suspensionReason: isActive ? null : String(req.body.reason ?? "Administrative suspension"),
+      });
+      await emitAdminRealtimeEvent(req, {
+        event: isActive ? "user_activated" : "user_suspended",
+        channel: "user_activity",
+        entityType: "user",
+        referenceId: id,
+        payload: { user: toAdminUser(user) },
+      });
+      res.json(toAdminUser(user));
+    } catch (error) {
+      console.error("Admin user status error:", error);
+      res.status(400).json({ message: "Failed to update user status", error: getErrorMessage(error) });
+    }
+  });
+
+  app.get('/api/admin/users/analytics', authenticateToken, requireAdmin, async (_req, res) => {
+    try {
+      const users = (await storage.getAllUsers()).map(toAdminUser);
+      const byRole = users.reduce<Record<string, number>>((acc, user) => {
+        acc[user.role] = (acc[user.role] ?? 0) + 1;
+        return acc;
+      }, {});
+      const byRegion = users.reduce<Record<string, number>>((acc, user) => {
+        const region = user.region || "Global";
+        acc[region] = (acc[region] ?? 0) + 1;
+        return acc;
+      }, {});
+      res.json({
+        totalUsers: users.length,
+        activeUsers: users.filter((user) => user.isActive).length,
+        suspendedUsers: users.filter((user) => !user.isActive).length,
+        verifiedUsers: users.filter((user) => Boolean(user.verification?.verifiedAt)).length,
+        adminUsers: users.filter((user) => ["viewer", "editor", "admin", "super_admin"].includes(user.role)).length,
+        byRole,
+        byRegion,
+      });
+    } catch (error) {
+      console.error("Admin user analytics error:", error);
+      res.status(500).json({ message: "Failed to fetch user analytics" });
+    }
+  });
+
+  app.get('/api/admin/users/export', authenticateToken, requireAdmin, async (_req, res) => {
+    try {
+      const users = (await storage.getAllUsers()).map(toAdminUser);
+      const headers = ["ID", "Username", "Email", "Name", "Role", "Region", "Active", "Suspended At"];
+      const rows = users.map((user) => [
+        user.id,
+        user.username,
+        user.email,
+        `${user.firstName} ${user.lastName}`.trim(),
+        user.role,
+        user.region,
+        user.isActive,
+        user.suspendedAt,
+      ]);
+      const csv = [headers, ...rows].map((row) => row.map(escapeCsvValue).join(",")).join("\n");
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="mtendere-users-${new Date().toISOString().slice(0, 10)}.csv"`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Admin user export error:", error);
+      res.status(500).json({ message: "Failed to export users" });
     }
   });
 
@@ -3748,14 +4465,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const scholarship = await storage.createScholarship(scholarshipData);
-      setScholarshipMeta(scholarship.id, {
-        eligibility: req.body.eligibility ?? "",
-        status: normalizeAdminStatus(req.body.status, scholarship.isActive),
-        isPremium: Boolean(req.body.isPremium),
-        paymentStatus: req.body.paymentStatus ?? "unpaid",
-        featuredImage,
-        region: req.body.region ?? "Global",
-      });
+      setScholarshipMeta(
+        scholarship.id,
+        buildScholarshipMetaFromBody(
+          {
+            ...req.body,
+            status: normalizeAdminStatus(req.body.status, scholarship.isActive),
+            isPremium: Boolean(req.body.isPremium),
+            paymentStatus: req.body.paymentStatus ?? "unpaid",
+            region: req.body.region ?? "Global",
+          },
+          featuredImage,
+        ),
+      );
 
       await emitAdminRealtimeEvent(req, {
         event: "scholarship_created",
@@ -3796,14 +4518,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const scholarship = await storage.updateScholarship(id, updateData);
       if (!scholarship) return res.status(404).json({ message: "Scholarship not found" });
 
-      setScholarshipMeta(id, {
-        eligibility: req.body.eligibility,
-        status: req.body.status,
-        isPremium: parseOptionalBoolean(req.body.isPremium),
-        paymentStatus: req.body.paymentStatus,
-        featuredImage,
-        region: req.body.region,
-      });
+      setScholarshipMeta(id, buildScholarshipMetaFromBody(req.body, featuredImage));
 
       await emitAdminRealtimeEvent(req, {
         event: "scholarship_updated",
@@ -3838,6 +4553,162 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Admin scholarship delete error:", error);
       res.status(500).json({ message: "Failed to delete scholarship" });
+    }
+  });
+
+  app.post('/api/admin/scholarships/:id/duplicate', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const source = await storage.getScholarship(id);
+      if (!source) return res.status(404).json({ message: "Scholarship not found" });
+
+      const copy = await storage.createScholarship({
+        title: `${source.title} Copy`,
+        description: source.description,
+        institution: source.institution,
+        country: source.country,
+        amount: source.amount,
+        currency: source.currency,
+        deadline: source.deadline,
+        requirements: source.requirements as any,
+        category: source.category,
+        imageUrl: source.imageUrl,
+        isActive: false,
+        createdBy: getAuthenticatedUser(req).id,
+      });
+      setScholarshipMeta(copy.id, {
+        ...getScholarshipMeta(id),
+        slug: `${getScholarshipMeta(id).slug ?? slugify(source.title)}-copy-${copy.id}`,
+        status: "draft",
+      });
+      await emitAdminRealtimeEvent(req, {
+        event: "scholarship_duplicated",
+        channel: "scholarships",
+        entityType: "scholarship",
+        referenceId: copy.id,
+        payload: { sourceId: id, scholarship: toAdminScholarship(copy) },
+      });
+      res.status(201).json(toAdminScholarship(copy));
+    } catch (error) {
+      console.error("Admin scholarship duplicate error:", error);
+      res.status(400).json({ message: "Failed to duplicate scholarship", error: getErrorMessage(error) });
+    }
+  });
+
+  app.patch('/api/admin/scholarships/:id/status', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const status = normalizeAdminStatus(String(req.body.status ?? ""));
+      const scholarship = await storage.updateScholarship(id, { isActive: status === "published" });
+      if (!scholarship) return res.status(404).json({ message: "Scholarship not found" });
+      setScholarshipMeta(id, { status });
+      await emitAdminRealtimeEvent(req, {
+        event: "scholarship_status_updated",
+        channel: "scholarships",
+        entityType: "scholarship",
+        referenceId: id,
+        payload: { status },
+      });
+      res.json(toAdminScholarship(scholarship));
+    } catch (error) {
+      console.error("Admin scholarship status error:", error);
+      res.status(400).json({ message: "Failed to update scholarship status", error: getErrorMessage(error) });
+    }
+  });
+
+  app.get('/api/admin/scholarships/analytics', authenticateToken, requireEditor, async (_req, res) => {
+    try {
+      const [scholarships, applications] = await Promise.all([
+        storage.getAllScholarships(),
+        storage.getAllApplications(),
+      ]);
+      const mapped = scholarships.map(toAdminScholarship);
+      const scholarshipApps = applications.filter((app) => app.type === "scholarship");
+      const statusCounts = mapped.reduce<Record<string, number>>((acc, item) => {
+        acc[item.status] = (acc[item.status] ?? 0) + 1;
+        return acc;
+      }, {});
+      const applicationStatusCounts = scholarshipApps.reduce<Record<string, number>>((acc, app) => {
+        acc[app.status] = (acc[app.status] ?? 0) + 1;
+        return acc;
+      }, {});
+      const byCategory = mapped.reduce<Record<string, number>>((acc, item) => {
+        acc[item.category] = (acc[item.category] ?? 0) + 1;
+        return acc;
+      }, {});
+      res.json({
+        totalScholarships: mapped.length,
+        publishedScholarships: mapped.filter((item) => item.status === "published").length,
+        featuredScholarships: mapped.filter((item) => item.isFeatured).length,
+        expiringSoon: mapped.filter((item) => {
+          const diff = new Date(item.deadline).getTime() - Date.now();
+          return diff > 0 && diff <= 30 * 24 * 60 * 60 * 1000;
+        }).length,
+        applications: scholarshipApps.length,
+        approvals: scholarshipApps.filter((app) => app.status === "approved").length,
+        conversionRate: mapped.length ? Math.round((scholarshipApps.length / mapped.length) * 100) : 0,
+        statusCounts,
+        applicationStatusCounts,
+        byCategory,
+        topScholarships: mapped
+          .map((item) => ({
+            id: item.id,
+            title: item.title,
+            applications: scholarshipApps.filter((app) => String(app.referenceId) === item.id).length,
+            status: item.status,
+          }))
+          .sort((left, right) => right.applications - left.applications)
+          .slice(0, 8),
+      });
+    } catch (error) {
+      console.error("Admin scholarship analytics error:", error);
+      res.status(500).json({ message: "Failed to fetch scholarship analytics" });
+    }
+  });
+
+  app.get('/api/admin/scholarships/reports/summary', authenticateToken, requireEditor, async (_req, res) => {
+    try {
+      const [scholarships, applications] = await Promise.all([
+        storage.getAllScholarships(),
+        storage.getAllApplications(),
+      ]);
+      const mapped = scholarships.map(toAdminScholarship);
+      const scholarshipApps = applications.filter((app) => app.type === "scholarship");
+      res.json({
+        generatedAt: new Date().toISOString(),
+        module: "scholarships",
+        executiveSummary: {
+          total: mapped.length,
+          published: mapped.filter((item) => item.status === "published").length,
+          drafts: mapped.filter((item) => item.status === "draft").length,
+          applications: scholarshipApps.length,
+          pendingReview: scholarshipApps.filter((app) => app.status === "pending").length,
+        },
+        operationalRisks: mapped
+          .filter((item) => item.status === "published" && new Date(item.deadline).getTime() < Date.now())
+          .map((item) => ({ id: item.id, title: item.title, risk: "Published scholarship past deadline" })),
+        automationReadiness: ["deadline reminders", "reviewer assignment", "status notifications", "PDF generation"],
+      });
+    } catch (error) {
+      console.error("Admin scholarship report error:", error);
+      res.status(500).json({ message: "Failed to build scholarship report" });
+    }
+  });
+
+  app.get('/api/admin/scholarships/export', authenticateToken, requireEditor, async (_req, res) => {
+    try {
+      const mapped = (await storage.getAllScholarships()).map(toAdminScholarship);
+      const headers = ["ID", "Title", "Category", "Institution", "Status", "Deadline", "Featured", "Region"];
+      const rows = mapped.map((item) => [item.id, item.title, item.category, item.institution, item.status, item.deadline, item.isFeatured, item.region]);
+      const csv = [headers, ...rows].map((row) => row.map(escapeCsvValue).join(",")).join("\n");
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="mtendere-scholarships-${new Date().toISOString().slice(0, 10)}.csv"`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Admin scholarship export error:", error);
+      res.status(500).json({ message: "Failed to export scholarships" });
     }
   });
 
@@ -3894,17 +4765,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const job = await storage.createJob(jobData);
-      setJobMeta(job.id, {
-        salaryRange: req.body.salaryRange ?? "",
-        applicationUrl: req.body.applicationUrl ?? "",
-        status: normalizeAdminStatus(req.body.status, job.isActive),
-        region: req.body.region ?? "Global",
-        isPremium: Boolean(req.body.isPremium),
-        price: req.body.price ?? "",
-        paymentStatus: req.body.paymentStatus ?? "unpaid",
-        featuredImage,
-        benefits: req.body.benefits ?? "",
-      });
+      setJobMeta(
+        job.id,
+        buildJobMetaFromBody(
+          {
+            ...req.body,
+            status: normalizeAdminStatus(req.body.status, job.isActive),
+            region: req.body.region ?? "Global",
+            isPremium: Boolean(req.body.isPremium),
+            price: req.body.price ?? "",
+            paymentStatus: req.body.paymentStatus ?? "unpaid",
+          },
+          featuredImage,
+        ),
+      );
 
       await emitAdminRealtimeEvent(req, {
         event: "job_created",
@@ -3941,17 +4815,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const job = await storage.updateJob(id, updateData);
       if (!job) return res.status(404).json({ message: "Job not found" });
 
-      setJobMeta(id, {
-        salaryRange: req.body.salaryRange,
-        applicationUrl: req.body.applicationUrl,
-        status: req.body.status,
-        region: req.body.region,
-        isPremium: parseOptionalBoolean(req.body.isPremium),
-        price: req.body.price,
-        paymentStatus: req.body.paymentStatus,
-        featuredImage,
-        benefits: req.body.benefits,
-      });
+      setJobMeta(id, buildJobMetaFromBody(req.body, featuredImage));
 
       await emitAdminRealtimeEvent(req, {
         event: "job_updated",
@@ -3989,6 +4853,157 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/admin/jobs/:id/duplicate', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const source = await storage.getJob(id);
+      if (!source) return res.status(404).json({ message: "Job not found" });
+
+      const copy = await storage.createJob({
+        title: `${source.title} Copy`,
+        description: source.description,
+        company: source.company,
+        location: source.location,
+        salary: source.salary,
+        currency: source.currency,
+        jobType: source.jobType,
+        requirements: source.requirements as any,
+        benefits: source.benefits as any,
+        isRemote: source.isRemote,
+        deadline: source.deadline,
+        isActive: false,
+        createdBy: getAuthenticatedUser(req).id,
+      });
+      setJobMeta(copy.id, {
+        ...getJobMeta(id),
+        slug: `${getJobMeta(id).slug ?? slugify(source.title)}-copy-${copy.id}`,
+        status: "draft",
+      });
+      await emitAdminRealtimeEvent(req, {
+        event: "job_duplicated",
+        channel: "jobs",
+        entityType: "job",
+        referenceId: copy.id,
+        payload: { sourceId: id, job: toAdminJob(copy) },
+      });
+      res.status(201).json(toAdminJob(copy));
+    } catch (error) {
+      console.error("Admin job duplicate error:", error);
+      res.status(400).json({ message: "Failed to duplicate job", error: getErrorMessage(error) });
+    }
+  });
+
+  app.patch('/api/admin/jobs/:id/status', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const status = normalizeAdminStatus(String(req.body.status ?? ""));
+      const job = await storage.updateJob(id, { isActive: status === "published" });
+      if (!job) return res.status(404).json({ message: "Job not found" });
+      setJobMeta(id, { status });
+      await emitAdminRealtimeEvent(req, {
+        event: "job_status_updated",
+        channel: "jobs",
+        entityType: "job",
+        referenceId: id,
+        payload: { status },
+      });
+      res.json(toAdminJob(job));
+    } catch (error) {
+      console.error("Admin job status error:", error);
+      res.status(400).json({ message: "Failed to update job status", error: getErrorMessage(error) });
+    }
+  });
+
+  app.get('/api/admin/jobs/analytics', authenticateToken, requireEditor, async (_req, res) => {
+    try {
+      const [jobs, applications] = await Promise.all([
+        storage.getAllJobs(),
+        storage.getAllApplications(),
+      ]);
+      const mapped = jobs.map(toAdminJob);
+      const jobApps = applications.filter((app) => app.type === "job");
+      const byType = mapped.reduce<Record<string, number>>((acc, item) => {
+        acc[item.employmentType || item.jobType] = (acc[item.employmentType || item.jobType] ?? 0) + 1;
+        return acc;
+      }, {});
+      const byStage = jobApps.reduce<Record<string, number>>((acc, app) => {
+        const stage = getApplicationMeta(app.id).stage ?? app.status;
+        acc[stage] = (acc[stage] ?? 0) + 1;
+        return acc;
+      }, {});
+      res.json({
+        totalJobs: mapped.length,
+        publishedJobs: mapped.filter((item) => item.status === "published").length,
+        featuredJobs: mapped.filter((item) => item.isFeatured).length,
+        applications: jobApps.length,
+        shortlisted: jobApps.filter((app) => getApplicationMeta(app.id).shortlist).length,
+        interviews: jobApps.reduce((sum, app) => sum + (getApplicationMeta(app.id).interviewSchedule?.length ?? 0), 0),
+        conversionRate: mapped.length ? Math.round((jobApps.length / mapped.length) * 100) : 0,
+        byType,
+        byStage,
+        topJobs: mapped
+          .map((item) => ({
+            id: item.id,
+            title: item.title,
+            company: item.company,
+            applications: jobApps.filter((app) => String(app.referenceId) === item.id).length,
+            status: item.status,
+          }))
+          .sort((left, right) => right.applications - left.applications)
+          .slice(0, 8),
+      });
+    } catch (error) {
+      console.error("Admin job analytics error:", error);
+      res.status(500).json({ message: "Failed to fetch job analytics" });
+    }
+  });
+
+  app.get('/api/admin/jobs/reports/summary', authenticateToken, requireEditor, async (_req, res) => {
+    try {
+      const [jobs, applications] = await Promise.all([
+        storage.getAllJobs(),
+        storage.getAllApplications(),
+      ]);
+      const mapped = jobs.map(toAdminJob);
+      const jobApps = applications.filter((app) => app.type === "job");
+      res.json({
+        generatedAt: new Date().toISOString(),
+        module: "jobs",
+        executiveSummary: {
+          total: mapped.length,
+          published: mapped.filter((item) => item.status === "published").length,
+          applications: jobApps.length,
+          shortlisted: jobApps.filter((app) => getApplicationMeta(app.id).shortlist).length,
+          interviews: jobApps.reduce((sum, app) => sum + (getApplicationMeta(app.id).interviewSchedule?.length ?? 0), 0),
+        },
+        operationalRisks: mapped
+          .filter((item) => item.status === "published" && item.deadline && new Date(item.deadline).getTime() < Date.now())
+          .map((item) => ({ id: item.id, title: item.title, risk: "Published job past application deadline" })),
+        automationReadiness: ["candidate scoring", "interview scheduling", "recruiter templates", "job alerts"],
+      });
+    } catch (error) {
+      console.error("Admin job report error:", error);
+      res.status(500).json({ message: "Failed to build job report" });
+    }
+  });
+
+  app.get('/api/admin/jobs/export', authenticateToken, requireEditor, async (_req, res) => {
+    try {
+      const mapped = (await storage.getAllJobs()).map(toAdminJob);
+      const headers = ["ID", "Title", "Company", "Location", "Type", "Status", "Deadline", "Featured"];
+      const rows = mapped.map((item) => [item.id, item.title, item.company, item.location, item.employmentType || item.jobType, item.status, item.deadline, item.isFeatured]);
+      const csv = [headers, ...rows].map((row) => row.map(escapeCsvValue).join(",")).join("\n");
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="mtendere-jobs-${new Date().toISOString().slice(0, 10)}.csv"`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Admin job export error:", error);
+      res.status(500).json({ message: "Failed to export jobs" });
+    }
+  });
+
   app.get('/api/admin/partners', authenticateToken, requireEditor, async (req, res) => {
     try {
       const page = Number(req.query.page ?? 1);
@@ -4023,10 +5038,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         name: req.body.name ?? "",
         description: req.body.description ?? "",
         logoUrl: logo,
+        coverImage: req.body.coverImage ?? null,
         website: req.body.website ?? null,
-        country: req.body.region ?? "Global",
+        contactName: req.body.contactName ?? null,
+        contactEmail: req.body.contactEmail ?? null,
+        contactPhone: req.body.contactPhone ?? null,
+        socialLinks: req.body.socialLinks ?? null,
+        industryCategory: req.body.industryCategory ?? req.body.partnershipType ?? null,
+        partnershipLevel: req.body.partnershipLevel ?? null,
+        sponsorshipTier: req.body.sponsorshipTier ?? null,
+        status: req.body.status ?? (req.body.isActive === false ? "inactive" : "active"),
+        country: req.body.country ?? req.body.region ?? "Global",
+        region: req.body.region ?? req.body.country ?? "Global",
+        address: req.body.address ?? null,
+        documents: req.body.documents ?? null,
+        agreements: req.body.agreements ?? null,
+        notes: req.body.notes ?? null,
+        internalComments: req.body.internalComments ?? null,
+        linkedEvents: req.body.linkedEvents ?? null,
+        linkedSponsorships: req.body.linkedSponsorships ?? null,
+        linkedOpportunities: req.body.linkedOpportunities ?? null,
+        partnershipHistory: req.body.partnershipHistory ?? null,
         studentCount: req.body.studentCount ?? null,
         ranking: req.body.ranking ?? null,
+        programs: req.body.programs ?? null,
         isActive: req.body.isActive ?? true,
       });
 
@@ -4034,10 +5069,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       setPartnerMeta(partner.id, {
         partnershipType: req.body.partnershipType ?? "partner",
         logo,
+        coverImage: req.body.coverImage ?? "",
+        contactName: req.body.contactName ?? "",
         contactEmail: req.body.contactEmail ?? "",
         contactPhone: req.body.contactPhone ?? "",
         address: req.body.address ?? "",
-        region: req.body.region ?? "Global",
+        country: req.body.country ?? req.body.region ?? "Global",
+        region: req.body.region ?? req.body.country ?? "Global",
+        industryCategory: req.body.industryCategory ?? req.body.partnershipType ?? "",
+        partnershipLevel: req.body.partnershipLevel ?? "",
+        sponsorshipTier: req.body.sponsorshipTier ?? "",
+        status: req.body.status ?? "active",
+        socialLinks: req.body.socialLinks ?? {},
+        documents: req.body.documents ?? [],
+        agreements: req.body.agreements ?? [],
+        notes: req.body.notes ?? "",
+        internalComments: req.body.internalComments ?? "",
+        linkedEvents: req.body.linkedEvents ?? [],
+        linkedSponsorships: req.body.linkedSponsorships ?? [],
+        linkedOpportunities: req.body.linkedOpportunities ?? [],
+        partnershipHistory: req.body.partnershipHistory ?? [],
+        activities: req.body.activities ?? [],
+        meetings: req.body.meetings ?? [],
+        reminders: req.body.reminders ?? [],
+        financialRecords: req.body.financialRecords ?? [],
+        performanceMetrics: req.body.performanceMetrics ?? {},
         videoUrl: parseOptionalUrl(req.body.videoUrl) ?? "",
         videoTitle: req.body.videoTitle ?? "",
         videoDescription: req.body.videoDescription ?? "",
@@ -4045,6 +5101,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isPremium: Boolean(req.body.isPremium),
         paymentStatus: req.body.paymentStatus ?? "unpaid",
       });
+
+      if (req.body.contactEmail) {
+        void sendPartnerOnboardingEmail({
+          email: String(req.body.contactEmail),
+          organizationName: partner.name,
+          contactName: req.body.contactName ?? partner.name,
+          adminUrl: `${env.ADMIN_APP_URL || env.PUBLIC_APP_URL || ""}/admin/partners?search=${encodeURIComponent(partner.name)}`,
+        });
+      }
 
       await emitAdminRealtimeEvent(req, {
         event: "partner_created",
@@ -4071,10 +5136,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (req.body.description !== undefined) payload.description = req.body.description;
       const logo = req.body.logo !== undefined ? ensureMediaReference(req.body.logo, "partners") : undefined;
       if (logo !== undefined) payload.logoUrl = logo;
+      if (req.body.coverImage !== undefined) payload.coverImage = req.body.coverImage;
       if (req.body.website !== undefined) payload.website = req.body.website;
-      if (req.body.region !== undefined) payload.country = req.body.region;
+      if (req.body.contactName !== undefined) payload.contactName = req.body.contactName;
+      if (req.body.contactEmail !== undefined) payload.contactEmail = req.body.contactEmail;
+      if (req.body.contactPhone !== undefined) payload.contactPhone = req.body.contactPhone;
+      if (req.body.socialLinks !== undefined) payload.socialLinks = req.body.socialLinks;
+      if (req.body.industryCategory !== undefined) payload.industryCategory = req.body.industryCategory;
+      if (req.body.partnershipLevel !== undefined) payload.partnershipLevel = req.body.partnershipLevel;
+      if (req.body.sponsorshipTier !== undefined) payload.sponsorshipTier = req.body.sponsorshipTier;
+      if (req.body.status !== undefined) payload.status = req.body.status;
+      if (req.body.country !== undefined) payload.country = req.body.country;
+      if (req.body.region !== undefined) {
+        payload.region = req.body.region;
+        payload.country = req.body.country ?? req.body.region;
+      }
+      if (req.body.address !== undefined) payload.address = req.body.address;
+      if (req.body.documents !== undefined) payload.documents = req.body.documents;
+      if (req.body.agreements !== undefined) payload.agreements = req.body.agreements;
+      if (req.body.notes !== undefined) payload.notes = req.body.notes;
+      if (req.body.internalComments !== undefined) payload.internalComments = req.body.internalComments;
+      if (req.body.linkedEvents !== undefined) payload.linkedEvents = req.body.linkedEvents;
+      if (req.body.linkedSponsorships !== undefined) payload.linkedSponsorships = req.body.linkedSponsorships;
+      if (req.body.linkedOpportunities !== undefined) payload.linkedOpportunities = req.body.linkedOpportunities;
+      if (req.body.partnershipHistory !== undefined) payload.partnershipHistory = req.body.partnershipHistory;
       if (req.body.studentCount !== undefined) payload.studentCount = req.body.studentCount;
       if (req.body.ranking !== undefined) payload.ranking = req.body.ranking;
+      if (req.body.programs !== undefined) payload.programs = req.body.programs;
       if (req.body.isActive !== undefined) payload.isActive = req.body.isActive;
 
       const updateData = insertPartnerSchema.partial().parse(payload);
@@ -4084,10 +5172,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       setPartnerMeta(id, {
         partnershipType: req.body.partnershipType,
         logo,
+        coverImage: req.body.coverImage,
+        contactName: req.body.contactName,
         contactEmail: req.body.contactEmail,
         contactPhone: req.body.contactPhone,
         address: req.body.address,
+        country: req.body.country,
         region: req.body.region,
+        industryCategory: req.body.industryCategory,
+        partnershipLevel: req.body.partnershipLevel,
+        sponsorshipTier: req.body.sponsorshipTier,
+        status: req.body.status,
+        socialLinks: req.body.socialLinks,
+        documents: req.body.documents,
+        agreements: req.body.agreements,
+        notes: req.body.notes,
+        internalComments: req.body.internalComments,
+        linkedEvents: req.body.linkedEvents,
+        linkedSponsorships: req.body.linkedSponsorships,
+        linkedOpportunities: req.body.linkedOpportunities,
+        partnershipHistory: req.body.partnershipHistory,
+        activities: req.body.activities,
+        meetings: req.body.meetings,
+        reminders: req.body.reminders,
+        financialRecords: req.body.financialRecords,
+        performanceMetrics: req.body.performanceMetrics,
         videoUrl: parseOptionalUrl(req.body.videoUrl),
         videoTitle: req.body.videoTitle,
         videoDescription: req.body.videoDescription,
@@ -4129,6 +5238,151 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Admin partner delete error:", error);
       res.status(500).json({ message: "Failed to delete partner" });
+    }
+  });
+
+  app.get('/api/admin/partners/:id/crm', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const partner = await storage.getPartner(id);
+      if (!partner) return res.status(404).json({ message: "Partner not found" });
+      res.json({ partner: toAdminPartner(partner), crm: getPartnerCrmSnapshot(id) });
+    } catch (error) {
+      console.error("Admin partner CRM fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch partner CRM" });
+    }
+  });
+
+  app.post('/api/admin/partners/:id/activities', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const partner = await storage.getPartner(id);
+      if (!partner) return res.status(404).json({ message: "Partner not found" });
+      const payload = partnerActivityInputSchema.parse(req.body);
+      const meta = getPartnerMeta(id);
+      const record = createOperationalRecord({
+        ...payload,
+        dueAt: payload.dueAt?.toISOString() ?? null,
+        completedAt: payload.completedAt?.toISOString() ?? null,
+        createdBy: getAuthenticatedUser(req).id,
+      });
+      const nextActivities = [record, ...(meta.activities ?? [])].slice(0, 100);
+      const nextReminders =
+        payload.dueAt && !payload.completedAt
+          ? [record, ...(meta.reminders ?? [])].slice(0, 100)
+          : meta.reminders;
+      setPartnerMeta(id, {
+        activities: nextActivities,
+        reminders: nextReminders,
+        performanceMetrics: {
+          ...(meta.performanceMetrics ?? {}),
+          lastTouchAt: record.createdAt,
+        },
+      });
+      await emitAdminRealtimeEvent(req, {
+        event: "partner_activity_created",
+        channel: "partners",
+        entityType: "partner_activity",
+        referenceId: id,
+        payload: { partnerId: id, activity: record },
+      });
+      res.status(201).json(record);
+    } catch (error) {
+      console.error("Admin partner activity create error:", error);
+      res.status(400).json({ message: "Failed to create partner activity", error: getErrorMessage(error) });
+    }
+  });
+
+  app.post('/api/admin/partners/:id/documents', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const partner = await storage.getPartner(id);
+      if (!partner) return res.status(404).json({ message: "Partner not found" });
+      const payload = partnerDocumentInputSchema.parse(req.body);
+      const meta = getPartnerMeta(id);
+      const record = createOperationalRecord({
+        ...payload,
+        expiresAt: payload.expiresAt?.toISOString() ?? null,
+        uploadedBy: getAuthenticatedUser(req).id,
+      });
+      const collection = payload.type === "agreement" ? "agreements" : "documents";
+      setPartnerMeta(id, {
+        [collection]: [record, ...((meta as Record<string, any>)[collection] ?? [])].slice(0, 100),
+      });
+      res.status(201).json(record);
+    } catch (error) {
+      console.error("Admin partner document create error:", error);
+      res.status(400).json({ message: "Failed to add partner document", error: getErrorMessage(error) });
+    }
+  });
+
+  app.post('/api/admin/partners/:id/financial-records', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const partner = await storage.getPartner(id);
+      if (!partner) return res.status(404).json({ message: "Partner not found" });
+      const payload = partnerFinancialInputSchema.parse(req.body);
+      const meta = getPartnerMeta(id);
+      const record = createOperationalRecord({
+        ...payload,
+        recordedAt: new Date().toISOString(),
+        createdBy: getAuthenticatedUser(req).id,
+      });
+      const financialRecords = [record, ...(meta.financialRecords ?? [])].slice(0, 100);
+      const totalContribution = financialRecords.reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
+      setPartnerMeta(id, {
+        financialRecords,
+        performanceMetrics: {
+          ...(meta.performanceMetrics ?? {}),
+          totalContribution,
+          lastContributionAt: record.createdAt,
+        },
+      });
+      res.status(201).json(record);
+    } catch (error) {
+      console.error("Admin partner financial record create error:", error);
+      res.status(400).json({ message: "Failed to add financial record", error: getErrorMessage(error) });
+    }
+  });
+
+  app.get('/api/admin/partners/analytics/summary', authenticateToken, requireEditor, async (_req, res) => {
+    try {
+      const partners = await storage.getAllPartners();
+      const mapped = partners.map(toAdminPartner);
+      const activePartners = mapped.filter((partner) => partner.isActive !== false && partner.status !== "inactive");
+      const totalContribution = mapped.reduce((sum, partner) => {
+        const crm = getPartnerCrmSnapshot(Number(partner.id));
+        return sum + Number(crm.performanceMetrics.totalContribution ?? 0);
+      }, 0);
+      const byTier = mapped.reduce<Record<string, number>>((acc, partner) => {
+        const tier = partner.sponsorshipTier || partner.partnershipLevel || "Unassigned";
+        acc[tier] = (acc[tier] ?? 0) + 1;
+        return acc;
+      }, {});
+      res.json({
+        totalPartners: mapped.length,
+        activePartners: activePartners.length,
+        featuredPartners: mapped.filter((partner) => partner.isFeatured).length,
+        premiumPartners: mapped.filter((partner) => partner.isPremium).length,
+        totalContribution,
+        byTier,
+        renewalAlerts: mapped.flatMap((partner) =>
+          (partner.agreements ?? [])
+            .filter((item: Record<string, unknown>) => {
+              if (!item.expiresAt) return false;
+              const diff = new Date(String(item.expiresAt)).getTime() - Date.now();
+              return diff >= 0 && diff <= 60 * 24 * 60 * 60 * 1000;
+            })
+            .map((item: Record<string, unknown>) => ({ partnerId: partner.id, partnerName: partner.name, document: item })),
+        ),
+      });
+    } catch (error) {
+      console.error("Admin partner analytics error:", error);
+      res.status(500).json({ message: "Failed to fetch partner analytics" });
     }
   });
 
@@ -4177,11 +5431,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const post = await storage.createBlogPost(postData);
-      setBlogMeta(post.id, {
-        slug: req.body.slug ?? `post-${post.id}`,
-        status: normalizeAdminStatus(req.body.status, post.isPublished),
-        featuredImage,
-      });
+      setBlogMeta(
+        post.id,
+        buildBlogMetaFromBody(
+          {
+            ...req.body,
+            slug: req.body.slug ?? `post-${post.id}`,
+            status: normalizeAdminStatus(req.body.status, post.isPublished),
+          },
+          featuredImage,
+        ),
+      );
 
       await emitAdminRealtimeEvent(req, {
         event: "blog_post_created",
@@ -4217,11 +5477,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const post = await storage.updateBlogPost(id, updateData);
       if (!post) return res.status(404).json({ message: "Blog post not found" });
 
-      setBlogMeta(id, {
-        slug: req.body.slug,
-        status: req.body.status,
-        featuredImage,
-      });
+      setBlogMeta(id, buildBlogMetaFromBody(req.body, featuredImage));
 
       await emitAdminRealtimeEvent(req, {
         event: "blog_post_updated",
@@ -4256,6 +5512,123 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Admin blog delete error:", error);
       res.status(500).json({ message: "Failed to delete blog post" });
+    }
+  });
+
+  app.post('/api/admin/blog/:id/duplicate', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const source = await storage.getBlogPost(id);
+      if (!source) return res.status(404).json({ message: "Blog post not found" });
+
+      const post = await storage.createBlogPost({
+        title: `${source.title} Copy`,
+        content: source.content,
+        excerpt: source.excerpt,
+        imageUrl: source.imageUrl,
+        category: source.category,
+        tags: Array.isArray(source.tags) ? source.tags : [],
+        isPublished: false,
+        authorId: getAuthenticatedUser(req).id,
+      });
+      setBlogMeta(post.id, {
+        ...getBlogMeta(id),
+        slug: `${getBlogMeta(id).slug ?? slugify(source.title)}-copy-${post.id}`,
+        status: "draft",
+        revisionHistory: [
+          createOperationalRecord({ action: "duplicated", sourceId: id, actor: getAuthenticatedUser(req).id }),
+          ...(getBlogMeta(id).revisionHistory ?? []),
+        ].slice(0, 100),
+      });
+      await emitAdminRealtimeEvent(req, {
+        event: "blog_post_duplicated",
+        channel: "blog-posts",
+        entityType: "blog",
+        referenceId: post.id,
+        payload: { sourceId: id, blogPost: toAdminBlogPost(post) },
+      });
+      res.status(201).json(toAdminBlogPost(post));
+    } catch (error) {
+      console.error("Admin blog duplicate error:", error);
+      res.status(400).json({ message: "Failed to duplicate blog post", error: getErrorMessage(error) });
+    }
+  });
+
+  app.patch('/api/admin/blog/:id/status', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const status = normalizeAdminStatus(String(req.body.status ?? ""));
+      const post = await storage.updateBlogPost(id, { isPublished: status === "published" });
+      if (!post) return res.status(404).json({ message: "Blog post not found" });
+      const meta = getBlogMeta(id);
+      setBlogMeta(id, {
+        status,
+        revisionHistory: [
+          createOperationalRecord({ action: "status_changed", status, actor: getAuthenticatedUser(req).id }),
+          ...(meta.revisionHistory ?? []),
+        ].slice(0, 100),
+      });
+      await emitAdminRealtimeEvent(req, {
+        event: "blog_post_status_updated",
+        channel: "blog-posts",
+        entityType: "blog",
+        referenceId: id,
+        payload: { status },
+      });
+      res.json(toAdminBlogPost(post));
+    } catch (error) {
+      console.error("Admin blog status error:", error);
+      res.status(400).json({ message: "Failed to update blog status", error: getErrorMessage(error) });
+    }
+  });
+
+  app.get('/api/admin/blog/analytics', authenticateToken, requireEditor, async (_req, res) => {
+    try {
+      const mapped = (await storage.getAllBlogPosts()).map(toAdminBlogPost);
+      const byCategory = mapped.reduce<Record<string, number>>((acc, item) => {
+        acc[item.category] = (acc[item.category] ?? 0) + 1;
+        return acc;
+      }, {});
+      res.json({
+        totalPosts: mapped.length,
+        publishedPosts: mapped.filter((item) => item.status === "published").length,
+        drafts: mapped.filter((item) => item.status === "draft").length,
+        scheduled: mapped.filter((item) => Boolean(item.scheduledAt)).length,
+        averageReadingTime: mapped.length
+          ? Math.round(mapped.reduce((sum, item) => sum + Number(item.readingTimeMinutes ?? 0), 0) / mapped.length)
+          : 0,
+        byCategory,
+        revisionCount: mapped.reduce((sum, item) => sum + (item.revisionHistory?.length ?? 0), 0),
+        topContent: mapped
+          .map((item) => ({
+            id: item.id,
+            title: item.title,
+            status: item.status,
+            readingTimeMinutes: item.readingTimeMinutes,
+            revisions: item.revisionHistory?.length ?? 0,
+          }))
+          .slice(0, 8),
+      });
+    } catch (error) {
+      console.error("Admin blog analytics error:", error);
+      res.status(500).json({ message: "Failed to fetch blog analytics" });
+    }
+  });
+
+  app.get('/api/admin/blog/export', authenticateToken, requireEditor, async (_req, res) => {
+    try {
+      const mapped = (await storage.getAllBlogPosts()).map(toAdminBlogPost);
+      const headers = ["ID", "Title", "Slug", "Category", "Status", "Reading Time", "Created"];
+      const rows = mapped.map((item) => [item.id, item.title, item.slug, item.category, item.status, item.readingTimeMinutes, item.createdAt]);
+      const csv = [headers, ...rows].map((row) => row.map(escapeCsvValue).join(",")).join("\n");
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="mtendere-blog-${new Date().toISOString().slice(0, 10)}.csv"`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Admin blog export error:", error);
+      res.status(500).json({ message: "Failed to export blog posts" });
     }
   });
 
@@ -4299,10 +5672,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const member = await storage.createTeamMember(memberData);
-      setTeamMeta(member.id, {
-        department: req.body.department ?? "",
-        profileImage,
-      });
+      setTeamMeta(member.id, buildTeamMetaFromBody({ ...req.body, department: req.body.department ?? "" }, profileImage));
       await emitAdminRealtimeEvent(req, {
         event: "team_member_created",
         channel: "team-members",
@@ -4338,10 +5708,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const member = await storage.updateTeamMember(id, updateData);
       if (!member) return res.status(404).json({ message: "Team member not found" });
 
-      setTeamMeta(id, {
-        department: req.body.department,
-        profileImage,
-      });
+      setTeamMeta(id, buildTeamMetaFromBody(req.body, profileImage));
 
       await emitAdminRealtimeEvent(req, {
         event: "team_member_updated",
@@ -4376,6 +5743,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Admin team delete error:", error);
       res.status(500).json({ message: "Failed to delete team member" });
+    }
+  });
+
+  app.patch('/api/admin/team/:id/status', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const isActive = req.body.isActive !== false;
+      const member = await storage.updateTeamMember(id, { isActive });
+      if (!member) return res.status(404).json({ message: "Team member not found" });
+      await emitAdminRealtimeEvent(req, {
+        event: "team_member_status_updated",
+        channel: "team-members",
+        entityType: "team",
+        referenceId: id,
+        payload: { isActive },
+      });
+      res.json(toAdminTeamMember(member));
+    } catch (error) {
+      console.error("Admin team status error:", error);
+      res.status(400).json({ message: "Failed to update team status", error: getErrorMessage(error) });
+    }
+  });
+
+  app.get('/api/admin/team/analytics', authenticateToken, requireEditor, async (_req, res) => {
+    try {
+      const mapped = (await storage.getAllTeamMembers()).map(toAdminTeamMember);
+      const byDepartment = mapped.reduce<Record<string, number>>((acc, item) => {
+        const department = item.department || "Unassigned";
+        acc[department] = (acc[department] ?? 0) + 1;
+        return acc;
+      }, {});
+      res.json({
+        totalTeamMembers: mapped.length,
+        activeTeamMembers: mapped.filter((item) => item.isActive).length,
+        publicProfiles: mapped.filter((item) => item.visibility === "public").length,
+        leadershipProfiles: mapped.filter((item) => item.leadershipLevel).length,
+        skillsCatalogued: Array.from(new Set(mapped.flatMap((item) => item.skills ?? []))).length,
+        byDepartment,
+      });
+    } catch (error) {
+      console.error("Admin team analytics error:", error);
+      res.status(500).json({ message: "Failed to fetch team analytics" });
+    }
+  });
+
+  app.get('/api/admin/team/export', authenticateToken, requireEditor, async (_req, res) => {
+    try {
+      const mapped = (await storage.getAllTeamMembers()).map(toAdminTeamMember);
+      const headers = ["ID", "Name", "Position", "Department", "Visibility", "Active", "Skills"];
+      const rows = mapped.map((item) => [item.id, item.name, item.position, item.department, item.visibility, item.isActive, (item.skills ?? []).join("; ")]);
+      const csv = [headers, ...rows].map((row) => row.map(escapeCsvValue).join(",")).join("\n");
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="mtendere-team-${new Date().toISOString().slice(0, 10)}.csv"`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Admin team export error:", error);
+      res.status(500).json({ message: "Failed to export team members" });
     }
   });
 
@@ -4451,6 +5876,145 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Admin events analytics error:", error);
       res.status(500).json({ message: "Failed to fetch event analytics" });
+    }
+  });
+
+  app.get('/api/admin/events/reports/summary', authenticateToken, requireEditor, async (_req, res) => {
+    try {
+      const [events, registrations, analytics] = await Promise.all([
+        storage.getAllEvents(),
+        storage.getAllEventRegistrations(),
+        storage.getAnalytics(),
+      ]);
+      const eventRows = await Promise.all(events.map(toAdminEvent));
+      const revenue = registrations.reduce((sum, registration) => {
+        const event = events.find((item) => item.id === registration.eventId);
+        if (!event?.isPaid || registration.status === "rejected" || registration.status === "cancelled") return sum;
+        return sum + Number(event.priceAmount ?? 0);
+      }, 0);
+      const byCountry = registrations.reduce<Record<string, number>>((acc, registration) => {
+        const country = String((registration.answers as Record<string, unknown> | null)?.country ?? "Unspecified");
+        acc[country] = (acc[country] ?? 0) + 1;
+        return acc;
+      }, {});
+      const traffic = analytics
+        .filter((item) => parseAnalyticsMeta(item.metadata).type === "event")
+        .reduce<Record<string, number>>((acc, item) => {
+          acc[item.event] = (acc[item.event] ?? 0) + 1;
+          return acc;
+        }, {});
+      res.json({
+        generatedAt: new Date().toISOString(),
+        totals: {
+          events: events.length,
+          published: events.filter((event) => event.status === "published").length,
+          registrations: registrations.length,
+          attended: registrations.filter((item) => ["attended", "checked_in", "checked_out"].includes(item.attendanceStatus)).length,
+          revenue,
+          conversionRate: traffic.event_viewed ? Math.round((registrations.length / traffic.event_viewed) * 100) : 0,
+        },
+        byCountry,
+        traffic,
+        popularEvents: eventRows
+          .slice()
+          .sort((left, right) => (right.registrationCount ?? 0) - (left.registrationCount ?? 0))
+          .slice(0, 10),
+      });
+    } catch (error) {
+      console.error("Admin event report error:", error);
+      res.status(500).json({ message: "Failed to generate event report" });
+    }
+  });
+
+  app.post('/api/admin/events/:id/duplicate', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const source = await storage.getEvent(id);
+      if (!source) return res.status(404).json({ message: "Event not found" });
+      const baseSlug = slugify(`${source.slug || source.title}-copy`);
+      const startsAt = new Date(source.startAt);
+      const endsAt = new Date(source.endAt);
+      startsAt.setDate(startsAt.getDate() + 7);
+      endsAt.setDate(endsAt.getDate() + 7);
+      const duplicate = await storage.createEvent(insertEventSchema.parse({
+        title: `${source.title} Copy`,
+        slug: `${baseSlug}-${randomBytes(2).toString("hex")}`,
+        summary: source.summary,
+        description: source.description,
+        category: source.category,
+        eventType: source.eventType,
+        organizer: source.organizer,
+        location: source.location,
+        venueName: source.venueName,
+        address: source.address,
+        mapUrl: source.mapUrl,
+        isVirtual: source.isVirtual,
+        virtualUrl: source.virtualUrl,
+        livestreamUrl: source.livestreamUrl,
+        isPaid: source.isPaid,
+        priceAmount: source.priceAmount,
+        currency: source.currency,
+        capacity: source.capacity,
+        rsvpEnabled: source.rsvpEnabled,
+        startAt: startsAt,
+        endAt: endsAt,
+        registrationDeadline: null,
+        coverImage: source.coverImage,
+        videoUrl: source.videoUrl,
+        tags: source.tags,
+        ticketTypes: source.ticketTypes,
+        customFields: source.customFields,
+        agenda: source.agenda,
+        speakers: source.speakers,
+        sponsors: source.sponsors,
+        partners: source.partners,
+        faqs: source.faqs,
+        resources: source.resources,
+        attachments: source.attachments,
+        gallery: source.gallery,
+        seoMeta: source.seoMeta,
+        socialMeta: source.socialMeta,
+        status: "draft",
+        isFeatured: false,
+        isRecommended: source.isRecommended,
+        isTrending: false,
+        allowComments: source.allowComments,
+        requiresApproval: source.requiresApproval,
+        createdBy: getAuthenticatedUser(req).id,
+      }));
+      await emitAdminRealtimeEvent(req, {
+        event: "event_duplicated",
+        channel: "events",
+        entityType: "event",
+        referenceId: duplicate.id,
+        payload: { sourceId: id, event: await toAdminEvent(duplicate) },
+      });
+      res.status(201).json(await toAdminEvent(duplicate));
+    } catch (error) {
+      console.error("Admin event duplicate error:", error);
+      res.status(400).json({ message: "Failed to duplicate event", error: getErrorMessage(error) });
+    }
+  });
+
+  app.patch('/api/admin/events/:id/status', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const status = z.enum(["draft", "published", "archived", "cancelled"]).parse(req.body.status);
+      const event = await storage.updateEvent(id, { status });
+      if (!event) return res.status(404).json({ message: "Event not found" });
+      await emitAdminRealtimeEvent(req, {
+        event: "event_status_updated",
+        channel: "events",
+        entityType: "event",
+        referenceId: event.id,
+        payload: { id, status },
+      });
+      res.json(await toAdminEvent(event));
+    } catch (error) {
+      console.error("Admin event status update error:", error);
+      res.status(400).json({ message: "Failed to update event status", error: getErrorMessage(error) });
     }
   });
 
@@ -4547,6 +6111,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/admin/events/:id/registrations/export', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const event = await storage.getEvent(id);
+      if (!event) return res.status(404).json({ message: "Event not found" });
+      const registrations = await storage.getEventRegistrations(id);
+      const format = String(req.query.format ?? "csv").toLowerCase();
+      const rows = [
+        ["Name", "Email", "Phone", "Organization", "Ticket Type", "Status", "Attendance", "Ticket Code", "Registered At", "Checked In", "Checked Out"],
+        ...registrations.map((registration) => [
+          registration.fullName,
+          registration.email,
+          registration.phone ?? "",
+          registration.organization ?? "",
+          registration.ticketType ?? "",
+          registration.status,
+          registration.attendanceStatus,
+          registration.ticketCode,
+          registration.createdAt ?? "",
+          registration.checkedInAt ?? "",
+          registration.checkedOutAt ?? "",
+        ]),
+      ];
+
+      const filename = `${event.slug || `event-${event.id}`}-registrations`;
+      if (format === "excel" || format === "xls") {
+        const htmlRows = rows
+          .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`)
+          .join("");
+        res.setHeader("Content-Type", "application/vnd.ms-excel; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}.xls"`);
+        res.send(`<table>${htmlRows}</table>`);
+        return;
+      }
+
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}.csv"`);
+      res.send(rows.map((row) => row.map(escapeCsvValue).join(",")).join("\n"));
+    } catch (error) {
+      console.error("Admin event registration export error:", error);
+      res.status(500).json({ message: "Failed to export registrations" });
+    }
+  });
+
+  app.post('/api/admin/event-registrations/:id/check-in', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const registration = await storage.updateEventRegistration(id, {
+        status: "checked_in",
+        attendanceStatus: "checked_in",
+        checkedInAt: new Date(),
+      });
+      await emitAdminRealtimeEvent(req, {
+        event: "event_registration_checked_in",
+        channel: "events",
+        entityType: "event_registration",
+        referenceId: registration.eventId,
+        payload: { registration },
+      });
+      res.json(registration);
+    } catch (error) {
+      console.error("Admin event check-in error:", error);
+      res.status(400).json({ message: "Failed to check in attendee", error: getErrorMessage(error) });
+    }
+  });
+
+  app.post('/api/admin/event-registrations/:id/check-out', authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const registration = await storage.updateEventRegistration(id, {
+        attendanceStatus: "checked_out",
+        checkedOutAt: new Date(),
+      });
+      await emitAdminRealtimeEvent(req, {
+        event: "event_registration_checked_out",
+        channel: "events",
+        entityType: "event_registration",
+        referenceId: registration.eventId,
+        payload: { registration },
+      });
+      res.json(registration);
+    } catch (error) {
+      console.error("Admin event check-out error:", error);
+      res.status(400).json({ message: "Failed to check out attendee", error: getErrorMessage(error) });
+    }
+  });
+
   app.put('/api/admin/event-registrations/:id', authenticateToken, requireEditor, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
@@ -4555,7 +6209,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const registration = await storage.updateEventRegistration(id, {
         ...payload,
         checkedInAt: payload.status === "checked_in" ? new Date() : undefined,
+        checkedOutAt: payload.attendanceStatus === "checked_out" ? new Date() : undefined,
       });
+      const event = await storage.getEvent(registration.eventId);
+      if (event && (payload.status || payload.approvalNotes)) {
+        void sendEventRegistrationStatusUpdate({
+          email: registration.email,
+          name: registration.fullName,
+          eventTitle: event.title,
+          status: registration.status,
+          notes: payload.approvalNotes,
+          ticketUrl: `${env.PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`}/api/events/registrations/${registration.ticketCode}/ticket`,
+        });
+      }
       await emitAdminRealtimeEvent(req, {
         event: "event_registration_updated",
         channel: "events",
@@ -4596,6 +6262,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             opportunityTitle: scholarship?.title ?? job?.title ?? "Opportunity",
             opportunityType: app.type ?? "application",
             coverLetter: app.notes ?? "",
+            meta: getApplicationMeta(app.id),
           };
         }),
       );
@@ -4699,6 +6366,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/admin/applications/analytics', authenticateToken, requireAdmin, async (_req, res) => {
+    try {
+      const applications = await storage.getAllApplications();
+      const byType = applications.reduce<Record<string, number>>((acc, app) => {
+        acc[app.type] = (acc[app.type] ?? 0) + 1;
+        return acc;
+      }, {});
+      const byStatus = applications.reduce<Record<string, number>>((acc, app) => {
+        acc[app.status] = (acc[app.status] ?? 0) + 1;
+        return acc;
+      }, {});
+      const byStage = applications.reduce<Record<string, number>>((acc, app) => {
+        const stage = getApplicationMeta(app.id).stage ?? app.status;
+        acc[stage] = (acc[stage] ?? 0) + 1;
+        return acc;
+      }, {});
+      const scores = applications
+        .map((app) => getApplicationMeta(app.id).score)
+        .filter((score): score is number => typeof score === "number");
+      res.json({
+        totalApplications: applications.length,
+        pendingApplications: applications.filter((app) => app.status === "pending").length,
+        approvedApplications: applications.filter((app) => app.status === "approved").length,
+        rejectedApplications: applications.filter((app) => app.status === "rejected").length,
+        shortlisted: applications.filter((app) => getApplicationMeta(app.id).shortlist).length,
+        interviewsScheduled: applications.reduce((sum, app) => sum + (getApplicationMeta(app.id).interviewSchedule?.length ?? 0), 0),
+        averageScore: scores.length ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : 0,
+        byType,
+        byStatus,
+        byStage,
+      });
+    } catch (error) {
+      console.error("Admin application analytics error:", error);
+      res.status(500).json({ message: "Failed to fetch application analytics" });
+    }
+  });
+
+  app.get('/api/admin/applications/reports/summary', authenticateToken, requireAdmin, async (_req, res) => {
+    try {
+      const applications = await storage.getAllApplications();
+      res.json({
+        generatedAt: new Date().toISOString(),
+        module: "applications",
+        executiveSummary: {
+          total: applications.length,
+          pending: applications.filter((app) => app.status === "pending").length,
+          inReview: applications.filter((app) => getApplicationMeta(app.id).stage === "review").length,
+          approved: applications.filter((app) => app.status === "approved").length,
+          interviews: applications.reduce((sum, app) => sum + (getApplicationMeta(app.id).interviewSchedule?.length ?? 0), 0),
+        },
+        queues: applications
+          .filter((app) => ["pending", "under_review"].includes(app.status))
+          .map((app) => ({
+            id: app.id,
+            type: app.type,
+            referenceId: app.referenceId,
+            status: app.status,
+            stage: getApplicationMeta(app.id).stage ?? app.status,
+            score: getApplicationMeta(app.id).score ?? null,
+          }))
+          .slice(0, 50),
+        automationReadiness: ["review assignment", "scorecards", "interview scheduling", "status notifications", "PDF confirmations"],
+      });
+    } catch (error) {
+      console.error("Admin application report error:", error);
+      res.status(500).json({ message: "Failed to build application report" });
+    }
+  });
+
+  app.post('/api/admin/applications/:id/comments', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+      const application = await storage.getApplication(id);
+      if (!application) return res.status(404).json({ message: "Application not found" });
+      const comment = createOperationalRecord({
+        comment: String(req.body.comment ?? "").slice(0, 4000),
+        visibility: req.body.visibility === "applicant" ? "applicant" : "internal",
+        reviewerId: getAuthenticatedUser(req).id,
+      });
+      const meta = getApplicationMeta(id);
+      setApplicationMeta(id, {
+        reviewerComments: [comment, ...(meta.reviewerComments ?? [])].slice(0, 100),
+        reviewHistory: [
+          createOperationalRecord({ action: "comment_added", reviewerId: getAuthenticatedUser(req).id }),
+          ...(meta.reviewHistory ?? []),
+        ].slice(0, 100),
+      });
+      res.status(201).json(comment);
+    } catch (error) {
+      console.error("Admin application comment error:", error);
+      res.status(400).json({ message: "Failed to add application comment", error: getErrorMessage(error) });
+    }
+  });
+
   app.put('/api/admin/applications/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
@@ -4735,6 +6497,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? await storage.updateApplication(id, updateData)
           : existingApplication;
 
+      const applicationMeta = getApplicationMeta(id);
+      const nextReviewRecord = createOperationalRecord({
+        status: application.status,
+        stage: payload.stage ?? applicationMeta.stage ?? "review",
+        score: payload.score ?? applicationMeta.score ?? null,
+        shortlist: payload.shortlist ?? applicationMeta.shortlist ?? false,
+        interviewAt: payload.interviewAt?.toISOString() ?? null,
+        reviewedBy: getAuthenticatedUser(req).id,
+        notes: payload.reviewNotes ?? "",
+      });
+      setApplicationMeta(id, {
+        stage: payload.stage ?? (payload.status === "approved" ? "approved" : applicationMeta.stage ?? "review"),
+        score: payload.score ?? applicationMeta.score,
+        shortlist: payload.shortlist ?? applicationMeta.shortlist,
+        verificationChecks: payload.verificationChecks ?? applicationMeta.verificationChecks,
+        interviewSchedule: payload.interviewAt
+          ? [
+              createOperationalRecord({
+                startsAt: payload.interviewAt.toISOString(),
+                status: "scheduled",
+                reviewerId: getAuthenticatedUser(req).id,
+              }),
+              ...(applicationMeta.interviewSchedule ?? []),
+            ].slice(0, 50)
+          : applicationMeta.interviewSchedule,
+        reviewerComments: payload.reviewNotes
+          ? [
+              createOperationalRecord({
+                comment: payload.reviewNotes,
+                reviewerId: getAuthenticatedUser(req).id,
+              }),
+              ...(applicationMeta.reviewerComments ?? []),
+            ].slice(0, 100)
+          : applicationMeta.reviewerComments,
+        reviewHistory: [nextReviewRecord, ...(applicationMeta.reviewHistory ?? [])].slice(0, 100),
+      });
+
       const [user, scholarship, job] = await Promise.all([
         storage.getUser(application.userId),
         application.type === "scholarship"
@@ -4753,6 +6552,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         opportunityTitle,
         opportunityType: application.type ?? "application",
         coverLetter: application.notes ?? "",
+        meta: getApplicationMeta(id),
       };
 
       await emitAdminRealtimeEvent(req, {
@@ -4904,6 +6704,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Admin AI chat error:", error);
       res.status(400).json({ message: "Failed to get chat response", error: getErrorMessage(error) });
     }
+  });
+
+  app.get('/api/admin/permissions/catalog', authenticateToken, requireAdmin, (_req, res) => {
+    const modules = [
+      "dashboard",
+      "scholarships",
+      "jobs",
+      "partners",
+      "blog",
+      "team",
+      "users",
+      "roles",
+      "applications",
+      "events",
+      "analytics",
+      "media",
+      "settings",
+    ];
+    const actions = ["create", "read", "update", "delete", "approve", "publish", "export", "archive"];
+    res.json({
+      permissions: Array.from(adminPermissionIds).sort(),
+      modules,
+      actions,
+      matrix: modules.map((module) => ({
+        module,
+        permissions: actions.map((action) => `${module}.${action}`),
+      })),
+      inheritance: {
+        viewer: ["read"],
+        editor: ["create", "read", "update", "publish"],
+        admin: ["create", "read", "update", "delete", "approve", "publish", "export", "archive"],
+        super_admin: ["*"],
+      },
+    });
   });
 
   app.get('/api/admin/roles', authenticateToken, requireSuperAdmin, (req, res) => {

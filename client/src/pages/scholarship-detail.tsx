@@ -463,6 +463,10 @@ export default function ScholarshipDetail() {
                   type="scholarship"
                   referenceId={id}
                   title={resolved.title}
+                  customFields={[
+                    { name: "academicLevel", label: "Current academic level", required: true },
+                    { name: "eligibilityStatement", label: "Why are you eligible for this scholarship?", type: "textarea", required: true },
+                  ]}
                   trigger={
                     <Button className="w-full bg-mtendere-blue font-bold hover:bg-mtendere-blue/90">
                       Apply Now

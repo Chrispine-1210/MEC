@@ -7,13 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { getInitialUrlSearchParam } from "@/hooks/use-url-search-param";
 import DataTable from "@/components/admin/DataTable";
-import { ClipboardList, CheckCircle, XCircle, Clock, AlertCircle, Eye, ChevronRight } from "lucide-react";
+import { ClipboardList, CheckCircle, XCircle, Clock, AlertCircle, Eye, ChevronRight, Star, CalendarClock } from "lucide-react";
 import type { Application } from "@shared/schema";
 
 type AdminApplication = Application & {
@@ -22,6 +23,8 @@ type AdminApplication = Application & {
   opportunityTitle?: string;
   opportunityType?: string;
   coverLetter?: string;
+  submittedAt?: string;
+  meta?: Record<string, any>;
 };
 
 const statusConfig: Record<string, { color: string; icon: any; label: string }> = {
@@ -46,6 +49,10 @@ export default function ApplicationsPage() {
   const [selectedApp, setSelectedApp] = useState<AdminApplication | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
   const [newStatus, setNewStatus] = useState("");
+  const [reviewStage, setReviewStage] = useState("review");
+  const [reviewScore, setReviewScore] = useState("");
+  const [interviewAt, setInterviewAt] = useState("");
+  const [shortlist, setShortlist] = useState(false);
   const { toast } = useToast();
 
   const { data, isLoading } = useQuery<{ applications: Application[], total: number }>({
@@ -53,6 +60,15 @@ export default function ApplicationsPage() {
     queryFn: async () => {
       const response = await authFetch(`/api/admin/applications?page=${page}&limit=${limit}&search=${search}&status=${status}`);
       if (!response.ok) throw new Error("Failed to fetch applications");
+      return response.json();
+    },
+  });
+
+  const { data: analytics } = useQuery<any>({
+    queryKey: ["/api/admin/applications/analytics"],
+    queryFn: async () => {
+      const response = await authFetch("/api/admin/applications/analytics");
+      if (!response.ok) throw new Error("Failed to fetch application analytics");
       return response.json();
     },
   });
@@ -105,17 +121,25 @@ export default function ApplicationsPage() {
     setSelectedApp(app as AdminApplication);
     setNewStatus(app.status);
     setReviewNotes("");
+    setReviewStage(app.meta?.stage || "review");
+    setReviewScore(typeof app.meta?.score === "number" ? String(app.meta.score) : "");
+    setInterviewAt("");
+    setShortlist(Boolean(app.meta?.shortlist));
   };
 
   const submitReview = (statusOverride?: string) => {
     if (!selectedApp) return;
     updateMutation.mutate({
       id: selectedApp.id,
-      data: {
-        status: statusOverride ?? newStatus,
-        reviewNotes,
-      },
-    });
+        data: {
+          status: statusOverride ?? newStatus,
+          reviewNotes,
+          stage: reviewStage,
+          score: reviewScore ? Number(reviewScore) : undefined,
+          shortlist,
+          interviewAt: interviewAt || undefined,
+        },
+      });
   };
 
   // Summary stats
@@ -242,11 +266,13 @@ export default function ApplicationsPage() {
 
       {/* Quick Stats */}
       {data && data.applications.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           {[
             { label: "Pending Review", count: data.applications.filter(a => a.status === "pending").length, color: "amber", icon: Clock },
             { label: "Approved", count: data.applications.filter(a => a.status === "approved").length, color: "green", icon: CheckCircle },
             { label: "Rejected", count: data.applications.filter(a => a.status === "rejected").length, color: "red", icon: XCircle },
+            { label: "Shortlisted", count: analytics?.shortlisted ?? 0, color: "green", icon: Star },
+            { label: "Interviews", count: analytics?.interviewsScheduled ?? 0, color: "amber", icon: CalendarClock },
           ].map(({ label, count, color, icon: Icon }) => (
             <Card key={label} className={statCardStyles[color].card}>
               <CardContent className="p-4 flex items-center gap-3">
@@ -277,7 +303,7 @@ export default function ApplicationsPage() {
 
       {/* Review Dialog */}
       <Dialog open={!!selectedApp} onOpenChange={(open) => { if (!open) setSelectedApp(null); }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Eye className="h-5 w-5" />
@@ -307,7 +333,7 @@ export default function ApplicationsPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Applied</span>
-                  <span className="text-sm">{new Date(selectedApp.createdAt).toLocaleString()}</span>
+                  <span className="text-sm">{new Date(selectedApp.createdAt ?? selectedApp.submittedAt ?? Date.now()).toLocaleString()}</span>
                 </div>
               </div>
 
@@ -341,6 +367,24 @@ export default function ApplicationsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-sm font-medium mb-1.5 block">Review Stage</label>
+                    <Input value={reviewStage} onChange={(event) => setReviewStage(event.target.value)} placeholder="review, interview, final" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1.5 block">Score</label>
+                    <Input value={reviewScore} onChange={(event) => setReviewScore(event.target.value)} type="number" min={0} max={100} placeholder="0-100" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1.5 block">Interview</label>
+                    <Input value={interviewAt} onChange={(event) => setInterviewAt(event.target.value)} type="datetime-local" />
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 rounded-lg border border-border/60 p-3 text-sm">
+                  <input type="checkbox" checked={shortlist} onChange={(event) => setShortlist(event.target.checked)} />
+                  Shortlist this applicant
+                </label>
                 <div>
                   <label className="text-sm font-medium mb-1.5 block">Review Notes (optional)</label>
                   <Textarea

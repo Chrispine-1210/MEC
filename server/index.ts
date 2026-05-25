@@ -17,6 +17,9 @@ app.disable("x-powered-by");
 
 app.use(
   helmet({
+    crossOriginResourcePolicy: { policy: "same-site" },
+    frameguard: { action: "deny" },
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
@@ -61,24 +64,14 @@ const normalizeOrigin = (value?: string) => {
   }
 };
 
-const configuredOrigins = [
-  env.PUBLIC_APP_URL,
-  env.FRONTEND_URL,
-  env.ADMIN_APP_URL,
-  env.VITE_SITE_URL,
-  env.VITE_API_URL,
-  ...splitOriginList(env.CORS_ORIGIN),
-  ...splitOriginList(env.CORS_ORIGINS),
-  ...splitOriginList(env.ALLOWED_ORIGINS),
+const productionBrowserOrigins = [
+  "https://mtendereeducationconsult.com",
+  "https://admin.mtendereeducationconsult.com",
 ];
 
 const developmentOrigins = isProduction
   ? []
   : [
-      "http://localhost:3000",
-      "http://localhost:5000",
-      "http://localhost:5173",
-      `http://localhost:${adminPort}`,
       "http://127.0.0.1:3000",
       "http://127.0.0.1:5000",
       "http://127.0.0.1:5173",
@@ -89,16 +82,22 @@ const developmentOrigins = isProduction
     ];
 
 const allowedOrigins = new Set(
-  [
-    ...configuredOrigins,
-    ...developmentOrigins,
-    `http://localhost:${port}`,
-    `http://127.0.0.1:${port}`,
-    `http://0.0.0.0:${port}`,
-    `http://localhost:${adminPort}`,
-    `http://127.0.0.1:${adminPort}`,
-    `http://0.0.0.0:${adminPort}`,
-  ]
+  (isProduction
+    ? productionBrowserOrigins
+    : [
+        env.PUBLIC_APP_URL,
+        env.FRONTEND_URL,
+        env.ADMIN_APP_URL,
+        env.VITE_SITE_URL,
+        ...splitOriginList(env.CORS_ORIGIN),
+        ...splitOriginList(env.CORS_ORIGINS),
+        ...splitOriginList(env.ALLOWED_ORIGINS),
+        ...developmentOrigins,
+        `http://127.0.0.1:${port}`,
+        `http://0.0.0.0:${port}`,
+        `http://127.0.0.1:${adminPort}`,
+        `http://0.0.0.0:${adminPort}`,
+      ])
     .map(normalizeOrigin)
     .filter(Boolean) as string[],
 );
@@ -107,12 +106,8 @@ const isAllowedOrigin = (origin: string | undefined, req: Request) => {
   if (!origin) return true;
 
   const normalizedOrigin = normalizeOrigin(origin);
-  const hostOrigin = normalizeOrigin(`${req.protocol}://${req.get("host")}`);
 
-  return Boolean(
-    normalizedOrigin &&
-      (normalizedOrigin === hostOrigin || allowedOrigins.has(normalizedOrigin)),
-  );
+  return Boolean(normalizedOrigin && allowedOrigins.has(normalizedOrigin));
 };
 
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -294,8 +289,9 @@ export const ready = (async () => {
   });
 
   if (!isVercelRuntime) {
-    server.listen(port, "0.0.0.0", () => {
-      log(`Server listening on port ${port}`);
+    const listenHost = env.HOST || (isProduction ? "127.0.0.1" : "0.0.0.0");
+    server.listen(port, listenHost, () => {
+      log(`Server listening on ${listenHost}:${port}`);
     });
   }
 
