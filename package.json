@@ -13,6 +13,7 @@
     "dev:Admin": "npm run dev:admin",
     "dev:all": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"npm run dev:admin\"",
     "dev": "npm run dev:server",
+    "prebuild": "node scripts/ensure-dev-deps.cjs",
     "build:client": "cross-env NODE_OPTIONS=--max-old-space-size=4096 vite build",
     "build:admin": "cross-env NODE_OPTIONS=--max-old-space-size=4096 npm run build --prefix ./Admin",
     "build:admin:vercel": "cross-env NODE_OPTIONS=--max-old-space-size=4096 ADMIN_BUILD_OUT_DIR=dist/client/admin VITE_ADMIN_BASE_PATH=/admin/ npm run build --prefix ./Admin",
