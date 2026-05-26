@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { resolveApiUrl } from "@/lib/api-base";
+import { apiFetch } from "@/lib/api-base";
 import { apiRequest } from "@/lib/queryClient";
 
 type ApplicationDialogProps = {
@@ -120,7 +120,7 @@ export default function ApplicationDialog({ type, referenceId, title, trigger, c
     }
 
     const token = localStorage.getItem("token");
-    const response = await fetch(resolveApiUrl("/api/application-assets"), {
+    const response = await apiFetch("/api/application-assets", {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: formData,

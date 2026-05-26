@@ -91,7 +91,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
               invalidateByPrefix(["/api/events", "/api/admin/events"]);
               break;
             case "user_activity":
-              if (user?.role === "admin" || user?.role === "super_admin") {
+              if (user?.role === "super_admin") {
                 invalidateByPrefix([
                   "/api/analytics",
                   "/api/admin/dashboard",

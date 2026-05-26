@@ -244,7 +244,7 @@ export default function ExpandingNav() {
                         <User className="w-4 h-4" />
                         <span>Dashboard</span>
                       </Link>
-                      {(user.role === 'admin' || user.role === 'super_admin') && (
+                      {user.role === 'super_admin' && (
                         <Link
                           href="/admin"
                           onClick={closeMenu}
@@ -368,7 +368,7 @@ export default function ExpandingNav() {
                     >
                       Dashboard
                     </Link>
-                    {(user.role === 'admin' || user.role === 'super_admin') && (
+                    {user.role === 'super_admin' && (
                       <Link
                         href="/admin"
                         onClick={closeMenu}

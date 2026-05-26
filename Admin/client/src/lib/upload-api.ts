@@ -1,4 +1,4 @@
-import { resolveApiUrl } from "./api-base";
+import { apiFetch } from "./api-base";
 
 // Legacy image upload wrapper. Images are stored in governed assets/imgs modules.
 export const uploadApi = {
@@ -12,7 +12,7 @@ export const uploadApi = {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    return fetch(resolveApiUrl("/api/admin/media/assets/misc"), {
+    return apiFetch("/api/admin/media/assets/misc", {
       method: "POST",
       headers,
       body: formData,
@@ -32,7 +32,7 @@ export const uploadApi = {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    return fetch(resolveApiUrl("/api/admin/media/assets/misc"), {
+    return apiFetch("/api/admin/media/assets/misc", {
       method: "POST",
       headers,
       body: formData,

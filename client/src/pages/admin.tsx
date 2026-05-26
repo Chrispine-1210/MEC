@@ -34,16 +34,16 @@ export default function Admin() {
 
   const { data: analytics } = useQuery<any>({
     queryKey: ["/api/analytics/summary"],
-    enabled: !!user && (user.role === 'admin' || user.role === 'super_admin'),
+    enabled: !!user && user.role === 'super_admin',
   });
 
   const { data: recentActivity } = useQuery<any[]>({
     queryKey: ["/api/analytics"],
-    enabled: !!user && (user.role === 'admin' || user.role === 'super_admin'),
+    enabled: !!user && user.role === 'super_admin',
   });
 
   useEffect(() => {
-    if (!isLoading && (!user || (user.role !== 'admin' && user.role !== 'super_admin'))) {
+    if (!isLoading && (!user || user.role !== 'super_admin')) {
       setLocation("/dashboard");
     }
   }, [user, isLoading, setLocation]);
@@ -59,7 +59,7 @@ export default function Admin() {
     );
   }
 
-  if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
+  if (!user || user.role !== 'super_admin') {
     return null;
   }
 

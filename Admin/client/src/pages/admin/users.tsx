@@ -20,15 +20,50 @@ import { Plus, Pencil, Trash2, Users, UserPlus, ShieldCheck } from "lucide-react
 import type { User } from "@shared/schema";
 import { getInitialUrlSearchParam } from "@/hooks/use-url-search-param";
 
+const strongPasswordSchema = z
+  .string()
+  .min(12, "Password must be at least 12 characters")
+  .max(128, "Password must be 128 characters or fewer")
+  .regex(/[a-z]/, "Password must include a lowercase letter")
+  .regex(/[A-Z]/, "Password must include an uppercase letter")
+  .regex(/[0-9]/, "Password must include a number")
+  .regex(/[^A-Za-z0-9]/, "Password must include a symbol");
+
 const createSchema = insertUserSchema.extend({
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: strongPasswordSchema,
+  role: z.enum(["viewer", "writer"]),
+});
+
+const updateSchema = insertUserSchema.partial().extend({
+  password: strongPasswordSchema.optional(),
+  role: z.enum(["viewer", "writer", "super_admin", "admin", "editor"]).optional(),
 });
 
 const roleColors: Record<string, string> = {
   super_admin: "bg-info/15 text-info",
   admin: "bg-primary/10 text-primary",
+  writer: "bg-success/15 text-success",
   editor: "bg-success/15 text-success",
   viewer: "bg-muted text-muted-foreground",
+};
+
+const assignableRoleOptions = [
+  { value: "viewer", label: "Viewer" },
+  { value: "writer", label: "Writer" },
+];
+
+const roleLabel = (role: string) =>
+  role === "super_admin"
+    ? "Super Admin"
+    : role === "admin"
+      ? "Legacy Admin"
+      : role === "editor"
+        ? "Legacy Editor"
+        : role.charAt(0).toUpperCase() + role.slice(1);
+
+const getEditableRole = (role: string) => {
+  if (role === "viewer" || role === "writer" || role === "super_admin") return role;
+  return "writer";
 };
 
 export default function UsersPage() {
@@ -97,7 +132,7 @@ export default function UsersPage() {
   });
 
   const form = useForm<any>({
-    resolver: zodResolver(editingUser ? insertUserSchema.partial() : createSchema),
+    resolver: zodResolver(editingUser ? updateSchema : createSchema),
     defaultValues: { username: "", email: "", password: "", firstName: "", lastName: "", role: "viewer", region: "" },
   });
 
@@ -115,7 +150,7 @@ export default function UsersPage() {
 
   const handleEdit = (user: User) => {
     setEditingUser(user);
-    form.reset({ username: user.username, email: user.email, role: user.role, firstName: user.firstName || "", lastName: user.lastName || "", region: user.region || "" });
+    form.reset({ username: user.username, email: user.email, role: getEditableRole(user.role), firstName: user.firstName || "", lastName: user.lastName || "", region: user.region || "" });
     setIsDialogOpen(true);
   };
 
@@ -128,20 +163,18 @@ export default function UsersPage() {
   const onSubmit = (formData: any) => {
     if (editingUser) {
       const { password, ...rest } = formData;
+      if (editingUser.role === "super_admin") {
+        delete rest.role;
+      }
       updateMutation.mutate({ id: editingUser.id, data: rest });
     } else {
       createMutation.mutate(formData);
     }
   };
 
-  const roleOptions = [
-    { value: "viewer", label: "Viewer" },
-    { value: "editor", label: "Editor" },
-    { value: "admin", label: "Administrator" },
-    ...(currentUser?.role === "super_admin"
-      ? [{ value: "super_admin", label: "Super Admin" }]
-      : []),
-  ];
+  const roleOptions = editingUser?.role === "super_admin"
+    ? [{ value: "super_admin", label: "Super Admin", disabled: true }]
+    : assignableRoleOptions;
 
   const columns = [
     {
@@ -170,7 +203,7 @@ export default function UsersPage() {
       render: (v: string) => (
         <Badge className={`text-xs border-0 ${roleColors[v] || roleColors.viewer}`}>
           <ShieldCheck className="h-3 w-3 mr-1" />
-          {v?.replace("_", " ")}
+          {roleLabel(v)}
         </Badge>
       )
     },
@@ -181,6 +214,7 @@ export default function UsersPage() {
         <Switch
           checked={value}
           onCheckedChange={(checked) => toggleActiveMutation.mutate({ id: row.id, isActive: checked })}
+          disabled={row.role === "super_admin" || String(row.id) === String(currentUser?.id)}
           aria-label="Toggle active status"
         />
       )
@@ -208,7 +242,7 @@ export default function UsersPage() {
             variant="ghost"
             size="sm"
             onClick={() => handleDelete(row.id)}
-            disabled={String(row.id) === String(currentUser?.id) || (row.role === "super_admin" && currentUser?.role !== "super_admin")}
+            disabled={String(row.id) === String(currentUser?.id) || row.role === "super_admin"}
             className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -258,7 +292,7 @@ export default function UsersPage() {
               {editingUser ? "Edit User" : "Create New User"}
             </DialogTitle>
             <DialogDescription>
-              {editingUser ? "Update user information and role assignment." : "Create a new admin account with specific access level."}
+              {editingUser ? "Update user information and role assignment." : "Create a Viewer or Writer account. Super admin access is not created here."}
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
@@ -297,7 +331,7 @@ export default function UsersPage() {
                 <FormField control={form.control} name="password" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Password *</FormLabel>
-                    <FormControl><Input type="password" placeholder="Min. 8 characters" {...field} /></FormControl>
+                    <FormControl><Input type="password" placeholder="12+ chars with number & symbol" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -306,7 +340,7 @@ export default function UsersPage() {
                 <FormField control={form.control} name="role" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Role *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={editingUser?.role === "super_admin"}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select role" />
@@ -314,7 +348,7 @@ export default function UsersPage() {
                       </FormControl>
                       <SelectContent>
                         {roleOptions.map((role) => (
-                          <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
+                          <SelectItem key={role.value} value={role.value} disabled={"disabled" in role && role.disabled}>{role.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

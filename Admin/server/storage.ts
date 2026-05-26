@@ -1,6 +1,7 @@
 import { type User, type InsertUser, type Scholarship, type InsertScholarship, type JobOpportunity, type InsertJobOpportunity, type PartnerInstitution, type InsertPartnerInstitution, type BlogPost, type InsertBlogPost, type TeamMember, type InsertTeamMember, type Application, type InsertApplication, type AiChatConversation, type InsertAiChatConversation, type AdminNotification, type InsertAdminNotification, type AuditLog, type InsertAuditLog, type Settings, type InsertSettings } from "@shared/schema";
 import { nanoid } from "nanoid";
 import bcrypt from "bcrypt";
+import { randomUUID } from "crypto";
 
 export interface Role {
   id: string;
@@ -140,9 +141,10 @@ export class MemStorage implements IStorage {
       updatedAt: new Date()
     };
 
-    // Add default admin user for testing
+    // Add default super admin only when strong credentials are provided by the environment.
     const defaultAdminId = "default-admin-id";
-    const hashedPassword = bcrypt.hashSync("admin123", 10);
+    const seedSuperAdminPassword = process.env.SEED_SUPER_ADMIN_PASSWORD || process.env.SUPER_ADMIN_PASSWORD;
+    const hashedPassword = bcrypt.hashSync(seedSuperAdminPassword || randomUUID(), 12);
     this.usersMap.set(defaultAdminId, {
       id: defaultAdminId,
       username: "admin",
@@ -153,7 +155,7 @@ export class MemStorage implements IStorage {
       profileImage: null,
       role: "super_admin",
       region: "Global",
-      isActive: true,
+      isActive: Boolean(seedSuperAdminPassword),
       lastLogin: null,
 
       mfaEnabled: false,
@@ -167,8 +169,7 @@ export class MemStorage implements IStorage {
     // Seed default roles
     const now = new Date();
     this.rolesMap.set("viewer", { id: "viewer", name: "Viewer", description: "Read-only access to public content", permissions: ["view_dashboard"], createdAt: now, updatedAt: now });
-    this.rolesMap.set("editor", { id: "editor", name: "Editor", description: "Can create and edit content", permissions: ["view_dashboard", "manage_scholarships", "manage_jobs", "manage_blog", "manage_partners", "manage_team"], createdAt: now, updatedAt: now });
-    this.rolesMap.set("admin", { id: "admin", name: "Administrator", description: "Full access to admin panel", permissions: ["view_dashboard", "manage_scholarships", "manage_jobs", "manage_partners", "manage_blog", "manage_team", "manage_users", "review_applications", "manage_roles", "view_analytics"], createdAt: now, updatedAt: now });
+    this.rolesMap.set("writer", { id: "writer", name: "Writer", description: "Can create and edit content", permissions: ["view_dashboard", "manage_scholarships", "manage_jobs", "manage_blog", "manage_partners", "manage_team"], createdAt: now, updatedAt: now });
     this.rolesMap.set("super_admin", { id: "super_admin", name: "Super Administrator", description: "Complete system access including settings", permissions: ["view_dashboard", "manage_scholarships", "manage_jobs", "manage_partners", "manage_blog", "manage_team", "manage_users", "review_applications", "manage_roles", "view_analytics", "manage_settings"], createdAt: now, updatedAt: now });
   }
 

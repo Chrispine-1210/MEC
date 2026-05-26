@@ -111,6 +111,62 @@ import {
 import { normalizeSearchQuery, parsePagination, searchAndRank } from "./search";
 
 const JWT_SECRET = env.JWT_SECRET;
+const PASSWORD_HASH_ROUNDS = 12;
+const ADMIN_PORTAL_ROLES = new Set(["viewer", "writer", "editor", "admin", "super_admin"]);
+const ADMIN_SELF_SERVICE_ROLES = new Set(["viewer", "writer"]);
+const ADMIN_ASSIGNABLE_ROLES = new Set(["viewer", "writer"]);
+const ADMIN_CONTENT_ROLES = new Set(["writer", "editor", "admin", "super_admin"]);
+const PROTECTED_ADMIN_ROLES = new Set(["super_admin"]);
+const COMMON_WEAK_PASSWORDS = [
+  "password",
+  "password123",
+  "admin",
+  "admin123",
+  "qwerty",
+  "letmein",
+  "welcome",
+  "mtendere",
+];
+
+const strongPasswordSchema = z
+  .string()
+  .min(12, "Password must be at least 12 characters")
+  .max(128, "Password must be 128 characters or fewer")
+  .regex(/[a-z]/, "Password must include a lowercase letter")
+  .regex(/[A-Z]/, "Password must include an uppercase letter")
+  .regex(/[0-9]/, "Password must include a number")
+  .regex(/[^A-Za-z0-9]/, "Password must include a symbol")
+  .refine(
+    (password) => !COMMON_WEAK_PASSWORDS.some((weak) => password.toLowerCase().includes(weak)),
+    "Password is too common or contains an unsafe word",
+  );
+
+const validateStrongPassword = (password: string) => strongPasswordSchema.parse(password);
+
+const normalizeAdminRole = (role: unknown) => {
+  if (typeof role !== "string") return null;
+  const normalized = role.trim().toLowerCase();
+  return normalized === "editor" ? "writer" : normalized;
+};
+
+const normalizeSelfServiceAdminRole = (role: unknown) => {
+  const normalized = normalizeAdminRole(role);
+  return normalized && ADMIN_SELF_SERVICE_ROLES.has(normalized) ? normalized : "viewer";
+};
+
+const isExplicitForbiddenAdminSignupRole = (role: unknown) => {
+  if (role === undefined || role === null || role === "") return false;
+  const normalized = normalizeAdminRole(role);
+  return Boolean(normalized && !ADMIN_SELF_SERVICE_ROLES.has(normalized));
+};
+
+const normalizeAssignableAdminRole = (role: unknown) => {
+  const normalized = normalizeAdminRole(role);
+  return normalized && ADMIN_ASSIGNABLE_ROLES.has(normalized) ? normalized : null;
+};
+
+const isProtectedAdminRole = (role: string | null | undefined) =>
+  Boolean(role && PROTECTED_ADMIN_ROLES.has(role));
 
 const checkoutRequestSchema = z.object({
   mode: z.enum(["payment", "subscription"]).optional(),
@@ -382,6 +438,11 @@ const getErrorMessage = (error: unknown) => {
   }
 
   return "Unknown error";
+};
+
+const getErrorLogMessage = (error: unknown) => {
+  const message = getErrorMessage(error);
+  return typeof message === "string" ? message : JSON.stringify(message);
 };
 
 const isTransientDbConnectivityError = (error: unknown) => {
@@ -1115,14 +1176,10 @@ const getOptionalAuthenticatedUser = (req: Request): JwtUser | null => {
   }
 };
 
-const isAdmin = (user: JwtUser | null) =>
-  user?.role === "admin" || user?.role === "super_admin";
+const isAdmin = (user: JwtUser | null) => user?.role === "super_admin";
 
 const isAdminPortalUser = (user: JwtUser | null) =>
-  user?.role === "viewer" ||
-  user?.role === "editor" ||
-  user?.role === "admin" ||
-  user?.role === "super_admin";
+  Boolean(user?.role && ADMIN_PORTAL_ROLES.has(user.role));
 
 const authenticateToken = (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
@@ -1174,11 +1231,11 @@ const requireSuperAdmin = (req: Request, res: Response, next: NextFunction) => {
 };
 
 const isEditor = (user: JwtUser | null) =>
-  user?.role === "editor" || user?.role === "admin" || user?.role === "super_admin";
+  Boolean(user?.role && ADMIN_CONTENT_ROLES.has(user.role));
 
 const requireEditor = (req: Request, res: Response, next: NextFunction) => {
   if (!isEditor(getAuthenticatedUser(req))) {
-    return res.status(403).json({ message: "Editor access required" });
+    return res.status(403).json({ message: "Writer access required" });
   }
 
   next();
@@ -1803,23 +1860,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ? req.query.ref
             : null;
       const userData = insertUserSchema.parse(registrationBody);
+      userData.email = userData.email.trim().toLowerCase();
+      userData.username = userData.username.trim();
 
       const isAdminRegistration = req.path === "/auth/register";
-      const adminPortalRoles = new Set(["viewer", "editor", "admin"]);
 
       if (isAdminRegistration) {
-        const requestedRole = userData.role && adminPortalRoles.has(userData.role) ? userData.role : "viewer";
-
-        if (env.NODE_ENV === "production" && requestedRole !== "viewer") {
-          return res.status(403).json({
-            message: "Editor and admin accounts must be provisioned by an existing administrator.",
-          });
+        if (isExplicitForbiddenAdminSignupRole(userData.role)) {
+          return res.status(403).json({ message: "Only Viewer and Writer accounts can be created from the admin sign-up form." });
         }
-
-        userData.role = requestedRole;
+        userData.role = normalizeSelfServiceAdminRole(userData.role);
       } else {
         userData.role = "user";
       }
+      validateStrongPassword(userData.password);
       
       // Check if user already exists
       const existingUser =
@@ -1830,7 +1884,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Hash password
-      const hashedPassword = await bcrypt.hash(userData.password, 10);
+      const hashedPassword = await bcrypt.hash(userData.password, PASSWORD_HASH_ROUNDS);
       
       // Create user
       const createdUser = await storage.createUser({
@@ -1864,7 +1918,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user: buildPublicUser(user),
       });
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error('Registration error:', getErrorLogMessage(error));
       res.status(400).json({ message: 'Registration failed', error: getErrorMessage(error) });
     }
   };
@@ -1880,6 +1934,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const normalizedIdentifier = String(identifier).trim();
       const looksLikeEmail = normalizedIdentifier.includes("@");
+      const lookupIdentifier = looksLikeEmail ? normalizedIdentifier.toLowerCase() : normalizedIdentifier;
       const existingFailure = getLoginFailure(normalizedIdentifier);
       if (existingFailure?.lockedUntil && existingFailure.lockedUntil > Date.now()) {
         const retryAfterSeconds = Math.ceil((existingFailure.lockedUntil - Date.now()) / 1000);
@@ -1892,11 +1947,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Use a single targeted lookup to avoid unnecessary DB round-trips during login.
       const user = looksLikeEmail
-        ? await storage.getUserByEmail(normalizedIdentifier)
-        : await storage.getUserByUsername(normalizedIdentifier);
+        ? await storage.getUserByEmail(lookupIdentifier)
+        : await storage.getUserByUsername(lookupIdentifier);
       if (!user) {
         registerLoginFailure(normalizedIdentifier);
         return res.status(401).json({ message: 'Invalid credentials' });
+      }
+      if (user.isActive === false) {
+        registerLoginFailure(normalizedIdentifier);
+        return res.status(403).json({ message: 'This account is inactive. Contact the super administrator.' });
       }
 
       // Check password
@@ -2018,7 +2077,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/user', authenticateToken, sendUserProfile);
   app.get('/api/user/profile', authenticateToken, sendUserProfile);
 
-  app.get('/api/users', authenticateToken, requireAdmin, async (_req, res) => {
+  app.get('/api/users', authenticateToken, requireSuperAdmin, async (_req, res) => {
     try {
       const users = await storage.getAllUsers();
       res.json(users.map(buildPublicUser));
@@ -2028,9 +2087,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
+  app.post('/api/users', authenticateToken, requireSuperAdmin, async (req, res) => {
     try {
       const userData = insertUserSchema.parse(req.body);
+      userData.email = userData.email.trim().toLowerCase();
+      userData.username = userData.username.trim();
+      const requestedRole = normalizeAssignableAdminRole(userData.role);
+      if (!requestedRole) {
+        return res.status(403).json({ message: "Only viewer and writer accounts can be created from user management" });
+      }
+      validateStrongPassword(userData.password);
+      userData.role = requestedRole;
       const existingUser =
         (await storage.getUserByEmail(userData.email)) ||
         (await storage.getUserByUsername(userData.username));
@@ -2041,37 +2108,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const user = await storage.createUser({
         ...userData,
-        password: await bcrypt.hash(userData.password, 10),
+        password: await bcrypt.hash(userData.password, PASSWORD_HASH_ROUNDS),
       });
 
       res.status(201).json(buildPublicUser(user));
     } catch (error) {
-      console.error('User creation error:', error);
+      console.error('User creation error:', getErrorLogMessage(error));
       res.status(400).json({ message: 'Failed to create user', error: getErrorMessage(error) });
     }
   });
 
-  app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+  app.put('/api/users/:id', authenticateToken, requireSuperAdmin, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
 
       const updateData = insertUserSchema.partial().parse(req.body);
+      if (updateData.email) updateData.email = updateData.email.trim().toLowerCase();
+      if (updateData.username) updateData.username = updateData.username.trim();
+      const existingUser = await storage.getUser(id);
+      if (!existingUser) return res.status(404).json({ message: 'User not found' });
+      if (isProtectedAdminRole(existingUser.role) && updateData.role && updateData.role !== existingUser.role) {
+        return res.status(403).json({ message: "Super administrator role cannot be changed from user management" });
+      }
+      if (isProtectedAdminRole(existingUser.role) && updateData.isActive === false) {
+        return res.status(403).json({ message: "Super administrator accounts cannot be suspended from user management" });
+      }
+      if (updateData.role && !isProtectedAdminRole(existingUser.role)) {
+        const requestedRole = normalizeAssignableAdminRole(updateData.role);
+        if (!requestedRole) {
+          return res.status(403).json({ message: "Only viewer and writer roles can be assigned" });
+        }
+        updateData.role = requestedRole;
+      }
+      if (updateData.password) validateStrongPassword(updateData.password);
       const nextUser = updateData.password
-        ? { ...updateData, password: await bcrypt.hash(updateData.password, 10) }
+        ? { ...updateData, password: await bcrypt.hash(updateData.password, PASSWORD_HASH_ROUNDS) }
         : updateData;
 
       const user = await storage.updateUser(id, nextUser);
-      if (!user) return res.status(404).json({ message: 'User not found' });
 
       res.json(buildPublicUser(user));
     } catch (error) {
-      console.error('User update error:', error);
+      console.error('User update error:', getErrorLogMessage(error));
       res.status(400).json({ message: 'Failed to update user', error: getErrorMessage(error) });
     }
   });
 
-  app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+  app.delete('/api/users/:id', authenticateToken, requireSuperAdmin, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
@@ -2079,6 +2163,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const authUser = getAuthenticatedUser(req);
       if (authUser.id === id) {
         return res.status(400).json({ message: 'You cannot delete your own account' });
+      }
+      const targetUser = await storage.getUser(id);
+      if (!targetUser) return res.status(404).json({ message: 'User not found' });
+      if (isProtectedAdminRole(targetUser.role)) {
+        return res.status(403).json({ message: "Super administrator accounts cannot be deleted from user management" });
       }
 
       const success = await storage.deleteUser(id);
@@ -2566,7 +2655,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const user = getAuthenticatedUser(req);
-      if (existingApplication.userId !== user.id && user.role !== 'admin' && user.role !== 'super_admin') {
+      if (existingApplication.userId !== user.id && !isAdmin(user)) {
         return res.status(403).json({ message: 'Not authorized to update this application' });
       }
       
@@ -4038,7 +4127,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/ecosystem/overview', authenticateToken, requireAdminPortal, async (_req, res) => {
+  app.get('/api/admin/ecosystem/overview', authenticateToken, requireAdmin, async (_req, res) => {
     try {
       const sourceErrors: string[] = [];
       const safeList = async <T>(label: string, loader: () => Promise<T[]>): Promise<T[]> => {
@@ -4180,7 +4269,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+  app.get('/api/admin/users', authenticateToken, requireSuperAdmin, async (req, res) => {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
@@ -4204,7 +4293,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/users/:id(\\d+)', authenticateToken, requireAdmin, async (req, res) => {
+  app.get('/api/admin/users/:id(\\d+)', authenticateToken, requireSuperAdmin, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -4217,13 +4306,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+  app.post('/api/admin/users', authenticateToken, requireSuperAdmin, async (req, res) => {
     try {
-      const requester = getAuthenticatedUser(req);
       const userData = insertUserSchema.parse(req.body);
-      if (userData.role === "super_admin" && requester.role !== "super_admin") {
-        return res.status(403).json({ message: "Only a super administrator can create super admin users" });
+      userData.email = userData.email.trim().toLowerCase();
+      userData.username = userData.username.trim();
+      const requestedRole = normalizeAssignableAdminRole(userData.role);
+      if (!requestedRole) {
+        return res.status(403).json({
+          message: "Only viewer and writer accounts can be created from admin management. Super admin is provisioned outside the portal.",
+        });
       }
+      validateStrongPassword(userData.password);
+      userData.role = requestedRole;
 
       const existing =
         (await storage.getUserByEmail(userData.email)) ||
@@ -4234,7 +4329,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const user = await storage.createUser({
         ...userData,
-        password: await bcrypt.hash(userData.password, 10),
+        password: await bcrypt.hash(userData.password, PASSWORD_HASH_ROUNDS),
       });
       if (req.body.region) {
         setUserMeta(user.id, { region: String(req.body.region) });
@@ -4248,12 +4343,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       res.status(201).json(toAdminUser(user));
     } catch (error) {
-      console.error("Admin user create error:", error);
+      console.error("Admin user create error:", getErrorLogMessage(error));
       res.status(400).json({ message: "Failed to create user", error: getErrorMessage(error) });
     }
   });
 
-  app.put('/api/admin/users/:id(\\d+)', authenticateToken, requireAdmin, async (req, res) => {
+  app.put('/api/admin/users/:id(\\d+)', authenticateToken, requireSuperAdmin, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -4262,21 +4357,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!existingUser) return res.status(404).json({ message: "User not found" });
 
       const updateData = insertUserSchema.partial().parse(req.body);
+      if (updateData.email) updateData.email = updateData.email.trim().toLowerCase();
+      if (updateData.username) updateData.username = updateData.username.trim();
       if (id === requester.id && updateData.isActive === false) {
         return res.status(400).json({ message: "You cannot deactivate your own account" });
       }
       if (id === requester.id && updateData.role && updateData.role !== requester.role) {
         return res.status(400).json({ message: "You cannot change your own role" });
       }
-      if (updateData.role === "super_admin" && requester.role !== "super_admin") {
-        return res.status(403).json({ message: "Only a super administrator can assign the super admin role" });
+      if (isProtectedAdminRole(existingUser.role) && updateData.role && updateData.role !== existingUser.role) {
+        return res.status(403).json({ message: "Super administrator role cannot be changed from admin management" });
       }
-      if (existingUser.role === "super_admin" && requester.role !== "super_admin") {
-        return res.status(403).json({ message: "Only a super administrator can update super admin users" });
+      if (isProtectedAdminRole(existingUser.role) && updateData.isActive === false) {
+        return res.status(403).json({ message: "Super administrator accounts cannot be suspended from admin management" });
       }
+      if (updateData.role && !isProtectedAdminRole(existingUser.role)) {
+        const requestedRole = normalizeAssignableAdminRole(updateData.role);
+        if (!requestedRole) {
+          return res.status(403).json({ message: "Only viewer and writer roles can be assigned" });
+        }
+        updateData.role = requestedRole;
+      }
+      if (updateData.password) validateStrongPassword(updateData.password);
 
       const nextUser = updateData.password
-        ? { ...updateData, password: await bcrypt.hash(updateData.password, 10) }
+        ? { ...updateData, password: await bcrypt.hash(updateData.password, PASSWORD_HASH_ROUNDS) }
         : updateData;
 
       const user = await storage.updateUser(id, nextUser);
@@ -4292,12 +4397,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       res.json(toAdminUser(user));
     } catch (error) {
-      console.error("Admin user update error:", error);
+      console.error("Admin user update error:", getErrorLogMessage(error));
       res.status(400).json({ message: "Failed to update user", error: getErrorMessage(error) });
     }
   });
 
-  app.delete('/api/admin/users/:id(\\d+)', authenticateToken, requireAdmin, async (req, res) => {
+  app.delete('/api/admin/users/:id(\\d+)', authenticateToken, requireSuperAdmin, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -4308,8 +4413,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const targetUser = await storage.getUser(id);
       if (!targetUser) return res.status(404).json({ message: "User not found" });
-      if (targetUser.role === "super_admin" && requester.role !== "super_admin") {
-        return res.status(403).json({ message: "Only a super administrator can delete super admin users" });
+      if (isProtectedAdminRole(targetUser.role)) {
+        return res.status(403).json({ message: "Super administrator accounts cannot be deleted from admin management" });
       }
 
       const success = await storage.deleteUser(id);
@@ -4329,7 +4434,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch('/api/admin/users/:id(\\d+)/status', authenticateToken, requireAdmin, async (req, res) => {
+  app.patch('/api/admin/users/:id(\\d+)/status', authenticateToken, requireSuperAdmin, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -4339,8 +4444,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const target = await storage.getUser(id);
       if (!target) return res.status(404).json({ message: "User not found" });
-      if (target.role === "super_admin" && requester.role !== "super_admin") {
-        return res.status(403).json({ message: "Only a super administrator can suspend super admin users" });
+      if (isProtectedAdminRole(target.role)) {
+        return res.status(403).json({ message: "Super administrator accounts cannot be suspended from admin management" });
       }
       const isActive = req.body.isActive !== false;
       const user = await storage.updateUser(id, { isActive });
@@ -4362,7 +4467,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/users/analytics', authenticateToken, requireAdmin, async (_req, res) => {
+  app.get('/api/admin/users/analytics', authenticateToken, requireSuperAdmin, async (_req, res) => {
     try {
       const users = (await storage.getAllUsers()).map(toAdminUser);
       const byRole = users.reduce<Record<string, number>>((acc, user) => {
@@ -4379,7 +4484,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         activeUsers: users.filter((user) => user.isActive).length,
         suspendedUsers: users.filter((user) => !user.isActive).length,
         verifiedUsers: users.filter((user) => Boolean(user.verification?.verifiedAt)).length,
-        adminUsers: users.filter((user) => ["viewer", "editor", "admin", "super_admin"].includes(user.role)).length,
+        adminUsers: users.filter((user) => ADMIN_PORTAL_ROLES.has(user.role)).length,
         byRole,
         byRegion,
       });
@@ -4389,7 +4494,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/users/export', authenticateToken, requireAdmin, async (_req, res) => {
+  app.get('/api/admin/users/export', authenticateToken, requireSuperAdmin, async (_req, res) => {
     try {
       const users = (await storage.getAllUsers()).map(toAdminUser);
       const headers = ["ID", "Username", "Email", "Name", "Role", "Region", "Active", "Suspended At"];
@@ -6733,8 +6838,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       })),
       inheritance: {
         viewer: ["read"],
-        editor: ["create", "read", "update", "publish"],
-        admin: ["create", "read", "update", "delete", "approve", "publish", "export", "archive"],
+        writer: ["create", "read", "update", "publish"],
         super_admin: ["*"],
       },
     });

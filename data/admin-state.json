@@ -39,6 +39,7 @@
   },
   "blogPosts": {},
   "teamMembers": {},
+  "applications": {},
   "aiConversations": {},
   "roles": [
     {
@@ -53,38 +54,17 @@
       "updatedAt": "2026-04-02T12:07:01.829Z"
     },
     {
-      "id": "editor",
-      "name": "Editor",
+      "id": "writer",
+      "name": "Writer",
       "description": "Can create and update platform content.",
       "permissions": [
         "view_dashboard",
+        "manage_events",
         "manage_scholarships",
         "manage_jobs",
         "manage_partners",
         "manage_blog",
         "manage_team",
-        "manage_events",
-        "manage_media"
-      ],
-      "isActive": true,
-      "createdAt": "2026-04-02T12:07:01.829Z",
-      "updatedAt": "2026-04-02T12:07:01.829Z"
-    },
-    {
-      "id": "admin",
-      "name": "Administrator",
-      "description": "Can manage content, users, and applications.",
-      "permissions": [
-        "view_dashboard",
-        "manage_scholarships",
-        "manage_jobs",
-        "manage_partners",
-        "manage_blog",
-        "manage_team",
-        "manage_users",
-        "review_applications",
-        "view_analytics",
-        "manage_events",
         "manage_media"
       ],
       "isActive": true,

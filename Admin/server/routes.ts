@@ -24,6 +24,16 @@ const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   throw new Error("JWT_SECRET is required for admin routes");
 }
+const PASSWORD_HASH_ROUNDS = 12;
+const strongPasswordSchema = z
+  .string()
+  .min(12, "Password must be at least 12 characters")
+  .max(128, "Password must be 128 characters or fewer")
+  .regex(/[a-z]/, "Password must include a lowercase letter")
+  .regex(/[A-Z]/, "Password must include an uppercase letter")
+  .regex(/[0-9]/, "Password must include a number")
+  .regex(/[^A-Za-z0-9]/, "Password must include a symbol")
+  .refine((password) => !/admin123|password|qwerty|mtendere/i.test(password), "Password is too common");
 
 // Helper function to validate request body
 const validateBody = (schema: z.ZodSchema) => {
@@ -151,24 +161,26 @@ router.post("/auth/register", async (req, res) => {
     }
 
     const { username, email, password, firstName, lastName } = req.body;
+    const role = ["viewer", "writer"].includes(req.body?.role) ? req.body.role : "viewer";
 
     if (!username || !password || !email) {
       return res.status(400).json({ message: "Required fields missing" });
     }
+    strongPasswordSchema.parse(password);
 
     const existingUser = await storage.getUserByUsername(username);
     if (existingUser) {
       return res.status(400).json({ message: "Username already exists" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, PASSWORD_HASH_ROUNDS);
     const user = await storage.createUser({
       username,
       email,
       password: hashedPassword,
       firstName,
       lastName,
-      role: "viewer",
+      role,
     });
 
     const token = jwt.sign(
@@ -202,6 +214,10 @@ router.post("/auth/register", async (req, res) => {
       },
     });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      console.error("Registration validation error:", JSON.stringify(error.flatten()));
+      return res.status(400).json({ message: "Validation error", errors: error.errors });
+    }
     console.error("Registration error:", error);
     res.status(500).json({ message: "Internal server error" });
   }

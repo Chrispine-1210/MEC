@@ -237,7 +237,7 @@ type AdminState = {
 
 const nowIso = () => new Date().toISOString();
 
-export const CORE_ADMIN_ROLE_IDS = ["viewer", "editor", "admin", "super_admin"] as const;
+export const CORE_ADMIN_ROLE_IDS = ["viewer", "writer", "editor", "admin", "super_admin"] as const;
 
 const coreAdminRoleSet = new Set<string>(CORE_ADMIN_ROLE_IDS);
 
@@ -254,8 +254,8 @@ const DEFAULT_ROLES: AdminRole[] = [
     updatedAt: nowIso(),
   },
   {
-    id: "editor",
-    name: "Editor",
+    id: "writer",
+    name: "Writer",
     description: "Can create and update platform content.",
     permissions: [
       "view_dashboard",
@@ -266,27 +266,6 @@ const DEFAULT_ROLES: AdminRole[] = [
       "manage_blog",
       "manage_team",
       "manage_media",
-    ],
-    isActive: true,
-    createdAt: nowIso(),
-    updatedAt: nowIso(),
-  },
-  {
-    id: "admin",
-    name: "Administrator",
-    description: "Can manage content, users, and applications.",
-    permissions: [
-      "view_dashboard",
-      "manage_events",
-      "manage_scholarships",
-      "manage_jobs",
-      "manage_partners",
-      "manage_blog",
-      "manage_team",
-      "manage_media",
-      "manage_users",
-      "review_applications",
-      "view_analytics",
     ],
     isActive: true,
     createdAt: nowIso(),

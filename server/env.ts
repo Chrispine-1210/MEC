@@ -7,8 +7,17 @@ dotenv.config({ path: path.resolve(process.cwd(), ".env"), quiet: true });
 dotenv.config({ path: path.resolve(process.cwd(), `.env.${nodeEnv}`), override: true, quiet: true });
 
 const optionalEnvString = z.preprocess(
-  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  (value) => {
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    return trimmed === "" ? undefined : trimmed;
+  },
   z.string().optional(),
+);
+
+const requiredEnvString = z.preprocess(
+  (value) => (typeof value === "string" ? value.trim() : value),
+  z.string().min(1, "JWT_SECRET is required"),
 );
 
 const optionalEnvBoolean = z.preprocess((value) => {
@@ -26,7 +35,7 @@ const envSchema = z.object({
   HOST: optionalEnvString,
   PORT: z.coerce.number().int().positive().default(5000),
   ADMIN_PORT: z.coerce.number().int().positive().default(5174),
-  JWT_SECRET: z.string().min(1, "JWT_SECRET is required"),
+  JWT_SECRET: requiredEnvString,
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
   PUBLIC_APP_URL: optionalEnvString,
@@ -53,4 +62,10 @@ const envSchema = z.object({
   REFERRAL_RELEASE_WORKER_MS: z.coerce.number().int().positive().default(900_000),
 });
 
-export const env = envSchema.parse(process.env);
+const parsedEnv = envSchema.parse(process.env);
+
+if (parsedEnv.NODE_ENV === "production" && parsedEnv.JWT_SECRET.length < 32) {
+  throw new Error("JWT_SECRET must be at least 32 characters in production");
+}
+
+export const env = parsedEnv;

@@ -29,7 +29,7 @@ const AVAILABLE_PERMISSIONS = [
 ];
 
 const PERMISSION_CATEGORIES = ["General", "Content", "Administration", "Reports"];
-const CORE_ROLE_IDS = new Set(["viewer", "editor", "admin", "super_admin"]);
+const CORE_ROLE_IDS = new Set(["viewer", "writer", "editor", "admin", "super_admin"]);
 
 export default function RolesPage() {
   const [page, setPage] = useState(1);

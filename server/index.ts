@@ -69,9 +69,15 @@ const productionBrowserOrigins = [
   "https://admin.mtendereeducationconsult.com",
 ];
 
+const vercelOrigin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined;
+
 const developmentOrigins = isProduction
   ? []
   : [
+      "http://localhost:3000",
+      "http://localhost:5000",
+      "http://localhost:5173",
+      `http://localhost:${adminPort}`,
       "http://127.0.0.1:3000",
       "http://127.0.0.1:5000",
       "http://127.0.0.1:5173",
@@ -83,7 +89,17 @@ const developmentOrigins = isProduction
 
 const allowedOrigins = new Set(
   (isProduction
-    ? productionBrowserOrigins
+    ? [
+        ...productionBrowserOrigins,
+        env.PUBLIC_APP_URL,
+        env.FRONTEND_URL,
+        env.ADMIN_APP_URL,
+        env.VITE_SITE_URL,
+        vercelOrigin,
+        ...splitOriginList(env.CORS_ORIGIN),
+        ...splitOriginList(env.CORS_ORIGINS),
+        ...splitOriginList(env.ALLOWED_ORIGINS),
+      ]
     : [
         env.PUBLIC_APP_URL,
         env.FRONTEND_URL,

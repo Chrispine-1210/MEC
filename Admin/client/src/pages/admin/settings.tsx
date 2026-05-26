@@ -263,7 +263,7 @@ export default function SettingsPage() {
                     <AlertTriangle className="h-4 w-4 mt-0.5 text-warning" />
                     <div>
                       <p className="text-xs font-medium text-warning">2FA policy enabled</p>
-                      <p className="text-xs text-warning">Administrators should complete authenticator enrollment before this is enforced in a stricter login flow.</p>
+                      <p className="text-xs text-warning">Super admins should complete authenticator enrollment before this is enforced in a stricter login flow.</p>
                     </div>
                   </div>
                 )}

@@ -151,7 +151,7 @@ function AdminRouter() {
         <div className="max-w-lg w-full rounded-xl border border-border/60 bg-card p-8 text-center shadow-lg">
           <h1 className="text-2xl font-semibold text-foreground">Admin access is not available for this account</h1>
           <p className="mt-3 text-sm text-muted-foreground">
-            This account is authenticated, but it does not have an admin portal role. Sign in with a viewer, editor, admin, or super_admin account.
+            This account is authenticated, but it does not have an admin portal role. Sign in with a Viewer, Writer, or Super Admin account.
           </p>
           <Button
             className="mt-6"

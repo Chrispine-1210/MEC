@@ -36,10 +36,17 @@ const loginSchema = z.object({
 const registerSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
   email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: z
+    .string()
+    .min(12, "Password must be at least 12 characters")
+    .max(128, "Password must be 128 characters or fewer")
+    .regex(/[a-z]/, "Password must include a lowercase letter")
+    .regex(/[A-Z]/, "Password must include an uppercase letter")
+    .regex(/[0-9]/, "Password must include a number")
+    .regex(/[^A-Za-z0-9]/, "Password must include a symbol"),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
-  role: z.enum(["viewer", "editor", "admin"]).default("viewer"),
+  role: z.enum(["viewer", "writer"]).default("viewer"),
 });
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
@@ -68,8 +75,6 @@ export default function AuthPage() {
     resolver: zodResolver(registerSchema),
     defaultValues: { username: "", email: "", password: "", firstName: "", lastName: "", role: "viewer" as const },
   });
-  const selectedRegisterRole = registerForm.watch("role");
-  const selectedRoleRequiresMfa = selectedRegisterRole === "admin";
 
   async function finalizeSession(token: string, user: User) {
     localStorage.setItem("token", token);
@@ -263,9 +268,9 @@ export default function AuthPage() {
 
                 <TabsContent value="login" className="space-y-4">
                   <Alert className="bg-primary/10 border-primary/20">
-                    <Info className="h-4 w-4 text-primary" />
+                      <Info className="h-4 w-4 text-primary" />
                     <AlertDescription className="text-primary text-xs">
-                      Sign in with an existing editor/admin account, or create a new portal account below.
+                      Sign in with an existing portal account, or create a Viewer or Writer account below.
                     </AlertDescription>
                   </Alert>
 
@@ -340,7 +345,7 @@ export default function AuthPage() {
                           <FormLabel>Password</FormLabel>
                           <FormControl>
                             <div className="relative">
-                              <Input type={showPassword ? "text" : "password"} placeholder="Min. 8 characters" {...field} />
+                              <Input type={showPassword ? "text" : "password"} placeholder="12+ chars with number & symbol" {...field} />
                               <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 hover:text-muted-foreground">
                                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                               </button>
@@ -360,27 +365,14 @@ export default function AuthPage() {
                             </FormControl>
                             <SelectContent>
                               <SelectItem value="viewer">Viewer - Read-only access</SelectItem>
-                              <SelectItem value="editor">Editor - Create & edit content</SelectItem>
-                              <SelectItem value="admin">Admin - Full management access</SelectItem>
+                              <SelectItem value="writer">Writer - Create & edit content</SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />
                         </FormItem>
                       )} />
-                      {selectedRoleRequiresMfa && (
-                        <Alert className="border-primary/30 bg-primary/10">
-                          <Info className="h-4 w-4 text-primary" />
-                          <AlertDescription className="text-xs text-primary">
-                            Admin accounts require MFA immediately after sign-up. Choose Viewer or Editor if you do not need full admin access yet.
-                          </AlertDescription>
-                        </Alert>
-                      )}
                       <Button type="submit" className="w-full" disabled={isLoading} size="lg">
-                        {isLoading
-                          ? "Creating account..."
-                          : selectedRoleRequiresMfa
-                            ? "Create Admin Account & Set Up MFA"
-                            : "Create Account"}
+                        {isLoading ? "Creating account..." : "Create Account"}
                       </Button>
                     </form>
                   </Form>

@@ -47,8 +47,8 @@ export const requireAdminRole = (req: AuthenticatedRequest, res: Response, next:
     return res.status(401).json({ message: 'Authentication required' });
   }
 
-  if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
-    return res.status(403).json({ message: 'Admin access required' });
+  if (req.user.role !== 'super_admin') {
+    return res.status(403).json({ message: 'Super admin access required' });
   }
 
   next();
@@ -59,9 +59,9 @@ export const requireEditorRole = (req: AuthenticatedRequest, res: Response, next
     return res.status(401).json({ message: 'Authentication required' });
   }
 
-  const allowedRoles = ['admin', 'editor', 'super_admin'];
+  const allowedRoles = ['writer', 'editor', 'admin', 'super_admin'];
   if (!allowedRoles.includes(req.user.role)) {
-    return res.status(403).json({ message: 'Editor access required' });
+    return res.status(403).json({ message: 'Writer access required' });
   }
 
   next();

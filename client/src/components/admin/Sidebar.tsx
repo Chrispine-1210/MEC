@@ -131,6 +131,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
   const roleColors: Record<string, string> = {
     super_admin: "bg-info/15 text-info",
     admin: "bg-primary/15 text-primary",
+    writer: "bg-success/15 text-success",
     editor: "bg-success/15 text-success",
     viewer: "bg-muted text-muted-foreground",
   };

@@ -1,4 +1,4 @@
-import { resolveApiUrl } from "./api-base";
+import { apiFetch } from "./api-base";
 
 // Upload API functionality
 export const uploadApi = {
@@ -12,7 +12,7 @@ export const uploadApi = {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    return fetch(resolveApiUrl("/api/admin/upload"), {
+    return apiFetch("/api/admin/upload", {
       method: 'POST',
       headers,
       body: formData,
@@ -32,7 +32,7 @@ export const uploadApi = {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    return fetch(resolveApiUrl("/api/admin/upload/multiple"), {
+    return apiFetch("/api/admin/upload/multiple", {
       method: 'POST',
       headers,
       body: formData,

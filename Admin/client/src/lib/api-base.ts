@@ -1,14 +1,34 @@
 const absoluteUrlPattern = /^[a-z][a-z\d+\-.]*:/i;
+const localHostnames = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1"]);
+
+const normalizeOrigin = (value: string) => {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return value.replace(/\/+$/, "");
+  }
+};
+
+const isLocalHostname = (hostname: string) =>
+  localHostnames.has(hostname) || hostname.endsWith(".localhost");
+
+const shouldUseViteProxy = (configuredOrigin: string) => {
+  if (!import.meta.env.DEV || typeof window === "undefined") return false;
+  if (!isLocalHostname(window.location.hostname)) return false;
+
+  try {
+    return !isLocalHostname(new URL(configuredOrigin).hostname);
+  } catch {
+    return false;
+  }
+};
 
 export function getApiOrigin() {
   const configuredOrigin = import.meta.env.VITE_API_URL?.trim();
   if (!configuredOrigin) return "";
 
-  try {
-    return new URL(configuredOrigin).origin;
-  } catch {
-    return configuredOrigin.replace(/\/+$/, "");
-  }
+  const normalizedOrigin = normalizeOrigin(configuredOrigin);
+  return shouldUseViteProxy(normalizedOrigin) ? "" : normalizedOrigin;
 }
 
 export function resolveApiUrl(input: RequestInfo | URL): RequestInfo | URL {
@@ -17,6 +37,25 @@ export function resolveApiUrl(input: RequestInfo | URL): RequestInfo | URL {
 
   const apiOrigin = getApiOrigin();
   return apiOrigin ? `${apiOrigin}${input}` : input;
+}
+
+export async function apiFetch(input: RequestInfo | URL, init?: RequestInit) {
+  const resolvedInput = resolveApiUrl(input);
+
+  try {
+    return await fetch(resolvedInput, init);
+  } catch (error) {
+    if (
+      typeof input === "string" &&
+      input.startsWith("/") &&
+      resolvedInput !== input &&
+      !absoluteUrlPattern.test(input)
+    ) {
+      return fetch(input, init);
+    }
+
+    throw error;
+  }
 }
 
 export function resolveWebSocketUrl(path = "/ws", token?: string | null) {

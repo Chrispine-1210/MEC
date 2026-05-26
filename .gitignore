@@ -8,3 +8,4 @@ logs/*
 !logs/
 !logs/pm2/
 !logs/pm2/.gitkeep
+.logs/

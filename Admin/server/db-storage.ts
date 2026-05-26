@@ -81,8 +81,7 @@ export class DatabaseStorage implements IStorage {
     const m = new Map<string, Role>();
     const now = new Date();
     m.set("viewer", { id: "viewer", name: "Viewer", description: "Read-only access to public content", permissions: ["view_dashboard"], createdAt: now, updatedAt: now });
-    m.set("editor", { id: "editor", name: "Editor", description: "Can create and edit content", permissions: ["view_dashboard", "manage_scholarships", "manage_jobs", "manage_blog", "manage_partners", "manage_team"], createdAt: now, updatedAt: now });
-    m.set("admin", { id: "admin", name: "Administrator", description: "Full access to admin panel", permissions: ["view_dashboard", "manage_scholarships", "manage_jobs", "manage_partners", "manage_blog", "manage_team", "manage_users", "review_applications", "manage_roles", "view_analytics"], createdAt: now, updatedAt: now });
+    m.set("writer", { id: "writer", name: "Writer", description: "Can create and edit content", permissions: ["view_dashboard", "manage_scholarships", "manage_jobs", "manage_blog", "manage_partners", "manage_team"], createdAt: now, updatedAt: now });
     m.set("super_admin", { id: "super_admin", name: "Super Administrator", description: "Complete system access including settings", permissions: ["view_dashboard", "manage_scholarships", "manage_jobs", "manage_partners", "manage_blog", "manage_team", "manage_users", "review_applications", "manage_roles", "view_analytics", "manage_settings"], createdAt: now, updatedAt: now });
     return m;
   })();
@@ -395,16 +394,18 @@ export class DatabaseStorage implements IStorage {
   async seed() {
     const existingAdmin = await this.getUserByUsername("admin");
     if (!existingAdmin) {
-      const hashedPassword = await bcrypt.hash("admin123", 10);
+      const password = process.env.SEED_SUPER_ADMIN_PASSWORD || process.env.SUPER_ADMIN_PASSWORD;
+      if (!password) throw new Error("SEED_SUPER_ADMIN_PASSWORD is required to seed a super admin");
+      const hashedPassword = await bcrypt.hash(password, 12);
       await this.createUser({
         username: "admin",
-        email: "admin@mtendere.com",
+        email: process.env.SEED_SUPER_ADMIN_EMAIL || "admin@mtendere.com",
         password: hashedPassword,
         firstName: "Mtendere",
         lastName: "Admin",
         role: "super_admin",
       });
-      console.log("[db] Seeded default admin user (admin / admin123)");
+      console.log("[db] Seeded super admin user from environment credentials");
     }
   }
 }

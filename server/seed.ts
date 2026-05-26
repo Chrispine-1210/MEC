@@ -4,21 +4,59 @@ import bcrypt from "bcryptjs";
 import { eq, inArray, isNull } from "drizzle-orm";
 import { ensurePartnerHeroVideoSeeds } from "./partner-video-seeds";
 
+const PASSWORD_HASH_ROUNDS = 12;
+
+const validateSeedSuperAdminPassword = (password: string) => {
+  const hasStrongShape =
+    password.length >= 12 &&
+    password.length <= 128 &&
+    /[a-z]/.test(password) &&
+    /[A-Z]/.test(password) &&
+    /[0-9]/.test(password) &&
+    /[^A-Za-z0-9]/.test(password) &&
+    !/admin123|password|qwerty|mtendere/i.test(password);
+
+  if (!hasStrongShape) {
+    throw new Error(
+      "SEED_SUPER_ADMIN_PASSWORD must be 12-128 characters and include uppercase, lowercase, number, and symbol characters.",
+    );
+  }
+};
+
 async function seed() {
   console.log("Seeding database...");
 
-  // Create admin user
-  const hashedPassword = await bcrypt.hash("admin123", 10);
-  const [adminUser] = await db.insert(users).values({
-    username: "admin",
-    email: "admin@mtendere.com",
-    password: hashedPassword,
-    firstName: "Admin",
-    lastName: "User",
-    role: "super_admin",
-  }).onConflictDoNothing().returning();
+  const superAdminPassword = process.env.SEED_SUPER_ADMIN_PASSWORD || process.env.SUPER_ADMIN_PASSWORD;
+  const [existingAdmin] = await db.select().from(users).where(eq(users.username, "admin")).limit(1);
+  const [existingSuperAdmin] = await db.select().from(users).where(eq(users.role, "super_admin")).limit(1);
+  let adminId = existingAdmin?.id || existingSuperAdmin?.id;
 
-  const adminId = adminUser?.id || 1;
+  if (superAdminPassword) {
+    validateSeedSuperAdminPassword(superAdminPassword);
+    const hashedPassword = await bcrypt.hash(superAdminPassword, PASSWORD_HASH_ROUNDS);
+
+    if (existingAdmin) {
+      await db
+        .update(users)
+        .set({ password: hashedPassword, role: "super_admin", isActive: true, updatedAt: new Date() })
+        .where(eq(users.id, existingAdmin.id));
+      adminId = existingAdmin.id;
+    } else {
+      const [adminUser] = await db.insert(users).values({
+        username: "admin",
+        email: process.env.SEED_SUPER_ADMIN_EMAIL || "admin@mtendere.com",
+        password: hashedPassword,
+        firstName: "Admin",
+        lastName: "User",
+        role: "super_admin",
+      }).onConflictDoNothing().returning();
+      adminId = adminUser?.id || adminId;
+    }
+  }
+
+  if (!adminId) {
+    throw new Error("No super admin exists. Set SEED_SUPER_ADMIN_PASSWORD before seeding a new database.");
+  }
 
   // Scholarships
   await db.insert(scholarships).values([

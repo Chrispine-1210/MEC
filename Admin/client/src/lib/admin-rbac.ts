@@ -1,4 +1,4 @@
-const ADMIN_ROLES = ["viewer", "editor", "admin", "super_admin"] as const;
+const ADMIN_ROLES = ["viewer", "writer", "editor", "admin", "super_admin"] as const;
 
 export type AdminRole = (typeof ADMIN_ROLES)[number];
 
@@ -26,13 +26,13 @@ const SUPER_ADMIN_ROUTES = ["/admin/roles", "/admin/settings"];
 const routeRoles = new Map<string, AdminRole[]>();
 
 for (const route of DASHBOARD_ROUTES) {
-  routeRoles.set(route, ["viewer", "editor", "admin", "super_admin"]);
+  routeRoles.set(route, ["viewer", "writer", "editor", "admin", "super_admin"]);
 }
 for (const route of CONTENT_ROUTES) {
-  routeRoles.set(route, ["editor", "admin", "super_admin"]);
+  routeRoles.set(route, ["writer", "editor", "admin", "super_admin"]);
 }
 for (const route of ADMIN_ONLY_ROUTES) {
-  routeRoles.set(route, ["admin", "super_admin"]);
+  routeRoles.set(route, ["super_admin"]);
 }
 for (const route of SUPER_ADMIN_ROUTES) {
   routeRoles.set(route, ["super_admin"]);
@@ -51,7 +51,7 @@ export const normalizeAdminPath = (path: string) => {
 
 export const getAllowedRolesForPath = (path: string): AdminRole[] => {
   const normalized = normalizeAdminPath(path);
-  return routeRoles.get(normalized) ?? ["viewer", "editor", "admin", "super_admin"];
+  return routeRoles.get(normalized) ?? ["viewer", "writer", "editor", "admin", "super_admin"];
 };
 
 export const canAccessAdminPath = (role: string, path: string) => {
@@ -61,8 +61,8 @@ export const canAccessAdminPath = (role: string, path: string) => {
 };
 
 export const canCreateContent = (role: string) =>
-  role === "editor" || role === "admin" || role === "super_admin";
+  role === "writer" || role === "editor" || role === "admin" || role === "super_admin";
 
-export const canManageUsers = (role: string) => role === "admin" || role === "super_admin";
+export const canManageUsers = (role: string) => role === "super_admin";
 
-export const canUseAiAssistant = (role: string) => role === "admin" || role === "super_admin";
+export const canUseAiAssistant = (role: string) => role === "super_admin";
