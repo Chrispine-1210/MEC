@@ -6,7 +6,7 @@
   "outputDirectory": "dist/client",
   "functions": {
     "api/[...path].js": {
-      "includeFiles": "dist/**"
+      "includeFiles": "{server-build,dist}/**"
     }
   },
   "routes": [

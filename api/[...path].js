@@ -1,7 +1,7 @@
 let appModulePromise;
 
 const getAppModule = () => {
-  appModulePromise ??= import("../dist/index.js");
+  appModulePromise ??= import("../server-build/index.js");
   return appModulePromise;
 };
 

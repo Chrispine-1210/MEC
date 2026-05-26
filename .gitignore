@@ -9,3 +9,6 @@ logs/*
 !logs/pm2/
 !logs/pm2/.gitkeep
 .logs/
+dist/index.js
+dist/client/admin/
+server-build/
