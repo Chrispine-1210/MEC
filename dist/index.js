@@ -17,8 +17,16 @@ var nodeEnv = process.env.NODE_ENV || "development";
 dotenv.config({ path: path.resolve(process.cwd(), ".env"), quiet: true });
 dotenv.config({ path: path.resolve(process.cwd(), `.env.${nodeEnv}`), override: true, quiet: true });
 var optionalEnvString = z.preprocess(
-  (value) => typeof value === "string" && value.trim() === "" ? void 0 : value,
+  (value) => {
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    return trimmed === "" ? void 0 : trimmed;
+  },
   z.string().optional()
+);
+var requiredEnvString = z.preprocess(
+  (value) => typeof value === "string" ? value.trim() : value,
+  z.string().min(1, "JWT_SECRET is required")
 );
 var optionalEnvBoolean = z.preprocess((value) => {
   if (typeof value !== "string") return value;
@@ -33,7 +41,7 @@ var envSchema = z.object({
   HOST: optionalEnvString,
   PORT: z.coerce.number().int().positive().default(5e3),
   ADMIN_PORT: z.coerce.number().int().positive().default(5174),
-  JWT_SECRET: z.string().min(1, "JWT_SECRET is required"),
+  JWT_SECRET: requiredEnvString,
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(6e4),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
   PUBLIC_APP_URL: optionalEnvString,
@@ -59,7 +67,11 @@ var envSchema = z.object({
   REFERRAL_RELEASE_WORKER_ENABLED: optionalEnvBoolean,
   REFERRAL_RELEASE_WORKER_MS: z.coerce.number().int().positive().default(9e5)
 });
-var env = envSchema.parse(process.env);
+var parsedEnv = envSchema.parse(process.env);
+if (parsedEnv.NODE_ENV === "production" && parsedEnv.JWT_SECRET.length < 32) {
+  throw new Error("JWT_SECRET must be at least 32 characters in production");
+}
+var env = parsedEnv;
 
 // server/index.ts
 import helmet from "helmet";
@@ -2764,7 +2776,7 @@ var sendAdminNotification = (input) => {
 import fs2 from "fs";
 import path3 from "path";
 var nowIso = () => (/* @__PURE__ */ new Date()).toISOString();
-var CORE_ADMIN_ROLE_IDS = ["viewer", "editor", "admin", "super_admin"];
+var CORE_ADMIN_ROLE_IDS = ["viewer", "writer", "editor", "admin", "super_admin"];
 var coreAdminRoleSet = new Set(CORE_ADMIN_ROLE_IDS);
 var isCoreAdminRole = (id) => coreAdminRoleSet.has(id);
 var DEFAULT_ROLES = [
@@ -2778,8 +2790,8 @@ var DEFAULT_ROLES = [
     updatedAt: nowIso()
   },
   {
-    id: "editor",
-    name: "Editor",
+    id: "writer",
+    name: "Writer",
     description: "Can create and update platform content.",
     permissions: [
       "view_dashboard",
@@ -2790,27 +2802,6 @@ var DEFAULT_ROLES = [
       "manage_blog",
       "manage_team",
       "manage_media"
-    ],
-    isActive: true,
-    createdAt: nowIso(),
-    updatedAt: nowIso()
-  },
-  {
-    id: "admin",
-    name: "Administrator",
-    description: "Can manage content, users, and applications.",
-    permissions: [
-      "view_dashboard",
-      "manage_events",
-      "manage_scholarships",
-      "manage_jobs",
-      "manage_partners",
-      "manage_blog",
-      "manage_team",
-      "manage_media",
-      "manage_users",
-      "review_applications",
-      "view_analytics"
     ],
     isActive: true,
     createdAt: nowIso(),
@@ -3852,6 +3843,46 @@ var logReferralAnalytics = async (event, userId, req, metadata) => {
 
 // server/routes.ts
 var JWT_SECRET = env.JWT_SECRET;
+var PASSWORD_HASH_ROUNDS = 12;
+var ADMIN_PORTAL_ROLES = /* @__PURE__ */ new Set(["viewer", "writer", "editor", "admin", "super_admin"]);
+var ADMIN_SELF_SERVICE_ROLES = /* @__PURE__ */ new Set(["viewer", "writer"]);
+var ADMIN_ASSIGNABLE_ROLES = /* @__PURE__ */ new Set(["viewer", "writer"]);
+var ADMIN_CONTENT_ROLES = /* @__PURE__ */ new Set(["writer", "editor", "admin", "super_admin"]);
+var PROTECTED_ADMIN_ROLES = /* @__PURE__ */ new Set(["super_admin"]);
+var COMMON_WEAK_PASSWORDS = [
+  "password",
+  "password123",
+  "admin",
+  "admin123",
+  "qwerty",
+  "letmein",
+  "welcome",
+  "mtendere"
+];
+var strongPasswordSchema = z3.string().min(12, "Password must be at least 12 characters").max(128, "Password must be 128 characters or fewer").regex(/[a-z]/, "Password must include a lowercase letter").regex(/[A-Z]/, "Password must include an uppercase letter").regex(/[0-9]/, "Password must include a number").regex(/[^A-Za-z0-9]/, "Password must include a symbol").refine(
+  (password) => !COMMON_WEAK_PASSWORDS.some((weak) => password.toLowerCase().includes(weak)),
+  "Password is too common or contains an unsafe word"
+);
+var validateStrongPassword = (password) => strongPasswordSchema.parse(password);
+var normalizeAdminRole = (role) => {
+  if (typeof role !== "string") return null;
+  const normalized = role.trim().toLowerCase();
+  return normalized === "editor" ? "writer" : normalized;
+};
+var normalizeSelfServiceAdminRole = (role) => {
+  const normalized = normalizeAdminRole(role);
+  return normalized && ADMIN_SELF_SERVICE_ROLES.has(normalized) ? normalized : "viewer";
+};
+var isExplicitForbiddenAdminSignupRole = (role) => {
+  if (role === void 0 || role === null || role === "") return false;
+  const normalized = normalizeAdminRole(role);
+  return Boolean(normalized && !ADMIN_SELF_SERVICE_ROLES.has(normalized));
+};
+var normalizeAssignableAdminRole = (role) => {
+  const normalized = normalizeAdminRole(role);
+  return normalized && ADMIN_ASSIGNABLE_ROLES.has(normalized) ? normalized : null;
+};
+var isProtectedAdminRole = (role) => Boolean(role && PROTECTED_ADMIN_ROLES.has(role));
 var checkoutRequestSchema = z3.object({
   mode: z3.enum(["payment", "subscription"]).optional(),
   priceId: z3.string().min(1).optional(),
@@ -4067,6 +4098,10 @@ var getErrorMessage = (error) => {
     return error.message;
   }
   return "Unknown error";
+};
+var getErrorLogMessage = (error) => {
+  const message = getErrorMessage(error);
+  return typeof message === "string" ? message : JSON.stringify(message);
 };
 var isTransientDbConnectivityError = (error) => {
   const message = JSON.stringify(getErrorMessage(error)).toLowerCase();
@@ -4678,8 +4713,8 @@ var getOptionalAuthenticatedUser = (req) => {
     return null;
   }
 };
-var isAdmin = (user) => user?.role === "admin" || user?.role === "super_admin";
-var isAdminPortalUser = (user) => user?.role === "viewer" || user?.role === "editor" || user?.role === "admin" || user?.role === "super_admin";
+var isAdmin = (user) => user?.role === "super_admin";
+var isAdminPortalUser = (user) => Boolean(user?.role && ADMIN_PORTAL_ROLES.has(user.role));
 var authenticateToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
@@ -4716,10 +4751,10 @@ var requireSuperAdmin = (req, res, next) => {
   }
   next();
 };
-var isEditor = (user) => user?.role === "editor" || user?.role === "admin" || user?.role === "super_admin";
+var isEditor = (user) => Boolean(user?.role && ADMIN_CONTENT_ROLES.has(user.role));
 var requireEditor = (req, res, next) => {
   if (!isEditor(getAuthenticatedUser(req))) {
-    return res.status(403).json({ message: "Editor access required" });
+    return res.status(403).json({ message: "Writer access required" });
   }
   next();
 };
@@ -5181,24 +5216,23 @@ async function registerRoutes(app2) {
       const { referralCode: bodyReferralCode, ...registrationBody } = req.body && typeof req.body === "object" ? req.body : {};
       const referralCode = typeof bodyReferralCode === "string" ? bodyReferralCode : typeof req.query.ref === "string" ? req.query.ref : null;
       const userData = insertUserSchema.parse(registrationBody);
+      userData.email = userData.email.trim().toLowerCase();
+      userData.username = userData.username.trim();
       const isAdminRegistration = req.path === "/auth/register";
-      const adminPortalRoles = /* @__PURE__ */ new Set(["viewer", "editor", "admin"]);
       if (isAdminRegistration) {
-        const requestedRole = userData.role && adminPortalRoles.has(userData.role) ? userData.role : "viewer";
-        if (env.NODE_ENV === "production" && requestedRole !== "viewer") {
-          return res.status(403).json({
-            message: "Editor and admin accounts must be provisioned by an existing administrator."
-          });
+        if (isExplicitForbiddenAdminSignupRole(userData.role)) {
+          return res.status(403).json({ message: "Only Viewer and Writer accounts can be created from the admin sign-up form." });
         }
-        userData.role = requestedRole;
+        userData.role = normalizeSelfServiceAdminRole(userData.role);
       } else {
         userData.role = "user";
       }
+      validateStrongPassword(userData.password);
       const existingUser = await storage.getUserByEmail(userData.email) || await storage.getUserByUsername(userData.username);
       if (existingUser) {
         return res.status(400).json({ message: "A user with that email or username already exists" });
       }
-      const hashedPassword = await bcrypt.hash(userData.password, 10);
+      const hashedPassword = await bcrypt.hash(userData.password, PASSWORD_HASH_ROUNDS);
       const createdUser = await storage.createUser({
         ...userData,
         password: hashedPassword
@@ -5224,7 +5258,7 @@ async function registerRoutes(app2) {
         user: buildPublicUser(user)
       });
     } catch (error) {
-      console.error("Registration error:", error);
+      console.error("Registration error:", getErrorLogMessage(error));
       res.status(400).json({ message: "Registration failed", error: getErrorMessage(error) });
     }
   };
@@ -5237,6 +5271,7 @@ async function registerRoutes(app2) {
       }
       const normalizedIdentifier = String(identifier).trim();
       const looksLikeEmail = normalizedIdentifier.includes("@");
+      const lookupIdentifier = looksLikeEmail ? normalizedIdentifier.toLowerCase() : normalizedIdentifier;
       const existingFailure = getLoginFailure(normalizedIdentifier);
       if (existingFailure?.lockedUntil && existingFailure.lockedUntil > Date.now()) {
         const retryAfterSeconds = Math.ceil((existingFailure.lockedUntil - Date.now()) / 1e3);
@@ -5246,10 +5281,14 @@ async function registerRoutes(app2) {
           retryAfterSeconds
         });
       }
-      const user = looksLikeEmail ? await storage.getUserByEmail(normalizedIdentifier) : await storage.getUserByUsername(normalizedIdentifier);
+      const user = looksLikeEmail ? await storage.getUserByEmail(lookupIdentifier) : await storage.getUserByUsername(lookupIdentifier);
       if (!user) {
         registerLoginFailure(normalizedIdentifier);
         return res.status(401).json({ message: "Invalid credentials" });
+      }
+      if (user.isActive === false) {
+        registerLoginFailure(normalizedIdentifier);
+        return res.status(403).json({ message: "This account is inactive. Contact the super administrator." });
       }
       const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) {
@@ -5346,7 +5385,7 @@ async function registerRoutes(app2) {
   };
   app2.get("/api/user", authenticateToken, sendUserProfile);
   app2.get("/api/user/profile", authenticateToken, sendUserProfile);
-  app2.get("/api/users", authenticateToken, requireAdmin, async (_req, res) => {
+  app2.get("/api/users", authenticateToken, requireSuperAdmin, async (_req, res) => {
     try {
       const users2 = await storage.getAllUsers();
       res.json(users2.map(buildPublicUser));
@@ -5355,44 +5394,74 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to fetch users" });
     }
   });
-  app2.post("/api/users", authenticateToken, requireAdmin, async (req, res) => {
+  app2.post("/api/users", authenticateToken, requireSuperAdmin, async (req, res) => {
     try {
       const userData = insertUserSchema.parse(req.body);
+      userData.email = userData.email.trim().toLowerCase();
+      userData.username = userData.username.trim();
+      const requestedRole = normalizeAssignableAdminRole(userData.role);
+      if (!requestedRole) {
+        return res.status(403).json({ message: "Only viewer and writer accounts can be created from user management" });
+      }
+      validateStrongPassword(userData.password);
+      userData.role = requestedRole;
       const existingUser = await storage.getUserByEmail(userData.email) || await storage.getUserByUsername(userData.username);
       if (existingUser) {
         return res.status(400).json({ message: "A user with that email or username already exists" });
       }
       const user = await storage.createUser({
         ...userData,
-        password: await bcrypt.hash(userData.password, 10)
+        password: await bcrypt.hash(userData.password, PASSWORD_HASH_ROUNDS)
       });
       res.status(201).json(buildPublicUser(user));
     } catch (error) {
-      console.error("User creation error:", error);
+      console.error("User creation error:", getErrorLogMessage(error));
       res.status(400).json({ message: "Failed to create user", error: getErrorMessage(error) });
     }
   });
-  app2.put("/api/users/:id", authenticateToken, requireAdmin, async (req, res) => {
+  app2.put("/api/users/:id", authenticateToken, requireSuperAdmin, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
       const updateData = insertUserSchema.partial().parse(req.body);
-      const nextUser = updateData.password ? { ...updateData, password: await bcrypt.hash(updateData.password, 10) } : updateData;
+      if (updateData.email) updateData.email = updateData.email.trim().toLowerCase();
+      if (updateData.username) updateData.username = updateData.username.trim();
+      const existingUser = await storage.getUser(id);
+      if (!existingUser) return res.status(404).json({ message: "User not found" });
+      if (isProtectedAdminRole(existingUser.role) && updateData.role && updateData.role !== existingUser.role) {
+        return res.status(403).json({ message: "Super administrator role cannot be changed from user management" });
+      }
+      if (isProtectedAdminRole(existingUser.role) && updateData.isActive === false) {
+        return res.status(403).json({ message: "Super administrator accounts cannot be suspended from user management" });
+      }
+      if (updateData.role && !isProtectedAdminRole(existingUser.role)) {
+        const requestedRole = normalizeAssignableAdminRole(updateData.role);
+        if (!requestedRole) {
+          return res.status(403).json({ message: "Only viewer and writer roles can be assigned" });
+        }
+        updateData.role = requestedRole;
+      }
+      if (updateData.password) validateStrongPassword(updateData.password);
+      const nextUser = updateData.password ? { ...updateData, password: await bcrypt.hash(updateData.password, PASSWORD_HASH_ROUNDS) } : updateData;
       const user = await storage.updateUser(id, nextUser);
-      if (!user) return res.status(404).json({ message: "User not found" });
       res.json(buildPublicUser(user));
     } catch (error) {
-      console.error("User update error:", error);
+      console.error("User update error:", getErrorLogMessage(error));
       res.status(400).json({ message: "Failed to update user", error: getErrorMessage(error) });
     }
   });
-  app2.delete("/api/users/:id", authenticateToken, requireAdmin, async (req, res) => {
+  app2.delete("/api/users/:id", authenticateToken, requireSuperAdmin, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
       const authUser = getAuthenticatedUser(req);
       if (authUser.id === id) {
         return res.status(400).json({ message: "You cannot delete your own account" });
+      }
+      const targetUser = await storage.getUser(id);
+      if (!targetUser) return res.status(404).json({ message: "User not found" });
+      if (isProtectedAdminRole(targetUser.role)) {
+        return res.status(403).json({ message: "Super administrator accounts cannot be deleted from user management" });
       }
       const success = await storage.deleteUser(id);
       if (!success) return res.status(404).json({ message: "User not found" });
@@ -5807,7 +5876,7 @@ async function registerRoutes(app2) {
         return res.status(404).json({ message: "Application not found" });
       }
       const user = getAuthenticatedUser(req);
-      if (existingApplication.userId !== user.id && user.role !== "admin" && user.role !== "super_admin") {
+      if (existingApplication.userId !== user.id && !isAdmin(user)) {
         return res.status(403).json({ message: "Not authorized to update this application" });
       }
       const application = await storage.updateApplication(id, updateData);
@@ -7094,7 +7163,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to fetch recent activity" });
     }
   });
-  app2.get("/api/admin/ecosystem/overview", authenticateToken, requireAdminPortal, async (_req, res) => {
+  app2.get("/api/admin/ecosystem/overview", authenticateToken, requireAdmin, async (_req, res) => {
     try {
       const sourceErrors = [];
       const safeList = async (label, loader) => {
@@ -7231,7 +7300,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to fetch ecosystem overview" });
     }
   });
-  app2.get("/api/admin/users", authenticateToken, requireAdmin, async (req, res) => {
+  app2.get("/api/admin/users", authenticateToken, requireSuperAdmin, async (req, res) => {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
@@ -7252,7 +7321,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to fetch users" });
     }
   });
-  app2.get("/api/admin/users/:id(\\d+)", authenticateToken, requireAdmin, async (req, res) => {
+  app2.get("/api/admin/users/:id(\\d+)", authenticateToken, requireSuperAdmin, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -7264,20 +7333,26 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to fetch user" });
     }
   });
-  app2.post("/api/admin/users", authenticateToken, requireAdmin, async (req, res) => {
+  app2.post("/api/admin/users", authenticateToken, requireSuperAdmin, async (req, res) => {
     try {
-      const requester = getAuthenticatedUser(req);
       const userData = insertUserSchema.parse(req.body);
-      if (userData.role === "super_admin" && requester.role !== "super_admin") {
-        return res.status(403).json({ message: "Only a super administrator can create super admin users" });
+      userData.email = userData.email.trim().toLowerCase();
+      userData.username = userData.username.trim();
+      const requestedRole = normalizeAssignableAdminRole(userData.role);
+      if (!requestedRole) {
+        return res.status(403).json({
+          message: "Only viewer and writer accounts can be created from admin management. Super admin is provisioned outside the portal."
+        });
       }
+      validateStrongPassword(userData.password);
+      userData.role = requestedRole;
       const existing = await storage.getUserByEmail(userData.email) || await storage.getUserByUsername(userData.username);
       if (existing) {
         return res.status(400).json({ message: "User already exists" });
       }
       const user = await storage.createUser({
         ...userData,
-        password: await bcrypt.hash(userData.password, 10)
+        password: await bcrypt.hash(userData.password, PASSWORD_HASH_ROUNDS)
       });
       if (req.body.region) {
         setUserMeta(user.id, { region: String(req.body.region) });
@@ -7291,11 +7366,11 @@ async function registerRoutes(app2) {
       });
       res.status(201).json(toAdminUser(user));
     } catch (error) {
-      console.error("Admin user create error:", error);
+      console.error("Admin user create error:", getErrorLogMessage(error));
       res.status(400).json({ message: "Failed to create user", error: getErrorMessage(error) });
     }
   });
-  app2.put("/api/admin/users/:id(\\d+)", authenticateToken, requireAdmin, async (req, res) => {
+  app2.put("/api/admin/users/:id(\\d+)", authenticateToken, requireSuperAdmin, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -7303,19 +7378,29 @@ async function registerRoutes(app2) {
       const existingUser = await storage.getUser(id);
       if (!existingUser) return res.status(404).json({ message: "User not found" });
       const updateData = insertUserSchema.partial().parse(req.body);
+      if (updateData.email) updateData.email = updateData.email.trim().toLowerCase();
+      if (updateData.username) updateData.username = updateData.username.trim();
       if (id === requester.id && updateData.isActive === false) {
         return res.status(400).json({ message: "You cannot deactivate your own account" });
       }
       if (id === requester.id && updateData.role && updateData.role !== requester.role) {
         return res.status(400).json({ message: "You cannot change your own role" });
       }
-      if (updateData.role === "super_admin" && requester.role !== "super_admin") {
-        return res.status(403).json({ message: "Only a super administrator can assign the super admin role" });
+      if (isProtectedAdminRole(existingUser.role) && updateData.role && updateData.role !== existingUser.role) {
+        return res.status(403).json({ message: "Super administrator role cannot be changed from admin management" });
       }
-      if (existingUser.role === "super_admin" && requester.role !== "super_admin") {
-        return res.status(403).json({ message: "Only a super administrator can update super admin users" });
+      if (isProtectedAdminRole(existingUser.role) && updateData.isActive === false) {
+        return res.status(403).json({ message: "Super administrator accounts cannot be suspended from admin management" });
       }
-      const nextUser = updateData.password ? { ...updateData, password: await bcrypt.hash(updateData.password, 10) } : updateData;
+      if (updateData.role && !isProtectedAdminRole(existingUser.role)) {
+        const requestedRole = normalizeAssignableAdminRole(updateData.role);
+        if (!requestedRole) {
+          return res.status(403).json({ message: "Only viewer and writer roles can be assigned" });
+        }
+        updateData.role = requestedRole;
+      }
+      if (updateData.password) validateStrongPassword(updateData.password);
+      const nextUser = updateData.password ? { ...updateData, password: await bcrypt.hash(updateData.password, PASSWORD_HASH_ROUNDS) } : updateData;
       const user = await storage.updateUser(id, nextUser);
       if (req.body.region !== void 0) {
         setUserMeta(id, { region: String(req.body.region) });
@@ -7329,11 +7414,11 @@ async function registerRoutes(app2) {
       });
       res.json(toAdminUser(user));
     } catch (error) {
-      console.error("Admin user update error:", error);
+      console.error("Admin user update error:", getErrorLogMessage(error));
       res.status(400).json({ message: "Failed to update user", error: getErrorMessage(error) });
     }
   });
-  app2.delete("/api/admin/users/:id(\\d+)", authenticateToken, requireAdmin, async (req, res) => {
+  app2.delete("/api/admin/users/:id(\\d+)", authenticateToken, requireSuperAdmin, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -7343,8 +7428,8 @@ async function registerRoutes(app2) {
       }
       const targetUser = await storage.getUser(id);
       if (!targetUser) return res.status(404).json({ message: "User not found" });
-      if (targetUser.role === "super_admin" && requester.role !== "super_admin") {
-        return res.status(403).json({ message: "Only a super administrator can delete super admin users" });
+      if (isProtectedAdminRole(targetUser.role)) {
+        return res.status(403).json({ message: "Super administrator accounts cannot be deleted from admin management" });
       }
       const success = await storage.deleteUser(id);
       deleteUserMeta(id);
@@ -7362,7 +7447,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to delete user" });
     }
   });
-  app2.patch("/api/admin/users/:id(\\d+)/status", authenticateToken, requireAdmin, async (req, res) => {
+  app2.patch("/api/admin/users/:id(\\d+)/status", authenticateToken, requireSuperAdmin, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -7372,8 +7457,8 @@ async function registerRoutes(app2) {
       }
       const target = await storage.getUser(id);
       if (!target) return res.status(404).json({ message: "User not found" });
-      if (target.role === "super_admin" && requester.role !== "super_admin") {
-        return res.status(403).json({ message: "Only a super administrator can suspend super admin users" });
+      if (isProtectedAdminRole(target.role)) {
+        return res.status(403).json({ message: "Super administrator accounts cannot be suspended from admin management" });
       }
       const isActive = req.body.isActive !== false;
       const user = await storage.updateUser(id, { isActive });
@@ -7394,7 +7479,7 @@ async function registerRoutes(app2) {
       res.status(400).json({ message: "Failed to update user status", error: getErrorMessage(error) });
     }
   });
-  app2.get("/api/admin/users/analytics", authenticateToken, requireAdmin, async (_req, res) => {
+  app2.get("/api/admin/users/analytics", authenticateToken, requireSuperAdmin, async (_req, res) => {
     try {
       const users2 = (await storage.getAllUsers()).map(toAdminUser);
       const byRole = users2.reduce((acc, user) => {
@@ -7411,7 +7496,7 @@ async function registerRoutes(app2) {
         activeUsers: users2.filter((user) => user.isActive).length,
         suspendedUsers: users2.filter((user) => !user.isActive).length,
         verifiedUsers: users2.filter((user) => Boolean(user.verification?.verifiedAt)).length,
-        adminUsers: users2.filter((user) => ["viewer", "editor", "admin", "super_admin"].includes(user.role)).length,
+        adminUsers: users2.filter((user) => ADMIN_PORTAL_ROLES.has(user.role)).length,
         byRole,
         byRegion
       });
@@ -7420,7 +7505,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to fetch user analytics" });
     }
   });
-  app2.get("/api/admin/users/export", authenticateToken, requireAdmin, async (_req, res) => {
+  app2.get("/api/admin/users/export", authenticateToken, requireSuperAdmin, async (_req, res) => {
     try {
       const users2 = (await storage.getAllUsers()).map(toAdminUser);
       const headers = ["ID", "Username", "Email", "Name", "Role", "Region", "Active", "Suspended At"];
@@ -9537,8 +9622,7 @@ async function registerRoutes(app2) {
       })),
       inheritance: {
         viewer: ["read"],
-        editor: ["create", "read", "update", "publish"],
-        admin: ["create", "read", "update", "delete", "approve", "publish", "export", "archive"],
+        writer: ["create", "read", "update", "publish"],
         super_admin: ["*"]
       }
     });
@@ -10360,7 +10444,28 @@ var productionBrowserOrigins = [
   "https://mtendereeducationconsult.com",
   "https://admin.mtendereeducationconsult.com"
 ];
+var vercelOrigin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : void 0;
+var hostnameFromUrl = (value) => {
+  if (!value) return null;
+  try {
+    return new URL(value).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+};
+var adminHostnames = new Set(
+  [
+    "admin.mtendereeducationconsult.com",
+    hostnameFromUrl(env.ADMIN_APP_URL)
+  ].filter(Boolean)
+);
+var requestHostname = (req) => (req.hostname || req.get("host")?.split(":")[0] || "").toLowerCase();
+var isAdminHostname = (req) => adminHostnames.has(requestHostname(req));
 var developmentOrigins = isProduction ? [] : [
+  "http://localhost:3000",
+  "http://localhost:5000",
+  "http://localhost:5173",
+  `http://localhost:${adminPort}`,
   "http://127.0.0.1:3000",
   "http://127.0.0.1:5000",
   "http://127.0.0.1:5173",
@@ -10370,7 +10475,17 @@ var developmentOrigins = isProduction ? [] : [
   `http://0.0.0.0:${adminPort}`
 ];
 var allowedOrigins = new Set(
-  (isProduction ? productionBrowserOrigins : [
+  (isProduction ? [
+    ...productionBrowserOrigins,
+    env.PUBLIC_APP_URL,
+    env.FRONTEND_URL,
+    env.ADMIN_APP_URL,
+    env.VITE_SITE_URL,
+    vercelOrigin,
+    ...splitOriginList(env.CORS_ORIGIN),
+    ...splitOriginList(env.CORS_ORIGINS),
+    ...splitOriginList(env.ALLOWED_ORIGINS)
+  ] : [
     env.PUBLIC_APP_URL,
     env.FRONTEND_URL,
     env.ADMIN_APP_URL,
@@ -10506,7 +10621,20 @@ var ready = (async () => {
     const clientDistPath = path7.resolve(import.meta.dirname, "..", "dist", "client");
     const adminDistPath = path7.resolve(import.meta.dirname, "..", "dist", "admin");
     if (fs5.existsSync(adminDistPath)) {
-      app.use("/admin", express3.static(adminDistPath));
+      const adminStatic = express3.static(adminDistPath);
+      app.use((req, res, next) => {
+        if (!isAdminHostname(req)) {
+          return next();
+        }
+        return adminStatic(req, res, next);
+      });
+      app.get("*", (req, res, next) => {
+        if (!isAdminHostname(req)) {
+          return next();
+        }
+        return res.sendFile(path7.join(adminDistPath, "index.html"));
+      });
+      app.use("/admin", adminStatic);
       app.get("/admin/*", (_req, res) => {
         res.sendFile(path7.join(adminDistPath, "index.html"));
       });

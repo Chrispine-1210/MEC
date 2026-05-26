@@ -71,6 +71,28 @@ const productionBrowserOrigins = [
 
 const vercelOrigin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined;
 
+const hostnameFromUrl = (value?: string) => {
+  if (!value) return null;
+
+  try {
+    return new URL(value).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+};
+
+const adminHostnames = new Set(
+  [
+    "admin.mtendereeducationconsult.com",
+    hostnameFromUrl(env.ADMIN_APP_URL),
+  ].filter(Boolean) as string[],
+);
+
+const requestHostname = (req: Request) =>
+  (req.hostname || req.get("host")?.split(":")[0] || "").toLowerCase();
+
+const isAdminHostname = (req: Request) => adminHostnames.has(requestHostname(req));
+
 const developmentOrigins = isProduction
   ? []
   : [
@@ -284,7 +306,24 @@ export const ready = (async () => {
     const adminDistPath = path.resolve(import.meta.dirname, "..", "dist", "admin");
 
     if (fs.existsSync(adminDistPath)) {
-      app.use("/admin", express.static(adminDistPath));
+      const adminStatic = express.static(adminDistPath);
+
+      app.use((req, res, next) => {
+        if (!isAdminHostname(req)) {
+          return next();
+        }
+
+        return adminStatic(req, res, next);
+      });
+      app.get("*", (req, res, next) => {
+        if (!isAdminHostname(req)) {
+          return next();
+        }
+
+        return res.sendFile(path.join(adminDistPath, "index.html"));
+      });
+
+      app.use("/admin", adminStatic);
       app.get("/admin/*", (_req, res) => {
         res.sendFile(path.join(adminDistPath, "index.html"));
       });
