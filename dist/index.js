@@ -47,6 +47,7 @@ var envSchema = z.object({
   PUBLIC_APP_URL: optionalEnvString,
   FRONTEND_URL: optionalEnvString,
   ADMIN_APP_URL: optionalEnvString,
+  API_APP_URL: optionalEnvString,
   CORS_ORIGIN: optionalEnvString,
   CORS_ORIGINS: optionalEnvString,
   ALLOWED_ORIGINS: optionalEnvString,
@@ -10459,8 +10460,16 @@ var adminHostnames = new Set(
     hostnameFromUrl(env.ADMIN_APP_URL)
   ].filter(Boolean)
 );
+var apiHostnames = new Set(
+  [
+    "api.mtendereeducationconsult.com",
+    hostnameFromUrl(env.API_APP_URL),
+    hostnameFromUrl(env.VITE_API_URL)
+  ].filter(Boolean)
+);
 var requestHostname = (req) => (req.hostname || req.get("host")?.split(":")[0] || "").toLowerCase();
 var isAdminHostname = (req) => adminHostnames.has(requestHostname(req));
+var isApiHostname = (req) => apiHostnames.has(requestHostname(req));
 var developmentOrigins = isProduction ? [] : [
   "http://localhost:3000",
   "http://localhost:5000",
@@ -10620,6 +10629,15 @@ var ready = (async () => {
   } else {
     const clientDistPath = path7.resolve(import.meta.dirname, "..", "dist", "client");
     const adminDistPath = path7.resolve(import.meta.dirname, "..", "dist", "admin");
+    app.use((req, res, next) => {
+      if (!isApiHostname(req)) {
+        return next();
+      }
+      if (req.path === "/" || req.path === "/health") {
+        return res.json({ status: "ok" });
+      }
+      return res.status(404).json({ message: "API route not found" });
+    });
     if (fs5.existsSync(adminDistPath)) {
       const adminStatic = express3.static(adminDistPath);
       app.use((req, res, next) => {

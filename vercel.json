@@ -31,6 +31,16 @@
       "dest": "/api/ws"
     },
     {
+      "src": "/(?:health)?",
+      "has": [
+        {
+          "type": "host",
+          "value": "api.mtendereeducationconsult.com"
+        }
+      ],
+      "dest": "/api/health"
+    },
+    {
       "src": "/(.*)",
       "has": [
         {

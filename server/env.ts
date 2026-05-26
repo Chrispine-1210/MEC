@@ -41,6 +41,7 @@ const envSchema = z.object({
   PUBLIC_APP_URL: optionalEnvString,
   FRONTEND_URL: optionalEnvString,
   ADMIN_APP_URL: optionalEnvString,
+  API_APP_URL: optionalEnvString,
   CORS_ORIGIN: optionalEnvString,
   CORS_ORIGINS: optionalEnvString,
   ALLOWED_ORIGINS: optionalEnvString,

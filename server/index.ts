@@ -88,10 +88,19 @@ const adminHostnames = new Set(
   ].filter(Boolean) as string[],
 );
 
+const apiHostnames = new Set(
+  [
+    "api.mtendereeducationconsult.com",
+    hostnameFromUrl(env.API_APP_URL),
+    hostnameFromUrl(env.VITE_API_URL),
+  ].filter(Boolean) as string[],
+);
+
 const requestHostname = (req: Request) =>
   (req.hostname || req.get("host")?.split(":")[0] || "").toLowerCase();
 
 const isAdminHostname = (req: Request) => adminHostnames.has(requestHostname(req));
+const isApiHostname = (req: Request) => apiHostnames.has(requestHostname(req));
 
 const developmentOrigins = isProduction
   ? []
@@ -304,6 +313,18 @@ export const ready = (async () => {
   } else {
     const clientDistPath = path.resolve(import.meta.dirname, "..", "dist", "client");
     const adminDistPath = path.resolve(import.meta.dirname, "..", "dist", "admin");
+
+    app.use((req, res, next) => {
+      if (!isApiHostname(req)) {
+        return next();
+      }
+
+      if (req.path === "/" || req.path === "/health") {
+        return res.json({ status: "ok" });
+      }
+
+      return res.status(404).json({ message: "API route not found" });
+    });
 
     if (fs.existsSync(adminDistPath)) {
       const adminStatic = express.static(adminDistPath);
