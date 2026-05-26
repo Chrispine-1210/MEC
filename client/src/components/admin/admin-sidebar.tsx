@@ -13,7 +13,6 @@ import {
   Building,
   UserCheck,
   BarChart3,
-  Settings,
   LogOut,
   Menu,
   X,
@@ -22,6 +21,7 @@ import {
   Mail,
   CalendarDays
 } from "lucide-react";
+import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
 
 interface AdminSidebarProps {
   activeView: string;
@@ -122,8 +122,11 @@ export default function AdminSidebar({ activeView, onViewChange, isOpen, onToggl
         <div className="p-6 border-b border-sidebar-border/60">
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-bold text-xl mb-1">
-                Mtendere <span className="text-mtendere-orange">Admin</span>
+              <div className="mb-3 flex items-center gap-3">
+                <img src={BRAND_LOGO_SRC} alt={BRAND_NAME} className="h-10 w-10 object-contain" />
+                <div className="font-bold text-xl">
+                  Mtendere <span className="text-mtendere-orange">Admin</span>
+                </div>
               </div>
               <div className="flex items-center space-x-2">
                 <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-mtendere-green' : 'bg-destructive/80'}`}></div>

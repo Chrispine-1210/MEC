@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { APP_NAME, BRAND_LOGO_SRC, BRAND_THEME_COLOR } from "@/lib/brand";
 
 interface SEOProps {
   title: string;
@@ -11,17 +12,18 @@ interface SEOProps {
 export function SEO({ 
   title, 
   description, 
-  image = "/og-image.png", 
+  image = BRAND_LOGO_SRC, 
   url = window.location.href,
   type = "website" 
 }: SEOProps) {
-  const fullTitle = `${title} | Mtendere Education Platform`;
+  const fullTitle = `${title} | ${APP_NAME}`;
 
   useEffect(() => {
     document.title = fullTitle;
     
     // Meta tags
     updateMetaTag("name", "description", description);
+    updateMetaTag("name", "theme-color", BRAND_THEME_COLOR);
     
     // Open Graph
     updateMetaTag("property", "og:title", fullTitle);

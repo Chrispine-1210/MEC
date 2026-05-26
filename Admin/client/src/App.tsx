@@ -29,6 +29,7 @@ import Media from "@/pages/admin/media";
 import AuthPage from "@/pages/auth";
 import { AdminRealtimeProvider } from "@/hooks/use-admin-realtime";
 import { canAccessAdminPath, isAdminPortalRole, normalizeAdminPath } from "@/lib/admin-rbac";
+import { APP_NAME, BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
 
 function AdminLoadingSkeleton() {
   return (
@@ -230,12 +231,8 @@ function Router() {
       <Route path="/" component={() => (
         <div className="min-h-screen bg-gradient-to-br from-primary/5 to-accent/10 flex items-center justify-center">
           <div className="text-center max-w-md p-8">
-            <div className="w-16 h-16 bg-primary rounded-xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-              </svg>
-            </div>
-            <h1 className="text-4xl font-bold text-foreground mb-4">Mtendere Education Platform</h1>
+            <img src={BRAND_LOGO_SRC} alt={BRAND_NAME} className="mx-auto mb-6 h-20 w-20 object-contain" />
+            <h1 className="text-4xl font-bold text-foreground mb-4">{APP_NAME}</h1>
             <p className="text-muted-foreground mb-8 leading-relaxed">
               Your comprehensive educational consulting platform for scholarships, job opportunities, and academic partnerships.
             </p>

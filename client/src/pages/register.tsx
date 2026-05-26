@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Eye, EyeOff } from "lucide-react";
+import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
 
 export default function Register() {
   const [, setLocation] = useLocation();
@@ -105,9 +106,7 @@ export default function Register() {
       <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(0,0,0,0.30),rgba(0,0,0,0.05)_45%,rgba(0,0,0,0.34))]" />
       <Card className="premium-card relative z-10 w-full max-w-md rounded-3xl border-white/20 bg-card/95 backdrop-blur-xl">
         <CardHeader className="text-center">
-          <div className="font-bold text-2xl text-mtendere-blue mb-4">
-            Mtendere <span className="text-mtendere-green">Education</span>
-          </div>
+          <img src={BRAND_LOGO_SRC} alt={BRAND_NAME} className="mx-auto mb-4 h-16 w-auto object-contain" />
           <CardTitle className="text-2xl">Create Account</CardTitle>
           <CardDescription>
             Join thousands of students advancing their careers with Mtendere

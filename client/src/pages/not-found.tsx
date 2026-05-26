@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Home, BookOpen, GraduationCap, Search, ArrowLeft } from "lucide-react";
-import logoImg from "@assets/mtendere-logo.svg";
+import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
 
 export default function NotFound() {
   return (
@@ -10,8 +10,8 @@ export default function NotFound() {
         <div className="mb-8">
           <Link href="/">
             <img
-              src={logoImg}
-              alt="Mtendere Education Consult"
+              src={BRAND_LOGO_SRC}
+              alt={BRAND_NAME}
               className="h-12 w-auto object-contain mx-auto"
             />
           </Link>

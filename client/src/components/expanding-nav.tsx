@@ -20,8 +20,7 @@ import {
   Settings,
   LogOut
 } from "lucide-react";
-
-import logoImg from "@assets/mtendere-logo.svg";
+import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
 
 export default function ExpandingNav() {
   const [isOpen, setIsOpen] = useState(false);
@@ -147,8 +146,8 @@ export default function ExpandingNav() {
           <Link href="/" onClick={closeMenu}>
             <div className="flex items-center group">
               <img
-                src={logoImg}
-                alt="Mtendere Education Consult"
+                src={BRAND_LOGO_SRC}
+                alt={BRAND_NAME}
                 className="h-12 w-auto object-contain transform group-hover:scale-105 transition-transform duration-300"
               />
             </div>

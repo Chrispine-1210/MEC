@@ -20,7 +20,7 @@ import {
   FileText,
   CalendarDays,
 } from "lucide-react";
-import logoImg from "@assets/mtendere-logo.svg";
+import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
 
 export default function Footer() {
   return (
@@ -46,8 +46,8 @@ export default function Footer() {
           <div className="lg:col-span-2">
             <div className="mb-5">
               <img
-                src={logoImg}
-                alt="Mtendere Education Consult"
+                src={BRAND_LOGO_SRC}
+                alt={BRAND_NAME}
                 className="h-14 w-auto object-contain"
               />
             </div>

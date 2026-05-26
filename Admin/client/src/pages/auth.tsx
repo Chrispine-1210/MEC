@@ -12,8 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { GraduationCap, Eye, EyeOff, Info } from "lucide-react";
+import { Eye, EyeOff, Info } from "lucide-react";
 import { type User } from "@shared/schema";
+import { ADMIN_APP_NAME, BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
 
 type MfaSetupPayload = {
   message: string;
@@ -210,10 +211,10 @@ export default function AuthPage() {
       <div className="hidden lg:flex lg:flex-1 bg-gradient-to-br from-primary to-chart-4 p-12 flex-col justify-between">
         <div>
           <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 bg-card/20 rounded-xl flex items-center justify-center">
-              <GraduationCap className="h-6 w-6 text-white" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white shadow-lg">
+              <img src={BRAND_LOGO_SRC} alt={BRAND_NAME} className="h-10 w-10 object-contain" />
             </div>
-            <span className="text-white text-xl font-bold">Mtendere Education</span>
+            <span className="text-white text-xl font-bold">{BRAND_NAME}</span>
           </div>
           <h1 className="text-4xl font-bold text-white leading-tight mb-4">
             Admin Management Platform
@@ -244,8 +245,8 @@ export default function AuthPage() {
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
           <div className="lg:hidden flex items-center gap-2 mb-8 justify-center">
-            <GraduationCap className="h-8 w-8 text-primary" />
-            <span className="text-xl font-bold text-foreground">Mtendere Admin</span>
+            <img src={BRAND_LOGO_SRC} alt={BRAND_NAME} className="h-12 w-12 object-contain" />
+            <span className="text-xl font-bold text-foreground">{ADMIN_APP_NAME}</span>
           </div>
 
           <Card className="shadow-xl border-0">

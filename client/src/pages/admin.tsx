@@ -18,11 +18,11 @@ import {
   Activity,
   CalendarDays,
   TrendingUp,
-  Eye,
-  Settings,
+  Menu,
   Bell,
   Mail
 } from "lucide-react";
+import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
 
 type AdminView = 'dashboard' | 'analytics' | 'events' | 'scholarships' | 'jobs' | 'users' | 'blog-posts' | 'testimonials' | 'partners' | 'team-members' | 'subscribers';
 
@@ -282,13 +282,20 @@ export default function Admin() {
       <div className="flex-1 flex flex-col min-h-screen lg:ml-64">
         {/* Mobile Header */}
         <div className="lg:hidden bg-card/90 backdrop-blur shadow-sm border-b border-border/60 p-4">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-          >
-            <Settings className="w-5 h-5" />
-          </Button>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <img src={BRAND_LOGO_SRC} alt={BRAND_NAME} className="h-9 w-9 object-contain" />
+              <span className="text-sm font-bold text-mtendere-blue">Mtendere Admin</span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              aria-label="Open admin navigation"
+            >
+              <Menu className="w-5 h-5" />
+            </Button>
+          </div>
         </div>
 
         {/* Content Area */}

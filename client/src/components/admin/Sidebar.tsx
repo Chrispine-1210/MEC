@@ -21,12 +21,12 @@ import {
   Shield,
   Settings,
   X,
-  BookOpen,
   ClipboardList,
   Bot,
   Flame,
   ChevronRight,
 } from "lucide-react";
+import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
 
 interface SidebarProps {
   onClose?: () => void;
@@ -141,8 +141,8 @@ export default function Sidebar({ onClose }: SidebarProps) {
         {/* Logo */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-border/60">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 bg-gradient-to-br from-primary to-chart-4 rounded-xl flex items-center justify-center shadow-md">
-              <BookOpen className="w-5 h-5 text-white" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-border/60">
+              <img src={BRAND_LOGO_SRC} alt={BRAND_NAME} className="h-9 w-9 object-contain" />
             </div>
             <div>
               <h1 className="text-sm font-bold text-foreground leading-none">Mtendere</h1>

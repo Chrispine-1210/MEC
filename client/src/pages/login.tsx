@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Eye, EyeOff, GraduationCap, Globe, Award, ArrowRight, ArrowLeft } from "lucide-react";
-import logoImg from "@assets/mtendere-logo.svg";
+import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
 import { getGovernedBackgroundImage } from "@/lib/image-governance";
 
 export default function Login() {
@@ -51,8 +51,8 @@ export default function Login() {
 
         <div className="relative z-10">
           <img
-            src={logoImg}
-            alt="Mtendere Education Consult"
+            src={BRAND_LOGO_SRC}
+            alt={BRAND_NAME}
             className="h-14 w-auto object-contain brightness-0 invert"
           />
         </div>
@@ -85,7 +85,7 @@ export default function Login() {
       <div className="flex flex-1 flex-col justify-center bg-background p-6 md:p-8 lg:p-16">
         <div className="premium-card mx-auto w-full max-w-md rounded-3xl p-6 md:p-8">
           <div className="mb-8 lg:hidden">
-            <img src={logoImg} alt="Mtendere Education Consult" className="h-12 w-auto object-contain" />
+            <img src={BRAND_LOGO_SRC} alt={BRAND_NAME} className="h-12 w-auto object-contain" />
           </div>
 
           <div className="mb-8">
