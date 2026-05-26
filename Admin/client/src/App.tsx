@@ -29,7 +29,7 @@ import Media from "@/pages/admin/media";
 import AuthPage from "@/pages/auth";
 import { AdminRealtimeProvider } from "@/hooks/use-admin-realtime";
 import { canAccessAdminPath, isAdminPortalRole, normalizeAdminPath } from "@/lib/admin-rbac";
-import { APP_NAME, BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
+import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
 
 function AdminLoadingSkeleton() {
   return (
@@ -223,31 +223,22 @@ function AdminRouter() {
   );
 }
 
+function RootRedirect() {
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    setLocation("/admin");
+  }, [setLocation]);
+
+  return <AdminLoadingSkeleton />;
+}
+
 function Router() {
   return (
     <Switch>
       <Route path="/admin/auth" component={AuthPage} />
       <Route path="/auth" component={AuthPage} />
-      <Route path="/" component={() => (
-        <div className="min-h-screen bg-gradient-to-br from-primary/5 to-accent/10 flex items-center justify-center">
-          <div className="text-center max-w-md p-8">
-            <img src={BRAND_LOGO_SRC} alt={BRAND_NAME} className="mx-auto mb-6 h-20 w-20 object-contain" />
-            <h1 className="text-4xl font-bold text-foreground mb-4">{APP_NAME}</h1>
-            <p className="text-muted-foreground mb-8 leading-relaxed">
-              Your comprehensive educational consulting platform for scholarships, job opportunities, and academic partnerships.
-            </p>
-            <a 
-              href="/admin" 
-              className="inline-flex items-center bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-lg font-semibold transition-colors duration-200 shadow-lg hover:shadow-xl"
-            >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Access Admin Panel
-            </a>
-          </div>
-        </div>
-      )} />
+      <Route path="/" component={RootRedirect} />
       
       <Route path="/admin/:path*" component={AdminRouter} />
       <Route path="/admin" component={AdminRouter} />

@@ -31,9 +31,6 @@
       "dest": "/api/ws"
     },
     {
-      "handle": "filesystem"
-    },
-    {
       "src": "/(.*)",
       "has": [
         {
@@ -42,6 +39,9 @@
         }
       ],
       "dest": "/admin/index.html"
+    },
+    {
+      "handle": "filesystem"
     },
     {
       "src": "/admin(?:/.*)?",
