@@ -41,6 +41,36 @@
       "dest": "/api/health"
     },
     {
+      "src": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "api.mtendereeducationconsult.com"
+        }
+      ],
+      "dest": "/api/health"
+    },
+    {
+      "src": "/health",
+      "has": [
+        {
+          "type": "host",
+          "value": "api.mtendereeducationconsult.com"
+        }
+      ],
+      "dest": "/api/health"
+    },
+    {
+      "src": "/((?!api/).+)",
+      "has": [
+        {
+          "type": "host",
+          "value": "api.mtendereeducationconsult.com"
+        }
+      ],
+      "dest": "/api/$1"
+    },
+    {
       "src": "/((?!api/|auth/|uploads/|media-assets/|ws$).*)",
       "has": [
         {
