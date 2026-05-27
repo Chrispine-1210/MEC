@@ -41,10 +41,7 @@
       "dest": "/api/health"
     },
     {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
+      "src": "/((?!api/|auth/|uploads/|media-assets/|ws$).*)",
       "has": [
         {
           "type": "host",
@@ -54,11 +51,14 @@
       "dest": "/admin/index.html"
     },
     {
+      "handle": "filesystem"
+    },
+    {
       "src": "/admin(?:/.*)?",
       "dest": "/admin/index.html"
     },
     {
-      "src": "/(.*)",
+      "src": "/((?!api/|auth/|uploads/|media-assets/|ws$).*)",
       "dest": "/index.html"
     }
   ]
