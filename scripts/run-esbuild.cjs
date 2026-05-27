@@ -1,11 +1,10 @@
-const { spawnSync } = require("child_process");
-const fs = require("fs");
 const path = require("path");
+const esbuild = require("esbuild");
 
 const repoRoot = path.resolve(__dirname, "..");
-const esbuildBin = path.join(repoRoot, "node_modules", "esbuild", "bin", "esbuild");
 const args = process.argv.slice(2);
-const esbuildArgs = [];
+const entryPoints = [];
+const options = {};
 let cwd = repoRoot;
 
 for (let index = 0; index < args.length; index += 1) {
@@ -14,21 +13,87 @@ for (let index = 0; index < args.length; index += 1) {
     cwd = path.resolve(repoRoot, args[++index] || ".");
     continue;
   }
-  esbuildArgs.push(arg);
+  if (arg === "--bundle") {
+    options.bundle = true;
+    continue;
+  }
+  if (arg === "--minify") {
+    options.minify = true;
+    continue;
+  }
+  if (arg === "--sourcemap") {
+    options.sourcemap = true;
+    continue;
+  }
+  if (arg.startsWith("--platform=")) {
+    options.platform = arg.slice("--platform=".length);
+    continue;
+  }
+  if (arg === "--platform") {
+    options.platform = args[++index];
+    continue;
+  }
+  if (arg.startsWith("--packages=")) {
+    options.packages = arg.slice("--packages=".length);
+    continue;
+  }
+  if (arg === "--packages") {
+    options.packages = args[++index];
+    continue;
+  }
+  if (arg.startsWith("--format=")) {
+    options.format = arg.slice("--format=".length);
+    continue;
+  }
+  if (arg === "--format") {
+    options.format = args[++index];
+    continue;
+  }
+  if (arg.startsWith("--outdir=")) {
+    options.outdir = arg.slice("--outdir=".length);
+    continue;
+  }
+  if (arg === "--outdir") {
+    options.outdir = args[++index];
+    continue;
+  }
+  if (arg.startsWith("--outfile=")) {
+    options.outfile = arg.slice("--outfile=".length);
+    continue;
+  }
+  if (arg === "--outfile") {
+    options.outfile = args[++index];
+    continue;
+  }
+  if (arg.startsWith("--target=")) {
+    options.target = arg.slice("--target=".length);
+    continue;
+  }
+  if (arg === "--target") {
+    options.target = args[++index];
+    continue;
+  }
+  if (arg.startsWith("--external:")) {
+    options.external ??= [];
+    options.external.push(arg.slice("--external:".length));
+    continue;
+  }
+  if (arg.startsWith("-")) {
+    throw new Error(`Unsupported esbuild argument: ${arg}`);
+  }
+  entryPoints.push(arg);
 }
 
-if (!fs.existsSync(esbuildBin)) {
-  throw new Error("esbuild is not installed. Run npm install --include=dev first.");
+if (entryPoints.length === 0) {
+  throw new Error("At least one esbuild entry point is required.");
 }
 
-const result = spawnSync(process.execPath, [esbuildBin, ...esbuildArgs], {
-  cwd,
-  env: process.env,
-  stdio: "inherit"
+esbuild.build({
+  absWorkingDir: cwd,
+  entryPoints,
+  logLevel: "info",
+  ...options
+}).catch((error) => {
+  console.error(error);
+  process.exit(1);
 });
-
-if (result.error) {
-  throw result.error;
-}
-
-process.exit(result.status ?? 1);
