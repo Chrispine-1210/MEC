@@ -41,6 +41,9 @@
       "dest": "/api/health"
     },
     {
+      "handle": "filesystem"
+    },
+    {
       "src": "/(.*)",
       "has": [
         {
@@ -49,9 +52,6 @@
         }
       ],
       "dest": "/admin/index.html"
-    },
-    {
-      "handle": "filesystem"
     },
     {
       "src": "/admin(?:/.*)?",
