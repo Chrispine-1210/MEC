@@ -6,7 +6,6 @@ import { env } from "./env";
 import helmet from "helmet";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { registerRoutes } from "./routes";
-import { log, setupVite } from "./vite";
 
 export const app = express();
 const isProduction = env.NODE_ENV === "production";
@@ -14,6 +13,17 @@ const port = env.PORT;
 const adminPort = env.ADMIN_PORT;
 const isVercelRuntime = process.env.VERCEL === "1" || process.env.VERCEL === "true";
 app.disable("x-powered-by");
+
+const log = (message: string, source = "express") => {
+  const formattedTime = new Date().toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+
+  console.log(`${formattedTime} [${source}] ${message}`);
+};
 
 app.use(
   helmet({
@@ -309,6 +319,10 @@ export const ready = (async () => {
   });
 
   if (!isVercelRuntime && app.get("env") === "development") {
+    const dynamicImport = new Function("m", "return import(m)") as (
+      modulePath: string,
+    ) => Promise<{ setupVite: (app: typeof import("express").default, server: import("http").Server) => Promise<void> }>;
+    const { setupVite } = await dynamicImport("./vite");
     await setupVite(app, server);
   } else {
     const clientDistPath = path.resolve(import.meta.dirname, "..", "dist", "client");
