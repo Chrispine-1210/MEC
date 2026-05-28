@@ -30,6 +30,7 @@ import AuthPage from "@/pages/auth";
 import { AdminRealtimeProvider } from "@/hooks/use-admin-realtime";
 import { canAccessAdminPath, isAdminPortalRole, normalizeAdminPath } from "@/lib/admin-rbac";
 import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
+import { Analytics } from "@vercel/analytics/react";
 
 function AdminLoadingSkeleton() {
   return (
@@ -260,6 +261,7 @@ function App() {
         <AdminRealtimeProvider>
           <Toaster />
           <Router />
+          <Analytics />
         </AdminRealtimeProvider>
       </TooltipProvider>
     </QueryClientProvider>
