@@ -9,6 +9,17 @@
     <meta name="theme-color" content="#2563eb" />
     <link rel="icon" type="image/png" href="/src/assets/imgs/Mtendere_Logo.png" />
     <link rel="apple-touch-icon" href="/src/assets/imgs/Mtendere_Logo.png" />
+    <script>
+      (() => {
+        const adminHost = "admin.mtendereeducationconsult.com";
+        const { hostname, pathname, search, hash } = window.location;
+        if (hostname !== adminHost || pathname === "/admin" || pathname.startsWith("/admin/")) return;
+        if (/^\/(?:api|uploads|media-assets)(?:\/|$)/.test(pathname) || pathname === "/ws" || pathname.startsWith("/auth/")) return;
+
+        const nextPath = pathname === "/" ? "/admin" : pathname === "/auth" ? "/admin/auth" : `/admin${pathname}`;
+        window.location.replace(`${nextPath}${search}${hash}`);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

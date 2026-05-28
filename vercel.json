@@ -9,6 +9,30 @@
       "includeFiles": "{server-build,dist}/**"
     }
   },
+  "redirects": [
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "admin.mtendereeducationconsult.com"
+        }
+      ],
+      "destination": "/admin",
+      "permanent": false
+    },
+    {
+      "source": "/auth",
+      "has": [
+        {
+          "type": "host",
+          "value": "admin.mtendereeducationconsult.com"
+        }
+      ],
+      "destination": "/admin/auth",
+      "permanent": false
+    }
+  ],
   "routes": [
     {
       "src": "/api/(.*)",
