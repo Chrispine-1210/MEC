@@ -79,6 +79,7 @@ This is a full-stack web application for Mtendere Education Consultants, an educ
 
 ## Changelog
 
+- May 28, 2026. Forced Vercel redeploy after admin domain routing and runtime path fixes.
 - July 08, 2025. Initial setup
 
 ## User Preferences
