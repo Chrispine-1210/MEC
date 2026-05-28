@@ -125,6 +125,7 @@ export default function Register() {
                 <Input
                   id="firstName"
                   name="firstName"
+                  autoComplete="given-name"
                   placeholder="Enter your first name"
                   value={formData.firstName}
                   onChange={handleChange}
@@ -141,6 +142,7 @@ export default function Register() {
                 <Input
                   id="lastName"
                   name="lastName"
+                  autoComplete="family-name"
                   placeholder="Enter your last name"
                   value={formData.lastName}
                   onChange={handleChange}
@@ -159,6 +161,7 @@ export default function Register() {
                 id="email"
                 name="email"
                 type="email"
+                autoComplete="email"
                 placeholder="Enter your email"
                 value={formData.email}
                 onChange={handleChange}
@@ -175,6 +178,7 @@ export default function Register() {
               <Input
                 id="username"
                 name="username"
+                autoComplete="username"
                 placeholder="Choose a username"
                 value={formData.username}
                 onChange={handleChange}
@@ -193,6 +197,7 @@ export default function Register() {
                   id="password"
                   name="password"
                   type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
                   placeholder="Create a password"
                   value={formData.password}
                   onChange={handleChange}
@@ -226,6 +231,7 @@ export default function Register() {
                   id="confirmPassword"
                   name="confirmPassword"
                   type={showConfirmPassword ? "text" : "password"}
+                  autoComplete="new-password"
                   placeholder="Confirm your password"
                   value={formData.confirmPassword}
                   onChange={handleChange}

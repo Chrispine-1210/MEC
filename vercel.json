@@ -6,6 +6,9 @@
   "buildCommand": "npm run build:vercel",
   "outputDirectory": "dist/client",
   "functions": {
+    "api/index.js": {
+      "includeFiles": "{server-build,dist}/**"
+    },
     "api/[...path].js": {
       "includeFiles": "{server-build,dist}/**"
     }
@@ -37,23 +40,23 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/api/$1"
+      "dest": "/api/index.js?__mec_path=api/$1"
     },
     {
       "src": "/auth/(.*)",
-      "dest": "/api/auth/$1"
+      "dest": "/api/index.js?__mec_path=auth/$1"
     },
     {
       "src": "/uploads/(.*)",
-      "dest": "/api/uploads/$1"
+      "dest": "/api/index.js?__mec_path=uploads/$1"
     },
     {
       "src": "/media-assets/(.*)",
-      "dest": "/api/media-assets/$1"
+      "dest": "/api/index.js?__mec_path=media-assets/$1"
     },
     {
       "src": "/ws",
-      "dest": "/api/ws"
+      "dest": "/api/index.js?__mec_path=ws"
     },
     {
       "src": "/(?:health)?",
@@ -63,7 +66,7 @@
           "value": "api.mtendereeducationconsult.com"
         }
       ],
-      "dest": "/api/health"
+      "dest": "/api/index.js?__mec_path=api/health"
     },
     {
       "src": "/",
@@ -73,7 +76,7 @@
           "value": "api.mtendereeducationconsult.com"
         }
       ],
-      "dest": "/api/health"
+      "dest": "/api/index.js?__mec_path=api/health"
     },
     {
       "src": "/health",
@@ -83,7 +86,7 @@
           "value": "api.mtendereeducationconsult.com"
         }
       ],
-      "dest": "/api/health"
+      "dest": "/api/index.js?__mec_path=api/health"
     },
     {
       "src": "/((?!api/).+)",
@@ -93,7 +96,7 @@
           "value": "api.mtendereeducationconsult.com"
         }
       ],
-      "dest": "/api/$1"
+      "dest": "/api/index.js?__mec_path=api/$1"
     },
     {
       "src": "/",

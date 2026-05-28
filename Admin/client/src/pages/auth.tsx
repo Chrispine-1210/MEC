@@ -82,10 +82,10 @@ export default function AuthPage() {
     queryClient.invalidateQueries({ queryKey: ["/api/user"] });
 
     try {
-      const statusRes = await apiRequest("GET", "/auth/mfa/status");
+      const statusRes = await apiRequest("GET", "/api/auth/mfa/status");
       const status = await statusRes.json();
       if (status.mfaRequiredForRole && !status.mfaEnabled) {
-        const setupRes = await apiRequest("POST", "/auth/mfa/setup", {});
+        const setupRes = await apiRequest("POST", "/api/auth/mfa/setup", {});
         const setupData = (await setupRes.json()) as MfaSetupPayload;
         setPendingMfaSetup(setupData);
         setSecretCopied(false);
@@ -112,7 +112,7 @@ export default function AuthPage() {
     setIsLoading(true);
     try {
       setPendingCredentials({ username: data.username, password: data.password });
-      const res = await apiRequest("POST", "/auth/login", data);
+      const res = await apiRequest("POST", "/api/auth/login", data);
       const body = await res.json();
 
       if (body.mfaRequired && body.challengeToken) {
@@ -137,7 +137,7 @@ export default function AuthPage() {
     if (!pendingMfaChallengeToken || !mfaCode.trim()) return;
     setIsLoading(true);
     try {
-      const res = await apiRequest("POST", "/auth/mfa/verify", {
+      const res = await apiRequest("POST", "/api/auth/mfa/verify", {
         challengeToken: pendingMfaChallengeToken,
         code: mfaCode.trim(),
       });
@@ -156,8 +156,8 @@ export default function AuthPage() {
     if (!pendingMfaSetup || !mfaCode.trim() || !pendingCredentials) return;
     setIsLoading(true);
     try {
-      await apiRequest("POST", "/auth/mfa/enable", { code: mfaCode.trim() });
-      const loginRes = await apiRequest("POST", "/auth/login", {
+      await apiRequest("POST", "/api/auth/mfa/enable", { code: mfaCode.trim() });
+      const loginRes = await apiRequest("POST", "/api/auth/login", {
         username: pendingCredentials.username,
         password: pendingCredentials.password,
         mfaCode: mfaCode.trim(),
@@ -178,7 +178,7 @@ export default function AuthPage() {
     setIsLoading(true);
     try {
       setPendingCredentials({ username: data.username, password: data.password });
-      const res = await apiRequest("POST", "/auth/register", data);
+      const res = await apiRequest("POST", "/api/auth/register", data);
       const { token, user } = await res.json();
       await finalizeSession(token, user);
     } catch (error: any) {
@@ -280,7 +280,7 @@ export default function AuthPage() {
                         <FormItem>
                           <FormLabel>Username</FormLabel>
                           <FormControl>
-                            <Input placeholder="Enter your username" {...field} />
+                            <Input autoComplete="username" placeholder="Enter your username" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -290,7 +290,7 @@ export default function AuthPage() {
                           <FormLabel>Password</FormLabel>
                           <FormControl>
                             <div className="relative">
-                              <Input type={showPassword ? "text" : "password"} placeholder="Enter your password" {...field} />
+                              <Input autoComplete="current-password" type={showPassword ? "text" : "password"} placeholder="Enter your password" {...field} />
                               <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 hover:text-muted-foreground">
                                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                               </button>
@@ -314,14 +314,14 @@ export default function AuthPage() {
                         <FormField control={registerForm.control} name="firstName" render={({ field }) => (
                           <FormItem>
                             <FormLabel>First Name</FormLabel>
-                            <FormControl><Input placeholder="First name" {...field} /></FormControl>
+                            <FormControl><Input autoComplete="given-name" placeholder="First name" {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )} />
                         <FormField control={registerForm.control} name="lastName" render={({ field }) => (
                           <FormItem>
                             <FormLabel>Last Name</FormLabel>
-                            <FormControl><Input placeholder="Last name" {...field} /></FormControl>
+                            <FormControl><Input autoComplete="family-name" placeholder="Last name" {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )} />
@@ -329,14 +329,14 @@ export default function AuthPage() {
                       <FormField control={registerForm.control} name="username" render={({ field }) => (
                         <FormItem>
                           <FormLabel>Username</FormLabel>
-                          <FormControl><Input placeholder="Choose a username" {...field} /></FormControl>
+                          <FormControl><Input autoComplete="username" placeholder="Choose a username" {...field} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )} />
                       <FormField control={registerForm.control} name="email" render={({ field }) => (
                         <FormItem>
                           <FormLabel>Email Address</FormLabel>
-                          <FormControl><Input type="email" placeholder="your@email.com" {...field} /></FormControl>
+                          <FormControl><Input autoComplete="email" type="email" placeholder="your@email.com" {...field} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )} />
@@ -345,7 +345,7 @@ export default function AuthPage() {
                           <FormLabel>Password</FormLabel>
                           <FormControl>
                             <div className="relative">
-                              <Input type={showPassword ? "text" : "password"} placeholder="12+ chars with number & symbol" {...field} />
+                              <Input autoComplete="new-password" type={showPassword ? "text" : "password"} placeholder="12+ chars with number & symbol" {...field} />
                               <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 hover:text-muted-foreground">
                                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                               </button>
@@ -391,6 +391,7 @@ export default function AuthPage() {
                     placeholder="123456"
                     maxLength={6}
                     inputMode="numeric"
+                    autoComplete="one-time-code"
                   />
                   <Button
                     type="button"
@@ -448,6 +449,7 @@ export default function AuthPage() {
                     placeholder="Enter 6-digit setup code"
                     maxLength={6}
                     inputMode="numeric"
+                    autoComplete="one-time-code"
                   />
                   <Button
                     type="button"
