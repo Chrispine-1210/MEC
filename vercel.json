@@ -71,10 +71,7 @@
       "dest": "/api/$1"
     },
     {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/((?!api/|auth/|uploads/|media-assets/|ws$).*)",
+      "src": "/((?!api/|auth/|uploads/|media-assets/|ws$|admin/assets/|admin/manifest\\.webmanifest$|admin/favicon\\.ico$).*)",
       "has": [
         {
           "type": "host",
@@ -85,6 +82,9 @@
         "Cache-Control": "no-store"
       },
       "dest": "/admin/index.html"
+    },
+    {
+      "handle": "filesystem"
     },
     {
       "src": "/admin(?:/.*)?",
