@@ -12,6 +12,8 @@ const normalizeOrigin = (value: string) => {
 const isLocalHostname = (hostname: string) =>
   localHostnames.has(hostname) || hostname.endsWith(".localhost");
 
+const functionBridgePrefixes = ["/api/", "/auth/", "/uploads/", "/media-assets/"];
+
 const shouldUseViteProxy = (configuredOrigin: string) => {
   if (!import.meta.env.DEV || typeof window === "undefined") return false;
   if (!isLocalHostname(window.location.hostname)) return false;
@@ -31,11 +33,30 @@ export function getApiOrigin() {
   return shouldUseViteProxy(normalizedOrigin) ? "" : normalizedOrigin;
 }
 
+const resolveViaFunctionBridge = (input: string, apiOrigin: string) => {
+  if (!import.meta.env.PROD) return null;
+  if (!functionBridgePrefixes.some((prefix) => input.startsWith(prefix))) return null;
+
+  const browserOrigin = typeof window !== "undefined" ? window.location.origin : "";
+  const bridgeOrigin = apiOrigin || browserOrigin;
+  if (!bridgeOrigin) return null;
+
+  const sourceUrl = new URL(input, bridgeOrigin);
+  const bridgeUrl = new URL("/api/index.js", bridgeOrigin);
+  bridgeUrl.searchParams.set("__mec_path", sourceUrl.pathname.replace(/^\/+/, ""));
+  sourceUrl.searchParams.forEach((value, key) => bridgeUrl.searchParams.append(key, value));
+
+  return apiOrigin ? bridgeUrl.toString() : `${bridgeUrl.pathname}${bridgeUrl.search}`;
+};
+
 export function resolveApiUrl(input: RequestInfo | URL): RequestInfo | URL {
   if (typeof input !== "string") return input;
   if (!input.startsWith("/") || absoluteUrlPattern.test(input)) return input;
 
   const apiOrigin = getApiOrigin();
+  const bridgedUrl = resolveViaFunctionBridge(input, apiOrigin);
+  if (bridgedUrl) return bridgedUrl;
+
   return apiOrigin ? `${apiOrigin}${input}` : input;
 }
 
