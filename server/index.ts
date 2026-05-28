@@ -4,7 +4,7 @@ import { randomUUID } from "crypto";
 import { env } from "./env";
 
 import helmet from "helmet";
-import express, { type NextFunction, type Request, type Response } from "express";
+import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { registerRoutes } from "./routes";
 
 export const app = express();
@@ -321,7 +321,7 @@ export const ready = (async () => {
   if (!isVercelRuntime && app.get("env") === "development") {
     const dynamicImport = new Function("m", "return import(m)") as (
       modulePath: string,
-    ) => Promise<{ setupVite: (app: typeof import("express").default, server: import("http").Server) => Promise<void> }>;
+    ) => Promise<{ setupVite: (app: Express, server: import("http").Server) => Promise<void> }>;
     const { setupVite } = await dynamicImport("./vite");
     await setupVite(app, server);
   } else {

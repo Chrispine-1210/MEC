@@ -71,6 +71,9 @@
       "dest": "/api/$1"
     },
     {
+      "handle": "filesystem"
+    },
+    {
       "src": "/((?!api/|auth/|uploads/|media-assets/|ws$).*)",
       "has": [
         {
@@ -78,13 +81,16 @@
           "value": "admin.mtendereeducationconsult.com"
         }
       ],
+      "headers": {
+        "Cache-Control": "no-store"
+      },
       "dest": "/admin/index.html"
     },
     {
-      "handle": "filesystem"
-    },
-    {
       "src": "/admin(?:/.*)?",
+      "headers": {
+        "Cache-Control": "no-store"
+      },
       "dest": "/admin/index.html"
     },
     {
