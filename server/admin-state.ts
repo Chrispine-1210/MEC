@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { resolveWritableRuntimePath } from "./runtime-paths";
 
 export type AdminContentStatus = "draft" | "published" | "archived";
 
@@ -348,9 +349,7 @@ const createDefaultState = (): AdminState => ({
 });
 
 const stateFilePath = path.resolve(
-  import.meta.dirname,
-  "..",
-  "data",
+  resolveWritableRuntimePath("data"),
   "admin-state.json",
 );
 

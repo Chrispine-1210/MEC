@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import { env } from "./env";
+import { resolveWritableRuntimePath } from "./runtime-paths";
 
 type EmailCategory =
   | "subscription_confirmation"
@@ -31,7 +32,7 @@ type EmailJob = EmailPayload & {
   lastError?: string;
 };
 
-const dataDir = path.resolve(import.meta.dirname, "..", "data");
+const dataDir = resolveWritableRuntimePath("data");
 const emailLogPath = path.join(dataDir, "email-events.jsonl");
 const queue: EmailJob[] = [];
 const sentTimestamps: number[] = [];

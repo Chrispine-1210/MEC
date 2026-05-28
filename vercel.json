@@ -71,6 +71,19 @@
       "dest": "/api/$1"
     },
     {
+      "src": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "admin.mtendereeducationconsult.com"
+        }
+      ],
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "dest": "/admin/index.html"
+    },
+    {
       "src": "/((?!api/|auth/|uploads/|media-assets/|ws$|admin/assets/|admin/manifest\\.webmanifest$|admin/favicon\\.ico$).*)",
       "has": [
         {

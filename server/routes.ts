@@ -109,6 +109,7 @@ import {
   verifyStripeWebhookEvent,
 } from "./referral-payments";
 import { normalizeSearchQuery, parsePagination, searchAndRank } from "./search";
+import { isVercelRuntime, resolveWritableRuntimePath } from "./runtime-paths";
 
 const JWT_SECRET = env.JWT_SECRET;
 const PASSWORD_HASH_ROUNDS = 12;
@@ -1589,7 +1590,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   };
 
-  const uploadsDir = path.resolve(import.meta.dirname, "..", "uploads");
+  const uploadsDir = resolveWritableRuntimePath("uploads");
   fs.mkdirSync(uploadsDir, { recursive: true });
   app.use("/uploads", express.static(uploadsDir));
   app.use("/api/uploads", express.static(uploadsDir));
@@ -1622,7 +1623,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     limits: { fileSize: 10 * 1024 * 1024, files: 10 },
   });
 
-  const mediaAssetRoot = path.resolve(import.meta.dirname, "..", "client", "src", "assets", "imgs");
+  const mediaAssetRoot = isVercelRuntime
+    ? resolveWritableRuntimePath("media-assets")
+    : path.resolve(import.meta.dirname, "..", "client", "src", "assets", "imgs");
   const mediaAssetModules = new Set([
     "blogs",
     "team",
