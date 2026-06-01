@@ -104,7 +104,7 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
 
   const handleLogout = async () => {
     try {
-      await apiRequest("POST", "/auth/logout");
+      await apiRequest("POST", "/api/auth/logout");
       localStorage.removeItem("token");
       queryClient.setQueryData(["/api/user"], null);
       toast({ title: "Logged out", description: "See you next time!" });

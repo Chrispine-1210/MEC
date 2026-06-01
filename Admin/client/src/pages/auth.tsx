@@ -55,7 +55,8 @@ type RegistrationConflictPayload = {
   fields?: Partial<Record<keyof RegisterFormValues, string>>;
 };
 
-const adminAuthPath = (path: string) => `/auth${path}`;
+const adminAuthPath = (path: string) =>
+  path === "/register" ? "/api/auth/admin/register" : `/api/auth${path}`;
 
 export default function AuthPage() {
   const [, setLocation] = useLocation();

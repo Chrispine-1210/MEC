@@ -80,6 +80,8 @@ const productionBrowserOrigins = [
   "https://admin.mtendereeducationconsult.com",
 ];
 
+const trustedProductionDomain = "mtendereeducationconsult.com";
+
 const vercelOrigin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined;
 
 const hostnameFromUrl = (value?: string) => {
@@ -164,8 +166,21 @@ const isAllowedOrigin = (origin: string | undefined, req: Request) => {
   if (!origin) return true;
 
   const normalizedOrigin = normalizeOrigin(origin);
+  if (!normalizedOrigin) return false;
 
-  return Boolean(normalizedOrigin && allowedOrigins.has(normalizedOrigin));
+  try {
+    const parsedOrigin = new URL(normalizedOrigin);
+    const hostname = parsedOrigin.hostname.toLowerCase();
+    const isTrustedProductionHost =
+      parsedOrigin.protocol === "https:" &&
+      (hostname === trustedProductionDomain || hostname.endsWith(`.${trustedProductionDomain}`));
+
+    if (isTrustedProductionHost) return true;
+  } catch {
+    // Fall back to the explicit allowlist for malformed values.
+  }
+
+  return allowedOrigins.has(normalizedOrigin);
 };
 
 app.use((req: Request, res: Response, next: NextFunction) => {

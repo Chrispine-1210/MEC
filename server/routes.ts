@@ -1899,7 +1899,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       userData.email = userData.email.trim().toLowerCase();
       userData.username = userData.username.trim();
 
-      const isAdminRegistration = req.path === "/auth/register";
+      const isAdminRegistration =
+        req.path === "/auth/register" ||
+        req.path === "/api/auth/admin/register" ||
+        req.path === "/api/admin/auth/register";
 
       if (isAdminRegistration) {
         if (isExplicitForbiddenAdminSignupRole(userData.role)) {
@@ -2042,6 +2045,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   app.post('/api/auth/register', registerHandler);
+  app.post('/api/auth/admin/register', registerHandler);
+  app.post('/api/admin/auth/register', registerHandler);
   app.post('/api/auth/login', loginHandler);
 
   // Admin client aliases
