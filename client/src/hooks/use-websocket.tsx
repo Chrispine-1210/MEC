@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useAuth } from "./use-auth";
-import { resolveWebSocketUrl } from "@/lib/api-base";
+import { isRealtimeEnabled, resolveWebSocketUrl } from "@/lib/api-base";
 import { queryClient } from "@/lib/queryClient";
 
 interface WebSocketContextType {
@@ -27,6 +27,13 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    if (!isRealtimeEnabled()) {
+      setSocket(null);
+      setIsConnected(false);
+      setSubscriptions([]);
+      return;
+    }
+
     let reconnectTimer: number | null = null;
     let isMounted = true;
     let ws: WebSocket | null = null;
@@ -44,12 +51,24 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
     const connect = () => {
       const token = localStorage.getItem("token");
-      const wsUrl = resolveWebSocketUrl("/ws", token);
+      let wsUrl: string;
+
+      try {
+        wsUrl = resolveWebSocketUrl("/ws", token);
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error("WebSocket URL error:", error);
+        }
+        setIsConnected(false);
+        return;
+      }
       
       ws = new WebSocket(wsUrl);
       
       ws.onopen = () => {
-        console.log("WebSocket connected");
+        if (import.meta.env.DEV) {
+          console.log("WebSocket connected");
+        }
         if (!isMounted || !ws) return;
         if (reconnectTimer !== null) {
           window.clearTimeout(reconnectTimer);
@@ -107,7 +126,9 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       };
 
       ws.onclose = () => {
-        console.log("WebSocket disconnected");
+        if (import.meta.env.DEV) {
+          console.log("WebSocket disconnected");
+        }
         if (!isMounted) return;
         setIsConnected(false);
         reconnectTimer = window.setTimeout(connect, 3000);

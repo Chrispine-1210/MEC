@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { type User } from "@shared/schema";
-import { resolveWebSocketUrl } from "@/lib/api-base";
+import { isRealtimeEnabled, resolveWebSocketUrl } from "@/lib/api-base";
 import { queryClient } from "@/lib/queryClient";
 
 type AdminRealtimeContextValue = {
@@ -44,7 +44,7 @@ export function AdminRealtimeProvider({ children }: { children: React.ReactNode 
   });
 
   useEffect(() => {
-    if (!hasToken || !user) {
+    if (!isRealtimeEnabled() || !hasToken || !user) {
       setIsConnected(false);
       return;
     }
@@ -61,7 +61,19 @@ export function AdminRealtimeProvider({ children }: { children: React.ReactNode 
 
     const connect = () => {
       const tokenFromStorage = localStorage.getItem("token");
-      socket = new WebSocket(resolveWebSocketUrl("/ws", tokenFromStorage));
+      let socketUrl: string;
+
+      try {
+        socketUrl = resolveWebSocketUrl("/ws", tokenFromStorage);
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error("Admin realtime URL error:", error);
+        }
+        setIsConnected(false);
+        return;
+      }
+
+      socket = new WebSocket(socketUrl);
 
       socket.onopen = () => {
         if (!isMounted || !socket) return;
@@ -136,7 +148,7 @@ export function AdminRealtimeProvider({ children }: { children: React.ReactNode 
     return () => {
       isMounted = false;
       clearReconnect();
-      if (socket && socket.readyState === WebSocket.OPEN) {
+      if (socket) {
         socket.close();
       }
     };

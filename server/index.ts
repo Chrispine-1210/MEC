@@ -76,6 +76,7 @@ const normalizeOrigin = (value?: string) => {
 
 const productionBrowserOrigins = [
   "https://mtendereeducationconsult.com",
+  "https://www.mtendereeducationconsult.com",
   "https://admin.mtendereeducationconsult.com",
 ];
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { resolveWebSocketUrl } from "@/lib/api-base";
+import { isRealtimeEnabled, resolveWebSocketUrl } from "@/lib/api-base";
 
 interface WebSocketMessage {
   type: string;
@@ -13,6 +13,11 @@ export function useWebSocket(channels: string[] = []) {
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
+    if (!isRealtimeEnabled()) {
+      setIsConnected(false);
+      return;
+    }
+
     let isMounted = true;
 
     const clearReconnect = () => {
@@ -28,7 +33,19 @@ export function useWebSocket(channels: string[] = []) {
         return;
       }
 
-      const socket = new WebSocket(resolveWebSocketUrl("/ws", token));
+      let socketUrl: string;
+
+      try {
+        socketUrl = resolveWebSocketUrl("/ws", token);
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error("Admin websocket URL error:", error);
+        }
+        setIsConnected(false);
+        return;
+      }
+
+      const socket = new WebSocket(socketUrl);
       socketRef.current = socket;
 
       socket.onopen = () => {

@@ -1623,9 +1623,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     limits: { fileSize: 10 * 1024 * 1024, files: 10 },
   });
 
+  const bundledMediaAssetRoot = path.resolve(import.meta.dirname, "..", "client", "src", "assets", "imgs");
   const mediaAssetRoot = isVercelRuntime
     ? resolveWritableRuntimePath("media-assets")
-    : path.resolve(import.meta.dirname, "..", "client", "src", "assets", "imgs");
+    : bundledMediaAssetRoot;
+  const mediaAssetReadRoots = Array.from(
+    new Set([
+      mediaAssetRoot,
+      bundledMediaAssetRoot,
+      path.resolve(process.cwd(), "client", "src", "assets", "imgs"),
+    ]),
+  );
   const mediaAssetModules = new Set([
     "blogs",
     "team",
@@ -1734,6 +1742,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .map((segment) => encodeURIComponent(segment))
       .join("/")}`;
 
+  const isPathInsideRoot = (candidate: string, root: string) => {
+    const relative = path.relative(root, candidate);
+    return relative === "" || (!!relative && !relative.startsWith("..") && !path.isAbsolute(relative));
+  };
+
   const normalizeMediaAssetReference = (value?: string | null) => {
     if (!value || /^https?:\/\//i.test(value) || value.startsWith("/uploads/")) return "";
 
@@ -1761,19 +1774,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       valid: boolean;
     }> = [];
 
-    const walk = (directory: string) => {
+    const walk = (directory: string, root: string) => {
       if (!fs.existsSync(directory)) return;
       for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
         const fullPath = path.join(directory, entry.name);
         if (entry.isDirectory()) {
-          if (directory === mediaAssetRoot && !mediaAssetModules.has(entry.name.toLowerCase())) continue;
-          walk(fullPath);
+          if (directory === root && !mediaAssetModules.has(entry.name.toLowerCase())) continue;
+          walk(fullPath, root);
           continue;
         }
 
         if (entry.name.startsWith(".") || !/\.(jpe?g|png|webp)$/i.test(entry.name)) continue;
         const stat = fs.statSync(fullPath);
-        const relative = path.relative(mediaAssetRoot, fullPath).replace(/\\/g, "/");
+        const relative = path.relative(root, fullPath).replace(/\\/g, "/");
         const moduleName = (relative.split("/")[0] || "misc").toLowerCase();
         if (!mediaAssetModules.has(moduleName)) continue;
         files.push({
@@ -1788,7 +1801,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     };
 
-    walk(mediaAssetRoot);
+    for (const root of mediaAssetReadRoots) {
+      walk(root, root);
+    }
     return files.sort((left, right) => left.path.localeCompare(right.path));
   };
 
@@ -1804,20 +1819,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const resolveMediaAssetFullPath = (reference: string) => {
     const segments = reference.split("/").filter(Boolean);
-    let current = mediaAssetRoot;
 
-    for (const segment of segments) {
-      if (!fs.existsSync(current)) return null;
-      const match = fs
-        .readdirSync(current, { withFileTypes: true })
-        .find((entry) => entry.name.toLowerCase() === segment.toLowerCase());
+    for (const root of mediaAssetReadRoots) {
+      let current = root;
 
-      if (!match) return null;
-      current = path.join(current, match.name);
+      for (const segment of segments) {
+        if (!fs.existsSync(current)) {
+          current = "";
+          break;
+        }
+
+        const match = fs
+          .readdirSync(current, { withFileTypes: true })
+          .find((entry) => entry.name.toLowerCase() === segment.toLowerCase());
+
+        if (!match) {
+          current = "";
+          break;
+        }
+
+        current = path.join(current, match.name);
+      }
+
+      if (!current) continue;
+
+      const resolved = path.resolve(current);
+      if (isPathInsideRoot(resolved, root)) return resolved;
     }
 
-    const resolved = path.resolve(current);
-    return resolved.startsWith(mediaAssetRoot) ? resolved : null;
+    return null;
   };
 
   const ensureMediaReference = (value: unknown, moduleName: keyof typeof mediaDefaultReferences) => {
@@ -1832,7 +1862,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!requestedPath) return res.status(404).send("Not found");
 
       const fullPath = resolveMediaAssetFullPath(requestedPath);
-      if (!fullPath || !fullPath.startsWith(mediaAssetRoot) || !fs.existsSync(fullPath) || !isValidImageFile(fullPath)) {
+      const isAllowedMediaPath = fullPath
+        ? mediaAssetReadRoots.some((root) => isPathInsideRoot(fullPath, root))
+        : false;
+      if (!fullPath || !isAllowedMediaPath || !fs.existsSync(fullPath) || !isValidImageFile(fullPath)) {
         return res.status(404).send("Not found");
       }
 

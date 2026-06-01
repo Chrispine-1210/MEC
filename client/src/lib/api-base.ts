@@ -12,7 +12,9 @@ const normalizeOrigin = (value: string) => {
 const isLocalHostname = (hostname: string) =>
   localHostnames.has(hostname) || hostname.endsWith(".localhost");
 
-const functionBridgePrefixes = ["/api/", "/auth/", "/uploads/", "/media-assets/"];
+const truthyEnvValues = new Set(["1", "true", "yes", "on"]);
+
+const isTruthyEnvValue = (value?: string) => truthyEnvValues.has(value?.trim().toLowerCase() ?? "");
 
 const shouldUseViteProxy = (configuredOrigin: string) => {
   if (!import.meta.env.DEV || typeof window === "undefined") return false;
@@ -33,31 +35,20 @@ export function getApiOrigin() {
   return shouldUseViteProxy(normalizedOrigin) ? "" : normalizedOrigin;
 }
 
-const resolveViaFunctionBridge = (input: string, apiOrigin: string) => {
-  if (import.meta.env.MODE !== "production") return null;
-  if (!functionBridgePrefixes.some((prefix) => input.startsWith(prefix))) return null;
-
-  const browserOrigin = typeof window !== "undefined" ? window.location.origin : "";
-  const bridgeOrigin = apiOrigin || browserOrigin;
-  if (!bridgeOrigin) return null;
-
-  const sourceUrl = new URL(input, bridgeOrigin);
-  const bridgeUrl = new URL("/api/index.js", bridgeOrigin);
-  bridgeUrl.searchParams.set("__mec_path", sourceUrl.pathname.replace(/^\/+/, ""));
-  sourceUrl.searchParams.forEach((value, key) => bridgeUrl.searchParams.append(key, value));
-
-  return apiOrigin ? bridgeUrl.toString() : `${bridgeUrl.pathname}${bridgeUrl.search}`;
-};
+export function isRealtimeEnabled() {
+  const configuredValue = import.meta.env.VITE_REALTIME_ENABLED?.trim();
+  if (configuredValue) return isTruthyEnvValue(configuredValue);
+  return import.meta.env.MODE !== "production";
+}
 
 export function resolveApiUrl(input: RequestInfo | URL): RequestInfo | URL {
   if (typeof input !== "string") return input;
   if (!input.startsWith("/") || absoluteUrlPattern.test(input)) return input;
 
   const apiOrigin = getApiOrigin();
-  const bridgedUrl = resolveViaFunctionBridge(input, apiOrigin);
-  if (bridgedUrl) return bridgedUrl;
+  if (apiOrigin) return `${apiOrigin}${input}`;
 
-  return apiOrigin ? `${apiOrigin}${input}` : input;
+  return input;
 }
 
 export async function apiFetch(input: RequestInfo | URL, init?: RequestInit) {
