@@ -38,7 +38,6 @@ export const partnerHeroVideoSeeds: PartnerHeroVideoSeed[] = [
     description:
       "Perul University partner pathway for students exploring Indian higher education, campus culture, and career-focused academic programs.",
     country: "India",
-    logoUrl: "partners/our-partners.jpg",
     partnershipType: "University Partner",
     videoUrl: "https://www.youtube.com/watch?v=1-z5Rn5Y-mI",
     videoTitle: "Perul University Partner Preview",

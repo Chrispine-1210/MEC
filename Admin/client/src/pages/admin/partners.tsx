@@ -480,7 +480,7 @@ export default function PartnersPage() {
                       <FormField control={form.control} name="logo" render={({ field }) => (
                         <FormItem>
                           <FormLabel>Partner Logo</FormLabel>
-                          <MediaAssetPicker moduleName="partners" value={field.value} onChange={field.onChange} label="Partner Logo" description="Identity mark used on partner cards, sponsorship blocks, and event pages." aspect="logo" />
+                          <MediaAssetPicker moduleName="logos" value={field.value} onChange={field.onChange} label="Partner Logo" description="Identity mark used on partner cards, sponsorship blocks, and event pages." aspect="logo" />
                           <FormMessage />
                         </FormItem>
                       )} />

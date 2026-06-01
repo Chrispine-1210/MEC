@@ -223,18 +223,18 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
 const MODULE_DEFAULT_KEYS: Record<GovernedImageModule, string[]> = {
   blog: ["events/img-20250321-wa0250.jpg", "events/img-20221029-wa0058.jpg", "events/img-20220907-wa0124.jpg", "events/img-20230311-wa0110.jpg"],
   team: ["teams/ms-brenda.jpg", "teams/george", "teams/dr-daniel", "teams/timothy"],
-  partner: ["partners/cu-logo-white.webp", "gbs-dubai", "ct-logo", "gedu-logo", "partners/our-partners", "partners/partners-2"],
+  partner: ["partners/cu-logo-white.webp", "gbs-dubai", "ct-logo", "gedu-logo", "programs/students-campus", "blogs/chiunda-campus"],
   university: ["students on campus with branded jerseys", "partners/cu-logo-white.webp", "gbs-dubai", "ct-logo", "gedu-logo"],
-  scholarship: ["scholarships/graduates-default.jpg", "scholarships/students", "scholarships/application-guidance"],
-  job: ["jobs/jobs-default.jpg", "jobs/corporate", "jobs/computer-repair", "jobs/inspector"],
-  event: ["events/events-default.jpg", "blogs/chiunda-campus", "programs/students-campus"],
+  scholarship: ["scholarships/application-registration", "scholarships/application-guidance", "programs/students-campus", "projects/foundation"],
+  job: ["jobs/corporate", "jobs/computer-repair", "jobs/inspector", "blogs/career-motivation"],
+  event: ["events/img-20250321-wa0250", "events/img-20221029-wa0058", "events/img-20220907-wa0124", "events/img-20230311-wa0110"],
   opportunity: ["scholarships/application-guidance", "blogs/career-motivation", "programs/students-campus"],
   project: ["projects/foundation", "misc/mtendere", "programs/students-campus"],
   program: ["programs/international-studies", "programs/students-campus", "programs/abroad-students"],
-  news: ["events/events-default.jpg", "projects/foundation", "blogs/application-guidance"],
+  news: ["events/img-20250321-wa0250", "projects/foundation", "blogs/application-guidance"],
   testimonial: ["students/Janet Kandulu.jpg", "students/Edna Kalonga.jpg", "students/Ian Ndola.jpg"],
-  misc: ["misc/mtendere", "misc/about-mtendere", "defaults/mtendere-default"],
-  default: ["defaults/mtendere-default.png", "misc/mtendere", "misc/about-mtendere"],
+  misc: ["misc/mtendere", "misc/about-mtendere", "programs/students-campus"],
+  default: ["misc/mtendere", "misc/about-mtendere", "defaults/mtendere-default.png"],
 };
 
 export function getGovernedImageAssets() {
@@ -245,7 +245,7 @@ export function resolveGovernedImage(input: GovernedImageInput): ResolvedGoverne
   const module = input.module;
   const assigned = resolveAssignedLocalAsset(input.src);
 
-  if (assigned) {
+  if (assigned && shouldHonorAssignedAsset(assigned, input)) {
     return toResolved(assigned, input, "assigned");
   }
 
@@ -457,7 +457,14 @@ function filterPoolForVariant(pool: AssetEntry[], input?: GovernedImageInput) {
   }
 
   const nonLogoAssets = pool.filter((asset) => !isLogoAsset(asset));
+  const specificAssets = nonLogoAssets.filter((asset) => !isPhotoPlaceholderAsset(asset));
+  if (specificAssets.length) return specificAssets;
   return nonLogoAssets.length ? nonLogoAssets : pool;
+}
+
+function shouldHonorAssignedAsset(asset: AssetEntry, input: GovernedImageInput) {
+  if (input.module === "default" || input.variant === "fallback") return true;
+  return !isPhotoPlaceholderAsset(asset);
 }
 
 function isLogoAsset(asset: AssetEntry) {
@@ -480,6 +487,8 @@ function isPhotoPlaceholderAsset(asset: AssetEntry) {
   const normalizedPath = asset.normalizedPath;
   return (
     normalizedPath.includes("partners-default") ||
+    normalizedPath.includes("partners-2") ||
+    normalizedPath.includes("our-partners") ||
     normalizedPath.includes("graduates-default") ||
     normalizedPath.includes("jobs-default") ||
     normalizedPath.includes("events-default") ||

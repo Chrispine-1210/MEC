@@ -175,7 +175,7 @@ const emptyForm = (): EventFormState => ({
   startAt: futureLocalDate(14, 9),
   endAt: futureLocalDate(14, 12),
   registrationDeadline: futureLocalDate(13, 17),
-  coverImage: "events/events-default.jpg",
+  coverImage: "events/IMG-20250321-WA0250.jpg",
   videoUrl: "",
   tags: "event, education, partnership",
   ticketTypes: '[{"name":"General Admission","priceAmount":0,"currency":"MWK","capacity":120}]',

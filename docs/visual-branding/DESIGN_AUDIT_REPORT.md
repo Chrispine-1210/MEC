@@ -10,6 +10,8 @@ Reviewed public Client Portal pages, Admin Management media tooling, shared imag
 
 - Exact duplicate image hash groups found: 42.
 - Duplicate filenames found: 33.
+- Total governed image files reviewed: 303.
+- Known generic/default asset references still present for audit visibility: 7.
 - High-impact duplicates included:
   - `about mtendere.jpg` repeated across Background, misc, and root image folders.
   - `Application guidance.jpg` repeated across Background, Blogs, scholarships, and root folders.
@@ -24,6 +26,7 @@ Reviewed public Client Portal pages, Admin Management media tooling, shared imag
 - Generic partner images were used for named institutions.
 - Seed data referenced global universities with generic stock-like visuals.
 - Logo presentation lacked a dedicated fallback when official branding was unavailable.
+- Root-level official logo assets were not exposed through the Admin `logos` module, making logo governance harder than it needed to be.
 
 ## Accessibility And Contrast Issues
 
@@ -38,9 +41,13 @@ Reviewed public Client Portal pages, Admin Management media tooling, shared imag
 - Split partner card imagery from institutional identity marks.
 - Added Admin media duplicate and quality reporting.
 - Added Admin bulk media reference replacement.
+- Added root-logo aliases so existing official logo files are managed as `logos/...` references in Admin without duplicating binary files.
+- Removed default placeholder media from new scholarship, event, partner, and video seed assignments.
+- Updated public image governance to ignore stale placeholder assignments and choose contextual assets instead.
 - Standardized Button and Card primitives across Client and Admin.
 
 ## Remaining Asset Governance Work
 
 - Exact duplicate binary files still exist in the repository and should be physically consolidated in a later cleanup after all references are migrated.
 - New source uploads should be compressed before assignment, preferably WebP for large photographic assets.
+- Placeholder binaries remain in the source tree only as flagged audit targets and last-resort fallbacks, not preferred presentation assets.

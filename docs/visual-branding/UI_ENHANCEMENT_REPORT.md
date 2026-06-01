@@ -14,12 +14,14 @@ Date: 2026-06-01
 - Partner cards separate photographic context from logo identity.
 - Logo tiles use consistent sizing, padding, borders, and object containment.
 - Admin media asset cards now display asset kind and quality warnings.
+- Partner logo controls in Admin now use the logo library directly instead of mixing logos with photographic partner covers.
 
 ## Hero And Contrast Improvements
 
 - Governed hero images now benefit from stronger shared overlays and text-shadow support.
 - Partner detail pages avoid using logos as full hero backgrounds.
 - Logo images no longer receive dark photo overlays that reduce brand legibility.
+- Stale placeholder hero/card references are treated as fallback candidates, allowing contextual images to take priority.
 
 ## Admin Workflow Improvements
 
@@ -30,6 +32,7 @@ Date: 2026-06-01
   - bulk reference replacement,
   - duplicate reporting,
   - quality reporting,
+  - official logo aliases,
   - direct reference copy.
 
 ## Result

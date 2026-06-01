@@ -1837,18 +1837,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const mediaDefaultReferences: Record<string, string> = {
     blogs: "blogs/application-guidance.jpg",
     teams: "teams/ms-brenda.jpg",
-    partners: "partners/partners-default.jpg",
+    partners: "partners/cu-logo-white.webp",
     universities: "partners/cu-logo-white.webp",
     logos: "partners/cu-logo-white.webp",
     "hero-banners": "programs/international-studies.jpg",
     backgrounds: "misc/mtendere.jpg",
-    scholarships: "scholarships/graduates-default.jpg",
-    jobs: "jobs/jobs-default.jpg",
-    events: "events/events-default.jpg",
+    scholarships: "scholarships/application-guidance.jpg",
+    jobs: "jobs/corporate.jpg",
+    events: "events/IMG-20250321-WA0250.jpg",
     opportunities: "scholarships/application-guidance.jpg",
     projects: "projects/foundation.jpg",
     programs: "programs/international-studies.jpg",
-    news: "events/events-default.jpg",
+    news: "events/IMG-20250321-WA0250.jpg",
     testimonials: "students/Janet Kandulu.jpg",
     misc: "misc/mtendere.jpg",
     defaults: "defaults/mtendere-default.png",
@@ -1950,6 +1950,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return "image";
   };
 
+  const isRootLogoAssetReference = (relative: string) =>
+    !relative.includes("/") && /\.(jpe?g|png|webp)$/i.test(relative) && getMediaAssetKind(relative) === "logo";
+
   const getMediaContentType = (relative: string) => {
     const extension = path.extname(relative).toLowerCase();
     if (extension === ".png") return "image/png";
@@ -1962,7 +1965,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const flags: string[] = [];
     if (size > 2 * 1024 * 1024) flags.push("large-source-file");
     if (!normalized.endsWith(".webp") && getMediaAssetKind(relative) !== "logo") flags.push("webp-recommended");
-    if (/(default|placeholder|partners-default|jobs-default|events-default|graduates-default)/i.test(normalized)) {
+    if (/(default|placeholder|partners-default|partners-2|our-partners|jobs-default|events-default|graduates-default)/i.test(normalized)) {
       flags.push("generic-or-placeholder");
     }
     return flags;
@@ -1991,6 +1994,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     if (!normalized || normalized.includes("..") || !/\.(jpe?g|png|webp)$/i.test(normalized)) return "";
     const moduleName = (normalized.split("/")[0] || "").toLowerCase();
+    if (!mediaAssetModules.has(moduleName) && isRootLogoAssetReference(normalized)) return `logos/${normalized}`;
     if (!mediaAssetModules.has(moduleName)) return "";
     return normalized;
   };
@@ -2023,13 +2027,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (entry.name.startsWith(".") || !/\.(jpe?g|png|webp)$/i.test(entry.name)) continue;
         const stat = fs.statSync(fullPath);
         const relative = path.relative(root, fullPath).replace(/\\/g, "/");
-        const moduleName = (relative.split("/")[0] || "misc").toLowerCase();
+        const exposedRelative = isRootLogoAssetReference(relative) ? `logos/${relative}` : relative;
+        const moduleName = (exposedRelative.split("/")[0] || "misc").toLowerCase();
         if (!mediaAssetModules.has(moduleName)) continue;
         files.push({
           module: moduleName,
           path: `assets/imgs/${relative}`,
-          reference: relative,
-          previewUrl: toMediaAssetUrl(relative),
+          reference: exposedRelative,
+          previewUrl: toMediaAssetUrl(exposedRelative),
           size: stat.size,
           updatedAt: stat.mtime,
           valid: isValidImageFile(fullPath),
@@ -2061,6 +2066,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const segments = reference.split("/").filter(Boolean);
 
     for (const root of mediaAssetReadRoots) {
+      if (segments[0]?.toLowerCase() === "logos" && segments.length === 2) {
+        const rootLogoMatch = fs.existsSync(root)
+          ? fs
+              .readdirSync(root, { withFileTypes: true })
+              .find((entry) => entry.isFile() && entry.name.toLowerCase() === segments[1].toLowerCase())
+          : undefined;
+
+        if (rootLogoMatch) {
+          const rootLogoPath = path.resolve(root, rootLogoMatch.name);
+          if (isPathInsideRoot(rootLogoPath, root)) return rootLogoPath;
+        }
+      }
+
       let current = root;
 
       for (const segment of segments) {

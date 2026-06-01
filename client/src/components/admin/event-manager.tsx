@@ -117,7 +117,7 @@ const emptyForm = (): EventFormState => {
     startAt: toDateTimeLocal(start.toISOString()),
     endAt: toDateTimeLocal(end.toISOString()),
     registrationDeadline: "",
-    coverImage: "events/events-default.jpg",
+    coverImage: "events/IMG-20250321-WA0250.jpg",
     videoUrl: "",
     tags: "scholarships, applications, students",
     agenda: "08:30 | Registration and orientation\n09:00 | Main session\n11:30 | Questions and next steps",

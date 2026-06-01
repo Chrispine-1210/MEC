@@ -70,7 +70,7 @@ async function seed() {
       deadline: new Date("2026-06-30"),
       requirements: ["Academic excellence", "Demonstrated leadership", "Financial need"],
       category: "STEM",
-      imageUrl: "scholarships/graduates-default.jpg",
+      imageUrl: "programs/students-campus.jpg",
       isActive: true,
       createdBy: adminId,
     },
@@ -235,7 +235,7 @@ async function seed() {
     {
       name: "CT University",
       description: "Applied learning and technology-focused university pathway for students seeking practical, career-connected degree programs.",
-      logoUrl: "partners/our-partners.jpg",
+      logoUrl: "logos/ct-logo.png",
       website: "https://ctuniversity.in",
       country: "India",
       studentCount: 120,
@@ -245,7 +245,7 @@ async function seed() {
     {
       name: "Amity University",
       description: "Global university network offering pathways across business, law, computing, applied sciences, and international programs.",
-      logoUrl: "partners/partners-default.jpg",
+      logoUrl: "logos/au-logo.png",
       website: "https://amity.edu",
       country: "India",
       studentCount: 200,
@@ -255,7 +255,7 @@ async function seed() {
     {
       name: "MSM Unify",
       description: "International education marketplace and partner network helping students compare study destinations and admissions routes.",
-      logoUrl: "partners/partners-default.jpg",
+      logoUrl: "logos/msm-unify-logo.png",
       website: "https://www.msmunify.com",
       country: "Global",
       studentCount: 45,
@@ -265,7 +265,7 @@ async function seed() {
     {
       name: "GEDU Global Education",
       description: "Global education network connecting students with international institutions, foundation routes, and degree pathways.",
-      logoUrl: "scholarships/students.jpg",
+      logoUrl: "logos/gedu-logo.png",
       website: "https://gedu.global",
       country: "Global",
       studentCount: 175,
@@ -376,7 +376,7 @@ async function seed() {
       startAt: new Date("2026-06-12T08:30:00"),
       endAt: new Date("2026-06-12T12:30:00"),
       registrationDeadline: new Date("2026-06-10T17:00:00"),
-      coverImage: "events/events-default.jpg",
+      coverImage: "events/IMG-20250321-WA0250.jpg",
       tags: ["scholarships", "applications", "students"],
       agenda: [
         { time: "08:30", title: "Registration and orientation" },
@@ -421,7 +421,7 @@ async function seed() {
       startAt: new Date("2026-06-20T18:00:00"),
       endAt: new Date("2026-06-20T19:30:00"),
       registrationDeadline: new Date("2026-06-20T12:00:00"),
-      coverImage: "events/events-default.jpg",
+      coverImage: "events/IMG-20221029-WA0058.jpg",
       tags: ["study-abroad", "virtual", "university"],
       agenda: [
         { time: "18:00", title: "Study destination overview" },
@@ -458,7 +458,7 @@ async function seed() {
       startAt: new Date("2026-07-05T09:00:00"),
       endAt: new Date("2026-07-05T14:00:00"),
       registrationDeadline: new Date("2026-07-03T17:00:00"),
-      coverImage: "events/events-default.jpg",
+      coverImage: "events/IMG-20220907-WA0124.jpg",
       tags: ["careers", "cv", "jobs"],
       agenda: [
         { time: "09:00", title: "Career planning briefing" },
