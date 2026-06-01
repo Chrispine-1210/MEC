@@ -46,10 +46,21 @@ export default defineConfig({
     sourcemap: false,
     target: "es2020",
     cssCodeSplit: true,
-    rollupOptions: {
+    chunkSizeWarningLimit: 650,
+    rolldownOptions: {
+      checks: {
+        pluginTimings: false,
+      },
       output: {
-        manualChunks: {
-          vendor: ["react", "react-dom"],
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("react-dom") || id.includes("react/jsx") || id.includes("react/index")) return "react-vendor";
+          if (id.includes("@radix-ui")) return "radix-vendor";
+          if (id.includes("@tanstack")) return "query-vendor";
+          if (id.includes("framer-motion")) return "motion-vendor";
+          if (id.includes("recharts") || id.includes("d3-")) return "charts-vendor";
+          if (id.includes("lucide-react") || id.includes("react-icons")) return "icons-vendor";
+          return "vendor";
         },
       },
     },
