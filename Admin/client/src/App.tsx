@@ -20,7 +20,7 @@ import Team from "@/pages/admin/team";
 import Users from "@/pages/admin/users";
 import Roles from "@/pages/admin/roles";
 import Applications from "@/pages/admin/applications";
-import Analytics from "@/pages/admin/analytics";
+import AnalyticsPage from "@/pages/admin/analytics";
 import Activity from "@/pages/admin/activity";
 import AiChat from "@/pages/admin/ai-chat";
 import Messages from "@/pages/admin/messages";
@@ -30,7 +30,7 @@ import AuthPage from "@/pages/auth";
 import { AdminRealtimeProvider } from "@/hooks/use-admin-realtime";
 import { canAccessAdminPath, isAdminPortalRole, normalizeAdminPath } from "@/lib/admin-rbac";
 import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
-import { Analytics } from "@vercel/analytics/react";
+import { Analytics as VercelAnalytics } from "@vercel/analytics/react";
 
 function AdminLoadingSkeleton() {
   return (
@@ -186,7 +186,7 @@ function AdminRouter() {
               onClick={() => {
                 localStorage.removeItem("token");
                 queryClient.removeQueries({ queryKey: ["/api/user"] });
-                setLocation("/auth");
+                setLocation("/admin/auth");
               }}
             >
               Switch Account
@@ -212,7 +212,7 @@ function AdminRouter() {
         <Route path="/admin/users" component={Users} />
         <Route path="/admin/roles" component={Roles} />
         <Route path="/admin/applications" component={Applications} />
-        <Route path="/admin/analytics" component={Analytics} />
+        <Route path="/admin/analytics" component={AnalyticsPage} />
         <Route path="/admin/activity" component={Activity} />
         <Route path="/admin/messages" component={Messages} />
         <Route path="/admin/media" component={Media} />
@@ -255,13 +255,15 @@ function App() {
     document.documentElement.style.colorScheme = "light";
   }, []);
 
+  const shouldEnableAnalytics = import.meta.env.MODE === "production";
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AdminRealtimeProvider>
           <Toaster />
           <Router />
-          <Analytics />
+          {shouldEnableAnalytics && <VercelAnalytics />}
         </AdminRealtimeProvider>
       </TooltipProvider>
     </QueryClientProvider>

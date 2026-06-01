@@ -92,6 +92,14 @@ export default function Sidebar({ onClose }: SidebarProps) {
     { name: "Settings", href: "/admin/settings", icon: Settings, description: "System configuration" },
   ];
 
+  const visibleSections = [
+    { title: "Overview", items: navigationItems },
+    { title: "Content", items: contentManagement },
+    { title: "People", items: userManagement },
+    { title: "Intelligence", items: aiFeatures },
+    { title: "System", items: systemSettings },
+  ].filter((section) => section.items.some(canAccess));
+
   const NavItem = ({ item }: { item: any }) => {
     const active = isActive(item.href);
     return (
@@ -168,15 +176,12 @@ export default function Sidebar({ onClose }: SidebarProps) {
         {/* Navigation */}
         <ScrollArea className="flex-1 px-3 py-4 scrollbar-thin">
           <div className="space-y-5">
-            <NavSection title="Overview" items={navigationItems} />
-            <Separator className="mx-2" />
-            <NavSection title="Content" items={contentManagement} />
-            <Separator className="mx-2" />
-            <NavSection title="People" items={userManagement} />
-            <Separator className="mx-2" />
-            <NavSection title="Intelligence" items={aiFeatures} />
-            <Separator className="mx-2" />
-            <NavSection title="System" items={systemSettings} />
+            {visibleSections.map((section, index) => (
+              <div key={section.title} className="space-y-5">
+                {index > 0 && <Separator className="mx-2" />}
+                <NavSection title={section.title} items={section.items} />
+              </div>
+            ))}
           </div>
         </ScrollArea>
 

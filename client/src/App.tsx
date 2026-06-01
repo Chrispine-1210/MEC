@@ -6,7 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/use-auth";
 import { WebSocketProvider } from "@/hooks/use-websocket";
-import { Analytics } from "@vercel/analytics/react";
+import { Analytics as VercelAnalytics } from "@vercel/analytics/react";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Login from "@/pages/login";
@@ -73,6 +73,8 @@ function App() {
     document.documentElement.style.colorScheme = "light";
   }, []);
 
+  const shouldEnableAnalytics = import.meta.env.MODE === "production";
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -82,7 +84,7 @@ function App() {
             <Router />
             <AIChat />
             <BackToTop />
-            <Analytics />
+            {shouldEnableAnalytics && <VercelAnalytics />}
           </WebSocketProvider>
         </AuthProvider>
       </TooltipProvider>

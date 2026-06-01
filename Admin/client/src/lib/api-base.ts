@@ -34,7 +34,7 @@ export function getApiOrigin() {
 }
 
 const resolveViaFunctionBridge = (input: string, apiOrigin: string) => {
-  if (!import.meta.env.PROD) return null;
+  if (import.meta.env.MODE !== "production") return null;
   if (!functionBridgePrefixes.some((prefix) => input.startsWith(prefix))) return null;
 
   const browserOrigin = typeof window !== "undefined" ? window.location.origin : "";

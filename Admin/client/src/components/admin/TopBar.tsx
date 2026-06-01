@@ -330,10 +330,12 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
                   My Profile
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem onClick={() => setLocation("/admin/settings")} className="cursor-pointer">
-                <Settings className="h-4 w-4 mr-2" />
-                Settings
-              </DropdownMenuItem>
+              {canManage && (
+                <DropdownMenuItem onClick={() => setLocation("/admin/settings")} className="cursor-pointer">
+                  <Settings className="h-4 w-4 mr-2" />
+                  Settings
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-destructive cursor-pointer focus:text-destructive focus:bg-destructive/10" onClick={handleLogout}>
                 <LogOut className="h-4 w-4 mr-2" />

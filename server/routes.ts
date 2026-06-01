@@ -1879,11 +1879,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       validateStrongPassword(userData.password);
       
       // Check if user already exists
-      const existingUser =
-        (await storage.getUserByEmail(userData.email)) ||
-        (await storage.getUserByUsername(userData.username));
-      if (existingUser) {
-        return res.status(400).json({ message: 'A user with that email or username already exists' });
+      const [existingEmailUser, existingUsernameUser] = await Promise.all([
+        storage.getUserByEmail(userData.email),
+        storage.getUserByUsername(userData.username),
+      ]);
+      if (existingEmailUser || existingUsernameUser) {
+        return res.status(409).json({
+          message: "A user with that email or username already exists",
+          fields: {
+            ...(existingEmailUser ? { email: "This email is already registered" } : {}),
+            ...(existingUsernameUser ? { username: "This username is already taken" } : {}),
+          },
+        });
       }
 
       // Hash password

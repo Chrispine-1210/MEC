@@ -3,8 +3,29 @@ import { apiFetch } from "./api-base";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    const text = await res.text();
+    let message = text || res.statusText;
+
+    try {
+      const payload = JSON.parse(text) as {
+        message?: string;
+        error?: string;
+        detail?: string;
+        issues?: Array<{ message?: string }>;
+      };
+      message =
+        payload.error ||
+        payload.message ||
+        payload.detail ||
+        payload.issues?.map((issue) => issue.message).filter(Boolean).join(", ") ||
+        message;
+    } catch {
+      if (text.trim().startsWith("<!DOCTYPE")) {
+        message = "The API returned an HTML page instead of JSON. Check the API URL or local dev proxy.";
+      }
+    }
+
+    throw new Error(message);
   }
 }
 

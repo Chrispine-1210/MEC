@@ -25,6 +25,9 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const getAuthErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error && error.message ? error.message : fallback;
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -70,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error("Login failed:", error);
       toast({
         title: "Login failed",
-        description: "Please check your credentials and try again.",
+        description: getAuthErrorMessage(error, "Please check your credentials and try again."),
         variant: "destructive",
       });
       return false;
@@ -95,7 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error("Registration failed:", error);
       toast({
         title: "Registration failed",
-        description: "Please check your information and try again.",
+        description: getAuthErrorMessage(error, "Please check your information and try again."),
         variant: "destructive",
       });
       return false;

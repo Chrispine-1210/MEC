@@ -55,6 +55,8 @@ type RegistrationConflictPayload = {
   fields?: Partial<Record<keyof RegisterFormValues, string>>;
 };
 
+const adminAuthPath = (path: string) => `/auth${path}`;
+
 export default function AuthPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -82,10 +84,10 @@ export default function AuthPage() {
     queryClient.invalidateQueries({ queryKey: ["/api/user"] });
 
     try {
-      const statusRes = await apiRequest("GET", "/api/auth/mfa/status");
+      const statusRes = await apiRequest("GET", adminAuthPath("/mfa/status"));
       const status = await statusRes.json();
       if (status.mfaRequiredForRole && !status.mfaEnabled) {
-        const setupRes = await apiRequest("POST", "/api/auth/mfa/setup", {});
+        const setupRes = await apiRequest("POST", adminAuthPath("/mfa/setup"), {});
         const setupData = (await setupRes.json()) as MfaSetupPayload;
         setPendingMfaSetup(setupData);
         setSecretCopied(false);
@@ -112,7 +114,7 @@ export default function AuthPage() {
     setIsLoading(true);
     try {
       setPendingCredentials({ username: data.username, password: data.password });
-      const res = await apiRequest("POST", "/api/auth/login", data);
+      const res = await apiRequest("POST", adminAuthPath("/login"), data);
       const body = await res.json();
 
       if (body.mfaRequired && body.challengeToken) {
@@ -137,7 +139,7 @@ export default function AuthPage() {
     if (!pendingMfaChallengeToken || !mfaCode.trim()) return;
     setIsLoading(true);
     try {
-      const res = await apiRequest("POST", "/api/auth/mfa/verify", {
+      const res = await apiRequest("POST", adminAuthPath("/mfa/verify"), {
         challengeToken: pendingMfaChallengeToken,
         code: mfaCode.trim(),
       });
@@ -156,8 +158,8 @@ export default function AuthPage() {
     if (!pendingMfaSetup || !mfaCode.trim() || !pendingCredentials) return;
     setIsLoading(true);
     try {
-      await apiRequest("POST", "/api/auth/mfa/enable", { code: mfaCode.trim() });
-      const loginRes = await apiRequest("POST", "/api/auth/login", {
+      await apiRequest("POST", adminAuthPath("/mfa/enable"), { code: mfaCode.trim() });
+      const loginRes = await apiRequest("POST", adminAuthPath("/login"), {
         username: pendingCredentials.username,
         password: pendingCredentials.password,
         mfaCode: mfaCode.trim(),
@@ -178,7 +180,7 @@ export default function AuthPage() {
     setIsLoading(true);
     try {
       setPendingCredentials({ username: data.username, password: data.password });
-      const res = await apiRequest("POST", "/api/auth/register", data);
+      const res = await apiRequest("POST", adminAuthPath("/register"), data);
       const { token, user } = await res.json();
       await finalizeSession(token, user);
     } catch (error: any) {

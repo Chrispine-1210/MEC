@@ -9,6 +9,22 @@ import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
 
+const COMMON_WEAK_PASSWORDS = ["password", "admin", "qwerty", "welcome", "mtendere"];
+
+const getPasswordError = (password: string) => {
+  if (!password) return "Password is required";
+  if (password.length < 12) return "Password must be at least 12 characters long";
+  if (password.length > 128) return "Password must be 128 characters or fewer";
+  if (!/[a-z]/.test(password)) return "Password must include a lowercase letter";
+  if (!/[A-Z]/.test(password)) return "Password must include an uppercase letter";
+  if (!/[0-9]/.test(password)) return "Password must include a number";
+  if (!/[^A-Za-z0-9]/.test(password)) return "Password must include a symbol";
+  if (COMMON_WEAK_PASSWORDS.some((weak) => password.toLowerCase().includes(weak))) {
+    return "Password is too common. Choose a more unique phrase";
+  }
+  return "";
+};
+
 export default function Register() {
   const [, setLocation] = useLocation();
   const referralCode = new URLSearchParams(window.location.search).get("ref");
@@ -46,22 +62,24 @@ export default function Register() {
       newErrors.lastName = "Last name is required";
     }
 
-    if (!formData.email.trim()) {
+    const normalizedEmail = formData.email.trim().toLowerCase();
+    const normalizedUsername = formData.username.trim();
+
+    if (!normalizedEmail) {
       newErrors.email = "Email is required";
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+    } else if (!/\S+@\S+\.\S+/.test(normalizedEmail)) {
       newErrors.email = "Please enter a valid email address";
     }
 
-    if (!formData.username.trim()) {
+    if (!normalizedUsername) {
       newErrors.username = "Username is required";
-    } else if (formData.username.length < 3) {
+    } else if (normalizedUsername.length < 3) {
       newErrors.username = "Username must be at least 3 characters long";
     }
 
-    if (!formData.password) {
-      newErrors.password = "Password is required";
-    } else if (formData.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters long";
+    const passwordError = getPasswordError(formData.password);
+    if (passwordError) {
+      newErrors.password = passwordError;
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -83,10 +101,10 @@ export default function Register() {
 
     try {
       const success = await register({
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        email: formData.email,
-        username: formData.username,
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        email: formData.email.trim().toLowerCase(),
+        username: formData.username.trim(),
         password: formData.password,
         referralCode: referralCode || undefined,
       });
@@ -211,6 +229,7 @@ export default function Register() {
                   className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                   onClick={() => setShowPassword(!showPassword)}
                   disabled={isLoading}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4" />
@@ -221,6 +240,11 @@ export default function Register() {
               </div>
               {errors.password && (
                 <p className="text-sm text-destructive">{errors.password}</p>
+              )}
+              {!errors.password && (
+                <p className="text-xs text-muted-foreground">
+                  Use 12+ characters with uppercase, lowercase, number, and symbol.
+                </p>
               )}
             </div>
 
@@ -245,6 +269,7 @@ export default function Register() {
                   className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   disabled={isLoading}
+                  aria-label={showConfirmPassword ? "Hide password confirmation" : "Show password confirmation"}
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="h-4 w-4" />

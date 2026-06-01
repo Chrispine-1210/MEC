@@ -49,8 +49,20 @@ export async function apiRequest(
   });
 
   if (!res.ok) {
-    const payload = await res.json().catch(() => ({ message: res.statusText }));
-    const error = new Error(payload.message || "Something went wrong");
+    const text = await res.text();
+    let payload: { message?: string; error?: string; detail?: string } = { message: res.statusText };
+
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = {
+        message: text.trim().startsWith("<!DOCTYPE")
+          ? "The API returned an HTML page instead of JSON. Check the API URL or local dev proxy."
+          : text || res.statusText,
+      };
+    }
+
+    const error = new Error(payload.error || payload.message || payload.detail || "Something went wrong");
     Object.assign(error, { status: res.status, payload });
     throw error;
   }

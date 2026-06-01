@@ -95,6 +95,8 @@ export default function AdminDashboard() {
     },
     refetchInterval: 30000,
   });
+  const { data: user } = useQuery<any>({ queryKey: ["/api/user"] });
+  const displayName = user?.firstName || user?.username || "there";
 
   const applicationChartData = stats ? [
     { name: "Pending", value: stats.applicationStats?.pending || 0, fill: "hsl(var(--chart-3))" },
@@ -122,7 +124,7 @@ export default function AdminDashboard() {
       <div className="bg-gradient-to-r from-primary to-chart-4 rounded-xl p-6 text-white">
         <div className="flex items-center gap-3 mb-2">
           <Sparkles className="h-7 w-7 animate-pulse" />
-          <h1 className="text-2xl font-bold">{greeting}, Admin!</h1>
+          <h1 className="text-2xl font-bold">{greeting}, {displayName}!</h1>
         </div>
         <p className="text-primary-foreground/80">Here's what's happening on the Mtendere Education Platform today.</p>
         <div className="mt-4 flex flex-wrap gap-3">

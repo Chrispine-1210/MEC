@@ -65,6 +65,17 @@ export default function ExpandingNav() {
     closeMenu();
   };
 
+  const servicePaths = [
+    "/scholarships",
+    "/study-abroad",
+    "/university-applications",
+    "/events",
+    "/jobs",
+    "/career-counseling",
+    "/resume-building",
+  ];
+  const isServicePath = servicePaths.some((path) => location === path || location.startsWith(`${path}/`));
+
   const navItems = [
     {
       label: "Home",
@@ -75,6 +86,7 @@ export default function ExpandingNav() {
       label: "Services",
       href: "#",
       dropdown: "services",
+      active: isServicePath,
       megaMenu: {
         sections: [
           {
@@ -102,7 +114,7 @@ export default function ExpandingNav() {
     {
       label: "Partners",
       href: "/partners",
-      active: location === "/partners",
+      active: location === "/partners" || location.startsWith("/partners/") || location === "/partnership-opportunities",
     },
     {
       label: "Events",
@@ -112,7 +124,7 @@ export default function ExpandingNav() {
     {
       label: "Blog",
       href: "/blog",
-      active: location === "/blog",
+      active: location === "/blog" || location.startsWith("/blog/"),
     },
     {
       label: "Team",
@@ -143,25 +155,38 @@ export default function ExpandingNav() {
       <div className="container mx-auto px-4">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <Link href="/" onClick={closeMenu}>
-            <div className="flex items-center group">
+          <Link
+            href="/"
+            onClick={closeMenu}
+            className="group flex items-center gap-2 rounded-full border border-border/70 bg-card/90 px-2 py-1 shadow-[0_14px_45px_-34px_rgba(15,23,42,0.72)] backdrop-blur-xl"
+          >
+            <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-border/60">
               <img
                 src={BRAND_LOGO_SRC}
                 alt={BRAND_NAME}
-                className="h-12 w-auto object-contain transform group-hover:scale-105 transition-transform duration-300"
+                className="h-9 w-9 object-contain transition-transform duration-300 group-hover:scale-105"
               />
-            </div>
+            </span>
+            <span className="hidden pr-2 text-sm font-black leading-tight text-foreground 2xl:block">
+              Mtendere
+            </span>
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden lg:flex items-center space-x-8">
+          <div className="hidden items-center gap-1 rounded-full border border-border/70 bg-card/80 p-1 shadow-[0_14px_45px_-36px_rgba(15,23,42,0.7)] backdrop-blur-xl xl:flex">
             {navItems.map((item) => (
               <div key={item.label} className="relative group">
                 {item.dropdown ? (
                   <div>
                     <button
-                      className="flex items-center space-x-1 text-foreground hover:text-mtendere-blue px-3 py-2 text-sm font-medium transition-colors"
+                      className={`flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-semibold transition-all ${
+                        item.active
+                          ? "bg-mtendere-blue text-white shadow-[0_14px_30px_-22px_rgba(37,99,235,0.9)]"
+                          : "text-foreground/75 hover:bg-muted/80 hover:text-mtendere-blue"
+                      }`}
                       onClick={() => toggleDropdown(item.dropdown!)}
+                      aria-haspopup="menu"
+                      aria-expanded={activeDropdown === item.dropdown}
                     >
                       <span>{item.label}</span>
                       <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${
@@ -171,8 +196,12 @@ export default function ExpandingNav() {
                     
                     {/* Mega Menu */}
                     {activeDropdown === item.dropdown && item.megaMenu && (
-                      <div className="absolute left-0 mt-2 w-96 overflow-hidden rounded-xl border border-border/70 bg-card/95 shadow-[0_28px_80px_-42px_rgba(15,23,42,0.72)] backdrop-blur-xl animate-scale-in">
-                        <div className="p-6 grid grid-cols-2 gap-6">
+                      <div className="absolute left-1/2 mt-3 w-[36rem] -translate-x-1/2 overflow-hidden rounded-lg border border-border/70 bg-card/95 shadow-[0_28px_80px_-42px_rgba(15,23,42,0.72)] backdrop-blur-xl animate-scale-in">
+                        <div className="border-b border-border/60 bg-muted/40 px-6 py-4">
+                          <p className="text-xs font-bold uppercase text-mtendere-orange">Mtendere pathways</p>
+                          <p className="mt-1 text-sm text-muted-foreground">Choose the support your client needs right now.</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-6 p-6">
                           {item.megaMenu.sections.map((section) => (
                             <div key={section.title}>
                               <div className="flex items-center space-x-2 mb-3">
@@ -186,7 +215,7 @@ export default function ExpandingNav() {
                                   key={subItem.label}
                                   href={subItem.href}
                                   onClick={closeMenu}
-                                  className="flex items-center space-x-2 py-2 text-sm text-muted-foreground hover:text-mtendere-blue transition-colors"
+                                  className="flex items-center space-x-2 rounded-md px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-mtendere-blue"
                                 >
                                   <subItem.icon className="w-4 h-4" />
                                   <span>{subItem.label}</span>
@@ -202,10 +231,10 @@ export default function ExpandingNav() {
                   <Link
                     href={item.href}
                     onClick={closeMenu}
-                    className={`px-3 py-2 text-sm font-medium transition-colors ${
+                    className={`flex h-10 items-center rounded-full px-4 text-sm font-semibold transition-all ${
                       item.active
-                        ? 'text-mtendere-blue border-b-2 border-mtendere-blue'
-                        : 'text-foreground hover:text-mtendere-blue'
+                        ? 'bg-mtendere-blue text-white shadow-[0_14px_30px_-22px_rgba(37,99,235,0.9)]'
+                        : 'text-foreground/75 hover:bg-muted/80 hover:text-mtendere-blue'
                     }`}
                   >
                     {item.label}
@@ -218,7 +247,7 @@ export default function ExpandingNav() {
           <GlobalSearch className="hidden w-56 2xl:w-72 xl:block" />
 
           {/* User Actions */}
-          <div className="hidden lg:flex items-center space-x-4">
+          <div className="hidden xl:flex items-center space-x-4">
             {user ? (
               <div className="relative group">
                 <Button
@@ -270,7 +299,7 @@ export default function ExpandingNav() {
                 <Button asChild variant="outline" className="border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white">
                   <Link href="/login">Login</Link>
                 </Button>
-                <Button asChild className="bg-mtendere-green hover:bg-mtendere-green/90">
+                <Button asChild className="bg-mtendere-green font-bold hover:bg-mtendere-green/90">
                   <Link href="/register">Register</Link>
                 </Button>
               </>
@@ -278,12 +307,13 @@ export default function ExpandingNav() {
           </div>
 
           {/* Mobile menu button */}
-          <div className="lg:hidden">
+          <div className="xl:hidden">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setIsOpen(!isOpen)}
               className="text-foreground hover:text-mtendere-blue"
+              aria-label={isOpen ? "Close navigation menu" : "Open navigation menu"}
             >
               {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </Button>
@@ -292,7 +322,7 @@ export default function ExpandingNav() {
 
         {/* Mobile Navigation */}
         {isOpen && (
-          <div className="lg:hidden animate-slide-in">
+          <div className="xl:hidden animate-slide-in">
             <div className="mt-2 space-y-1 rounded-b-2xl border border-border/70 bg-card/95 px-2 pb-4 pt-3 shadow-[0_28px_80px_-48px_rgba(15,23,42,0.7)] backdrop-blur-xl">
               <div className="px-1 pb-2">
                 <GlobalSearch onNavigate={closeMenu} placeholder="Search scholarships, jobs, blogs..." />
