@@ -1,6 +1,7 @@
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
 import GovernedImage from "@/components/governed-image";
+import InstitutionLogo from "@/components/institution-logo";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,12 +14,12 @@ import {
 import { getGovernedBackgroundImage } from "@/lib/image-governance";
 
 const TOP_UNIVERSITIES = [
-  { name: "University of Oxford", country: "🇬🇧 UK", ranking: "#1", field: "All Programs", img: "partners/partners-default.jpg" },
-  { name: "ETH Zurich", country: "🇨🇭 Switzerland", ranking: "#7", field: "Engineering & Science", img: "partners/partners-2.jpg" },
-  { name: "University of Toronto", country: "🇨🇦 Canada", ranking: "#34", field: "Medicine & Business", img: "partners/our-partners.jpg" },
-  { name: "University of Cape Town", country: "🇿🇦 South Africa", ranking: "#1 Africa", field: "Law & Social Sciences", img: "partners/partners-default.jpg" },
-  { name: "National University Singapore", country: "🇸🇬 Singapore", ranking: "#8", field: "Business & Technology", img: "programs/students-campus.jpg" },
-  { name: "Technical University Munich", country: "🇩🇪 Germany", ranking: "#50", field: "Engineering", img: "scholarships/students.jpg" },
+  { name: "Chandigarh University", country: "India", ranking: "QS Asia", field: "Engineering, Business & Health Sciences" },
+  { name: "CT University", country: "India", ranking: "Partner", field: "Technology, Management & Applied Sciences" },
+  { name: "Amity University", country: "India", ranking: "Global", field: "Business, Law & Computing" },
+  { name: "GBS Dubai", country: "United Arab Emirates", ranking: "Career-led", field: "Business, Finance & Hospitality" },
+  { name: "MSM Unify", country: "Global", ranking: "Network", field: "Multi-country study pathways" },
+  { name: "GEDU Global Education", country: "Global", ranking: "Global", field: "International foundation and degree pathways" },
 ];
 
 const SERVICES = [
@@ -182,24 +183,29 @@ export default function UniversityApplications() {
             <p className="text-muted-foreground max-w-xl mx-auto">A sample of institutions where our students have been admitted</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {TOP_UNIVERSITIES.map((u) => (
+            {TOP_UNIVERSITIES.map((u, index) => (
               <Card key={u.name} className="premium-card group overflow-hidden border-none transition-all duration-500">
                 <div className="relative h-40 overflow-hidden">
                   <GovernedImage
-                    module="partner"
-                    src={u.img}
-                    title={u.name}
+                    module="university"
+                    title={`${u.name} student pathway`}
                     category={u.field}
+                    index={index}
                     variant="card"
                     aspectRatio="auto"
                     className="h-full"
                     wrapperClassName="h-full rounded-none shadow-none"
                     imageClassName="group-hover:scale-110"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
                   <Badge className="absolute top-3 right-3 bg-mtendere-orange text-white text-xs font-bold">{u.ranking}</Badge>
+                  <InstitutionLogo
+                    name={u.name}
+                    compact
+                    className="absolute bottom-3 left-3 h-14 w-14 rounded-lg border-white/25"
+                  />
                 </div>
-                <CardContent className="pt-4">
+                <CardContent className="pt-5">
                   <h3 className="font-bold text-mtendere-blue text-lg">{u.name}</h3>
                   <p className="text-sm text-muted-foreground">{u.country}</p>
                   <p className="text-xs text-mtendere-green font-semibold mt-1">{u.field}</p>

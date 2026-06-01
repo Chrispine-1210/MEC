@@ -41,13 +41,14 @@ export default function GovernedImage({
   index,
   variant = "card",
   aspectRatio = "16 / 9",
-  fit = "cover",
+  fit,
   priority = false,
   caption = false,
   enableLightbox = false,
   wrapperClassName,
   imageClassName,
   className,
+  sizes,
   onLoad,
   onError,
   ...imgProps
@@ -69,6 +70,8 @@ export default function GovernedImage({
   const effectiveAlt = alt || activeImage.alt;
   const effectiveCaption = caption === false ? undefined : caption || activeImage.caption;
   const isHardFailed = loadState === "failed" && fallbackDepth > 0;
+  const effectiveFit = fit || (variant === "logo" ? "contain" : "cover");
+  const imageSizes = sizes || getDefaultSizes(variant);
 
   const image = isHardFailed ? (
     <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-mtendere-blue/12 via-card to-mtendere-green/12 text-center text-mtendere-blue">
@@ -85,11 +88,12 @@ export default function GovernedImage({
       loading={priority ? "eager" : "lazy"}
       decoding="async"
       fetchPriority={priority ? "high" : "auto"}
+      sizes={imageSizes}
       className={cn(
         "h-full w-full transition duration-700 ease-out",
-        fit === "cover" ? "object-cover" : "object-contain",
+        effectiveFit === "cover" ? "object-cover" : "object-contain",
         loadState === "loaded" ? "opacity-100" : "opacity-0",
-        "group-hover:scale-[1.035]",
+        variant !== "logo" && "group-hover:scale-[1.035]",
         imageClassName,
       )}
       onLoad={(event) => {
@@ -119,8 +123,10 @@ export default function GovernedImage({
     <figure className={cn("relative", className)}>
       <div
         className={cn(
-          "group relative overflow-hidden bg-muted media-depth ring-1 ring-black/5",
-          "after:pointer-events-none after:absolute after:inset-0 after:bg-gradient-to-t after:from-black/12 after:via-black/0 after:to-white/5",
+          "group relative overflow-hidden media-depth ring-1 ring-black/5",
+          variant === "logo"
+            ? "bg-card p-3"
+            : "bg-muted after:pointer-events-none after:absolute after:inset-0 after:bg-gradient-to-t after:from-black/12 after:via-black/0 after:to-white/5",
           wrapperClassName,
         )}
         style={{ aspectRatio }}
@@ -165,4 +171,11 @@ function getInitials(value: string) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join("");
+}
+
+function getDefaultSizes(variant: GovernedImageVariant) {
+  if (variant === "profile") return "96px";
+  if (variant === "logo") return "96px";
+  if (variant === "hero") return "100vw";
+  return "(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw";
 }

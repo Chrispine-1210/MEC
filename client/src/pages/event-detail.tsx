@@ -22,6 +22,7 @@ import {
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
 import GovernedImage from "@/components/governed-image";
+import InstitutionLogo from "@/components/institution-logo";
 import EventRegistrationDialog from "@/components/event-registration-dialog";
 import SaveItemButton from "@/components/save-item-button";
 import { Badge } from "@/components/ui/badge";
@@ -490,15 +491,11 @@ function PartnerStrip({ partners }: { partners: Array<Record<string, unknown>> }
         {partners.map((partner, index) => (
           <div key={String(partner.id ?? partner.name ?? index)} className="flex items-center gap-3 rounded-lg border border-border/60 p-4">
             {partner.logo || partner.logoUrl ? (
-              <GovernedImage
-                module="partner"
-                src={String(partner.logo ?? partner.logoUrl)}
-                title={String(partner.name ?? partner.organization ?? "Partner")}
-                variant="logo"
-                aspectRatio="1 / 1"
-                fit="contain"
-                className="h-full"
-                wrapperClassName="h-12 w-12 rounded-lg border bg-card p-1 shadow-none"
+              <InstitutionLogo
+                name={String(partner.name ?? partner.organization ?? "Partner")}
+                logoUrl={String(partner.logo ?? partner.logoUrl)}
+                compact
+                className="h-12 w-12"
               />
             ) : (
               <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-mtendere-blue/10">

@@ -2,6 +2,10 @@ export const mediaModules = [
   "blogs",
   "teams",
   "partners",
+  "universities",
+  "logos",
+  "hero-banners",
+  "backgrounds",
   "scholarships",
   "jobs",
   "events",
@@ -24,6 +28,9 @@ export type MediaAsset = {
   size: number;
   updatedAt: string;
   valid: boolean;
+  kind?: "image" | "logo" | "hero" | "background";
+  contentType?: string;
+  qualityFlags?: string[];
 };
 
 export type MediaAssetsResponse = {
@@ -47,12 +54,18 @@ export type MediaAuditResponse = {
   invalidReferences: MediaAuditReference[];
   fallbackPolicy: string[];
   assets: MediaAsset[];
+  duplicateGroups?: Array<{ hash: string; references: string[]; totalBytes: number }>;
+  qualityFindings?: Array<{ reference: string; severity: "info" | "warning"; issue: string; recommendation: string }>;
 };
 
 export const mediaModuleLabels: Record<string, string> = {
   blogs: "Blogs",
   teams: "Teams",
   partners: "Partners",
+  universities: "Universities",
+  logos: "Logos",
+  "hero-banners": "Hero Banners",
+  backgrounds: "Backgrounds",
   scholarships: "Scholarships",
   jobs: "Jobs",
   events: "Events",

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, Copy, Image as ImageIcon, Loader2, RefreshCw, ShieldCheck, Upload } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, CheckCircle2, Copy, Image as ImageIcon, Loader2, RefreshCw, ShieldCheck, Upload } from "lucide-react";
 import { SEO } from "@/components/SEO";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,8 +21,12 @@ import {
 
 export default function MediaGovernancePage() {
   const [moduleName, setModuleName] = useState<MediaModule>("blogs");
+  const [kindFilter, setKindFilter] = useState<"all" | "image" | "logo" | "hero" | "background">("all");
   const [search, setSearch] = useState("");
+  const [replaceFrom, setReplaceFrom] = useState("");
+  const [replaceTo, setReplaceTo] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [isReplacing, setIsReplacing] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const { toast } = useToast();
 
@@ -48,9 +52,10 @@ export default function MediaGovernancePage() {
     const term = search.trim().toLowerCase();
     return (assetsQuery.data?.assets || [])
       .filter((asset) => asset.module === moduleName)
+      .filter((asset) => kindFilter === "all" || asset.kind === kindFilter)
       .filter((asset) => !term || asset.reference.toLowerCase().includes(term))
       .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
-  }, [assetsQuery.data?.assets, moduleName, search]);
+  }, [assetsQuery.data?.assets, kindFilter, moduleName, search]);
 
   const totals = useMemo(() => {
     const assets = assetsQuery.data?.assets || [];
@@ -59,8 +64,10 @@ export default function MediaGovernancePage() {
       valid: assets.filter((asset) => asset.valid).length,
       invalid: assets.filter((asset) => !asset.valid).length,
       selectedModule: assets.filter((asset) => asset.module === moduleName).length,
+      logos: assets.filter((asset) => asset.kind === "logo").length,
+      qualityWarnings: auditQuery.data?.qualityFindings?.filter((finding) => finding.severity === "warning").length || 0,
     };
-  }, [assetsQuery.data?.assets, moduleName]);
+  }, [assetsQuery.data?.assets, auditQuery.data?.qualityFindings, moduleName]);
 
   const handleUpload = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -101,6 +108,44 @@ export default function MediaGovernancePage() {
   const copyReference = async (asset: MediaAsset) => {
     await navigator.clipboard?.writeText(asset.reference);
     toast({ title: "Reference copied", description: asset.reference });
+  };
+
+  const handleReplaceReferences = async () => {
+    if (!replaceFrom.trim() || !replaceTo.trim()) {
+      toast({ title: "Select references", description: "Provide both source and replacement media references.", variant: "destructive" });
+      return;
+    }
+
+    setIsReplacing(true);
+    try {
+      const response = await authFetch("/api/admin/media/replace-references", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from: replaceFrom.trim(), to: replaceTo.trim() }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message || "Replacement failed");
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/media/assets"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/media/audit"] }),
+      ]);
+
+      toast({
+        title: "References replaced",
+        description: `${payload.replacedCount || 0} content reference${payload.replacedCount === 1 ? "" : "s"} updated.`,
+      });
+      setReplaceFrom("");
+      setReplaceTo("");
+    } catch (error) {
+      toast({
+        title: "Replacement failed",
+        description: error instanceof Error ? error.message : "Media references could not be replaced.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsReplacing(false);
+    }
   };
 
   return (
@@ -144,8 +189,8 @@ export default function MediaGovernancePage() {
       <div className="grid gap-4 md:grid-cols-4">
         <Metric title="Governed Assets" value={totals.all} />
         <Metric title="Valid Files" value={totals.valid} tone="success" />
-        <Metric title="Invalid Files" value={totals.invalid} tone={totals.invalid ? "warning" : "success"} />
-        <Metric title="Missing References" value={auditQuery.data?.invalidCount || 0} tone={auditQuery.data?.invalidCount ? "warning" : "success"} />
+        <Metric title="Logo Assets" value={totals.logos} tone="success" />
+        <Metric title="Quality Warnings" value={totals.qualityWarnings + totals.invalid + (auditQuery.data?.invalidCount || 0)} tone={totals.qualityWarnings || totals.invalid || auditQuery.data?.invalidCount ? "warning" : "success"} />
       </div>
 
       <Card>
@@ -171,6 +216,18 @@ export default function MediaGovernancePage() {
                   ))}
                 </SelectContent>
               </Select>
+              <Select value={kindFilter} onValueChange={(value) => setKindFilter(value as typeof kindFilter)}>
+                <SelectTrigger className="w-full sm:w-44">
+                  <SelectValue placeholder="Asset type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All asset types</SelectItem>
+                  <SelectItem value="image">Images</SelectItem>
+                  <SelectItem value="logo">Logos</SelectItem>
+                  <SelectItem value="hero">Hero banners</SelectItem>
+                  <SelectItem value="background">Backgrounds</SelectItem>
+                </SelectContent>
+              </Select>
               <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search assets" className="sm:w-64" />
             </div>
           </div>
@@ -185,8 +242,8 @@ export default function MediaGovernancePage() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
               {moduleAssets.map((asset) => (
                 <div key={asset.reference} className="overflow-hidden rounded-lg border bg-card">
-                  <div className="aspect-video bg-muted">
-                    <img src={asset.previewUrl} alt={asset.reference} className="h-full w-full object-cover" />
+                  <div className={`aspect-video ${asset.kind === "logo" ? "asset-logo-tile p-5" : "bg-muted"}`}>
+                    <img src={asset.previewUrl} alt={asset.reference} className={`h-full w-full ${asset.kind === "logo" ? "object-contain" : "object-cover"}`} />
                   </div>
                   <div className="space-y-2 p-3">
                     <div className="flex items-center justify-between gap-2">
@@ -194,6 +251,14 @@ export default function MediaGovernancePage() {
                       <Badge variant="outline" className={asset.valid ? "text-success" : "text-warning"}>
                         {asset.valid ? "valid" : "invalid"}
                       </Badge>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      <Badge variant="secondary" className="text-[10px] capitalize">{asset.kind || "image"}</Badge>
+                      {(asset.qualityFlags || []).slice(0, 2).map((flag) => (
+                        <Badge key={flag} variant="outline" className="text-[10px] text-warning">
+                          {flag.replace(/-/g, " ")}
+                        </Badge>
+                      ))}
                     </div>
                     <p className="truncate text-xs text-muted-foreground">{asset.reference}</p>
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -213,6 +278,39 @@ export default function MediaGovernancePage() {
               No assets found for this module.
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ArrowRightLeft className="h-5 w-5 text-primary" />
+            Bulk Replace References
+          </CardTitle>
+          <CardDescription>
+            Replace a repeated or placeholder asset across blogs, jobs, scholarships, partners, team members, testimonials, and events.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+            <Input
+              value={replaceFrom}
+              onChange={(event) => setReplaceFrom(event.target.value)}
+              placeholder="Reference to replace, e.g. partners/partners-default.jpg"
+            />
+            <Input
+              value={replaceTo}
+              onChange={(event) => setReplaceTo(event.target.value)}
+              placeholder="Replacement governed reference"
+            />
+            <Button type="button" onClick={handleReplaceReferences} disabled={isReplacing}>
+              {isReplacing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRightLeft className="mr-2 h-4 w-4" />}
+              Replace
+            </Button>
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Tip: copy references from the asset cards above. Replacement refuses invalid or external destination assets.
+          </p>
         </CardContent>
       </Card>
 
@@ -257,6 +355,70 @@ export default function MediaGovernancePage() {
           )}
         </CardContent>
       </Card>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Duplicate Asset Findings</CardTitle>
+            <CardDescription>
+              Exact file duplicates increase bundle weight and encourage repeated visuals across the public site.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {auditQuery.data?.duplicateGroups?.length ? (
+              <div className="space-y-3">
+                {auditQuery.data.duplicateGroups.slice(0, 5).map((group) => (
+                  <div key={group.hash} className="rounded-lg border bg-muted/20 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <Badge variant="outline" className="text-warning">{group.references.length} copies</Badge>
+                      <span className="text-xs text-muted-foreground">{formatAssetSize(group.totalBytes)}</span>
+                    </div>
+                    <div className="space-y-1">
+                      {group.references.slice(0, 4).map((reference) => (
+                        <p key={reference} className="truncate text-xs text-muted-foreground">{reference}</p>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-success/30 bg-success/10 p-4 text-sm text-success">
+                No exact duplicate files detected in the governed library.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Quality Findings</CardTitle>
+            <CardDescription>
+              Prioritized signals for placeholders, oversized sources, and assets that should be converted to WebP.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {auditQuery.data?.qualityFindings?.length ? (
+              <div className="space-y-3">
+                {auditQuery.data.qualityFindings.slice(0, 8).map((finding) => (
+                  <div key={`${finding.reference}-${finding.issue}`} className="rounded-lg border bg-muted/20 p-3">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <p className="truncate text-sm font-medium text-foreground">{finding.reference}</p>
+                      <Badge variant="outline" className={finding.severity === "warning" ? "text-warning" : "text-muted-foreground"}>
+                        {finding.issue}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{finding.recommendation}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-success/30 bg-success/10 p-4 text-sm text-success">
+                No quality warnings detected.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

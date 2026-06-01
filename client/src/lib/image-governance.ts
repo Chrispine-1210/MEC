@@ -2,6 +2,7 @@ export type GovernedImageModule =
   | "blog"
   | "team"
   | "partner"
+  | "university"
   | "scholarship"
   | "job"
   | "event"
@@ -48,6 +49,10 @@ const GOVERNED_ASSET_FOLDERS = new Set([
   "team",
   "teams",
   "partners",
+  "universities",
+  "logos",
+  "hero-banners",
+  "backgrounds",
   "scholarships",
   "jobs",
   "events",
@@ -80,6 +85,13 @@ const imageModules = import.meta.glob(
     "../assets/imgs/teams/george.jpg",
     "../assets/imgs/teams/ms-brenda.jpg",
     "../assets/imgs/teams/timothy.jpg",
+    "../assets/imgs/au-logo.png",
+    "../assets/imgs/ct-logo.png",
+    "../assets/imgs/gedu-logo.png",
+    "../assets/imgs/msm-unify-logo.png",
+    "../assets/imgs/cu-logo-white.webp",
+    "../assets/imgs/gbs-dubai-1.webp",
+    "../assets/imgs/Students on Campus with Branded Jerseys.jpg",
     "../assets/imgs/Partners/cu-logo-white.webp",
     "../assets/imgs/Partners/gbs-dubai.webp",
     "../assets/imgs/Partners/our-partners.jpg",
@@ -140,6 +152,7 @@ const MODULE_FOLDERS: Record<GovernedImageModule, string[]> = {
   blog: ["blogs", "blog"],
   team: ["teams", "team"],
   partner: ["partners", "partner"],
+  university: ["universities", "partners", "programs", "students"],
   scholarship: ["scholarships", "scholarship", "students"],
   job: ["jobs", "job"],
   event: ["events", "event"],
@@ -173,6 +186,7 @@ const MODULE_KEYWORDS: Record<GovernedImageModule, string[]> = {
   ],
   team: ["team", "brenda", "george", "daniel", "christ", "timothy", "rabson", "ortiz", "staff"],
   partner: ["partner", "university", "campus", "chandigarh", "ct-logo", "gedu", "gbs", "msm", "au-logo"],
+  university: ["university", "campus", "chandigarh", "ct-logo", "gedu", "gbs", "msm", "au-logo", "students"],
   scholarship: ["scholarship", "graduate", "students", "campus", "application", "study", "abroad", "foundation"],
   job: ["job", "career", "business", "corporate", "worker", "factory", "computer", "chart", "resume"],
   event: ["event", "cerebration", "registration", "workshop", "meeting", "exhibition", "departure"],
@@ -209,7 +223,8 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
 const MODULE_DEFAULT_KEYS: Record<GovernedImageModule, string[]> = {
   blog: ["events/img-20250321-wa0250.jpg", "events/img-20221029-wa0058.jpg", "events/img-20220907-wa0124.jpg", "events/img-20230311-wa0110.jpg"],
   team: ["teams/ms-brenda.jpg", "teams/george", "teams/dr-daniel", "teams/timothy"],
-  partner: ["partners/partners-default.jpg", "partners/our-partners", "partners/partners-2", "partners/gbs"],
+  partner: ["partners/cu-logo-white.webp", "gbs-dubai", "ct-logo", "gedu-logo", "partners/our-partners", "partners/partners-2"],
+  university: ["students on campus with branded jerseys", "partners/cu-logo-white.webp", "gbs-dubai", "ct-logo", "gedu-logo"],
   scholarship: ["scholarships/graduates-default.jpg", "scholarships/students", "scholarships/application-guidance"],
   job: ["jobs/jobs-default.jpg", "jobs/corporate", "jobs/computer-repair", "jobs/inspector"],
   event: ["events/events-default.jpg", "blogs/chiunda-campus", "programs/students-campus"],
@@ -305,7 +320,7 @@ function pickCategoryAsset(input: GovernedImageInput) {
     ...(input.tags || []).flatMap((tag) => splitTokens(tag || "")),
   ];
   const hints = tokens.flatMap((token) => CATEGORY_KEYWORDS[token] || [token]);
-  const modulePool = getModulePool(input.module);
+  const modulePool = filterPoolForVariant(getModulePool(input.module), input);
   return pickByHints(hints, modulePool, input) || pickByHints(hints, assets, input);
 }
 
@@ -313,7 +328,7 @@ function pickModuleAsset(input: GovernedImageInput) {
   const moduleDefaults = pickByHints(MODULE_DEFAULT_KEYS[input.module], assets, input);
   if (moduleDefaults) return moduleDefaults;
 
-  const modulePool = getModulePool(input.module);
+  const modulePool = filterPoolForVariant(getModulePool(input.module), input);
   if (modulePool.length > 0) return pickDeterministic(modulePool, getHashSeed(input));
 
   return pickByHints(MODULE_KEYWORDS[input.module], assets, input);
@@ -375,7 +390,10 @@ function pickByHints(hints: string[] = [], pool: AssetEntry[] = assets, input?: 
   const normalizedHints = hints.map(normalizePath).filter(Boolean);
   if (normalizedHints.length === 0) return undefined;
 
-  const matches = pool.filter((asset) => normalizedHints.some((hint) => asset.normalizedPath.includes(hint)));
+  const matches = filterPoolForVariant(
+    pool.filter((asset) => normalizedHints.some((hint) => asset.normalizedPath.includes(hint))),
+    input,
+  );
   if (matches.length === 0) return undefined;
 
   return pickDeterministic(matches, getHashSeed(input));
@@ -428,6 +446,45 @@ function splitTokens(value: string) {
 
 function normalizePath(value: string) {
   return value.replace(/\\/g, "/").toLowerCase().replace(/^\/+/, "").trim();
+}
+
+function filterPoolForVariant(pool: AssetEntry[], input?: GovernedImageInput) {
+  if (!input) return pool;
+
+  if (input.variant === "logo") {
+    const logoAssets = pool.filter(isLogoAsset);
+    return logoAssets.length ? logoAssets : pool.filter((asset) => !isPhotoPlaceholderAsset(asset));
+  }
+
+  const nonLogoAssets = pool.filter((asset) => !isLogoAsset(asset));
+  return nonLogoAssets.length ? nonLogoAssets : pool;
+}
+
+function isLogoAsset(asset: AssetEntry) {
+  const normalizedPath = asset.normalizedPath;
+  return (
+    normalizedPath.includes("logo") ||
+    normalizedPath.includes("crest") ||
+    normalizedPath.includes("shield") ||
+    normalizedPath.includes("brand") ||
+    normalizedPath.includes("cu-logo") ||
+    normalizedPath.includes("ct-logo") ||
+    normalizedPath.includes("gedu") ||
+    normalizedPath.includes("msm-unify") ||
+    normalizedPath.includes("gbs-dubai") ||
+    normalizedPath.includes("au-logo")
+  );
+}
+
+function isPhotoPlaceholderAsset(asset: AssetEntry) {
+  const normalizedPath = asset.normalizedPath;
+  return (
+    normalizedPath.includes("partners-default") ||
+    normalizedPath.includes("graduates-default") ||
+    normalizedPath.includes("jobs-default") ||
+    normalizedPath.includes("events-default") ||
+    normalizedPath.includes("mtendere-default")
+  );
 }
 
 function positiveHash(value: string) {

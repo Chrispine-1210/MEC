@@ -22,7 +22,7 @@ import {
   insertSubscriberSchema,
 } from "@shared/schema";
 import bcrypt from "bcryptjs";
-import { createHmac, randomBytes, randomUUID } from "crypto";
+import { createHash, createHmac, randomBytes, randomUUID } from "crypto";
 import fs from "fs";
 import jwt from "jsonwebtoken";
 import multer from "multer";
@@ -371,6 +371,11 @@ const adminSettingsUpdateSchema = z.object({
   twoFactorRequired: z.boolean().optional(),
   weeklySummary: z.boolean().optional(),
   contentPublishedNotifications: z.boolean().optional(),
+});
+
+const mediaReplaceReferencesSchema = z.object({
+  from: z.string().trim().min(1).max(1000),
+  to: z.string().trim().min(1).max(1000),
 });
 
 const adminRoleInputSchema = z.object({
@@ -1812,6 +1817,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "team",
     "teams",
     "partners",
+    "universities",
+    "logos",
+    "hero-banners",
+    "backgrounds",
     "scholarships",
     "jobs",
     "events",
@@ -1829,6 +1838,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     blogs: "blogs/application-guidance.jpg",
     teams: "teams/ms-brenda.jpg",
     partners: "partners/partners-default.jpg",
+    universities: "partners/cu-logo-white.webp",
+    logos: "partners/cu-logo-white.webp",
+    "hero-banners": "programs/international-studies.jpg",
+    backgrounds: "misc/mtendere.jpg",
     scholarships: "scholarships/graduates-default.jpg",
     jobs: "jobs/jobs-default.jpg",
     events: "events/events-default.jpg",
@@ -1909,6 +1922,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
+  const getMediaAssetHash = (filePath: string) => {
+    try {
+      return createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
+    } catch {
+      return "";
+    }
+  };
+
+  const getMediaAssetKind = (relative: string): "image" | "logo" | "hero" | "background" => {
+    const normalized = relative.toLowerCase();
+    const moduleName = normalized.split("/")[0] || "";
+    if (
+      moduleName === "logos" ||
+      normalized.includes("logo") ||
+      normalized.includes("crest") ||
+      normalized.includes("shield") ||
+      normalized.includes("gbs-dubai") ||
+      normalized.includes("gedu") ||
+      normalized.includes("msm-unify") ||
+      normalized.includes("cu-logo") ||
+      normalized.includes("ct-logo") ||
+      normalized.includes("au-logo")
+    ) return "logo";
+    if (moduleName === "hero-banners" || normalized.includes("hero")) return "hero";
+    if (moduleName === "backgrounds" || normalized.includes("background")) return "background";
+    return "image";
+  };
+
+  const getMediaContentType = (relative: string) => {
+    const extension = path.extname(relative).toLowerCase();
+    if (extension === ".png") return "image/png";
+    if (extension === ".webp") return "image/webp";
+    return "image/jpeg";
+  };
+
+  const getMediaQualityFlags = (relative: string, size: number) => {
+    const normalized = relative.toLowerCase();
+    const flags: string[] = [];
+    if (size > 2 * 1024 * 1024) flags.push("large-source-file");
+    if (!normalized.endsWith(".webp") && getMediaAssetKind(relative) !== "logo") flags.push("webp-recommended");
+    if (/(default|placeholder|partners-default|jobs-default|events-default|graduates-default)/i.test(normalized)) {
+      flags.push("generic-or-placeholder");
+    }
+    return flags;
+  };
+
   const toMediaAssetUrl = (relative: string) =>
     `/media-assets/${relative
       .split("/")
@@ -1945,6 +2004,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       size: number;
       updatedAt: Date;
       valid: boolean;
+      hash: string;
+      kind: "image" | "logo" | "hero" | "background";
+      contentType: string;
+      qualityFlags: string[];
     }> = [];
 
     const walk = (directory: string, root: string) => {
@@ -1970,6 +2033,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           size: stat.size,
           updatedAt: stat.mtime,
           valid: isValidImageFile(fullPath),
+          hash: getMediaAssetHash(fullPath),
+          kind: getMediaAssetKind(relative),
+          contentType: getMediaContentType(relative),
+          qualityFlags: getMediaQualityFlags(relative, stat.size),
         });
       }
     };
@@ -7477,6 +7544,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             size: file.size,
             type: file.mimetype,
             valid: true,
+            hash: getMediaAssetHash(file.path),
+            kind: getMediaAssetKind(relativePath),
+            contentType: getMediaContentType(relativePath),
+            qualityFlags: getMediaQualityFlags(relativePath, file.size),
             note: "This source asset is governed and can be assigned immediately.",
           };
         }),
@@ -7484,6 +7555,139 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     },
   );
+
+  app.post("/api/admin/media/replace-references", authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const payload = mediaReplaceReferencesSchema.parse(req.body);
+      const fromReference = normalizeMediaAssetReference(payload.from) || payload.from.trim();
+      const toReference = normalizeMediaAssetReference(payload.to);
+
+      if (!toReference || !isValidMediaReference(toReference)) {
+        return res.status(400).json({ message: "Replacement asset must be a valid governed media reference." });
+      }
+
+      if (fromReference === toReference) {
+        return res.status(400).json({ message: "Choose two different media references." });
+      }
+
+      const matchesReference = (value?: string | null) =>
+        Boolean(value && (value === payload.from || normalizeMediaAssetReference(value) === fromReference));
+      const replacements: Array<{ module: string; id: number; title: string; field: string }> = [];
+
+      const [blogs, team, scholarshipsList, jobsList, partnersList, testimonialsList, eventsList] = await Promise.all([
+        storage.getAllBlogPosts(),
+        storage.getAllTeamMembers(),
+        storage.getAllScholarships(),
+        storage.getAllJobs(),
+        storage.getAllPartners(),
+        storage.getAllTestimonials(),
+        storage.getAllEvents(),
+      ]);
+
+      for (const item of blogs) {
+        const meta = getBlogMeta(item.id);
+        if (matchesReference(item.imageUrl)) {
+          await storage.updateBlogPost(item.id, { imageUrl: toReference });
+          replacements.push({ module: "blogs", id: item.id, title: item.title, field: "imageUrl" });
+        }
+        if (matchesReference(meta.featuredImage)) {
+          setBlogMeta(item.id, { ...meta, featuredImage: toReference });
+          replacements.push({ module: "blogs", id: item.id, title: item.title, field: "featuredImage" });
+        }
+      }
+
+      for (const item of team) {
+        const meta = getTeamMeta(item.id);
+        if (matchesReference(item.imageUrl)) {
+          await storage.updateTeamMember(item.id, { imageUrl: toReference });
+          replacements.push({ module: "teams", id: item.id, title: item.name, field: "imageUrl" });
+        }
+        if (matchesReference(meta.profileImage)) {
+          setTeamMeta(item.id, { ...meta, profileImage: toReference });
+          replacements.push({ module: "teams", id: item.id, title: item.name, field: "profileImage" });
+        }
+      }
+
+      for (const item of scholarshipsList) {
+        const meta = getScholarshipMeta(item.id);
+        if (matchesReference(item.imageUrl)) {
+          await storage.updateScholarship(item.id, { imageUrl: toReference });
+          replacements.push({ module: "scholarships", id: item.id, title: item.title, field: "imageUrl" });
+        }
+        if (matchesReference(meta.featuredImage)) {
+          setScholarshipMeta(item.id, { ...meta, featuredImage: toReference });
+          replacements.push({ module: "scholarships", id: item.id, title: item.title, field: "featuredImage" });
+        }
+      }
+
+      for (const item of jobsList) {
+        const meta = getJobMeta(item.id);
+        if (matchesReference(meta.featuredImage)) {
+          setJobMeta(item.id, { ...meta, featuredImage: toReference });
+          replacements.push({ module: "jobs", id: item.id, title: item.title, field: "featuredImage" });
+        }
+      }
+
+      for (const item of partnersList) {
+        const meta = getPartnerMeta(item.id);
+        let nextMeta = meta;
+        if (matchesReference(item.logoUrl)) {
+          await storage.updatePartner(item.id, { logoUrl: toReference });
+          replacements.push({ module: "partners", id: item.id, title: item.name, field: "logoUrl" });
+        }
+        if (matchesReference(item.coverImage)) {
+          await storage.updatePartner(item.id, { coverImage: toReference });
+          replacements.push({ module: "partners", id: item.id, title: item.name, field: "coverImage" });
+        }
+        if (matchesReference(meta.logo)) {
+          nextMeta = { ...nextMeta, logo: toReference };
+          setPartnerMeta(item.id, nextMeta);
+          replacements.push({ module: "partners", id: item.id, title: item.name, field: "logo" });
+        }
+        if (matchesReference(meta.coverImage)) {
+          nextMeta = { ...nextMeta, coverImage: toReference };
+          setPartnerMeta(item.id, nextMeta);
+          replacements.push({ module: "partners", id: item.id, title: item.name, field: "meta.coverImage" });
+        }
+      }
+
+      for (const item of testimonialsList) {
+        if (matchesReference(item.imageUrl)) {
+          await storage.updateTestimonial(item.id, { imageUrl: toReference });
+          replacements.push({
+            module: "testimonials",
+            id: item.id,
+            title: item.authorName || `Testimonial ${item.id}`,
+            field: "imageUrl",
+          });
+        }
+      }
+
+      for (const item of eventsList) {
+        if (matchesReference(item.coverImage)) {
+          await storage.updateEvent(item.id, { coverImage: toReference });
+          replacements.push({ module: "events", id: item.id, title: item.title, field: "coverImage" });
+        }
+      }
+
+      await storage.logAnalytics({
+        event: "media_references_replaced",
+        userId: getAuthenticatedUser(req).id,
+        metadata: {
+          from: fromReference,
+          to: toReference,
+          count: replacements.length,
+        },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+
+      res.json({ from: fromReference, to: toReference, replacedCount: replacements.length, replacements });
+    } catch (error) {
+      console.error("Admin media replacement error:", getErrorLogMessage(error));
+      res.status(400).json({ message: "Failed to replace media references", error: getErrorMessage(error) });
+    }
+  });
 
   app.get("/api/admin/media/audit", authenticateToken, requireEditor, async (_req, res) => {
     try {
@@ -7543,6 +7747,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 : "missing-local-asset"
             : "missing",
         }));
+      const assets = listMediaAssets();
+      const duplicateGroups = Object.values(
+        assets.reduce<Record<string, { hash: string; references: string[]; totalBytes: number }>>((groups, asset) => {
+          if (!asset.hash) return groups;
+          const current = groups[asset.hash] || { hash: asset.hash, references: [], totalBytes: 0 };
+          current.references.push(asset.reference);
+          current.totalBytes += asset.size;
+          groups[asset.hash] = current;
+          return groups;
+        }, {}),
+      )
+        .filter((group) => group.references.length > 1)
+        .sort((left, right) => right.references.length - left.references.length);
+
+      const qualityFindings = assets.flatMap((asset) =>
+        asset.qualityFlags.map((flag) => ({
+          reference: asset.reference,
+          severity: flag === "large-source-file" || flag === "generic-or-placeholder" ? "warning" : "info",
+          issue:
+            flag === "large-source-file"
+              ? "Large source image"
+              : flag === "generic-or-placeholder"
+                ? "Generic or placeholder-style asset"
+                : "Non-WebP image",
+          recommendation:
+            flag === "large-source-file"
+              ? "Replace with a compressed responsive source under 2 MB before assigning to public pages."
+              : flag === "generic-or-placeholder"
+                ? "Use a content-specific image or official institution logo instead of a default visual."
+                : "Prefer WebP for new uploads where visual quality allows.",
+        })),
+      );
 
       await storage.logAnalytics({
         event: "media_audit_run",
@@ -7560,7 +7796,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         invalidCount: invalidReferences.length,
         invalidReferences,
         fallbackPolicy: ["assigned asset", "category default", "global default", "styled initials placeholder"],
-        assets: listMediaAssets(),
+        duplicateGroups,
+        qualityFindings,
+        assets,
       });
     } catch (error) {
       console.error("Admin media audit error:", error);

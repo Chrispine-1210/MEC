@@ -3,6 +3,7 @@ import { Link, useRoute } from "wouter";
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
 import GovernedImage from "@/components/governed-image";
+import InstitutionLogo from "@/components/institution-logo";
 import RichContent from "@/components/rich-content";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -222,8 +223,8 @@ export default function PartnerDetail() {
         <div className="absolute inset-0">
           <GovernedImage
             module="partner"
-            src={resolved.logoUrl}
-            title={resolved.name}
+            src={resolved.coverImage}
+            title={`${resolved.name} campus and partnership`}
             category={resolved.country}
             variant="hero"
             priority
@@ -258,6 +259,11 @@ export default function PartnerDetail() {
               </div>
 
               <h1 className="mb-5 text-4xl font-bold md:text-6xl">{resolved.name}</h1>
+              <InstitutionLogo
+                name={resolved.name}
+                logoUrl={resolved.logoUrl}
+                className="mb-5 h-20 w-20 rounded-xl border-white/25"
+              />
               <p className="max-w-3xl text-base leading-relaxed text-white/85 md:text-lg">{descriptionSummary}</p>
 
               <div className="mt-8 grid gap-4 sm:grid-cols-3">

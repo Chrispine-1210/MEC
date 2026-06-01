@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
 import GovernedImage from "@/components/governed-image";
+import InstitutionLogo from "@/components/institution-logo";
 import type { ApiPartner } from "@/lib/api-types";
 import { getGovernedBackgroundImage } from "@/lib/image-governance";
 import { publicContentQueryOptions } from "@/lib/realtime-content";
@@ -154,16 +155,10 @@ export default function Partners() {
               {featuredPartners.map((partner, idx) => (
                 <Card key={partner.id} className="premium-card text-center transition-all duration-300">
                   <CardHeader className="pb-4">
-                    <GovernedImage
-                      module="partner"
-                      src={partner.logoUrl}
-                      title={partner.name}
-                      variant="logo"
-                      aspectRatio="1 / 1"
-                      fit="contain"
-                      index={idx}
-                      className="mx-auto mb-4 h-24 w-24"
-                      wrapperClassName="h-full rounded-full bg-mtendere-blue p-3 shadow-none"
+                    <InstitutionLogo
+                      name={partner.name}
+                      logoUrl={partner.logoUrl}
+                      className="mx-auto mb-4 h-24 w-24 rounded-xl"
                     />
                     <CardTitle className="text-2xl text-mtendere-blue">
                       {partner.name}
@@ -246,8 +241,8 @@ export default function Partners() {
                   <div className="relative h-44 overflow-hidden">
                     <GovernedImage
                       module="partner"
-                      src={partner.logoUrl}
-                      title={partner.name}
+                      src={partner.coverImage}
+                      title={`${partner.name} campus and partnership`}
                       category={partner.country}
                       index={idx}
                       variant="card"
@@ -256,11 +251,19 @@ export default function Partners() {
                       wrapperClassName="h-full rounded-none shadow-none"
                       imageClassName="group-hover:scale-110"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-                    <div className="absolute bottom-3 left-3 right-3">
-                      <div className="text-white font-bold text-base drop-shadow line-clamp-1">{partner.name}</div>
-                      <div className="text-white/80 text-xs flex items-center gap-1 mt-0.5">
-                        <MapPin className="w-3 h-3" />{partner.country}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
+                    <div className="absolute bottom-3 left-3 right-3 flex items-end gap-3">
+                      <InstitutionLogo
+                        name={partner.name}
+                        logoUrl={partner.logoUrl}
+                        compact
+                        className="h-14 w-14 rounded-lg border-white/25"
+                      />
+                      <div className="min-w-0">
+                        <div className="line-clamp-1 text-base font-bold text-white drop-shadow">{partner.name}</div>
+                        <div className="mt-0.5 flex items-center gap-1 text-xs text-white/80">
+                          <MapPin className="h-3 w-3" />{partner.country}
+                        </div>
                       </div>
                     </div>
                     {partner.ranking && (
