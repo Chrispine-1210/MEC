@@ -5,6 +5,10 @@ import { env } from "./env";
 import { resolveWritableRuntimePath } from "./runtime-paths";
 
 type EmailCategory =
+  | "account_verification"
+  | "welcome"
+  | "password_reset"
+  | "password_changed"
   | "subscription_confirmation"
   | "application_confirmation"
   | "application_status_update"
@@ -239,6 +243,99 @@ export const sendSubscriptionConfirmation = (input: {
       cta: { href: input.verificationUrl, label: "Confirm subscription" },
     }),
     metadata: { flow: "double_opt_in" },
+  });
+
+export const sendAccountVerification = (input: {
+  email: string;
+  name?: string | null;
+  verificationUrl: string;
+}) =>
+  enqueueEmail({
+    to: input.email,
+    subject: "Verify your Mtendere account",
+    category: "account_verification",
+    text: `Verify your Mtendere account: ${input.verificationUrl}`,
+    html: renderMtendereEmail({
+      title: "Verify your account",
+      preheader: "Confirm your email address to activate your Mtendere account.",
+      body: `
+        <p>Hello ${escapeHtml(input.name || "there")},</p>
+        <p>Your Mtendere account has been created. Please verify this email address before signing in.</p>
+        <p>This link expires for security. If you did not create an account, you can ignore this message.</p>
+      `,
+      cta: { href: input.verificationUrl, label: "Verify account" },
+    }),
+    metadata: { flow: "account_verification" },
+  });
+
+export const sendWelcomeEmail = (input: {
+  email: string;
+  name?: string | null;
+  dashboardUrl: string;
+}) =>
+  enqueueEmail({
+    to: input.email,
+    subject: "Welcome to Mtendere Education Consult",
+    category: "welcome",
+    text: `Welcome to Mtendere Education Consult. Open your dashboard: ${input.dashboardUrl}`,
+    html: renderMtendereEmail({
+      title: "Welcome to Mtendere",
+      preheader: "Your account is active and ready for scholarship, study abroad, and career support.",
+      body: `
+        <p>Hello ${escapeHtml(input.name || "there")},</p>
+        <p>Your Mtendere account is active. You can now track applications, save opportunities, receive updates, and manage your education journey from your dashboard.</p>
+        <p>We will keep important application and communication updates tied to your account for better follow-up.</p>
+      `,
+      cta: { href: input.dashboardUrl, label: "Open dashboard" },
+    }),
+    metadata: { flow: "welcome" },
+  });
+
+export const sendPasswordResetEmail = (input: {
+  email: string;
+  name?: string | null;
+  resetUrl: string;
+}) =>
+  enqueueEmail({
+    to: input.email,
+    subject: "Reset your Mtendere password",
+    category: "password_reset",
+    text: `Reset your Mtendere password: ${input.resetUrl}`,
+    html: renderMtendereEmail({
+      title: "Reset your password",
+      preheader: "Use this secure link to reset your Mtendere password.",
+      body: `
+        <p>Hello ${escapeHtml(input.name || "there")},</p>
+        <p>We received a password reset request for your Mtendere account. Use the secure link below to set a new password.</p>
+        <p>The link expires shortly and stops working after your password changes.</p>
+        <p>If you did not request this, keep your current password and contact Mtendere support.</p>
+      `,
+      cta: { href: input.resetUrl, label: "Reset password" },
+    }),
+    metadata: { flow: "password_reset" },
+  });
+
+export const sendPasswordChangedEmail = (input: {
+  email: string;
+  name?: string | null;
+  loginUrl: string;
+}) =>
+  enqueueEmail({
+    to: input.email,
+    subject: "Your Mtendere password was changed",
+    category: "password_changed",
+    text: `Your Mtendere password was changed. Sign in: ${input.loginUrl}`,
+    html: renderMtendereEmail({
+      title: "Password changed",
+      preheader: "Your Mtendere account password was changed successfully.",
+      body: `
+        <p>Hello ${escapeHtml(input.name || "there")},</p>
+        <p>Your Mtendere account password was changed successfully.</p>
+        <p>If this was not you, contact Mtendere support immediately and ask the super administrator to invalidate active sessions.</p>
+      `,
+      cta: { href: input.loginUrl, label: "Sign in" },
+    }),
+    metadata: { flow: "password_changed" },
   });
 
 export const sendApplicationConfirmation = (input: {

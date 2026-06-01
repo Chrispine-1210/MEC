@@ -22,7 +22,7 @@ import {
   insertSubscriberSchema,
 } from "@shared/schema";
 import bcrypt from "bcryptjs";
-import { randomBytes, randomUUID } from "crypto";
+import { createHmac, randomBytes, randomUUID } from "crypto";
 import fs from "fs";
 import jwt from "jsonwebtoken";
 import multer from "multer";
@@ -33,13 +33,17 @@ import { env } from "./env";
 import { getChatResponse } from "./ai";
 import {
   sendAdminNotification,
+  sendAccountVerification,
   sendApplicationConfirmation,
   sendApplicationStatusUpdate,
   sendContactAcknowledgement,
   sendEventRegistrationConfirmation,
   sendEventRegistrationStatusUpdate,
+  sendPasswordChangedEmail,
+  sendPasswordResetEmail,
   sendPartnerOnboardingEmail,
   sendSubscriptionConfirmation,
+  sendWelcomeEmail,
 } from "./email";
 import {
   deleteBlogMeta,
@@ -219,6 +223,49 @@ const subscriberRequestSchema = z.object({
   preferences: z.array(z.string().trim().min(1).max(80)).max(12).optional(),
   source: z.string().trim().max(80).default("website"),
   website: z.string().optional(),
+  recaptchaToken: z.string().trim().max(4096).optional(),
+  consentAccepted: z.boolean().optional().default(false),
+});
+
+const contactMessageRequestSchema = z.object({
+  name: z.string().trim().min(2, "Name is required").max(160),
+  email: z.string().trim().email("Valid email is required").max(255).transform((value) => value.toLowerCase()),
+  phone: z.string().trim().max(40).optional().nullable(),
+  subject: z.string().trim().min(2, "Subject is required").max(220),
+  inquiryCategory: z.string().trim().min(2, "Inquiry category is required").max(100),
+  message: z.string().trim().min(10, "Message must be at least 10 characters").max(5000),
+  website: z.string().optional(),
+  recaptchaToken: z.string().trim().max(4096).optional(),
+  consentAccepted: z.boolean().refine((value) => value, "Privacy consent is required"),
+  source: z.string().trim().max(120).optional().default("contact_page"),
+  landingPage: z.string().trim().max(500).optional(),
+  referrer: z.string().trim().max(500).optional(),
+  campaign: z.string().trim().max(160).optional(),
+  utmSource: z.string().trim().max(160).optional(),
+  utmMedium: z.string().trim().max(160).optional(),
+  utmCampaign: z.string().trim().max(160).optional(),
+  utmTerm: z.string().trim().max(160).optional(),
+  utmContent: z.string().trim().max(160).optional(),
+});
+
+const publicAnalyticsTrackSchema = z.object({
+  event: z
+    .string()
+    .trim()
+    .min(2)
+    .max(100)
+    .regex(/^[a-z0-9_:-]+$/i, "Event names may only contain letters, numbers, colon, dash, and underscore"),
+  metadata: z.record(z.unknown()).optional().default({}),
+  source: z.string().trim().max(120).optional(),
+});
+
+const forgotPasswordSchema = z.object({
+  email: z.string().trim().email().transform((value) => value.toLowerCase()),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().trim().min(20),
+  password: strongPasswordSchema,
 });
 
 const publicApplicationRequestSchema = z.object({
@@ -412,6 +459,8 @@ type JwtUser = {
   id: number;
   email: string;
   role: string;
+  type?: "access" | "refresh" | "email_verification" | "password_reset";
+  pwd?: string;
   iat?: number;
 };
 
@@ -455,6 +504,76 @@ const isTransientDbConnectivityError = (error: unknown) => {
     message.includes("connection terminated") ||
     message.includes("network")
   );
+};
+
+const getRequestBaseUrl = (req: Request) =>
+  env.PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`;
+
+const getAdminBaseUrl = (req: Request) =>
+  env.ADMIN_APP_URL || `${req.protocol}://${req.get("host")}/admin`;
+
+const passwordFingerprint = (passwordHash: string) =>
+  createHmac("sha256", JWT_SECRET).update(passwordHash).digest("hex").slice(0, 40);
+
+const getClientIp = (req: Request) => req.ip || req.socket.remoteAddress || "unknown";
+
+const flowRateLimits = new Map<string, { count: number; resetAt: number }>();
+
+const guardPublicFlowRateLimit = (req: Request, res: Response, flow: string, max = 8, windowMs = 10 * 60 * 1000) => {
+  const now = Date.now();
+  const key = `${flow}:${getClientIp(req)}`;
+  const current = flowRateLimits.get(key);
+
+  if (!current || current.resetAt <= now) {
+    flowRateLimits.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+
+  current.count += 1;
+  if (current.count <= max) return true;
+
+  const retryAfterSeconds = Math.ceil((current.resetAt - now) / 1000);
+  res.setHeader("Retry-After", String(retryAfterSeconds));
+  res.status(429).json({
+    message: "Too many submissions. Please wait a few minutes before trying again.",
+    retryAfterSeconds,
+  });
+  return false;
+};
+
+const verifyRecaptcha = async (token: string | undefined, req: Request, action: string) => {
+  if (!env.RECAPTCHA_SECRET_KEY) return { ok: true, skipped: true };
+  if (!token) return { ok: false, reason: "reCAPTCHA verification is required" };
+
+  const response = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      secret: env.RECAPTCHA_SECRET_KEY,
+      response: token,
+      remoteip: getClientIp(req),
+    }),
+  });
+
+  if (!response.ok) return { ok: false, reason: "reCAPTCHA verification failed" };
+
+  const payload = (await response.json()) as {
+    success?: boolean;
+    score?: number;
+    action?: string;
+    hostname?: string;
+    "error-codes"?: string[];
+  };
+  const score = typeof payload.score === "number" ? payload.score : 1;
+  const actionMatches = !payload.action || payload.action === action;
+
+  return {
+    ok: Boolean(payload.success && actionMatches && score >= 0.5),
+    reason: payload.success ? "reCAPTCHA risk score is too low" : "reCAPTCHA verification failed",
+    score,
+    hostname: payload.hostname,
+    errorCodes: payload["error-codes"],
+  };
 };
 
 const buildPublicUser = (user: {
@@ -1095,11 +1214,21 @@ const toAdminEvent = async (event: any) => {
 const createTicketCode = (eventId: number) =>
   `MEC-${eventId}-${randomBytes(4).toString("hex").toUpperCase()}`;
 
-const signToken = (user: { id: number; email: string; role: string }) => {
+const signToken = (user: { id: number; email: string; role: string; password: string }) => {
   const timeoutMinutes = Math.max(5, Math.min(480, getAdminSettings().sessionTimeout || 30));
-  return jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, {
+  return jwt.sign(
+    {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      type: "access",
+      pwd: passwordFingerprint(user.password),
+    },
+    JWT_SECRET,
+    {
     expiresIn: `${timeoutMinutes}m`,
-  });
+    },
+  );
 };
 
 const refreshTokenCookieName = "mec_refresh_token";
@@ -1113,10 +1242,36 @@ const refreshCookieOptions: CookieOptions = {
   path: "/",
 };
 
-const signRefreshToken = (user: { id: number; email: string; role: string }) =>
-  jwt.sign({ id: user.id, email: user.email, role: user.role, type: "refresh" }, JWT_SECRET, {
+const signRefreshToken = (user: { id: number; email: string; role: string; password: string }) =>
+  jwt.sign({ id: user.id, email: user.email, role: user.role, type: "refresh", pwd: passwordFingerprint(user.password) }, JWT_SECRET, {
     expiresIn: "7d",
   });
+
+const signEmailVerificationToken = (user: { id: number; email: string; role: string; password: string }) =>
+  jwt.sign(
+    {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      type: "email_verification",
+      pwd: passwordFingerprint(user.password),
+    },
+    JWT_SECRET,
+    { expiresIn: "24h" },
+  );
+
+const signPasswordResetToken = (user: { id: number; email: string; role: string; password: string }) =>
+  jwt.sign(
+    {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      type: "password_reset",
+      pwd: passwordFingerprint(user.password),
+    },
+    JWT_SECRET,
+    { expiresIn: "20m" },
+  );
 
 const getCookieValue = (req: Request, name: string) => {
   const cookieHeader = req.headers.cookie;
@@ -1134,7 +1289,7 @@ const getCookieValue = (req: Request, name: string) => {
   }
 };
 
-const setRefreshCookie = (res: Response, user: { id: number; email: string; role: string }) => {
+const setRefreshCookie = (res: Response, user: { id: number; email: string; role: string; password: string }) => {
   res.cookie(refreshTokenCookieName, signRefreshToken(user), refreshCookieOptions);
 };
 
@@ -1182,7 +1337,7 @@ const isAdmin = (user: JwtUser | null) => user?.role === "super_admin";
 const isAdminPortalUser = (user: JwtUser | null) =>
   Boolean(user?.role && ADMIN_PORTAL_ROLES.has(user.role));
 
-const authenticateToken = (req: Request, res: Response, next: NextFunction) => {
+const authenticateToken = async (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith("Bearer ")
     ? authHeader.slice("Bearer ".length)
@@ -1192,19 +1347,37 @@ const authenticateToken = (req: Request, res: Response, next: NextFunction) => {
     return res.status(401).json({ message: "Access token required" });
   }
 
-  jwt.verify(token, JWT_SECRET, (error: unknown, user: unknown) => {
-    if (error || !user) {
-      return res.status(403).json({ message: "Invalid or expired token" });
+  try {
+    const jwtUser = jwt.verify(token, JWT_SECRET) as JwtUser;
+    if (jwtUser.type && jwtUser.type !== "access") {
+      return res.status(403).json({ message: "Invalid token type" });
     }
 
-    const jwtUser = user as JwtUser;
     if (isJwtUserInvalidated(jwtUser)) {
       return res.status(401).json({ message: "Session was invalidated by an administrator" });
     }
 
-    (req as AuthenticatedRequest).user = jwtUser;
+    const user = await storage.getUser(Number(jwtUser.id));
+    if (!user || user.isActive === false) {
+      return res.status(401).json({ message: "Account is inactive or email verification is still pending" });
+    }
+
+    if (!jwtUser.pwd || jwtUser.pwd !== passwordFingerprint(user.password)) {
+      return res.status(401).json({ message: "Session expired. Please sign in again." });
+    }
+
+    (req as AuthenticatedRequest).user = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      type: "access",
+      pwd: jwtUser.pwd,
+      iat: jwtUser.iat,
+    };
     next();
-  });
+  } catch {
+    return res.status(403).json({ message: "Invalid or expired token" });
+  }
 };
 
 const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
@@ -1887,6 +2060,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication routes
   const registerHandler = async (req: Request, res: Response) => {
     try {
+      const isAdminRegistration =
+        req.path === "/auth/register" ||
+        req.path === "/api/auth/admin/register" ||
+        req.path === "/api/admin/auth/register";
+
+      if (isAdminRegistration) {
+        return res.status(403).json({
+          message: "Admin account creation is restricted to the super administrator. Use Admin > Users to create Viewer or Writer accounts.",
+        });
+      }
+
       const { referralCode: bodyReferralCode, ...registrationBody } =
         req.body && typeof req.body === "object" ? req.body : {};
       const referralCode =
@@ -1899,19 +2083,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       userData.email = userData.email.trim().toLowerCase();
       userData.username = userData.username.trim();
 
-      const isAdminRegistration =
-        req.path === "/auth/register" ||
-        req.path === "/api/auth/admin/register" ||
-        req.path === "/api/admin/auth/register";
-
-      if (isAdminRegistration) {
-        if (isExplicitForbiddenAdminSignupRole(userData.role)) {
-          return res.status(403).json({ message: "Only Viewer and Writer accounts can be created from the admin sign-up form." });
-        }
-        userData.role = normalizeSelfServiceAdminRole(userData.role);
-      } else {
-        userData.role = "user";
-      }
+      userData.role = "user";
       validateStrongPassword(userData.password);
       
       // Check if user already exists
@@ -1936,6 +2108,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const createdUser = await storage.createUser({
         ...userData,
         password: hashedPassword,
+        isActive: false,
       });
       const generatedReferralCode = await ensureUserGrowthRecords(
         createdUser.id,
@@ -1949,18 +2122,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.logAnalytics({
         event: 'user_registered',
         userId: user.id,
-        metadata: { email: user.email, role: user.role },
+        metadata: { email: user.email, role: user.role, requiresEmailVerification: true },
         ipAddress: req.ip,
         userAgent: req.get("user-agent"),
       });
 
       broadcast('user_activity', { type: 'user_registered', user: buildPublicUser(user) });
 
-      setRefreshCookie(res, user);
+      const verificationUrl = `${getRequestBaseUrl(req)}/api/auth/verify-email/${signEmailVerificationToken(user)}`;
+      void sendAccountVerification({
+        email: user.email,
+        name: `${user.firstName} ${user.lastName}`.trim(),
+        verificationUrl,
+      });
 
       res.status(201).json({
-        message: 'User created successfully',
-        token: signToken(user),
+        message: 'Account created. Please verify your email before signing in.',
+        requiresEmailVerification: true,
         user: buildPublicUser(user),
       });
     } catch (error) {
@@ -2001,7 +2179,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (user.isActive === false) {
         registerLoginFailure(normalizedIdentifier);
-        return res.status(403).json({ message: 'This account is inactive. Contact the super administrator.' });
+        return res.status(403).json({ message: 'This account is inactive or email verification is still pending.' });
       }
 
       // Check password
@@ -2053,6 +2231,135 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/auth/register', registerHandler);
   app.post('/auth/login', loginHandler);
 
+  const verifyEmailHandler = async (req: Request, res: Response) => {
+    try {
+      const decoded = jwt.verify(req.params.token, JWT_SECRET) as JwtUser;
+      if (decoded.type !== "email_verification" || !decoded.id || !decoded.email || !decoded.pwd) {
+        return res.status(400).json({ message: "Invalid verification link" });
+      }
+
+      const user = await storage.getUser(Number(decoded.id));
+      if (!user || user.email.toLowerCase() !== decoded.email.toLowerCase()) {
+        return res.status(400).json({ message: "Invalid verification link" });
+      }
+
+      if (decoded.pwd !== passwordFingerprint(user.password)) {
+        return res.status(400).json({ message: "Verification link has expired" });
+      }
+
+      const verifiedUser = user.isActive === false
+        ? await storage.updateUser(user.id, { isActive: true })
+        : user;
+
+      await storage.logAnalytics({
+        event: "email_verified",
+        userId: verifiedUser.id,
+        metadata: { role: verifiedUser.role },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+
+      void sendWelcomeEmail({
+        email: verifiedUser.email,
+        name: `${verifiedUser.firstName} ${verifiedUser.lastName}`.trim(),
+        dashboardUrl: `${getRequestBaseUrl(req)}/dashboard`,
+      });
+
+      res.redirect(302, `${getRequestBaseUrl(req)}/login?verified=1`);
+    } catch (error) {
+      console.error("Email verification error:", getErrorLogMessage(error));
+      res.status(400).json({ message: "Verification link is invalid or expired" });
+    }
+  };
+
+  app.get('/api/auth/verify-email/:token', verifyEmailHandler);
+  app.get('/auth/verify-email/:token', verifyEmailHandler);
+
+  const forgotPasswordHandler = async (req: Request, res: Response) => {
+    try {
+      if (!guardPublicFlowRateLimit(req, res, "forgot_password", 5, 15 * 60 * 1000)) return;
+      const payload = forgotPasswordSchema.parse(req.body);
+      const user = await storage.getUserByEmail(payload.email);
+
+      if (user && user.isActive !== false) {
+        const resetUrl = `${getRequestBaseUrl(req)}/reset-password?token=${encodeURIComponent(signPasswordResetToken(user))}`;
+        void sendPasswordResetEmail({
+          email: user.email,
+          name: `${user.firstName} ${user.lastName}`.trim(),
+          resetUrl,
+        });
+        await storage.logAnalytics({
+          event: "password_reset_requested",
+          userId: user.id,
+          metadata: { email: user.email },
+          ipAddress: req.ip,
+          userAgent: req.get("user-agent"),
+        });
+      }
+
+      res.json({
+        message: "If an active account exists for that email, a password reset link has been sent.",
+      });
+    } catch (error) {
+      console.error("Forgot password error:", getErrorLogMessage(error));
+      res.status(400).json({ message: "Password reset request failed", error: getErrorMessage(error) });
+    }
+  };
+
+  const resetPasswordHandler = async (req: Request, res: Response) => {
+    try {
+      if (!guardPublicFlowRateLimit(req, res, "reset_password", 8, 15 * 60 * 1000)) return;
+      const payload = resetPasswordSchema.parse(req.body);
+      const decoded = jwt.verify(payload.token, JWT_SECRET) as JwtUser;
+      if (decoded.type !== "password_reset" || !decoded.id || !decoded.email || !decoded.pwd) {
+        return res.status(400).json({ message: "Invalid password reset token" });
+      }
+
+      const user = await storage.getUser(Number(decoded.id));
+      if (!user || user.email.toLowerCase() !== decoded.email.toLowerCase()) {
+        return res.status(400).json({ message: "Invalid password reset token" });
+      }
+
+      if (decoded.pwd !== passwordFingerprint(user.password)) {
+        return res.status(400).json({ message: "Password reset token has already been used or expired" });
+      }
+
+      const isSamePassword = await bcrypt.compare(payload.password, user.password);
+      if (isSamePassword) {
+        return res.status(400).json({ message: "Choose a new password that is different from your current password" });
+      }
+
+      const updatedUser = await storage.updateUser(user.id, {
+        password: await bcrypt.hash(payload.password, PASSWORD_HASH_ROUNDS),
+      });
+
+      await storage.logAnalytics({
+        event: "password_reset_completed",
+        userId: updatedUser.id,
+        metadata: { email: updatedUser.email },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+
+      void sendPasswordChangedEmail({
+        email: updatedUser.email,
+        name: `${updatedUser.firstName} ${updatedUser.lastName}`.trim(),
+        loginUrl: `${getRequestBaseUrl(req)}/login`,
+      });
+
+      clearRefreshCookie(res);
+      res.json({ message: "Password reset successful. Please sign in with your new password." });
+    } catch (error) {
+      console.error("Reset password error:", getErrorLogMessage(error));
+      res.status(400).json({ message: "Password reset failed", error: getErrorMessage(error) });
+    }
+  };
+
+  app.post('/api/auth/forgot-password', forgotPasswordHandler);
+  app.post('/auth/forgot-password', forgotPasswordHandler);
+  app.post('/api/auth/reset-password', resetPasswordHandler);
+  app.post('/auth/reset-password', resetPasswordHandler);
+
   const logoutHandler = (_req: Request, res: Response) => {
     clearRefreshCookie(res);
     res.json({ message: 'Logged out successfully' });
@@ -2066,7 +2373,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const decoded = jwt.verify(refreshToken, JWT_SECRET) as JwtUser & { type?: string };
-      if (decoded.type !== "refresh" || !decoded.id) {
+      if (decoded.type !== "refresh" || !decoded.id || !decoded.pwd) {
         clearRefreshCookie(res);
         return res.status(401).json({ message: "Invalid refresh token" });
       }
@@ -2075,6 +2382,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user || user.isActive === false) {
         clearRefreshCookie(res);
         return res.status(401).json({ message: "Invalid refresh token" });
+      }
+
+      if (decoded.pwd !== passwordFingerprint(user.password)) {
+        clearRefreshCookie(res);
+        return res.status(401).json({ message: "Refresh token expired. Please sign in again." });
       }
 
       setRefreshCookie(res, user);
@@ -7281,6 +7593,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/analytics/track', async (req, res) => {
+    try {
+      if (!guardPublicFlowRateLimit(req, res, "analytics_track", 60, 60_000)) return;
+      const payload = publicAnalyticsTrackSchema.parse(req.body);
+      const user = getOptionalAuthenticatedUser(req);
+      await storage.logAnalytics({
+        event: payload.event,
+        userId: user?.id ?? null,
+        metadata: {
+          ...payload.metadata,
+          source: payload.source ?? payload.metadata?.source,
+          landingPage: req.get("referer") || payload.metadata?.landingPage,
+        },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+      res.status(202).json({ message: "Event tracked" });
+    } catch (error) {
+      console.error("Public analytics tracking error:", getErrorLogMessage(error));
+      res.status(400).json({ message: "Failed to track event", error: getErrorMessage(error) });
+    }
+  });
+
   // Saved Items routes
   app.get('/api/saved-items', authenticateToken, async (req, res) => {
     try {
@@ -7346,13 +7681,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Newsletter / subscription routes
   app.post('/api/subscribers', async (req, res) => {
     try {
+      if (!guardPublicFlowRateLimit(req, res, "newsletter", 10, 10 * 60 * 1000)) return;
       const payload = subscriberRequestSchema.parse(req.body);
 
       // Honeypot spam trap. Return success without storing so bots get no signal.
       if (payload.website) {
+        await storage.logAnalytics({
+          event: "subscriber_spam_trapped",
+          metadata: { source: payload.source },
+          ipAddress: req.ip,
+          userAgent: req.get("user-agent"),
+        });
         return res.status(201).json({
           message: "Please check your inbox to confirm your subscription.",
         });
+      }
+
+      const recaptcha = await verifyRecaptcha(payload.recaptchaToken, req, "newsletter");
+      if (!recaptcha.ok) {
+        return res.status(400).json({ message: recaptcha.reason || "reCAPTCHA verification failed" });
       }
 
       const verificationToken = randomBytes(32).toString("hex");
@@ -7387,7 +7734,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await storage.logAnalytics({
         event: "subscriber_created",
-        metadata: { email: subscriber.email, source: payload.source },
+        metadata: {
+          email: subscriber.email,
+          source: payload.source,
+          preferences: subscriber.preferences,
+          recaptchaSkipped: "skipped" in recaptcha ? recaptcha.skipped : false,
+          recaptchaScore: "score" in recaptcha ? recaptcha.score : undefined,
+        },
         ipAddress: req.ip,
         userAgent: req.get("user-agent"),
       });
@@ -7490,28 +7843,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/admin/subscribers/export', authenticateToken, requireAdmin, async (_req, res) => {
+    try {
+      const subscribers = await storage.getAllSubscribers();
+      const rows = [
+        ["id", "email", "name", "status", "preferences", "source", "verifiedAt", "unsubscribedAt", "createdAt"],
+        ...subscribers.map((subscriber) => [
+          subscriber.id,
+          subscriber.email,
+          subscriber.name ?? "",
+          subscriber.status,
+          Array.isArray(subscriber.preferences) ? subscriber.preferences.join(";") : "",
+          subscriber.source ?? "",
+          subscriber.verifiedAt?.toISOString?.() ?? "",
+          subscriber.unsubscribedAt?.toISOString?.() ?? "",
+          subscriber.createdAt?.toISOString?.() ?? "",
+        ]),
+      ];
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", "attachment; filename=\"mtendere-subscribers.csv\"");
+      res.send(rows.map((row) => row.map(escapeCsvValue).join(",")).join("\n"));
+    } catch (error) {
+      console.error("Subscriber export error:", error);
+      res.status(500).json({ message: "Failed to export subscribers" });
+    }
+  });
+
   // Messages / Contact routes
   app.post('/api/messages', async (req, res) => {
     try {
-      const messageData = insertMessageSchema.parse(req.body);
+      if (!guardPublicFlowRateLimit(req, res, "contact", 6, 10 * 60 * 1000)) return;
+      const payload = contactMessageRequestSchema.parse(req.body);
+
+      // Honeypot spam trap. Return success without storing so automated spam gets no signal.
+      if (payload.website) {
+        await storage.logAnalytics({
+          event: "contact_spam_trapped",
+          metadata: { category: payload.inquiryCategory, source: payload.source },
+          ipAddress: req.ip,
+          userAgent: req.get("user-agent"),
+        });
+        return res.status(201).json({
+          message: "Message sent successfully",
+          ticketCode: "MEC-RECEIVED",
+        });
+      }
+
+      const recaptcha = await verifyRecaptcha(payload.recaptchaToken, req, "contact");
+      if (!recaptcha.ok) {
+        return res.status(400).json({ message: recaptcha.reason || "reCAPTCHA verification failed" });
+      }
+
+      const messageData = insertMessageSchema.parse({
+        name: payload.name,
+        email: payload.email,
+        phone: payload.phone || null,
+        subject: `[${payload.inquiryCategory}] ${payload.subject}`,
+        message: payload.message,
+      });
       const message = await storage.createMessage(messageData);
+      const ticketCode = `MEC-CONTACT-${String(message.id).padStart(6, "0")}`;
       void sendContactAcknowledgement({
         email: message.email,
         name: message.name,
-        subject: message.subject,
+        subject: `${message.subject} (${ticketCode})`,
       });
       void sendAdminNotification({
-        subject: "New Mtendere contact message",
-        message: `${message.name} (${message.email}) sent: ${message.subject || "General inquiry"}`,
-        metadata: { messageId: message.id },
+        subject: `New Mtendere contact message ${ticketCode}`,
+        message: `${message.name} (${message.email}) submitted ${message.subject || "General inquiry"}. Phone: ${message.phone || "not provided"}.`,
+        metadata: { messageId: message.id, ticketCode, category: payload.inquiryCategory },
       });
       await storage.logAnalytics({
         event: "contact_message_submitted",
-        metadata: { messageId: message.id, subject: message.subject },
+        metadata: {
+          messageId: message.id,
+          ticketCode,
+          subject: message.subject,
+          category: payload.inquiryCategory,
+          source: payload.source,
+          landingPage: payload.landingPage,
+          referrer: payload.referrer,
+          campaign: payload.campaign,
+          utmSource: payload.utmSource,
+          utmMedium: payload.utmMedium,
+          utmCampaign: payload.utmCampaign,
+          utmTerm: payload.utmTerm,
+          utmContent: payload.utmContent,
+          consentAccepted: payload.consentAccepted,
+          recaptchaSkipped: "skipped" in recaptcha ? recaptcha.skipped : false,
+          recaptchaScore: "score" in recaptcha ? recaptcha.score : undefined,
+        },
         ipAddress: req.ip,
         userAgent: req.get("user-agent"),
       });
-      res.status(201).json({ message: 'Message sent successfully', data: message });
+      res.status(201).json({ message: 'Message sent successfully', ticketCode, data: message });
     } catch (error) {
       console.error('Message creation error:', error);
       res.status(400).json({ message: 'Failed to send message', error: getErrorMessage(error) });
@@ -7556,6 +7981,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Admin messages fetch error:", error);
       res.status(500).json({ message: "Failed to fetch messages" });
+    }
+  });
+
+  app.get('/api/admin/messages/export', authenticateToken, requireAdmin, async (_req, res) => {
+    try {
+      const messages = await storage.getAllMessages();
+      const rows = [
+        ["id", "name", "email", "phone", "subject", "message", "isRead", "createdAt"],
+        ...messages.map((message) => [
+          message.id,
+          message.name,
+          message.email,
+          message.phone ?? "",
+          message.subject ?? "",
+          message.message,
+          message.isRead ? "yes" : "no",
+          message.createdAt?.toISOString?.() ?? "",
+        ]),
+      ];
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", "attachment; filename=\"mtendere-contact-messages.csv\"");
+      res.send(rows.map((row) => row.map(escapeCsvValue).join(",")).join("\n"));
+    } catch (error) {
+      console.error("Messages export error:", error);
+      res.status(500).json({ message: "Failed to export messages" });
     }
   });
 

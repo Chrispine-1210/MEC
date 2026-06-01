@@ -51,6 +51,7 @@ const envSchema = z.object({
   EMAIL_API_URL: optionalEnvString,
   EMAIL_API_KEY: optionalEnvString,
   ADMIN_NOTIFICATION_EMAIL: optionalEnvString,
+  RECAPTCHA_SECRET_KEY: optionalEnvString,
   REDIS_URL: optionalEnvString,
   SENTRY_DSN: optionalEnvString,
   SENTRY_ENVIRONMENT: optionalEnvString,

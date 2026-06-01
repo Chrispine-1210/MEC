@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { getInitialUrlSearchParam } from "@/hooks/use-url-search-param";
-import { CheckCheck, Eye, Inbox, Mail, MessageSquare, Phone, RefreshCw, User } from "lucide-react";
+import { CheckCheck, Download, Eye, Inbox, Mail, MessageSquare, Phone, RefreshCw, User } from "lucide-react";
 
 type AdminMessage = {
   id: number;
@@ -67,6 +67,26 @@ export default function MessagesPage() {
       toast({ title: "Update failed", description: "Could not update this message.", variant: "destructive" });
     },
   });
+
+  const handleExport = async () => {
+    try {
+      const response = await authFetch("/api/admin/messages/export");
+      if (!response.ok) throw new Error("Failed to export messages");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "mtendere-contact-messages.csv";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Could not export messages.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const columns = [
     {
@@ -144,10 +164,16 @@ export default function MessagesPage() {
             <p className="text-muted-foreground">Search, triage, and review contact inquiries.</p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2">
-          <RefreshCw className="h-4 w-4" />
-          Refresh
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" className="gap-2" onClick={handleExport}>
+            <Download className="h-4 w-4" />
+            Export CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">

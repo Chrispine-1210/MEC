@@ -35,6 +35,7 @@ export default function Register() {
     username: "",
     password: "",
     confirmPassword: "",
+    acceptTerms: false,
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -43,8 +44,8 @@ export default function Register() {
   const { register } = useAuth();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, type, value, checked } = e.target;
+    setFormData(prev => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
     // Clear error when user starts typing
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: "" }));
@@ -86,6 +87,10 @@ export default function Register() {
       newErrors.confirmPassword = "Passwords do not match";
     }
 
+    if (!formData.acceptTerms) {
+      newErrors.acceptTerms = "You must accept the terms and privacy policy";
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -106,11 +111,12 @@ export default function Register() {
         email: formData.email.trim().toLowerCase(),
         username: formData.username.trim(),
         password: formData.password,
+        consentAccepted: formData.acceptTerms,
         referralCode: referralCode || undefined,
       });
 
       if (success) {
-        setLocation("/dashboard");
+        setLocation("/login?registered=1");
       }
     } catch (error) {
       console.error("Registration error:", error);
@@ -242,9 +248,28 @@ export default function Register() {
                 <p className="text-sm text-destructive">{errors.password}</p>
               )}
               {!errors.password && (
-                <p className="text-xs text-muted-foreground">
-                  Use 12+ characters with uppercase, lowercase, number, and symbol.
-                </p>
+                <div className="space-y-1">
+                  <div className="h-2 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-mtendere-green transition-all"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          [
+                            formData.password.length >= 12,
+                            /[a-z]/.test(formData.password),
+                            /[A-Z]/.test(formData.password),
+                            /[0-9]/.test(formData.password),
+                            /[^A-Za-z0-9]/.test(formData.password),
+                          ].filter(Boolean).length * 20,
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Use 12+ characters with uppercase, lowercase, number, and symbol.
+                  </p>
+                </div>
               )}
             </div>
 
@@ -280,6 +305,26 @@ export default function Register() {
               </div>
               {errors.confirmPassword && (
                 <p className="text-sm text-destructive">{errors.confirmPassword}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="flex items-start gap-3 text-sm text-muted-foreground">
+                <input
+                  name="acceptTerms"
+                  type="checkbox"
+                  checked={formData.acceptTerms}
+                  onChange={handleChange}
+                  disabled={isLoading}
+                  className="mt-1 h-4 w-4 rounded border-border"
+                  required
+                />
+                <span>
+                  I agree to Mtendere contacting me about my account, applications, and requested services, and I accept the privacy policy.
+                </span>
+              </label>
+              {errors.acceptTerms && (
+                <p className="text-sm text-destructive">{errors.acceptTerms}</p>
               )}
             </div>
 

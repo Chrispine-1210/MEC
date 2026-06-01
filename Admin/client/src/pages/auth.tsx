@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -33,30 +32,7 @@ const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
-const registerSchema = z.object({
-  username: z.string().min(3, "Username must be at least 3 characters"),
-  email: z.string().email("Invalid email address"),
-  password: z
-    .string()
-    .min(12, "Password must be at least 12 characters")
-    .max(128, "Password must be 128 characters or fewer")
-    .regex(/[a-z]/, "Password must include a lowercase letter")
-    .regex(/[A-Z]/, "Password must include an uppercase letter")
-    .regex(/[0-9]/, "Password must include a number")
-    .regex(/[^A-Za-z0-9]/, "Password must include a symbol"),
-  firstName: z.string().min(1, "First name is required"),
-  lastName: z.string().min(1, "Last name is required"),
-  role: z.enum(["viewer", "writer"]).default("viewer"),
-});
-
-type RegisterFormValues = z.infer<typeof registerSchema>;
-type RegistrationConflictPayload = {
-  message?: string;
-  fields?: Partial<Record<keyof RegisterFormValues, string>>;
-};
-
-const adminAuthPath = (path: string) =>
-  path === "/register" ? "/api/auth/admin/register" : `/api/auth${path}`;
+const adminAuthPath = (path: string) => `/api/auth${path}`;
 
 export default function AuthPage() {
   const [, setLocation] = useLocation();
@@ -72,11 +48,6 @@ export default function AuthPage() {
   const loginForm = useForm({
     resolver: zodResolver(loginSchema),
     defaultValues: { username: "", password: "" },
-  });
-
-  const registerForm = useForm<RegisterFormValues>({
-    resolver: zodResolver(registerSchema),
-    defaultValues: { username: "", email: "", password: "", firstName: "", lastName: "", role: "viewer" as const },
   });
 
   async function finalizeSession(token: string, user: User) {
@@ -177,28 +148,6 @@ export default function AuthPage() {
     }
   }
 
-  async function onRegister(data: RegisterFormValues) {
-    setIsLoading(true);
-    try {
-      setPendingCredentials({ username: data.username, password: data.password });
-      const res = await apiRequest("POST", adminAuthPath("/register"), data);
-      const { token, user } = await res.json();
-      await finalizeSession(token, user);
-    } catch (error: any) {
-      const payload = error?.payload as RegistrationConflictPayload | undefined;
-      if (payload?.fields) {
-        Object.entries(payload.fields).forEach(([field, message]) => {
-          if (message) {
-            registerForm.setError(field as keyof RegisterFormValues, { message });
-          }
-        });
-      }
-      toast({ variant: "destructive", title: "Registration failed", description: error.message });
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
   async function copyMfaSecret() {
     if (!pendingMfaSetup) return;
     try {
@@ -264,16 +213,15 @@ export default function AuthPage() {
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="login">
-                <TabsList className="grid w-full grid-cols-2 mb-6">
+                <TabsList className="grid w-full grid-cols-1 mb-6">
                   <TabsTrigger value="login">Sign In</TabsTrigger>
-                  <TabsTrigger value="register">Create Account</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="login" className="space-y-4">
                   <Alert className="bg-primary/10 border-primary/20">
                       <Info className="h-4 w-4 text-primary" />
                     <AlertDescription className="text-primary text-xs">
-                      Sign in with an existing portal account, or create a Viewer or Writer account below.
+                      Sign in with an account created by the super administrator.
                     </AlertDescription>
                   </Alert>
 
@@ -308,77 +256,6 @@ export default function AuthPage() {
                     </form>
                   </Form>
 
-                </TabsContent>
-
-                <TabsContent value="register" className="space-y-4">
-                  <Form {...registerForm}>
-                    <form onSubmit={registerForm.handleSubmit(onRegister)} className="space-y-4">
-                      <div className="grid grid-cols-2 gap-3">
-                        <FormField control={registerForm.control} name="firstName" render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>First Name</FormLabel>
-                            <FormControl><Input autoComplete="given-name" placeholder="First name" {...field} /></FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )} />
-                        <FormField control={registerForm.control} name="lastName" render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Last Name</FormLabel>
-                            <FormControl><Input autoComplete="family-name" placeholder="Last name" {...field} /></FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )} />
-                      </div>
-                      <FormField control={registerForm.control} name="username" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Username</FormLabel>
-                          <FormControl><Input autoComplete="username" placeholder="Choose a username" {...field} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )} />
-                      <FormField control={registerForm.control} name="email" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Email Address</FormLabel>
-                          <FormControl><Input autoComplete="email" type="email" placeholder="your@email.com" {...field} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )} />
-                      <FormField control={registerForm.control} name="password" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Password</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <Input autoComplete="new-password" type={showPassword ? "text" : "password"} placeholder="12+ chars with number & symbol" {...field} />
-                              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 hover:text-muted-foreground">
-                                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                              </button>
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )} />
-                      <FormField control={registerForm.control} name="role" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Role</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select a role" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="viewer">Viewer - Read-only access</SelectItem>
-                              <SelectItem value="writer">Writer - Create & edit content</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )} />
-                      <Button type="submit" className="w-full" disabled={isLoading} size="lg">
-                        {isLoading ? "Creating account..." : "Create Account"}
-                      </Button>
-                    </form>
-                  </Form>
                 </TabsContent>
               </Tabs>
 

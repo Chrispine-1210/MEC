@@ -10,6 +10,7 @@ import { getGovernedBackgroundImage } from "@/lib/image-governance";
 
 export default function Login() {
   const [, setLocation] = useLocation();
+  const notice = new URLSearchParams(window.location.search);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -91,6 +92,15 @@ export default function Login() {
           <div className="mb-8">
             <h1 className="mb-2 text-3xl font-black text-foreground">Welcome back</h1>
             <p className="text-muted-foreground">Sign in to continue your educational journey</p>
+            {(notice.get("verified") || notice.get("registered") || notice.get("reset")) && (
+              <p className="mt-3 rounded-lg border border-mtendere-green/25 bg-mtendere-green/10 p-3 text-sm text-mtendere-green">
+                {notice.get("reset")
+                  ? "Your password has been reset. Sign in with your new password."
+                  : notice.get("verified")
+                    ? "Your email has been verified. You can sign in now."
+                    : "Account created. Check your email to verify your account before signing in."}
+              </p>
+            )}
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -116,6 +126,9 @@ export default function Login() {
                 <Label htmlFor="password" className="text-sm font-semibold text-foreground/80">
                   Password
                 </Label>
+                <Link href="/forgot-password" className="text-xs font-semibold text-mtendere-blue hover:underline">
+                  Forgot password?
+                </Link>
               </div>
               <div className="relative">
                 <Input

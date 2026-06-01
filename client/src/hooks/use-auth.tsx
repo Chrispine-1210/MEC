@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, clearLocalAuthSession, refreshAuthSession } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 interface User {
@@ -19,7 +19,7 @@ interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<boolean>;
   register: (userData: any) => Promise<boolean>;
-  logout: () => void;
+  logout: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -48,8 +48,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const userData = await response.json();
       setUser(userData);
     } catch (error) {
-      console.error("Failed to fetch user profile:", error);
-      localStorage.removeItem("token");
+      const refreshed = await refreshAuthSession();
+      if (refreshed) {
+        try {
+          const response = await apiRequest("GET", "/api/user/profile");
+          const userData = await response.json();
+          setUser(userData);
+          return;
+        } catch (retryError) {
+          console.error("Failed to fetch user profile after refresh:", retryError);
+        }
+      } else {
+        console.error("Failed to fetch user profile:", error);
+      }
+      clearLocalAuthSession();
     } finally {
       setIsLoading(false);
     }
@@ -84,13 +96,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const response = await apiRequest("POST", "/api/auth/register", userData);
       const data = await response.json();
-      
-      localStorage.setItem("token", data.token);
-      setUser(data.user);
-      
+
+      if (data.token) {
+        localStorage.setItem("token", data.token);
+        setUser(data.user);
+      }
+
       toast({
-        title: "Welcome to Mtendere!",
-        description: "Your account has been created successfully.",
+        title: data.requiresEmailVerification ? "Verify your email" : "Welcome to Mtendere!",
+        description:
+          data.message ||
+          (data.requiresEmailVerification
+            ? "Check your inbox and verify your email before signing in."
+            : "Your account has been created successfully."),
       });
       
       return true;
@@ -105,8 +123,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem("token");
+  const logout = async () => {
+    try {
+      await apiRequest("POST", "/api/auth/logout");
+    } catch (error) {
+      console.error("Logout request failed:", error);
+    }
+    clearLocalAuthSession();
     setUser(null);
     toast({
       title: "Logged out",

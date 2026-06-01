@@ -9,6 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { getAttributionMetadata, trackConversionEvent } from "@/lib/conversion-tracking";
+import { getRecaptchaToken } from "@/lib/recaptcha";
 import { socialLinks } from "@/lib/social-links";
 import { 
   MapPin, 
@@ -34,35 +36,79 @@ export default function Contact() {
     subject: "",
     message: "",
     inquiryType: "",
+    website: "",
+    consentAccepted: false,
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [hasTrackedStart, setHasTrackedStart] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const target = e.target;
+    const isCheckbox = target instanceof HTMLInputElement && target.type === "checkbox";
+    const name = target.name;
+    setFormData(prev => ({ ...prev, [name]: isCheckbox ? target.checked : target.value }));
+    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: "" }));
+    if (!hasTrackedStart && name !== "website") {
+      setHasTrackedStart(true);
+      trackConversionEvent("contact_form_started", { form: "contact" });
+    }
   };
 
   const handleSelectChange = (name: string, value: string) => {
     setFormData(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: "" }));
+    if (!hasTrackedStart) {
+      setHasTrackedStart(true);
+      trackConversionEvent("contact_form_started", { form: "contact" });
+    }
+  };
+
+  const validateForm = () => {
+    const nextErrors: Record<string, string> = {};
+    if (formData.name.trim().length < 2) nextErrors.name = "Full name is required";
+    if (!/^\S+@\S+\.\S+$/.test(formData.email.trim())) nextErrors.email = "Valid email is required";
+    if (!formData.inquiryType) nextErrors.inquiryType = "Inquiry type is required";
+    if (formData.subject.trim().length < 2) nextErrors.subject = "Subject is required";
+    if (formData.message.trim().length < 10) nextErrors.message = "Message must be at least 10 characters";
+    if (!formData.consentAccepted) nextErrors.consentAccepted = "Please accept the privacy consent";
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateForm()) return;
     setIsLoading(true);
 
     try {
-      await apiRequest("POST", "/api/messages", {
-        name: formData.name,
-        email: formData.email,
+      const recaptchaToken = await getRecaptchaToken("contact");
+      const response = await apiRequest("POST", "/api/messages", {
+        name: formData.name.trim(),
+        email: formData.email.trim().toLowerCase(),
         phone: formData.phone || null,
-        subject: formData.inquiryType ? `${formData.inquiryType}: ${formData.subject}` : formData.subject,
-        message: formData.message,
+        subject: formData.subject.trim(),
+        inquiryCategory: formData.inquiryType,
+        message: formData.message.trim(),
+        website: formData.website,
+        consentAccepted: formData.consentAccepted,
+        recaptchaToken,
+        source: "contact_page",
+        ...getAttributionMetadata(),
+      });
+      const payload = await response.json();
+      trackConversionEvent("contact_form_completed", {
+        form: "contact",
+        ticketCode: payload.ticketCode,
+        category: formData.inquiryType,
       });
       
       toast({
         title: "Message Sent Successfully",
-        description: "Thank you for contacting us. We'll get back to you within 24 hours.",
+        description: payload.ticketCode
+          ? `Thank you for contacting us. Your ticket is ${payload.ticketCode}.`
+          : "Thank you for contacting us. We'll get back to you within 24 hours.",
       });
 
       // Reset form
@@ -73,6 +119,8 @@ export default function Contact() {
         subject: "",
         message: "",
         inquiryType: "",
+        website: "",
+        consentAccepted: false,
       });
     } catch (error) {
       toast({
@@ -226,17 +274,28 @@ export default function Contact() {
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <input
+                      tabIndex={-1}
+                      autoComplete="off"
+                      name="website"
+                      value={formData.website}
+                      onChange={handleChange}
+                      className="hidden"
+                      aria-hidden="true"
+                    />
                     <div className="space-y-2">
                       <Label htmlFor="name">Full Name *</Label>
                       <Input
                         id="name"
                         name="name"
+                        autoComplete="name"
                         placeholder="Enter your full name"
                         value={formData.name}
                         onChange={handleChange}
                         required
                         disabled={isLoading}
                       />
+                      {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
                     </div>
 
                     <div className="space-y-2">
@@ -245,12 +304,14 @@ export default function Contact() {
                         id="email"
                         name="email"
                         type="email"
+                        autoComplete="email"
                         placeholder="Enter your email"
                         value={formData.email}
                         onChange={handleChange}
                         required
                         disabled={isLoading}
                       />
+                      {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
                     </div>
                   </div>
 
@@ -261,6 +322,7 @@ export default function Contact() {
                         id="phone"
                         name="phone"
                         type="tel"
+                        autoComplete="tel"
                         placeholder="Enter your phone number"
                         value={formData.phone}
                         onChange={handleChange}
@@ -286,6 +348,7 @@ export default function Contact() {
                           ))}
                         </SelectContent>
                       </Select>
+                      {errors.inquiryType && <p className="text-sm text-destructive">{errors.inquiryType}</p>}
                     </div>
                   </div>
 
@@ -300,6 +363,7 @@ export default function Contact() {
                       required
                       disabled={isLoading}
                     />
+                    {errors.subject && <p className="text-sm text-destructive">{errors.subject}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -314,6 +378,25 @@ export default function Contact() {
                       disabled={isLoading}
                       rows={6}
                     />
+                    {errors.message && <p className="text-sm text-destructive">{errors.message}</p>}
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="flex items-start gap-3 text-sm text-muted-foreground">
+                      <input
+                        name="consentAccepted"
+                        type="checkbox"
+                        checked={formData.consentAccepted}
+                        onChange={handleChange}
+                        disabled={isLoading}
+                        className="mt-1 h-4 w-4 rounded border-border"
+                        required
+                      />
+                      <span>
+                        I agree that Mtendere may store this inquiry and contact me about my request.
+                      </span>
+                    </label>
+                    {errors.consentAccepted && <p className="text-sm text-destructive">{errors.consentAccepted}</p>}
                   </div>
 
                   <Button

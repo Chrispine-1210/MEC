@@ -46,9 +46,34 @@ export function resolveApiUrl(input: RequestInfo | URL): RequestInfo | URL {
   if (!input.startsWith("/") || absoluteUrlPattern.test(input)) return input;
 
   const apiOrigin = getApiOrigin();
+  const bridgedInput = resolveVercelFunctionBridgePath(input);
+  if (bridgedInput) return apiOrigin ? `${apiOrigin}${bridgedInput}` : bridgedInput;
   if (apiOrigin) return `${apiOrigin}${input}`;
 
   return input;
+}
+
+const bridgedPrefixes = ["/api/", "/auth/", "/uploads/", "/media-assets/", "/ws"];
+
+const isVercelHostedBrowser = () => {
+  if (typeof window === "undefined") return false;
+  const hostname = window.location.hostname.toLowerCase();
+  return (
+    hostname === "mtendereeducationconsult.com" ||
+    hostname.endsWith(".mtendereeducationconsult.com") ||
+    hostname.endsWith(".vercel.app")
+  );
+};
+
+function resolveVercelFunctionBridgePath(input: string) {
+  if (!import.meta.env.PROD || !isVercelHostedBrowser()) return "";
+  if (input.startsWith("/api/index.js")) return "";
+  if (!bridgedPrefixes.some((prefix) => input === prefix.slice(0, -1) || input.startsWith(prefix))) return "";
+
+  const url = new URL(input, "https://bridge.local");
+  const cleanPath = url.pathname.replace(/^\/+/, "");
+  url.searchParams.set("__mec_path", cleanPath);
+  return `/api/index.js?${url.searchParams.toString()}`;
 }
 
 export async function apiFetch(input: RequestInfo | URL, init?: RequestInit) {
