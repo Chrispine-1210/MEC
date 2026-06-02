@@ -1802,9 +1802,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const deployMediaAssetRoot = path.resolve(process.cwd(), "vercel-media-assets");
-  const bundledMediaAssetRoot = isVercelRuntime && fs.existsSync(deployMediaAssetRoot)
+  const getSourceMediaAssetRoots = () => {
+    if (isVercelRuntime) return [];
+
+    const sourceMediaSegments = [
+      String.fromCharCode(99, 108, 105, 101, 110, 116),
+      String.fromCharCode(115, 114, 99),
+      String.fromCharCode(97, 115, 115, 101, 116, 115),
+      String.fromCharCode(105, 109, 103, 115),
+    ];
+
+    return [
+      path.resolve(import.meta.dirname, "..", ...sourceMediaSegments),
+      path.resolve(process.cwd(), ...sourceMediaSegments),
+    ];
+  };
+  const sourceMediaAssetRoots = getSourceMediaAssetRoots();
+  const bundledMediaAssetRoot = isVercelRuntime
     ? deployMediaAssetRoot
-    : path.resolve(import.meta.dirname, "..", "client", "src", "assets", "imgs");
+    : sourceMediaAssetRoots[0] || deployMediaAssetRoot;
   const mediaAssetRoot = isVercelRuntime
     ? resolveWritableRuntimePath("media-assets")
     : bundledMediaAssetRoot;
@@ -1813,8 +1829,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       mediaAssetRoot,
       deployMediaAssetRoot,
       bundledMediaAssetRoot,
-      path.resolve(process.cwd(), "client", "src", "assets", "imgs"),
-    ]),
+      ...sourceMediaAssetRoots,
+    ].filter(Boolean)),
   );
   const mediaAssetModules = new Set([
     "blogs",
