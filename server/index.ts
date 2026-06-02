@@ -6,6 +6,7 @@ import { env } from "./env";
 import helmet from "helmet";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { registerRoutes } from "./routes";
+import { renderSeoHtml, shouldNoindexPath } from "./seo-render";
 
 export const app = express();
 const isProduction = env.NODE_ENV === "production";
@@ -33,10 +34,10 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com", "https://www.googletagmanager.com", "https://www.google-analytics.com"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        imgSrc: ["'self'", "data:", "https:"],
-        connectSrc: ["'self'", "https:", "ws:", "wss:"],
+        imgSrc: ["'self'", "data:", "https:", "https://www.google-analytics.com"],
+        connectSrc: ["'self'", "https:", "https://www.google-analytics.com", "https://region1.google-analytics.com", "ws:", "wss:"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         mediaSrc: ["'self'", "https:"],
         frameSrc: [
@@ -57,6 +58,13 @@ app.use(
 );
 
 app.set("trust proxy", true);
+
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (shouldNoindexPath(req.path)) {
+    res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
+  }
+  next();
+});
 
 const splitOriginList = (value?: string) =>
   (value ?? "")
@@ -390,9 +398,22 @@ export const ready = (async () => {
       });
     }
 
-    app.use(express.static(clientDistPath));
-    app.get("*", (_req, res) => {
-      res.sendFile(path.join(clientDistPath, "index.html"));
+    const clientIndexPath = path.join(clientDistPath, "index.html");
+    app.use(
+      express.static(clientDistPath, {
+        index: false,
+        maxAge: "1y",
+        immutable: true,
+      }),
+    );
+    app.get("*", async (req, res) => {
+      try {
+        const html = await fs.promises.readFile(clientIndexPath, "utf8");
+        res.type("html").send(await renderSeoHtml(req, html));
+      } catch (error) {
+        console.error("SEO HTML render error:", error);
+        res.sendFile(clientIndexPath);
+      }
     });
   }
 

@@ -5,7 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Users as UsersIcon, FileText, GraduationCap, Briefcase, Building2, BookOpen, BarChart2 } from "lucide-react";
+import { TrendingUp, Users as UsersIcon, FileText, GraduationCap, Briefcase, Building2, BookOpen, BarChart2, Search, Image, ShieldCheck, Globe2 } from "lucide-react";
 
 const COLORS = [
   "hsl(var(--chart-1))",
@@ -21,6 +21,22 @@ export default function AnalyticsPage() {
     queryFn: async () => {
       const res = await authFetch("/api/admin/dashboard/stats");
       if (!res.ok) throw new Error("Failed to fetch stats");
+      return res.json();
+    },
+  });
+  const { data: seoAudit, isLoading: seoAuditLoading } = useQuery<any>({
+    queryKey: ["/api/admin/seo/audit"],
+    queryFn: async () => {
+      const res = await authFetch("/api/admin/seo/audit");
+      if (!res.ok) throw new Error("Failed to fetch SEO audit");
+      return res.json();
+    },
+  });
+  const { data: seoAnalytics, isLoading: seoAnalyticsLoading } = useQuery<any>({
+    queryKey: ["/api/admin/seo/analytics"],
+    queryFn: async () => {
+      const res = await authFetch("/api/admin/seo/analytics");
+      if (!res.ok) throw new Error("Failed to fetch SEO analytics");
       return res.json();
     },
   });
@@ -83,6 +99,71 @@ export default function AnalyticsPage() {
           </Card>
         ))}
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Search className="h-5 w-5 text-primary" />
+            SEO Governance
+          </CardTitle>
+          <CardDescription>Indexability, image search coverage, metadata health, and webmaster integrations</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {seoAuditLoading || seoAnalyticsLoading ? (
+            <Skeleton className="h-36 w-full" />
+          ) : (
+            <>
+              <div className="grid gap-4 md:grid-cols-4">
+                {[
+                  { label: "Indexable URLs", value: seoAnalytics?.organicTrafficProxy?.publicIndexableUrls ?? 0, icon: Globe2 },
+                  { label: "Image URLs", value: seoAnalytics?.organicTrafficProxy?.imageSitemapUrls ?? 0, icon: Image },
+                  { label: "Search Queries", value: seoAnalytics?.organicTrafficProxy?.siteSearches ?? 0, icon: Search },
+                  { label: "Audit Issues", value: seoAudit?.summary?.issues ?? 0, icon: ShieldCheck },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-lg border bg-muted/30 p-4">
+                    <item.icon className="mb-3 h-5 w-5 text-primary" />
+                    <div className="text-2xl font-bold">{item.value}</div>
+                    <p className="text-xs text-muted-foreground">{item.label}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+                <div className="rounded-lg border p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h2 className="text-base font-semibold text-foreground">Top Search Queries</h2>
+                    <Badge variant="outline">{seoAnalytics?.window?.start?.slice(0, 10)} to {seoAnalytics?.window?.end?.slice(0, 10)}</Badge>
+                  </div>
+                  {(seoAnalytics?.organicTrafficProxy?.topSearchQueries ?? []).length ? (
+                    <div className="space-y-2">
+                      {seoAnalytics.organicTrafficProxy.topSearchQueries.slice(0, 6).map((item: any) => (
+                        <div key={item.query} className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2 text-sm">
+                          <span className="font-medium">{item.query}</span>
+                          <Badge>{item.count}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No internal search-query data has been captured yet.</p>
+                  )}
+                </div>
+                <div className="rounded-lg border p-4">
+                  <h2 className="mb-3 text-base font-semibold text-foreground">Integrations</h2>
+                  <div className="space-y-2">
+                    {Object.entries(seoAnalytics?.integrations ?? {}).map(([key, enabled]) => (
+                      <div key={key} className="flex items-center justify-between text-sm">
+                        <span className="capitalize text-muted-foreground">{key.replace(/([A-Z])/g, " $1")}</span>
+                        <Badge className={enabled ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}>
+                          {enabled ? "Ready" : "Missing"}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -1971,6 +1971,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     priority?: string;
     images?: SitemapImage[];
   };
+  type PublicSitemapData = {
+    pages: SitemapUrl[];
+    scholarships: SitemapUrl[];
+    jobs: SitemapUrl[];
+    blog: SitemapUrl[];
+    events: SitemapUrl[];
+    partners: SitemapUrl[];
+    team: SitemapUrl[];
+  };
+
+  const sitemapDefaultImages = {
+    logo: "/media-assets/logos/Mtendere_Logo.png",
+    home: "/media-assets/programs/international-studies.jpg",
+    scholarship: "/media-assets/scholarships/application-guidance.jpg",
+    job: "/media-assets/jobs/corporate.jpg",
+    blog: "/media-assets/blogs/application-guidance.jpg",
+    event: "/media-assets/events/IMG-20250321-WA0250.jpg",
+    partner: "/media-assets/partners/cu-logo-white.webp",
+    team: "/media-assets/teams/ms-brenda.jpg",
+    about: "/media-assets/misc/about-mtendere.jpg",
+    service: "/media-assets/programs/students-campus.jpg",
+  };
 
   const sitemapPaths = [
     "/pages-sitemap.xml",
@@ -1979,24 +2001,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/blog-sitemap.xml",
     "/events-sitemap.xml",
     "/partners-sitemap.xml",
+    "/team-sitemap.xml",
     "/images-sitemap.xml",
   ];
 
   const staticSitemapPages = [
-    { path: "/", changefreq: "weekly" as const, priority: "1.0", title: "Mtendere Education Consult" },
-    { path: "/scholarships", changefreq: "daily" as const, priority: "0.9", title: "Scholarships" },
-    { path: "/jobs", changefreq: "daily" as const, priority: "0.9", title: "Jobs" },
-    { path: "/resume-building", changefreq: "monthly" as const, priority: "0.75", title: "AI CV Builder" },
-    { path: "/events", changefreq: "daily" as const, priority: "0.85", title: "Events" },
-    { path: "/partners", changefreq: "weekly" as const, priority: "0.8", title: "Partners" },
-    { path: "/partnership-opportunities", changefreq: "monthly" as const, priority: "0.7", title: "Partnership Opportunities" },
-    { path: "/blog", changefreq: "daily" as const, priority: "0.85", title: "Blog" },
-    { path: "/team", changefreq: "monthly" as const, priority: "0.65", title: "Team" },
-    { path: "/about", changefreq: "monthly" as const, priority: "0.7", title: "About" },
-    { path: "/contact", changefreq: "monthly" as const, priority: "0.7", title: "Contact" },
-    { path: "/study-abroad", changefreq: "monthly" as const, priority: "0.8", title: "Study Abroad" },
-    { path: "/university-applications", changefreq: "monthly" as const, priority: "0.75", title: "University Applications" },
-    { path: "/career-counseling", changefreq: "monthly" as const, priority: "0.75", title: "Career Counseling" },
+    { path: "/", changefreq: "weekly" as const, priority: "1.0", title: "Mtendere Education Consult", image: sitemapDefaultImages.home },
+    { path: "/scholarships", changefreq: "daily" as const, priority: "0.9", title: "Scholarships", image: sitemapDefaultImages.scholarship },
+    { path: "/jobs", changefreq: "daily" as const, priority: "0.9", title: "Jobs", image: sitemapDefaultImages.job },
+    { path: "/resume-building", changefreq: "monthly" as const, priority: "0.75", title: "AI CV Builder", image: sitemapDefaultImages.job },
+    { path: "/events", changefreq: "daily" as const, priority: "0.85", title: "Events", image: sitemapDefaultImages.event },
+    { path: "/partners", changefreq: "weekly" as const, priority: "0.8", title: "Partners", image: sitemapDefaultImages.partner },
+    { path: "/partnership-opportunities", changefreq: "monthly" as const, priority: "0.7", title: "Partnership Opportunities", image: "/media-assets/partners/gbs-dubai.webp" },
+    { path: "/blog", changefreq: "daily" as const, priority: "0.85", title: "Blog", image: sitemapDefaultImages.blog },
+    { path: "/team", changefreq: "monthly" as const, priority: "0.65", title: "Team", image: sitemapDefaultImages.team },
+    { path: "/about", changefreq: "monthly" as const, priority: "0.7", title: "About", image: sitemapDefaultImages.about },
+    { path: "/contact", changefreq: "monthly" as const, priority: "0.7", title: "Contact", image: sitemapDefaultImages.logo },
+    { path: "/study-abroad", changefreq: "monthly" as const, priority: "0.8", title: "Study Abroad", image: "/media-assets/programs/abroad-students.jpg" },
+    { path: "/university-applications", changefreq: "monthly" as const, priority: "0.75", title: "University Applications", image: sitemapDefaultImages.service },
+    { path: "/career-counseling", changefreq: "monthly" as const, priority: "0.75", title: "Career Counseling", image: "/media-assets/blogs/career-motivation.jpg" },
   ];
 
   const absoluteSitemapUrl = (value: string, baseUrl: string) => {
@@ -2015,7 +2038,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const imageEntry = (src: unknown, title: string, caption: string, baseUrl: string): SitemapImage | undefined => {
     if (typeof src !== "string" || !src.trim()) return undefined;
     if (/^(data:|blob:|javascript:)/i.test(src)) return undefined;
-    const loc = absoluteSitemapUrl(src, baseUrl);
+    const normalizedMediaReference = normalizeMediaAssetReference(src);
+    const source = normalizedMediaReference
+      ? `/media-assets/${normalizedMediaReference}`
+      : src;
+    const loc = absoluteSitemapUrl(source, baseUrl);
     if (!/^https?:\/\//i.test(loc)) return undefined;
     return {
       loc,
@@ -2034,14 +2061,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return resolvedImages.length ? { ...url, images: resolvedImages } : url;
   };
 
-  const buildPublicSitemapData = async (baseUrl: string) => {
+  let sitemapCache: { baseUrl: string; generatedAt: number; data: PublicSitemapData } | null = null;
+  const sitemapCacheTtlMs = 60_000;
+
+  const safeSitemapList = async <T>(label: string, loader: () => Promise<T[]>): Promise<T[]> => {
+    try {
+      return await loader();
+    } catch (error) {
+      console.error(`${label} sitemap source error:`, error);
+      return [];
+    }
+  };
+
+  const buildPublicSitemapData = async (baseUrl: string): Promise<PublicSitemapData> => {
+    if (sitemapCache && sitemapCache.baseUrl === baseUrl && Date.now() - sitemapCache.generatedAt < sitemapCacheTtlMs) {
+      return sitemapCache.data;
+    }
+
     const [scholarshipsRaw, jobsRaw, partnersRaw, blogRaw, eventsRaw, teamRaw] = await Promise.all([
-      storage.getActiveScholarships(),
-      storage.getActiveJobs(),
-      storage.getActivePartners(),
-      storage.getPublishedBlogPosts(),
-      storage.getPublishedEvents(),
-      storage.getActiveTeamMembers(),
+      safeSitemapList("Scholarships", () => storage.getActiveScholarships()),
+      safeSitemapList("Jobs", () => storage.getActiveJobs()),
+      safeSitemapList("Partners", () => storage.getActivePartners()),
+      safeSitemapList("Blog", () => storage.getPublishedBlogPosts()),
+      safeSitemapList("Events", () => storage.getPublishedEvents()),
+      safeSitemapList("Team", () => storage.getActiveTeamMembers()),
     ]);
 
     const scholarships = scholarshipsRaw.map(toPublicScholarship);
@@ -2059,7 +2102,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           changefreq: page.changefreq,
           priority: page.priority,
         },
-        [imageEntry("/src/assets/imgs/Mtendere_Logo.png", page.title, `${page.title} page from Mtendere Education Consult`, baseUrl)],
+        [imageEntry(page.image, page.title, `${page.title} page from Mtendere Education Consult`, baseUrl)],
       ),
     );
 
@@ -2072,7 +2115,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           priority: item.isFeatured ? "0.95" : "0.82",
         },
         [
-          imageEntry(item.bannerImage || item.imageUrl, `${item.title} scholarship`, `${item.title} scholarship at ${item.institution}`, baseUrl),
+          imageEntry(item.bannerImage || item.imageUrl || sitemapDefaultImages.scholarship, `${item.title} scholarship`, `${item.title} scholarship at ${item.institution}`, baseUrl),
         ],
       ),
     );
@@ -2086,7 +2129,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           priority: item.isFeatured ? "0.95" : "0.82",
         },
         [
-          imageEntry(item.imageUrl, `${item.title} job`, `${item.title} role at ${item.company}`, baseUrl),
+          imageEntry(item.imageUrl || sitemapDefaultImages.job, `${item.title} job`, `${item.title} role at ${item.company}`, baseUrl),
           imageEntry(item.companyLogo, `${item.company} logo`, `${item.company} hiring organization logo`, baseUrl),
         ],
       ),
@@ -2100,7 +2143,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           changefreq: "weekly",
           priority: "0.78",
         },
-        [imageEntry(item.imageUrl, `${item.title} article`, `${item.title} article by Mtendere Education Consult`, baseUrl)],
+        [imageEntry(item.imageUrl || sitemapDefaultImages.blog, `${item.title} article`, `${item.title} article by Mtendere Education Consult`, baseUrl)],
       ),
     );
 
@@ -2112,7 +2155,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           changefreq: deriveEventRuntimeStatus(item) === "upcoming" ? "daily" : "monthly",
           priority: item.isFeatured ? "0.9" : "0.76",
         },
-        [imageEntry(item.coverImage, `${item.title} event`, `${item.title} event in ${item.location}`, baseUrl)],
+        [imageEntry(item.coverImage || sitemapDefaultImages.event, `${item.title} event`, `${item.title} event in ${item.location}`, baseUrl)],
       ),
     );
 
@@ -2125,7 +2168,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           priority: item.isFeatured ? "0.85" : "0.72",
         },
         [
-          imageEntry(item.logoUrl, `${item.name} logo`, `${item.name} official partner logo`, baseUrl),
+          imageEntry(item.logoUrl || sitemapDefaultImages.partner, `${item.name} logo`, `${item.name} official partner logo`, baseUrl),
           imageEntry(item.coverImage, `${item.name} campus`, `${item.name} partner profile imagery`, baseUrl),
         ],
       ),
@@ -2139,11 +2182,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           changefreq: "monthly",
           priority: "0.62",
         },
-        [imageEntry(item.imageUrl || item.profileImage, `${item.name} profile photo`, `${item.name}, ${item.title || item.position}`, baseUrl)],
+        [imageEntry(item.imageUrl || item.profileImage || sitemapDefaultImages.team, `${item.name} profile photo`, `${item.name}, ${item.title || item.position}`, baseUrl)],
       ),
     );
 
-    return { pages, scholarships: scholarshipUrls, jobs: jobUrls, blog: blogUrls, events: eventUrls, partners: partnerUrls, team: teamUrls };
+    const data = { pages, scholarships: scholarshipUrls, jobs: jobUrls, blog: blogUrls, events: eventUrls, partners: partnerUrls, team: teamUrls };
+    sitemapCache = { baseUrl, generatedAt: Date.now(), data };
+    return data;
   };
 
   const renderUrlset = (urls: SitemapUrl[], includeImages = false) => {
@@ -2210,6 +2255,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "Allow: /assets/",
         "Allow: /media-assets/",
         "Allow: /uploads/",
+        "Allow: /*.jpg$",
+        "Allow: /*.jpeg$",
+        "Allow: /*.png$",
+        "Allow: /*.webp$",
+        "Allow: /*.avif$",
         "Disallow: /admin",
         "Disallow: /admin/",
         "Disallow: /dashboard",
@@ -2220,6 +2270,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "Disallow: /*?mfa=",
         ...sitemapPaths.map((path) => `Sitemap: ${absoluteSitemapUrl(path, baseUrl)}`),
         `Sitemap: ${absoluteSitemapUrl("/sitemap.xml", baseUrl)}`,
+        `Host: ${new URL(baseUrl).host}`,
       ].join("\n"),
     );
   });
@@ -2231,7 +2282,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/pages-sitemap.xml", async (req, res) => {
     try {
       const data = await buildPublicSitemapData(getPublicBaseUrl(req));
-      sendXml(res, renderUrlset([...data.pages, ...data.team]));
+      sendXml(res, renderUrlset(data.pages));
     } catch (error) {
       console.error("Pages sitemap generation error:", error);
       res.status(500).type("text/plain").send("Failed to generate pages sitemap");
@@ -2285,6 +2336,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Partners sitemap generation error:", error);
       res.status(500).type("text/plain").send("Failed to generate partners sitemap");
+    }
+  });
+
+  app.get("/team-sitemap.xml", async (req, res) => {
+    try {
+      const data = await buildPublicSitemapData(getPublicBaseUrl(req));
+      sendXml(res, renderUrlset(data.team));
+    } catch (error) {
+      console.error("Team sitemap generation error:", error);
+      res.status(500).type("text/plain").send("Failed to generate team sitemap");
     }
   });
 
@@ -2468,6 +2529,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     setHeaders: (res, filePath) => {
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("Cache-Control", "public, max-age=300");
+      if (/\.(?:jpe?g|png|webp|avif)$/i.test(filePath)) {
+        res.setHeader("X-Robots-Tag", "index, follow, max-image-preview:large");
+      } else {
+        res.setHeader("X-Robots-Tag", "noindex, nofollow");
+      }
       if (!/\.(?:jpe?g|png|webp|pdf)$/i.test(filePath)) {
         res.setHeader("Content-Disposition", "attachment");
       }
@@ -2852,6 +2918,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("X-Robots-Tag", "index, follow, max-image-preview:large");
+      res.setHeader("Content-Type", getMediaContentType(requestedPath));
+      res.setHeader("Content-Disposition", "inline");
       res.sendFile(fullPath);
     } catch (error) {
       console.error("Media asset delivery error:", error);
@@ -8893,7 +8962,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           title: page.title,
           description: `${page.title} from Mtendere Education Consult`,
           canonical: absoluteSitemapUrl(page.path, baseUrl),
-          image: "/src/assets/imgs/Mtendere_Logo.png",
+          image: page.image,
           structuredData: ["Organization", "WebSite", "BreadcrumbList", "CollectionPage"],
           status: "public",
         })),
@@ -9189,14 +9258,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })),
       ];
 
+      const externalReferences = references
+        .filter((reference) => typeof reference.value === "string" && /^https?:\/\//i.test(reference.value))
+        .map((reference) => ({
+          ...reference,
+          reason: "external-url",
+          recommendation: "Verify this is an official institution, employer, event, or profile asset before publishing.",
+        }));
       const invalidReferences = references
-        .filter((reference) => !isValidMediaReference(reference.value))
+        .filter((reference) => {
+          if (typeof reference.value === "string" && /^https?:\/\//i.test(reference.value)) return false;
+          return !isValidMediaReference(reference.value);
+        })
         .map((reference) => ({
           ...reference,
           reason: reference.value
-            ? /^https?:\/\//i.test(reference.value)
-              ? "external-url"
-              : reference.value.startsWith("/uploads/")
+            ? String(reference.value).startsWith("/uploads/")
                 ? "upload-folder"
                 : "missing-local-asset"
             : "missing",
@@ -9249,6 +9326,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         checked: references.length,
         invalidCount: invalidReferences.length,
         invalidReferences,
+        externalReviewCount: externalReferences.length,
+        externalReferences,
         fallbackPolicy: ["assigned asset", "category default", "global default", "styled initials placeholder"],
         duplicateGroups,
         qualityFindings,

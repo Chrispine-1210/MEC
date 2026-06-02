@@ -92,6 +92,8 @@ function App() {
 
     addVerificationMeta("google-site-verification", import.meta.env.VITE_GOOGLE_SITE_VERIFICATION);
     addVerificationMeta("msvalidate.01", import.meta.env.VITE_BING_SITE_VERIFICATION);
+    addVerificationMeta("yandex-verification", import.meta.env.VITE_YANDEX_SITE_VERIFICATION);
+    addVerificationMeta("baidu-site-verification", import.meta.env.VITE_BAIDU_SITE_VERIFICATION);
 
     const ga4Id = import.meta.env.VITE_GA4_MEASUREMENT_ID;
     if (ga4Id && !document.querySelector(`script[data-mtendere-ga4="${ga4Id}"]`)) {
