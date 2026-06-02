@@ -9604,9 +9604,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error('Subscriber creation error:', getErrorLogMessage(error));
+      const message = getPublicErrorMessage(error, "Failed to subscribe");
       res.status(400).json({
-        message: getPublicErrorMessage(error, "Failed to subscribe"),
-        error: getErrorMessage(error),
+        message,
+        error: message,
       });
     }
   });

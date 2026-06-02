@@ -16,6 +16,33 @@ type NewsletterSignupProps = {
   className?: string;
 };
 
+const getReadableErrorMessage = (error: unknown) => {
+  if (error instanceof Error && error.message && error.message !== "[object Object]") {
+    return error.message;
+  }
+
+  if (error && typeof error === "object") {
+    const record = error as { message?: unknown; payload?: unknown; error?: unknown; detail?: unknown };
+    for (const candidate of [record.message, record.error, record.detail]) {
+      if (typeof candidate === "string" && candidate.trim() && candidate !== "[object Object]") {
+        return candidate;
+      }
+    }
+
+    const payload = record.payload;
+    if (payload && typeof payload === "object") {
+      const payloadRecord = payload as { message?: unknown; error?: unknown; detail?: unknown };
+      for (const candidate of [payloadRecord.message, payloadRecord.error, payloadRecord.detail]) {
+        if (typeof candidate === "string" && candidate.trim() && candidate !== "[object Object]") {
+          return candidate;
+        }
+      }
+    }
+  }
+
+  return "We could not complete your subscription. Please check your email address and try again.";
+};
+
 export default function NewsletterSignup({
   source = "website",
   compact = false,
@@ -59,7 +86,7 @@ export default function NewsletterSignup({
     onError: (error) => {
       toast({
         title: "Subscription failed",
-        description: error instanceof Error ? error.message : "Please try again.",
+        description: getReadableErrorMessage(error),
         variant: "destructive",
       });
     },
