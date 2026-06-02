@@ -4,7 +4,6 @@ import { useLocation } from "wouter";
 import AdminSidebar from "@/components/admin/admin-sidebar";
 import AnalyticsDashboard from "@/components/admin/analytics-dashboard";
 import ContentManager from "@/components/admin/content-manager";
-import EmailManagement from "@/components/admin/email-management";
 import EventManager from "@/components/admin/event-manager";
 import SubscriberManager from "@/components/admin/subscriber-manager";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,7 +24,7 @@ import {
 } from "lucide-react";
 import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
 
-type AdminView = 'dashboard' | 'analytics' | 'events' | 'email-management' | 'scholarships' | 'jobs' | 'users' | 'blog-posts' | 'testimonials' | 'partners' | 'team-members' | 'subscribers';
+type AdminView = 'dashboard' | 'analytics' | 'events' | 'scholarships' | 'jobs' | 'users' | 'blog-posts' | 'testimonials' | 'partners' | 'team-members' | 'subscribers';
 
 export default function Admin() {
   const { user, isLoading } = useAuth();
@@ -70,8 +69,6 @@ export default function Admin() {
         return <AnalyticsDashboard />;
       case 'events':
         return <EventManager />;
-      case 'email-management':
-        return <EmailManagement />;
       case 'subscribers':
         return <SubscriberManager />;
       case 'scholarships':
@@ -253,15 +250,6 @@ export default function Admin() {
                   >
                     <TrendingUp className="w-4 h-4 mr-2" />
                     View Analytics
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    className="w-full border-mtendere-green text-mtendere-green hover:bg-mtendere-green hover:text-white"
-                    onClick={() => setActiveView('email-management')}
-                  >
-                    <Mail className="w-4 h-4 mr-2" />
-                    Email Management
                   </Button>
 
                   <Button

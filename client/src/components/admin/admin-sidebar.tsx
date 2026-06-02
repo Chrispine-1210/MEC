@@ -54,12 +54,6 @@ export default function AdminSidebar({ activeView, onViewChange, isOpen, onToggl
       color: 'text-mtendere-blue',
     },
     {
-      id: 'email-management',
-      label: 'Email Management',
-      icon: Mail,
-      color: 'text-mtendere-green',
-    },
-    {
       id: 'scholarships',
       label: 'Scholarships',
       icon: GraduationCap,

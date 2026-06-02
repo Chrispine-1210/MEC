@@ -9405,11 +9405,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "pending",
         verificationToken,
         unsubscribeToken,
-        consentAccepted: payload.consentAccepted,
-        consentSource: payload.source,
-        consentAt: payload.consentAccepted ? new Date() : null,
-        consentIpAddress: getClientIp(req),
-        consentUserAgent: req.get("user-agent") || null,
         verifiedAt: null,
         unsubscribedAt: null,
       });
@@ -9419,29 +9414,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : await storage.createSubscriber(subscriberPayload);
 
       const emailPreferenceToken = createEmailPreferenceToken(subscriber.email);
-      await storage.upsertEmailPreference({
-        userId: null,
-        email: subscriber.email,
-        categories: Object.fromEntries(
-          subscriptionPreferenceCategories.map((category) => [
-            category,
-            (subscriber.preferences || []).includes(category),
-          ]),
-        ),
-        consentStatus: payload.consentAccepted ? "pending_double_opt_in" : "pending",
-        consentSource: payload.source,
-        consentAt: payload.consentAccepted ? new Date() : null,
-        unsubscribedAt: null,
-        unsubscribeTokenHash: createEmailPreferenceTokenHash(emailPreferenceToken),
-        auditTrail: [
-          {
-            action: "newsletter_signup",
-            preferences: subscriber.preferences,
-            consentAccepted: payload.consentAccepted,
-            at: new Date().toISOString(),
-          },
-        ],
-      });
+      try {
+        await storage.upsertEmailPreference({
+          userId: null,
+          email: subscriber.email,
+          categories: Object.fromEntries(
+            subscriptionPreferenceCategories.map((category) => [
+              category,
+              (subscriber.preferences || []).includes(category),
+            ]),
+          ),
+          consentStatus: payload.consentAccepted ? "pending_double_opt_in" : "pending",
+          consentSource: payload.source,
+          consentAt: payload.consentAccepted ? new Date() : null,
+          unsubscribedAt: null,
+          unsubscribeTokenHash: createEmailPreferenceTokenHash(emailPreferenceToken),
+          auditTrail: [
+            {
+              action: "newsletter_signup",
+              preferences: subscriber.preferences,
+              consentAccepted: payload.consentAccepted,
+              at: new Date().toISOString(),
+            },
+          ],
+        });
+      } catch (preferenceError) {
+        console.warn("Email preference sync skipped:", getErrorMessage(preferenceError));
+      }
 
       const baseUrl = getApiRequestBaseUrl(req);
       const verificationUrl = `${baseUrl}/api/subscribers/verify/${verificationToken}`;
@@ -9491,27 +9490,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.updateSubscriber(subscriber.id, {
         status: "active",
         verifiedAt: new Date(),
-        consentAccepted: true,
-        consentAt: subscriber.consentAt || new Date(),
-        consentSource: subscriber.consentSource || "double_opt_in",
         verificationToken: null,
       });
-      const preference = await storage.getEmailPreferenceByEmail(subscriber.email);
-      if (preference) {
-        await storage.updateEmailPreference(preference.id, {
-          consentStatus: "active",
-          consentAt: preference.consentAt || new Date(),
-          categories: Object.fromEntries(
-            subscriptionPreferenceCategories.map((category) => [
-              category,
-              (subscriber.preferences || []).includes(category),
-            ]),
-          ),
-          auditTrail: [
-            ...(preference.auditTrail || []),
-            { action: "double_opt_in_verified", at: new Date().toISOString() },
-          ],
-        });
+      try {
+        const preference = await storage.getEmailPreferenceByEmail(subscriber.email);
+        if (preference) {
+          await storage.updateEmailPreference(preference.id, {
+            consentStatus: "active",
+            consentAt: preference.consentAt || new Date(),
+            categories: Object.fromEntries(
+              subscriptionPreferenceCategories.map((category) => [
+                category,
+                (subscriber.preferences || []).includes(category),
+              ]),
+            ),
+            auditTrail: [
+              ...(preference.auditTrail || []),
+              { action: "double_opt_in_verified", at: new Date().toISOString() },
+            ],
+          });
+        }
+      } catch (preferenceError) {
+        console.warn("Email preference verification sync skipped:", getErrorMessage(preferenceError));
       }
 
       const redirectUrl = `${env.PUBLIC_APP_URL || "/"}${env.PUBLIC_APP_URL ? "" : ""}`;
@@ -9531,17 +9531,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "unsubscribed",
         unsubscribedAt: new Date(),
       });
-      const preference = await storage.getEmailPreferenceByEmail(subscriber.email);
-      if (preference) {
-        await storage.updateEmailPreference(preference.id, {
-          categories: Object.fromEntries(subscriptionPreferenceCategories.map((category) => [category, false])),
-          consentStatus: "unsubscribed",
-          unsubscribedAt: new Date(),
-          auditTrail: [
-            ...(preference.auditTrail || []),
-            { action: "subscriber_token_unsubscribe", at: new Date().toISOString() },
-          ],
-        });
+      try {
+        const preference = await storage.getEmailPreferenceByEmail(subscriber.email);
+        if (preference) {
+          await storage.updateEmailPreference(preference.id, {
+            categories: Object.fromEntries(subscriptionPreferenceCategories.map((category) => [category, false])),
+            consentStatus: "unsubscribed",
+            unsubscribedAt: new Date(),
+            auditTrail: [
+              ...(preference.auditTrail || []),
+              { action: "subscriber_token_unsubscribe", at: new Date().toISOString() },
+            ],
+          });
+        }
+      } catch (preferenceError) {
+        console.warn("Email preference unsubscribe sync skipped:", getErrorMessage(preferenceError));
       }
 
       const redirectUrl = env.PUBLIC_APP_URL || "/";
@@ -9561,17 +9565,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: "unsubscribed",
           unsubscribedAt: new Date(),
         });
-        const preference = await storage.getEmailPreferenceByEmail(subscriber.email);
-        if (preference) {
-          await storage.updateEmailPreference(preference.id, {
-            categories: Object.fromEntries(subscriptionPreferenceCategories.map((category) => [category, false])),
-            consentStatus: "unsubscribed",
-            unsubscribedAt: new Date(),
-            auditTrail: [
-              ...(preference.auditTrail || []),
-              { action: "email_unsubscribe_request", at: new Date().toISOString() },
-            ],
-          });
+        try {
+          const preference = await storage.getEmailPreferenceByEmail(subscriber.email);
+          if (preference) {
+            await storage.updateEmailPreference(preference.id, {
+              categories: Object.fromEntries(subscriptionPreferenceCategories.map((category) => [category, false])),
+              consentStatus: "unsubscribed",
+              unsubscribedAt: new Date(),
+              auditTrail: [
+                ...(preference.auditTrail || []),
+                { action: "email_unsubscribe_request", at: new Date().toISOString() },
+              ],
+            });
+          }
+        } catch (preferenceError) {
+          console.warn("Email preference unsubscribe request sync skipped:", getErrorMessage(preferenceError));
         }
       }
 

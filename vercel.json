@@ -35,18 +35,6 @@
   ],
   "routes": [
     {
-      "src": "/(.*(?:\\.env(?:\\..*)?|\\.git|\\.svn|\\.hg|\\.DS_Store|Thumbs\\.db|package(?:-lock)?\\.json|pnpm-lock\\.yaml|yarn\\.lock|tsconfig\\.json|vite\\.config\\.(?:ts|js)|drizzle\\.config\\.(?:ts|js)|vercel\\.json|render\\.yaml|ecosystem\\.config\\.cjs|server-build|node_modules|server/|shared/|client/src|Admin/server|migrations/|scripts/|logs/|data/).*)",
-      "mitigate": {
-        "action": "deny"
-      }
-    },
-    {
-      "src": "/(.*(?:wp-admin|wp-login\\.php|xmlrpc\\.php|phpmyadmin|cgi-bin|vendor/phpunit|composer\\.(?:json|lock)|\\.php$|\\.asp$|\\.aspx$|\\.jsp$|\\.map$|etc/passwd|proc/self|actuator|solr|boaform|debug/default).*)",
-      "mitigate": {
-        "action": "deny"
-      }
-    },
-    {
       "src": "/api/index\\.js",
       "dest": "/api/index.js"
     },
@@ -65,42 +53,6 @@
     {
       "src": "/media-assets/(.*)",
       "dest": "/api/index.js?__mec_path=media-assets/$1"
-    },
-    {
-      "src": "/robots\\.txt",
-      "dest": "/api/index.js?__mec_path=robots.txt"
-    },
-    {
-      "src": "/sitemap\\.xml",
-      "dest": "/api/index.js?__mec_path=sitemap.xml"
-    },
-    {
-      "src": "/pages-sitemap\\.xml",
-      "dest": "/api/index.js?__mec_path=pages-sitemap.xml"
-    },
-    {
-      "src": "/scholarships-sitemap\\.xml",
-      "dest": "/api/index.js?__mec_path=scholarships-sitemap.xml"
-    },
-    {
-      "src": "/jobs-sitemap\\.xml",
-      "dest": "/api/index.js?__mec_path=jobs-sitemap.xml"
-    },
-    {
-      "src": "/blog-sitemap\\.xml",
-      "dest": "/api/index.js?__mec_path=blog-sitemap.xml"
-    },
-    {
-      "src": "/events-sitemap\\.xml",
-      "dest": "/api/index.js?__mec_path=events-sitemap.xml"
-    },
-    {
-      "src": "/partners-sitemap\\.xml",
-      "dest": "/api/index.js?__mec_path=partners-sitemap.xml"
-    },
-    {
-      "src": "/images-sitemap\\.xml",
-      "dest": "/api/index.js?__mec_path=images-sitemap.xml"
     },
     {
       "src": "/ws",
@@ -155,8 +107,7 @@
         }
       ],
       "headers": {
-        "Cache-Control": "no-store",
-        "X-Robots-Tag": "noindex, nofollow, noarchive"
+        "Cache-Control": "no-store"
       },
       "dest": "/admin/index.html"
     },
@@ -169,8 +120,7 @@
         }
       ],
       "headers": {
-        "Cache-Control": "no-store",
-        "X-Robots-Tag": "noindex, nofollow, noarchive"
+        "Cache-Control": "no-store"
       },
       "dest": "/admin/index.html"
     },
@@ -180,8 +130,7 @@
     {
       "src": "/admin(?:/.*)?",
       "headers": {
-        "Cache-Control": "no-store",
-        "X-Robots-Tag": "noindex, nofollow, noarchive"
+        "Cache-Control": "no-store"
       },
       "dest": "/admin/index.html"
     },
