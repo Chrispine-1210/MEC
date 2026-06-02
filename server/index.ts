@@ -182,10 +182,7 @@ const isAllowedOrigin = (origin: string | undefined, req: Request) => {
       (hostname === trustedProductionDomain || hostname.endsWith(`.${trustedProductionDomain}`));
     const isTrustedVercelHost =
       parsedOrigin.protocol === "https:" &&
-      hostname.endsWith(".vercel.app") &&
-      (/^(mec|mtendere)(?:-|$)/.test(hostname) ||
-        hostname.includes("mtendereeducationconsult") ||
-        hostname.includes("chrispine-1210"));
+      hostname.endsWith(".vercel.app");
 
     if (isTrustedProductionHost) return true;
     if (isTrustedVercelHost) return true;

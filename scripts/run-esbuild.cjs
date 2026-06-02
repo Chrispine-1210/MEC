@@ -78,6 +78,16 @@ for (let index = 0; index < args.length; index += 1) {
     options.external.push(arg.slice("--external:".length));
     continue;
   }
+  if (arg.startsWith("--banner:js=")) {
+    options.banner ??= {};
+    options.banner.js = arg.slice("--banner:js=".length);
+    continue;
+  }
+  if (arg === "--node-esm-require-banner") {
+    options.banner ??= {};
+    options.banner.js = 'import { createRequire } from "module"; const require = createRequire(import.meta.url);';
+    continue;
+  }
   if (arg.startsWith("-")) {
     throw new Error(`Unsupported esbuild argument: ${arg}`);
   }
