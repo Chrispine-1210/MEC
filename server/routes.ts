@@ -35,6 +35,7 @@ import {
   createEmailPreferenceToken,
   createEmailPreferenceTokenHash,
   createEmailTokenHash,
+  getEmailDeliveryDiagnostics,
   getEmailPlatformHealth,
   isTransactionalEmailDeliveryReady,
   recordEmailClick,
@@ -2979,7 +2980,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/media-assets/*", serveMediaAsset);
 
   app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok" });
+    const emailDiagnostics = getEmailDeliveryDiagnostics();
+    res.json({
+      status: "ok",
+      deployment: {
+        commit: process.env.VERCEL_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || null,
+        environment: process.env.VERCEL_ENV || env.NODE_ENV,
+        vercel: process.env.VERCEL === "1" || process.env.VERCEL === "true",
+      },
+      email: {
+        ready: emailDiagnostics.ready,
+        activeProviders: emailDiagnostics.activeProviders,
+        dryRunEnabled: emailDiagnostics.dryRunEnabled,
+        fromConfigured: emailDiagnostics.fromConfigured,
+        providerConfigured: emailDiagnostics.providerConfigured,
+      },
+    });
   });
 
   // Authentication routes
@@ -3607,6 +3623,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Admin email stats error:", getErrorLogMessage(error));
       res.status(500).json({ message: "Failed to fetch email platform stats" });
     }
+  });
+
+  app.get('/api/admin/email/diagnostics', authenticateToken, requireAdmin, async (_req, res) => {
+    res.json(getEmailDeliveryDiagnostics());
   });
 
   app.get('/api/admin/email/templates', authenticateToken, requireAdmin, async (_req, res) => {
@@ -9579,20 +9599,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         unsubscribeUrl,
       }, { awaitDelivery: true });
 
-      if (confirmationEmail.status !== "sent") {
+      const emailWasReallySent = confirmationEmail.status === "sent" && confirmationEmail.provider !== "dry_run";
+      if (!emailWasReallySent) {
         console.error(
           "Subscription confirmation email failed:",
           getErrorLogMessage({
             emailJobId: confirmationEmail.id,
             status: confirmationEmail.status,
             provider: confirmationEmail.provider,
-            error: confirmationEmail.error || confirmationEmail.lastError || "Email provider did not accept the message",
+            error:
+              confirmationEmail.provider === "dry_run"
+                ? "Email delivery is in dry-run mode; no inbox email was sent"
+                : confirmationEmail.error || confirmationEmail.lastError || "Email provider did not accept the message",
           }),
         );
         return res.status(503).json({
           message:
-            "Your subscription was saved, but we could not send the confirmation email right now. Please try again shortly or contact support.",
+            confirmationEmail.provider === "dry_run"
+              ? "Your subscription was saved, but email delivery is not configured for live sending yet. Please contact support."
+              : "Your subscription was saved, but we could not send the confirmation email right now. Please try again shortly or contact support.",
           deliveryStatus: confirmationEmail.status,
+          deliveryProvider: confirmationEmail.provider,
         });
       }
 

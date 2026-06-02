@@ -559,6 +559,23 @@ const getProviderOrder = () => {
 
 export const isTransactionalEmailDeliveryReady = () => getProviderOrder().length > 0;
 
+export const getEmailDeliveryDiagnostics = () => {
+  const activeProviders = getProviderOrder().map((provider) => provider.name);
+  return {
+    ready: activeProviders.some((provider) => provider !== "dry_run"),
+    activeProviders,
+    dryRunEnabled,
+    fromConfigured: Boolean(env.EMAIL_FROM),
+    providerConfigured: {
+      resend: Boolean(env.RESEND_API_KEY),
+      sendgrid: Boolean(env.SENDGRID_API_KEY),
+      postmark: Boolean(env.POSTMARK_SERVER_TOKEN),
+      ses: Boolean(env.AWS_SES_ACCESS_KEY_ID && env.AWS_SES_SECRET_ACCESS_KEY && env.AWS_SES_REGION),
+      custom: Boolean(env.EMAIL_API_URL),
+    },
+  };
+};
+
 const ctaButton = (href: string, label: string) => `
   <table role="presentation" cellspacing="0" cellpadding="0" style="margin: 28px 0;">
     <tr>
