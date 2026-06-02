@@ -17,10 +17,6 @@ data
 !client/.env.production.example
 !Admin/.env.production.example
 
-dist
-server-build
-vercel-media-assets
-
 docs
 tests
 coverage

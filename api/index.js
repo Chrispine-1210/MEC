@@ -5,7 +5,8 @@ const getAppModule = () => {
   return appModulePromise;
 };
 
-const allowedMappedPathPattern = /^(api\/|auth\/|uploads\/|media-assets\/|ws$)/i;
+const allowedMappedPathPattern =
+  /^(api\/|auth\/|uploads\/|media-assets\/|ws$|robots\.txt$|sitemap\.xml$|(?:pages|scholarships|jobs|blog|events|partners|images)-sitemap\.xml$)/i;
 const blockedMappedPathPattern =
   /(^|\/)(?:\.|%2e|server|server-build|shared|client\/src|admin\/server|node_modules|migrations|scripts|logs|data|uploads\/\.|media-assets\/\.)(?:\/|$)|(?:\.\.|%2e%2e|\\|%5c|\0|%00)/i;
 
@@ -36,6 +37,8 @@ export default async function handler(req, res) {
     await appModule.ready;
     return appModule.default(req, res);
   } catch (error) {
+    console.error("[api] request failed", error);
+
     const status =
       typeof error === "object" && error !== null && "statusCode" in error
         ? Number(error.statusCode) || 500

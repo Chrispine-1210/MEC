@@ -67,6 +67,42 @@
       "dest": "/api/index.js?__mec_path=media-assets/$1"
     },
     {
+      "src": "/robots\\.txt",
+      "dest": "/api/index.js?__mec_path=robots.txt"
+    },
+    {
+      "src": "/sitemap\\.xml",
+      "dest": "/api/index.js?__mec_path=sitemap.xml"
+    },
+    {
+      "src": "/pages-sitemap\\.xml",
+      "dest": "/api/index.js?__mec_path=pages-sitemap.xml"
+    },
+    {
+      "src": "/scholarships-sitemap\\.xml",
+      "dest": "/api/index.js?__mec_path=scholarships-sitemap.xml"
+    },
+    {
+      "src": "/jobs-sitemap\\.xml",
+      "dest": "/api/index.js?__mec_path=jobs-sitemap.xml"
+    },
+    {
+      "src": "/blog-sitemap\\.xml",
+      "dest": "/api/index.js?__mec_path=blog-sitemap.xml"
+    },
+    {
+      "src": "/events-sitemap\\.xml",
+      "dest": "/api/index.js?__mec_path=events-sitemap.xml"
+    },
+    {
+      "src": "/partners-sitemap\\.xml",
+      "dest": "/api/index.js?__mec_path=partners-sitemap.xml"
+    },
+    {
+      "src": "/images-sitemap\\.xml",
+      "dest": "/api/index.js?__mec_path=images-sitemap.xml"
+    },
+    {
       "src": "/ws",
       "dest": "/api/index.js?__mec_path=ws"
     },
