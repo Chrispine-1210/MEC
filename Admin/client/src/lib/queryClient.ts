@@ -16,6 +16,41 @@ export const clearLocalAuthSession = () => {
   localStorage.removeItem("token");
 };
 
+const formatApiErrorPayload = (payload: unknown, fallback: string) => {
+  if (!payload || typeof payload !== "object") return fallback;
+
+  const record = payload as {
+    message?: unknown;
+    error?: unknown;
+    detail?: unknown;
+    issues?: Array<{ message?: unknown }>;
+  };
+
+  for (const candidate of [record.error, record.message, record.detail]) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate;
+    if (!candidate || typeof candidate !== "object") continue;
+
+    const nested = candidate as {
+      message?: unknown;
+      formErrors?: unknown[];
+      fieldErrors?: Record<string, unknown[]>;
+    };
+    if (typeof nested.message === "string" && nested.message.trim()) return nested.message;
+
+    const fieldMessages = Object.entries(nested.fieldErrors || {}).flatMap(([field, values]) =>
+      Array.isArray(values)
+        ? values.map((value) => `${field}: ${String(value)}`)
+        : [`${field}: ${String(values)}`],
+    );
+    const formMessages = Array.isArray(nested.formErrors) ? nested.formErrors.map(String) : [];
+    const combined = [...fieldMessages, ...formMessages].filter(Boolean).join(", ");
+    if (combined) return combined;
+  }
+
+  const issueMessages = record.issues?.map((issue) => String(issue.message || "")).filter(Boolean).join(", ");
+  return issueMessages || fallback;
+};
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = await res.text();
@@ -28,12 +63,7 @@ async function throwIfResNotOk(res: Response) {
         detail?: string;
         issues?: Array<{ message?: string }>;
       };
-      message =
-        payload.error ||
-        payload.message ||
-        payload.detail ||
-        payload.issues?.map((issue) => issue.message).filter(Boolean).join(", ") ||
-        message;
+      message = formatApiErrorPayload(payload, message);
     } catch {
       if (text.trim().startsWith("<!DOCTYPE")) {
         message = "The API returned an HTML page instead of JSON. Check the API URL or local dev proxy.";
@@ -168,7 +198,7 @@ export async function apiRequest(
       };
     }
 
-    const error = new Error(payload.error || payload.message || payload.detail || "Something went wrong");
+    const error = new Error(formatApiErrorPayload(payload, "Something went wrong"));
     Object.assign(error, { status: res.status, payload });
     throw error;
   }

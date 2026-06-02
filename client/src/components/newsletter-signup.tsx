@@ -25,7 +25,7 @@ export default function NewsletterSignup({
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [website, setWebsite] = useState("");
-  const [preferences, setPreferences] = useState(["scholarships", "jobs", "study-abroad"]);
+  const [preferences, setPreferences] = useState(["scholarships", "jobs", "news"]);
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [hasTrackedStart, setHasTrackedStart] = useState(false);
   const { toast } = useToast();
@@ -148,7 +148,7 @@ export default function NewsletterSignup({
         {[
           ["scholarships", "Scholarships"],
           ["jobs", "Jobs"],
-          ["study-abroad", "Study abroad"],
+          ["news", "Study abroad"],
         ].map(([value, label]) => (
           <label key={value} className="flex items-center gap-2">
             <input

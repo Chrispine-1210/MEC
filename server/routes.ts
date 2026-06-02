@@ -237,10 +237,36 @@ const subscriptionPreferenceCategories = [
   "marketing",
 ] as const;
 
+const subscriptionPreferenceAliases: Record<string, (typeof subscriptionPreferenceCategories)[number]> = {
+  newsletter: "news",
+  newsletters: "news",
+  "study-abroad": "scholarships",
+  study_abroad: "scholarships",
+  studyabroad: "scholarships",
+  blog: "blog_updates",
+  blogs: "blog_updates",
+  partners: "partner_updates",
+};
+
+const normalizeSubscriptionPreferences = (value: unknown) => {
+  if (!Array.isArray(value)) return undefined;
+
+  const allowed = new Set<string>(subscriptionPreferenceCategories);
+  const normalized = value
+    .map((item) => String(item).trim().toLowerCase())
+    .map((item) => subscriptionPreferenceAliases[item] || item)
+    .filter((item): item is (typeof subscriptionPreferenceCategories)[number] => allowed.has(item));
+
+  return Array.from(new Set(normalized));
+};
+
 const subscriberRequestSchema = z.object({
   email: z.string().trim().email().transform((value) => value.toLowerCase()),
   name: z.string().trim().max(160).optional(),
-  preferences: z.array(z.enum(subscriptionPreferenceCategories)).max(subscriptionPreferenceCategories.length).optional(),
+  preferences: z.preprocess(
+    normalizeSubscriptionPreferences,
+    z.array(z.enum(subscriptionPreferenceCategories)).max(subscriptionPreferenceCategories.length).optional(),
+  ),
   source: z.string().trim().max(80).default("website"),
   website: z.string().optional(),
   recaptchaToken: z.string().trim().max(4096).optional(),
@@ -549,6 +575,27 @@ const getErrorMessage = (error: unknown) => {
 const getErrorLogMessage = (error: unknown) => {
   const message = getErrorMessage(error);
   return typeof message === "string" ? message : JSON.stringify(message);
+};
+
+const getPublicErrorMessage = (error: unknown, fallback = "Request failed") => {
+  if (error instanceof z.ZodError) {
+    const flattened = error.flatten();
+    const fieldMessages = Object.entries(flattened.fieldErrors)
+      .flatMap(([field, messages]) => (messages || []).map((message) => `${field}: ${message}`));
+    const formMessages = flattened.formErrors || [];
+    return [...fieldMessages, ...formMessages].filter(Boolean).join(", ") || fallback;
+  }
+
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+};
+
+const logAnalyticsBestEffort = async (input: Parameters<typeof storage.logAnalytics>[0]) => {
+  try {
+    await storage.logAnalytics(input);
+  } catch (error) {
+    console.warn("Analytics logging skipped:", getErrorLogMessage(error));
+  }
 };
 
 const isTransientDbConnectivityError = (error: unknown) => {
@@ -9457,7 +9504,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Honeypot spam trap. Return success without storing so bots get no signal.
       if (payload.website) {
-        await storage.logAnalytics({
+        void logAnalyticsBestEffort({
           event: "subscriber_spam_trapped",
           metadata: { source: payload.source },
           ipAddress: req.ip,
@@ -9532,7 +9579,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         unsubscribeUrl,
       });
 
-      await storage.logAnalytics({
+      void logAnalyticsBestEffort({
         event: "subscriber_created",
         metadata: {
           email: subscriber.email,
@@ -9556,8 +9603,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
     } catch (error) {
-      console.error('Subscriber creation error:', error);
-      res.status(400).json({ message: 'Failed to subscribe', error: getErrorMessage(error) });
+      console.error('Subscriber creation error:', getErrorLogMessage(error));
+      res.status(400).json({
+        message: getPublicErrorMessage(error, "Failed to subscribe"),
+        error: getErrorMessage(error),
+      });
     }
   });
 
