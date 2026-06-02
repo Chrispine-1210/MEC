@@ -342,7 +342,7 @@ export default function Scholarships() {
                     />
                     
                     <Button asChild variant="outline" size="icon" className="border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white shadow-sm" aria-label={`View ${scholarship.title}`}>
-                      <Link href={`/scholarships/${scholarship.id}`}>
+                      <Link href={`/scholarships/${scholarship.slug || scholarship.id}`}>
                         <ExternalLink className="w-4 h-4" />
                       </Link>
                     </Button>

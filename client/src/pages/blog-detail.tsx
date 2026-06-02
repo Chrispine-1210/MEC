@@ -13,9 +13,20 @@ import ExpandingNav from "@/components/expanding-nav";
 import Footer from "@/components/footer";
 import GovernedImage from "@/components/governed-image";
 import RichContent from "@/components/rich-content";
+import { SEO } from "@/components/SEO";
 import { getBlogInlineImages } from "@/lib/image-governance";
 import { publicContentQueryOptions } from "@/lib/realtime-content";
 import { extractRichTextHeadings, hasRichHtml, richTextToPlainText, truncateRichText } from "@/lib/rich-text";
+import {
+  buildBlogPostingSchema,
+  buildBreadcrumbSchema,
+  buildFaqSchema,
+  buildOrganizationSchema,
+  buildWebsiteSchema,
+  canonicalUrl,
+  generateKeywords,
+  seoDescription,
+} from "@/lib/seo";
 import {
   ArrowLeft,
   ArrowRight,
@@ -255,38 +266,40 @@ function formatDate(value?: string | null) {
 
 export default function BlogDetail() {
   const [, params] = useRoute("/blog/:id");
-  const id = Number(params?.id || 0);
+  const identifier = params?.id || "";
+  const numericId = Number(identifier);
   const { toast } = useToast();
   const [comment, setComment] = useState("");
 
   const { data: post, isLoading: postLoading } = useQuery<ApiBlogPost>({
-    queryKey: [`/api/blog-posts/${id}`],
-    enabled: Number.isFinite(id) && id > 0,
+    queryKey: [`/api/blog-posts/${identifier}`],
+    enabled: Boolean(identifier),
     ...publicContentQueryOptions,
   });
   const { data: posts } = useQuery<ApiBlogPost[]>({
     queryKey: ["/api/blog-posts"],
     ...publicContentQueryOptions,
   });
+  const commentPostId = post?.id || (Number.isFinite(numericId) && numericId > 0 ? numericId : 0);
   const { data: comments, isLoading: commentsLoading } = useQuery<ApiBlogComment[]>({
-    queryKey: [`/api/blog-posts/${id}/comments`],
-    enabled: Number.isFinite(id) && id > 0,
+    queryKey: [`/api/blog-posts/${commentPostId}/comments`],
+    enabled: commentPostId > 0,
     ...publicContentQueryOptions,
   });
 
   const likeMutation = useMutation({
-    mutationFn: async () => (await apiRequest("POST", `/api/blog-posts/${id}/like`)).json(),
+    mutationFn: async () => (await apiRequest("POST", `/api/blog-posts/${post?.id || numericId}/like`)).json(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/blog-posts/${id}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/blog-posts/${identifier}`] });
       toast({ title: "Post liked!" });
     },
   });
 
   const commentMutation = useMutation({
     mutationFn: async (content: string) =>
-      (await apiRequest("POST", `/api/blog-posts/${id}/comments`, { content })).json(),
+      (await apiRequest("POST", `/api/blog-posts/${post?.id || numericId}/comments`, { content })).json(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/blog-posts/${id}/comments`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/blog-posts/${post?.id || numericId}/comments`] });
       setComment("");
       toast({ title: "Comment added!" });
     },
@@ -348,6 +361,30 @@ export default function BlogDetail() {
     .filter((item) => item.id !== post.id)
     .sort((left, right) => Number(right.category === post.category) - Number(left.category === post.category))
     .slice(0, 3);
+  const articlePath = `/blog/${post.slug || post.id}`;
+  const blogKeywords = generateKeywords({
+    module: "blog",
+    title: post.title,
+    category: post.category,
+    tags,
+    audience: guide.audience,
+  });
+  const detailStructuredData = [
+    buildOrganizationSchema(),
+    buildWebsiteSchema(),
+    buildBreadcrumbSchema([
+      { name: "Home", url: "/" },
+      { name: "Blog", url: "/blog" },
+      { name: post.title, url: articlePath },
+    ]),
+    buildBlogPostingSchema(post, readingTime),
+    buildFaqSchema(
+      guide.keyQuestions.map((question, index) => ({
+        question,
+        answer: guide.actionNotes[index] || guide.purpose,
+      })),
+    ),
+  ].filter(Boolean) as Record<string, unknown>[];
   const inlineImages = getBlogInlineImages({
     title: post.title,
     content: post.content,
@@ -383,6 +420,20 @@ export default function BlogDetail() {
 
   return (
     <div className="min-h-screen bg-background">
+      <SEO
+        title={String(post.seoMeta?.title || post.title)}
+        description={seoDescription(String(post.seoMeta?.description || ""), excerpt)}
+        image={post.imageUrl || undefined}
+        imageAlt={`${post.title} article image`}
+        canonical={canonicalUrl(articlePath)}
+        type="article"
+        keywords={blogKeywords}
+        author={String(post.authorProfile?.name || "Mtendere Education Consult")}
+        section={post.category}
+        publishedTime={post.createdAt}
+        modifiedTime={post.updatedAt || post.createdAt}
+        structuredData={detailStructuredData}
+      />
       <ExpandingNav />
 
       <section className="relative mt-16 overflow-hidden py-20 text-white">
@@ -911,7 +962,7 @@ export default function BlogDetail() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {relatedPosts.map((item) => (
-                    <Link key={item.id} href={`/blog/${item.id}`}>
+                    <Link key={item.id} href={`/blog/${item.slug || item.id}`}>
                       <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-3 rounded-xl border border-border/60 p-3 transition-colors hover:bg-muted/40">
                         <GovernedImage
                           module="blog"

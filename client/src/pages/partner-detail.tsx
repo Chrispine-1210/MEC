@@ -5,6 +5,7 @@ import Footer from "@/components/footer";
 import GovernedImage from "@/components/governed-image";
 import InstitutionLogo from "@/components/institution-logo";
 import RichContent from "@/components/rich-content";
+import { SEO } from "@/components/SEO";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { ApiPartner } from "@/lib/api-types";
 import { publicContentQueryOptions } from "@/lib/realtime-content";
 import { richTextToPlainText } from "@/lib/rich-text";
+import {
+  buildBreadcrumbSchema,
+  buildFaqSchema,
+  buildOrganizationSchema,
+  buildPartnerSchema,
+  buildWebsiteSchema,
+  canonicalUrl,
+  generateKeywords,
+  seoDescription,
+} from "@/lib/seo";
 import {
   ArrowLeft,
   ArrowRight,
@@ -214,9 +225,51 @@ export default function PartnerDetail() {
     { label: "Plan your university application", href: "/university-applications" },
     { label: "Browse scholarships", href: "/scholarships" },
   ];
+  const partnerPath = `/partners/${resolved.id}`;
+  const partnerKeywords = generateKeywords({
+    module: "partner",
+    title: resolved.name,
+    category: resolved.partnershipType || resolved.industryCategory,
+    location: resolved.country,
+    institution: resolved.name,
+  });
+  const partnerQuestions = [
+    "Does the program mix, support model, and campus scale fit how I learn best?",
+    "What funding options or affordability trade-offs should I understand before applying?",
+    "If I shortlist this partner, what documents and deadlines need to be mapped first?",
+  ];
+  const detailStructuredData = [
+    buildOrganizationSchema(),
+    buildWebsiteSchema(),
+    buildBreadcrumbSchema([
+      { name: "Home", url: "/" },
+      { name: "Partners", url: "/partners" },
+      { name: resolved.name, url: partnerPath },
+    ]),
+    buildPartnerSchema(resolved),
+    buildFaqSchema(
+      partnerQuestions.map((question, index) => ({
+        question,
+        answer: getDecisionFocus(resolved)[index] || "Mtendere can help you compare this partner against your academic goals, budget, and timeline.",
+      })),
+    ),
+  ].filter(Boolean) as Record<string, unknown>[];
 
   return (
     <div className="min-h-screen bg-background">
+      <SEO
+        title={`${resolved.name} Partner Profile`}
+        description={seoDescription(resolved.description, `${resolved.name} partner institution profile with programs, opportunities, contact details, and application guidance.`)}
+        image={resolved.coverImage || resolved.logoUrl || undefined}
+        imageAlt={`${resolved.name} official profile`}
+        canonical={canonicalUrl(partnerPath)}
+        type="profile"
+        keywords={partnerKeywords}
+        section="Partners"
+        publishedTime={resolved.createdAt}
+        modifiedTime={resolved.updatedAt || resolved.createdAt}
+        structuredData={detailStructuredData}
+      />
       <ExpandingNav />
 
       <section className="relative mt-16 overflow-hidden py-20 text-white">

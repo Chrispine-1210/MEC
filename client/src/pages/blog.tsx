@@ -160,7 +160,7 @@ export default function Blog() {
           <>
             {/* Featured Article */}
             {featured && (
-              <Link href={`/blog/${featured.id}`}>
+              <Link href={`/blog/${featured.slug || featured.id}`}>
                 <div className="premium-card group mb-14 cursor-pointer overflow-hidden rounded-2xl bg-card transition-all duration-300">
                   <div className="md:flex">
                     <div className="md:w-1/2 h-72 md:h-auto overflow-hidden">
@@ -214,7 +214,7 @@ export default function Blog() {
             {rest.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {rest.map((post, i) => (
-                  <Link key={post.id} href={`/blog/${post.id}`}>
+                  <Link key={post.id} href={`/blog/${post.slug || post.id}`}>
                     <Card className="premium-card group flex h-full cursor-pointer flex-col overflow-hidden border-none bg-muted/40 transition-all duration-500">
                       <div className="relative h-52 overflow-hidden">
                         <GovernedImage

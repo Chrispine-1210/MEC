@@ -223,7 +223,7 @@ export default function Home() {
                   <div className="h-px bg-muted w-full mb-6" />
                   <div className="flex items-center justify-between">
                     <Button asChild variant="link" className="p-0 text-mtendere-blue font-bold h-auto hover:text-mtendere-green transition-colors group/btn">
-                      <Link href={`/blog/${post.id}`} className="flex items-center">
+                      <Link href={`/blog/${post.slug || post.id}`} className="flex items-center">
                         Read Full Story <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover/btn:translate-x-1" />
                       </Link>
                     </Button>

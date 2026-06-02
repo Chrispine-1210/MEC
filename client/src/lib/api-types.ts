@@ -185,11 +185,16 @@ export interface ApiTestimonial {
 export interface ApiBlogPost {
   id: number;
   title: string;
+  slug?: string;
   content: string;
   excerpt?: string | null;
   imageUrl?: string | null;
   category: string;
   tags?: string[] | null;
+  seoMeta?: Record<string, unknown> | null;
+  socialMeta?: Record<string, unknown> | null;
+  authorProfile?: Record<string, unknown> | null;
+  readingTimeMinutes?: number | null;
   isPublished: boolean | null;
   authorId: number;
   likes: number | null;

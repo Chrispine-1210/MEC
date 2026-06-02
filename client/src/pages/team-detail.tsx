@@ -15,6 +15,14 @@ import { publicContentQueryOptions } from "@/lib/realtime-content";
 import { getTeamGroups, getTeamMemberSlug, toDisplayTeamMember } from "@/lib/team-display";
 import { richTextToPlainText } from "@/lib/rich-text";
 import {
+  buildBreadcrumbSchema,
+  buildOrganizationSchema,
+  buildPersonSchema,
+  buildWebsiteSchema,
+  canonicalUrl,
+  generateKeywords,
+} from "@/lib/seo";
+import {
   ArrowLeft,
   Award,
   BriefcaseBusiness,
@@ -97,21 +105,31 @@ export default function TeamDetail() {
   const linkedIn = resolved.socialLinks?.linkedin || resolved.linkedin || "";
   const twitter = resolved.socialLinks?.twitter || resolved.twitter || "";
   const expertise = resolved.skills?.length ? resolved.skills : resolved.focusAreas ?? [];
-  const profileStructuredData = {
-    "@context": "https://schema.org",
-    "@type": "Person",
-    name: resolved.name,
-    jobTitle: resolved.title || resolved.position,
-    worksFor: {
-      "@type": "Organization",
-      name: "Mtendere Education Consult",
-    },
-    email: contactEmail || undefined,
-    telephone: contactPhone || undefined,
-    image: resolved.imageUrl || undefined,
-    url: typeof window !== "undefined" ? window.location.href : undefined,
-    sameAs: [linkedIn, twitter].filter(Boolean),
-  };
+  const teamPath = `/team/${getTeamMemberSlug(resolved)}`;
+  const profileKeywords = generateKeywords({
+    module: "team",
+    title: `${resolved.name} ${resolved.title || resolved.position}`,
+    category: resolved.department || resolved.group,
+    tags: expertise,
+  });
+  const profileStructuredData = [
+    buildOrganizationSchema(),
+    buildWebsiteSchema(),
+    buildBreadcrumbSchema([
+      { name: "Home", url: "/" },
+      { name: "Team", url: "/team" },
+      { name: resolved.name, url: teamPath },
+    ]),
+    buildPersonSchema(
+      {
+        ...resolved,
+        email: contactEmail,
+        linkedin: linkedIn,
+        twitter,
+        slug: getTeamMemberSlug(resolved),
+      },
+    ),
+  ];
   const details = [
     { label: "Role", value: resolved.title || resolved.position, icon: BriefcaseBusiness },
     { label: "Department", value: resolved.department || resolved.group, icon: Users },
@@ -133,7 +151,14 @@ export default function TeamDetail() {
         title={`${resolved.name} - ${resolved.position}`}
         description={summary}
         image={resolved.imageUrl || undefined}
+        imageAlt={`${resolved.name} profile photo`}
+        canonical={canonicalUrl(teamPath)}
         type="profile"
+        keywords={profileKeywords}
+        author={resolved.name}
+        section={resolved.department || resolved.group}
+        publishedTime={resolved.createdAt}
+        modifiedTime={resolved.updatedAt || resolved.createdAt}
         structuredData={profileStructuredData}
       />
       <ExpandingNav />

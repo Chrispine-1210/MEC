@@ -68,6 +68,7 @@ export default function GovernedImage({
 
   const activeImage = fallbackDepth === 0 ? resolved : globalFallback;
   const effectiveAlt = alt || activeImage.alt;
+  const effectiveTitle = activeImage.title || title || effectiveAlt;
   const effectiveCaption = caption === false ? undefined : caption || activeImage.caption;
   const isHardFailed = loadState === "failed" && fallbackDepth > 0;
   const effectiveFit = fit || (variant === "logo" ? "contain" : "cover");
@@ -85,9 +86,14 @@ export default function GovernedImage({
       {...imgProps}
       src={activeImage.src}
       alt={effectiveAlt}
+      title={effectiveTitle}
       loading={priority ? "eager" : "lazy"}
       decoding="async"
       sizes={imageSizes}
+      data-image-key={activeImage.key}
+      data-image-module={activeImage.module}
+      data-image-fallback={activeImage.fallbackLevel}
+      data-image-description={activeImage.description}
       className={cn(
         "h-full w-full transition duration-700 ease-out",
         effectiveFit === "cover" ? "object-cover" : "object-contain",
@@ -152,9 +158,17 @@ export default function GovernedImage({
         <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
           <DialogContent className="max-w-5xl border-0 bg-black/90 p-3 text-white">
             <DialogTitle className="sr-only">{effectiveAlt}</DialogTitle>
-            <DialogDescription className="sr-only">{effectiveCaption || "Image preview"}</DialogDescription>
+            <DialogDescription className="sr-only">{activeImage.description || effectiveCaption || "Image preview"}</DialogDescription>
             <div className="max-h-[82vh] overflow-hidden rounded-lg bg-black">
-              <img src={activeImage.src} alt={effectiveAlt} className="max-h-[82vh] w-full object-contain" />
+              <img
+                src={activeImage.src}
+                alt={effectiveAlt}
+                title={effectiveTitle}
+                data-image-key={activeImage.key}
+                data-image-module={activeImage.module}
+                data-image-description={activeImage.description}
+                className="max-h-[82vh] w-full object-contain"
+              />
             </div>
           </DialogContent>
         </Dialog>

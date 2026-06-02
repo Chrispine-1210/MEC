@@ -6,7 +6,19 @@ import ApplicationDialog from "@/components/application-dialog";
 import SaveItemButton from "@/components/save-item-button";
 import GovernedImage from "@/components/governed-image";
 import RichContent from "@/components/rich-content";
+import { SEO } from "@/components/SEO";
 import { publicContentQueryOptions } from "@/lib/realtime-content";
+import {
+  buildBreadcrumbSchema,
+  buildFaqSchema,
+  buildOrganizationSchema,
+  buildScholarshipSchema,
+  buildWebsiteSchema,
+  canonicalUrl,
+  generateKeywords,
+  seoDescription,
+  toSeoFaqs,
+} from "@/lib/seo";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -59,11 +71,12 @@ const getDaysLeft = (dateString?: string | null) => {
 
 export default function ScholarshipDetail() {
   const [, params] = useRoute("/scholarships/:id");
-  const id = Number(params?.id ?? 0);
+  const identifier = params?.id ?? "";
+  const numericId = Number(identifier);
 
   const { data: scholarship, isLoading: scholarshipLoading } = useQuery<ApiScholarship>({
-    queryKey: [`/api/scholarships/${id}`],
-    enabled: Number.isFinite(id) && id > 0,
+    queryKey: [`/api/scholarships/${identifier}`],
+    enabled: Boolean(identifier),
     ...publicContentQueryOptions,
   });
 
@@ -72,9 +85,13 @@ export default function ScholarshipDetail() {
     ...publicContentQueryOptions,
   });
 
-  const resolved = scholarship || scholarships?.find((item) => item.id === id);
+  const resolved =
+    scholarship ||
+    scholarships?.find((item) =>
+      Number.isFinite(numericId) && numericId > 0 ? item.id === numericId : item.slug === identifier,
+    );
   const related = (scholarships || [])
-    .filter((item) => item.id !== id && item.category === resolved?.category)
+    .filter((item) => item.id !== resolved?.id && item.category === resolved?.category)
     .slice(0, 3);
 
   if (scholarshipLoading && listLoading) {
@@ -213,9 +230,58 @@ export default function ScholarshipDetail() {
     "Gather transcripts, references, and your statement before the final week.",
     "Get feedback on your application story so your submission reads stronger and clearer.",
   ];
+  const scholarshipPath = `/scholarships/${resolved.slug || resolved.id}`;
+  const scholarshipKeywords = generateKeywords({
+    module: "scholarship",
+    title: resolved.title,
+    category: resolved.category,
+    location: resolved.country,
+    institution: resolved.institution,
+    tags: resolved.tags,
+  });
+  const scholarshipFaqs = toSeoFaqs(resolved.faq, [
+    {
+      question: `Who is eligible for ${resolved.title}?`,
+      answer:
+        resolved.eligibilityCriteria ||
+        requirements.join(", ") ||
+        "Eligibility details are listed in the scholarship requirements and should be confirmed before applying.",
+    },
+    {
+      question: `When is the deadline for ${resolved.title}?`,
+      answer: `The listed application deadline is ${formatDate(resolved.deadline)}.`,
+    },
+  ]);
+  const detailStructuredData = [
+    buildOrganizationSchema(),
+    buildWebsiteSchema(),
+    buildBreadcrumbSchema([
+      { name: "Home", url: "/" },
+      { name: "Scholarships", url: "/scholarships" },
+      { name: resolved.title, url: scholarshipPath },
+    ]),
+    buildScholarshipSchema(resolved),
+    buildFaqSchema(scholarshipFaqs),
+  ].filter(Boolean) as Record<string, unknown>[];
 
   return (
     <div className="min-h-screen bg-background">
+      <SEO
+        title={String(resolved.seoMeta?.title || resolved.title)}
+        description={seoDescription(
+          String(resolved.seoMeta?.description || ""),
+          `${resolved.title} scholarship at ${resolved.institution}. ${overviewContent}`,
+        )}
+        image={resolved.bannerImage || resolved.imageUrl || undefined}
+        imageAlt={`${resolved.title} scholarship`}
+        canonical={canonicalUrl(scholarshipPath)}
+        type="article"
+        keywords={scholarshipKeywords}
+        section={resolved.category}
+        publishedTime={resolved.createdAt}
+        modifiedTime={resolved.updatedAt || resolved.createdAt}
+        structuredData={detailStructuredData}
+      />
       <ExpandingNav />
 
       <section className="relative mt-16 overflow-hidden py-20 text-white">
@@ -461,7 +527,7 @@ export default function ScholarshipDetail() {
 
                 <ApplicationDialog
                   type="scholarship"
-                  referenceId={id}
+                  referenceId={resolved.id}
                   title={resolved.title}
                   customFields={[
                     { name: "academicLevel", label: "Current academic level", required: true },
@@ -476,7 +542,7 @@ export default function ScholarshipDetail() {
 
                 <SaveItemButton
                   type="scholarship"
-                  referenceId={id}
+                  referenceId={resolved.id}
                   className="w-full border-mtendere-blue text-mtendere-blue hover:bg-mtendere-blue hover:text-white"
                 />
 
@@ -524,7 +590,7 @@ export default function ScholarshipDetail() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {related.map((item) => (
-                    <Link key={item.id} href={`/scholarships/${item.id}`}>
+                    <Link key={item.id} href={`/scholarships/${item.slug || item.id}`}>
                       <div className="flex items-center justify-between rounded-lg border border-border/60 p-3 transition-colors hover:bg-muted/40">
                         <div>
                           <p className="line-clamp-1 text-sm font-semibold text-foreground">{item.title}</p>

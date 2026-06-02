@@ -31,6 +31,7 @@ import TeamDetail from "@/pages/team-detail";
 import Contact from "@/pages/contact";
 import AIChat from "@/components/ai-chat";
 import BackToTop from "@/components/back-to-top";
+import RouteSEO from "@/components/RouteSEO";
 import Blog from "@/pages/blog";
 import BlogDetail from "@/pages/blog-detail";
 import StudyAbroad from "@/pages/study-abroad";
@@ -77,6 +78,40 @@ function App() {
   useEffect(() => {
     document.documentElement.classList.remove("dark");
     document.documentElement.style.colorScheme = "light";
+
+    const addVerificationMeta = (name: string, content?: string) => {
+      if (!content) return;
+      let meta = document.querySelector<HTMLMetaElement>(`meta[name="${name}"]`);
+      if (!meta) {
+        meta = document.createElement("meta");
+        meta.name = name;
+        document.head.appendChild(meta);
+      }
+      meta.content = content;
+    };
+
+    addVerificationMeta("google-site-verification", import.meta.env.VITE_GOOGLE_SITE_VERIFICATION);
+    addVerificationMeta("msvalidate.01", import.meta.env.VITE_BING_SITE_VERIFICATION);
+
+    const ga4Id = import.meta.env.VITE_GA4_MEASUREMENT_ID;
+    if (ga4Id && !document.querySelector(`script[data-mtendere-ga4="${ga4Id}"]`)) {
+      const script = document.createElement("script");
+      script.async = true;
+      script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(ga4Id)}`;
+      script.dataset.mtendereGa4 = ga4Id;
+      document.head.appendChild(script);
+
+      const win = window as typeof window & {
+        dataLayer?: unknown[];
+        gtag?: (...args: unknown[]) => void;
+      };
+      win.dataLayer = win.dataLayer || [];
+      win.gtag = (...args: unknown[]) => {
+        win.dataLayer?.push(args);
+      };
+      win.gtag("js", new Date());
+      win.gtag("config", ga4Id);
+    }
   }, []);
 
   const shouldEnableAnalytics = import.meta.env.MODE === "production";
@@ -87,6 +122,7 @@ function App() {
         <AuthProvider>
           <WebSocketProvider>
             <Toaster />
+            <RouteSEO />
             <Router />
             <AIChat />
             <BackToTop />

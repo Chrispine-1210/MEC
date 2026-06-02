@@ -25,6 +25,7 @@ import GovernedImage from "@/components/governed-image";
 import InstitutionLogo from "@/components/institution-logo";
 import EventRegistrationDialog from "@/components/event-registration-dialog";
 import SaveItemButton from "@/components/save-item-button";
+import { SEO } from "@/components/SEO";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,6 +34,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { ApiEvent, ApiEventComment } from "@/lib/api-types";
+import {
+  buildBreadcrumbSchema,
+  buildEventSchema,
+  buildFaqSchema,
+  buildOrganizationSchema,
+  buildWebsiteSchema,
+  canonicalUrl,
+  generateKeywords,
+  seoDescription,
+  toSeoFaqs,
+} from "@/lib/seo";
 
 export default function EventDetail() {
   const [, params] = useRoute("/events/:id");
@@ -145,9 +157,51 @@ export default function EventDetail() {
   const faqs = event.faqs || [];
   const resources = event.resources || [];
   const comments = event.comments || [];
+  const eventPath = `/events/${event.slug || event.id}`;
+  const eventKeywords = generateKeywords({
+    module: "event",
+    title: event.title,
+    category: event.category,
+    location: event.location,
+    tags: event.tags,
+  });
+  const eventFaqs = toSeoFaqs(event.faqs, [
+    {
+      question: `How do I register for ${event.title}?`,
+      answer: "Use the registration button on this page to reserve your seat or submit your participation details.",
+    },
+    {
+      question: `Where is ${event.title} hosted?`,
+      answer: event.isVirtual ? "This event is available online." : `This event is hosted at ${event.venueName || event.location}.`,
+    },
+  ]);
+  const detailStructuredData = [
+    buildOrganizationSchema(),
+    buildWebsiteSchema(),
+    buildBreadcrumbSchema([
+      { name: "Home", url: "/" },
+      { name: "Events", url: "/events" },
+      { name: event.title, url: eventPath },
+    ]),
+    buildEventSchema(event),
+    buildFaqSchema(eventFaqs),
+  ].filter(Boolean) as Record<string, unknown>[];
 
   return (
     <div className="min-h-screen bg-background">
+      <SEO
+        title={String(event.seoMeta?.title || event.title)}
+        description={seoDescription(String(event.seoMeta?.description || ""), event.summary || event.description)}
+        image={event.coverImage || undefined}
+        imageAlt={`${event.title} event`}
+        canonical={canonicalUrl(eventPath)}
+        type="article"
+        keywords={eventKeywords}
+        section={event.category}
+        publishedTime={event.createdAt}
+        modifiedTime={event.updatedAt || event.createdAt}
+        structuredData={detailStructuredData}
+      />
       <ExpandingNav />
 
       <section className="relative mt-16 overflow-hidden py-24 text-white">

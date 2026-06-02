@@ -1111,6 +1111,37 @@ const toPublicJob = (job: any) => {
   };
 };
 
+const toPublicScholarship = (scholarship: any) => {
+  const meta = getScholarshipMeta(scholarship.id);
+  return {
+    ...scholarship,
+    slug: meta.slug ?? slugify(scholarship.title ?? `scholarship-${scholarship.id}`),
+    shortDescription: meta.shortDescription ?? scholarship.description ?? "",
+    fullContent: meta.fullContent ?? scholarship.description ?? "",
+    imageUrl: meta.featuredImage ?? scholarship.imageUrl ?? null,
+    bannerImage: meta.featuredImage ?? scholarship.imageUrl ?? null,
+    scholarshipType: meta.scholarshipType ?? null,
+    fundingType: meta.fundingType ?? null,
+    eligibilityCriteria: meta.eligibilityCriteria ?? meta.eligibility ?? null,
+    countryRestrictions: meta.countryRestrictions ?? [],
+    academicRequirements: meta.academicRequirements ?? [],
+    openingDate: meta.openingDate ?? null,
+    fundingAmount: meta.fundingAmount ?? null,
+    sponsorOrganization: meta.sponsorOrganization ?? scholarship.institution ?? null,
+    benefits: meta.benefits ?? [],
+    applicationSteps: meta.applicationSteps ?? [],
+    requiredDocuments: meta.requiredDocuments ?? [],
+    faq: meta.faq ?? [],
+    brochures: meta.brochures ?? [],
+    videoEmbeds: meta.videoEmbeds ?? [],
+    seoMeta: meta.seoMeta ?? {},
+    socialMeta: meta.socialMeta ?? {},
+    tags: meta.tags ?? [],
+    isFeatured: meta.isFeatured ?? false,
+    region: meta.region ?? scholarship.country ?? "Global",
+  };
+};
+
 const findJobByIdentifier = async (identifier: string, requester?: JwtUser | null) => {
   const numericId = Number.parseInt(identifier, 10);
   if (!Number.isNaN(numericId) && String(numericId) === identifier) {
@@ -1122,6 +1153,20 @@ const findJobByIdentifier = async (identifier: string, requester?: JwtUser | nul
   return jobs.find((job) => {
     const meta = getJobMeta(job.id);
     return (meta.slug ?? slugify(job.title ?? `job-${job.id}`)) === normalized;
+  });
+};
+
+const findScholarshipByIdentifier = async (identifier: string, requester?: JwtUser | null) => {
+  const numericId = Number.parseInt(identifier, 10);
+  if (!Number.isNaN(numericId) && String(numericId) === identifier) {
+    return storage.getScholarship(numericId);
+  }
+
+  const normalized = slugify(identifier);
+  const scholarships = isAdmin(requester ?? null) ? await storage.getAllScholarships() : await storage.getActiveScholarships();
+  return scholarships.find((scholarship) => {
+    const meta = getScholarshipMeta(scholarship.id);
+    return (meta.slug ?? slugify(scholarship.title ?? `scholarship-${scholarship.id}`)) === normalized;
   });
 };
 
@@ -1247,6 +1292,38 @@ const toAdminTeamMember = (member: any) => {
     createdAt: member.createdAt ?? null,
     updatedAt: member.updatedAt ?? null,
   };
+};
+
+const toPublicBlogPost = (post: any) => {
+  const meta = getBlogMeta(post.id);
+  const content = String(post.content ?? "");
+  return {
+    ...post,
+    slug: meta.slug ?? slugify(post.title ?? `post-${post.id}`),
+    imageUrl: meta.featuredImage ?? post.imageUrl ?? null,
+    gallery: meta.gallery ?? [],
+    videos: meta.videos ?? [],
+    seoMeta: meta.seoMeta ?? {},
+    socialMeta: meta.socialMeta ?? {},
+    structuredData: meta.structuredData ?? {},
+    readingTimeMinutes: meta.readingTimeMinutes ?? Math.max(1, Math.ceil(content.split(/\s+/).filter(Boolean).length / 220)),
+    relatedPosts: meta.relatedPosts ?? [],
+    authorProfile: meta.authorProfile ?? {},
+  };
+};
+
+const findBlogPostByIdentifier = async (identifier: string, requester?: JwtUser | null) => {
+  const numericId = Number.parseInt(identifier, 10);
+  if (!Number.isNaN(numericId) && String(numericId) === identifier) {
+    return storage.getBlogPost(numericId);
+  }
+
+  const normalized = slugify(identifier);
+  const posts = isAdmin(requester ?? null) ? await storage.getAllBlogPosts() : await storage.getPublishedBlogPosts();
+  return posts.find((post) => {
+    const meta = getBlogMeta(post.id);
+    return (meta.slug ?? slugify(post.title ?? `post-${post.id}`)) === normalized;
+  });
 };
 
 const toPublicTeamMember = (member: any) => {
@@ -1886,64 +1963,341 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&apos;");
 
+  type SitemapImage = { loc: string; title?: string; caption?: string };
+  type SitemapUrl = {
+    loc: string;
+    lastmod?: string | Date | null;
+    changefreq?: "always" | "hourly" | "daily" | "weekly" | "monthly" | "yearly" | "never";
+    priority?: string;
+    images?: SitemapImage[];
+  };
+
+  const sitemapPaths = [
+    "/pages-sitemap.xml",
+    "/scholarships-sitemap.xml",
+    "/jobs-sitemap.xml",
+    "/blog-sitemap.xml",
+    "/events-sitemap.xml",
+    "/partners-sitemap.xml",
+    "/images-sitemap.xml",
+  ];
+
+  const staticSitemapPages = [
+    { path: "/", changefreq: "weekly" as const, priority: "1.0", title: "Mtendere Education Consult" },
+    { path: "/scholarships", changefreq: "daily" as const, priority: "0.9", title: "Scholarships" },
+    { path: "/jobs", changefreq: "daily" as const, priority: "0.9", title: "Jobs" },
+    { path: "/resume-building", changefreq: "monthly" as const, priority: "0.75", title: "AI CV Builder" },
+    { path: "/events", changefreq: "daily" as const, priority: "0.85", title: "Events" },
+    { path: "/partners", changefreq: "weekly" as const, priority: "0.8", title: "Partners" },
+    { path: "/partnership-opportunities", changefreq: "monthly" as const, priority: "0.7", title: "Partnership Opportunities" },
+    { path: "/blog", changefreq: "daily" as const, priority: "0.85", title: "Blog" },
+    { path: "/team", changefreq: "monthly" as const, priority: "0.65", title: "Team" },
+    { path: "/about", changefreq: "monthly" as const, priority: "0.7", title: "About" },
+    { path: "/contact", changefreq: "monthly" as const, priority: "0.7", title: "Contact" },
+    { path: "/study-abroad", changefreq: "monthly" as const, priority: "0.8", title: "Study Abroad" },
+    { path: "/university-applications", changefreq: "monthly" as const, priority: "0.75", title: "University Applications" },
+    { path: "/career-counseling", changefreq: "monthly" as const, priority: "0.75", title: "Career Counseling" },
+  ];
+
+  const absoluteSitemapUrl = (value: string, baseUrl: string) => {
+    try {
+      return new URL(value, `${baseUrl}/`).href;
+    } catch {
+      return `${baseUrl}/${value.replace(/^\/+/, "")}`;
+    }
+  };
+
+  const sitemapDate = (value?: string | Date | null) => {
+    const date = value ? new Date(value) : new Date();
+    return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+  };
+
+  const imageEntry = (src: unknown, title: string, caption: string, baseUrl: string): SitemapImage | undefined => {
+    if (typeof src !== "string" || !src.trim()) return undefined;
+    if (/^(data:|blob:|javascript:)/i.test(src)) return undefined;
+    const loc = absoluteSitemapUrl(src, baseUrl);
+    if (!/^https?:\/\//i.test(loc)) return undefined;
+    return {
+      loc,
+      title: title.slice(0, 140),
+      caption: caption.slice(0, 240),
+    };
+  };
+
+  const withImages = (url: SitemapUrl, images: Array<SitemapImage | undefined>): SitemapUrl => {
+    const seen = new Set<string>();
+    const resolvedImages = images.filter((item): item is SitemapImage => Boolean(item)).filter((item) => {
+      if (seen.has(item.loc)) return false;
+      seen.add(item.loc);
+      return true;
+    });
+    return resolvedImages.length ? { ...url, images: resolvedImages } : url;
+  };
+
+  const buildPublicSitemapData = async (baseUrl: string) => {
+    const [scholarshipsRaw, jobsRaw, partnersRaw, blogRaw, eventsRaw, teamRaw] = await Promise.all([
+      storage.getActiveScholarships(),
+      storage.getActiveJobs(),
+      storage.getActivePartners(),
+      storage.getPublishedBlogPosts(),
+      storage.getPublishedEvents(),
+      storage.getActiveTeamMembers(),
+    ]);
+
+    const scholarships = scholarshipsRaw.map(toPublicScholarship);
+    const jobs = jobsRaw.map(toPublicJob);
+    const partners = partnersRaw.map(toPublicPartner);
+    const blogPosts = blogRaw.map(toPublicBlogPost);
+    const teamMembers = teamRaw.map(toPublicTeamMember);
+    const now = new Date().toISOString();
+
+    const pages: SitemapUrl[] = staticSitemapPages.map((page) =>
+      withImages(
+        {
+          loc: absoluteSitemapUrl(page.path, baseUrl),
+          lastmod: now,
+          changefreq: page.changefreq,
+          priority: page.priority,
+        },
+        [imageEntry("/src/assets/imgs/Mtendere_Logo.png", page.title, `${page.title} page from Mtendere Education Consult`, baseUrl)],
+      ),
+    );
+
+    const scholarshipUrls: SitemapUrl[] = scholarships.map((item) =>
+      withImages(
+        {
+          loc: absoluteSitemapUrl(`/scholarships/${item.slug || item.id}`, baseUrl),
+          lastmod: item.updatedAt ?? item.createdAt,
+          changefreq: "weekly",
+          priority: item.isFeatured ? "0.95" : "0.82",
+        },
+        [
+          imageEntry(item.bannerImage || item.imageUrl, `${item.title} scholarship`, `${item.title} scholarship at ${item.institution}`, baseUrl),
+        ],
+      ),
+    );
+
+    const jobUrls: SitemapUrl[] = jobs.map((item) =>
+      withImages(
+        {
+          loc: absoluteSitemapUrl(`/jobs/${item.slug || item.id}`, baseUrl),
+          lastmod: item.updatedAt ?? item.createdAt,
+          changefreq: "daily",
+          priority: item.isFeatured ? "0.95" : "0.82",
+        },
+        [
+          imageEntry(item.imageUrl, `${item.title} job`, `${item.title} role at ${item.company}`, baseUrl),
+          imageEntry(item.companyLogo, `${item.company} logo`, `${item.company} hiring organization logo`, baseUrl),
+        ],
+      ),
+    );
+
+    const blogUrls: SitemapUrl[] = blogPosts.map((item) =>
+      withImages(
+        {
+          loc: absoluteSitemapUrl(`/blog/${item.slug || item.id}`, baseUrl),
+          lastmod: item.updatedAt ?? item.createdAt,
+          changefreq: "weekly",
+          priority: "0.78",
+        },
+        [imageEntry(item.imageUrl, `${item.title} article`, `${item.title} article by Mtendere Education Consult`, baseUrl)],
+      ),
+    );
+
+    const eventUrls: SitemapUrl[] = eventsRaw.map((item) =>
+      withImages(
+        {
+          loc: absoluteSitemapUrl(`/events/${item.slug || item.id}`, baseUrl),
+          lastmod: item.updatedAt ?? item.createdAt,
+          changefreq: deriveEventRuntimeStatus(item) === "upcoming" ? "daily" : "monthly",
+          priority: item.isFeatured ? "0.9" : "0.76",
+        },
+        [imageEntry(item.coverImage, `${item.title} event`, `${item.title} event in ${item.location}`, baseUrl)],
+      ),
+    );
+
+    const partnerUrls: SitemapUrl[] = partners.map((item) =>
+      withImages(
+        {
+          loc: absoluteSitemapUrl(`/partners/${item.id}`, baseUrl),
+          lastmod: item.updatedAt ?? item.createdAt,
+          changefreq: "monthly",
+          priority: item.isFeatured ? "0.85" : "0.72",
+        },
+        [
+          imageEntry(item.logoUrl, `${item.name} logo`, `${item.name} official partner logo`, baseUrl),
+          imageEntry(item.coverImage, `${item.name} campus`, `${item.name} partner profile imagery`, baseUrl),
+        ],
+      ),
+    );
+
+    const teamUrls: SitemapUrl[] = teamMembers.map((item) =>
+      withImages(
+        {
+          loc: absoluteSitemapUrl(`/team/${item.slug || slugify(String(item.title ?? item.position ?? item.name ?? `team-${item.id}`))}`, baseUrl),
+          lastmod: item.updatedAt ?? item.createdAt,
+          changefreq: "monthly",
+          priority: "0.62",
+        },
+        [imageEntry(item.imageUrl || item.profileImage, `${item.name} profile photo`, `${item.name}, ${item.title || item.position}`, baseUrl)],
+      ),
+    );
+
+    return { pages, scholarships: scholarshipUrls, jobs: jobUrls, blog: blogUrls, events: eventUrls, partners: partnerUrls, team: teamUrls };
+  };
+
+  const renderUrlset = (urls: SitemapUrl[], includeImages = false) => {
+    const xmlns = includeImages
+      ? '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">'
+      : '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">';
+    return [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      xmlns,
+      ...urls.map((url) => {
+        const imageXml = includeImages
+          ? (url.images ?? [])
+              .map((image) =>
+                [
+                  "    <image:image>",
+                  `      <image:loc>${escapeXml(image.loc)}</image:loc>`,
+                  image.title ? `      <image:title>${escapeXml(image.title)}</image:title>` : "",
+                  image.caption ? `      <image:caption>${escapeXml(image.caption)}</image:caption>` : "",
+                  "    </image:image>",
+                ]
+                  .filter(Boolean)
+                  .join("\n"),
+              )
+              .join("\n")
+          : "";
+        return [
+          "  <url>",
+          `    <loc>${escapeXml(url.loc)}</loc>`,
+          `    <lastmod>${sitemapDate(url.lastmod)}</lastmod>`,
+          url.changefreq ? `    <changefreq>${url.changefreq}</changefreq>` : "",
+          url.priority ? `    <priority>${url.priority}</priority>` : "",
+          imageXml,
+          "  </url>",
+        ]
+          .filter(Boolean)
+          .join("\n");
+      }),
+      "</urlset>",
+    ].join("\n");
+  };
+
+  const renderSitemapIndex = (baseUrl: string) =>
+    [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+      ...sitemapPaths.map((path) =>
+        ["  <sitemap>", `    <loc>${escapeXml(absoluteSitemapUrl(path, baseUrl))}</loc>`, `    <lastmod>${new Date().toISOString()}</lastmod>`, "  </sitemap>"].join("\n"),
+      ),
+      "</sitemapindex>",
+    ].join("\n");
+
+  const sendXml = (res: Response, xml: string) => {
+    res.setHeader("Cache-Control", "public, max-age=900, stale-while-revalidate=3600");
+    res.type("application/xml").send(xml);
+  };
+
   app.get("/robots.txt", (req, res) => {
     const baseUrl = getPublicBaseUrl(req);
-    res.type("text/plain").send(["User-agent: *", "Allow: /", `Sitemap: ${baseUrl}/sitemap.xml`].join("\n"));
+    res.setHeader("Cache-Control", "public, max-age=900, stale-while-revalidate=3600");
+    res.type("text/plain").send(
+      [
+        "User-agent: *",
+        "Allow: /",
+        "Allow: /assets/",
+        "Allow: /media-assets/",
+        "Allow: /uploads/",
+        "Disallow: /admin",
+        "Disallow: /admin/",
+        "Disallow: /dashboard",
+        "Disallow: /api/",
+        "Disallow: /auth/",
+        "Disallow: /*?token=",
+        "Disallow: /*?password=",
+        "Disallow: /*?mfa=",
+        ...sitemapPaths.map((path) => `Sitemap: ${absoluteSitemapUrl(path, baseUrl)}`),
+        `Sitemap: ${absoluteSitemapUrl("/sitemap.xml", baseUrl)}`,
+      ].join("\n"),
+    );
   });
 
-  app.get("/sitemap.xml", async (req, res) => {
+  app.get("/sitemap.xml", (req, res) => {
+    sendXml(res, renderSitemapIndex(getPublicBaseUrl(req)));
+  });
+
+  app.get("/pages-sitemap.xml", async (req, res) => {
     try {
-      const baseUrl = getPublicBaseUrl(req);
-      const [scholarshipsList, jobsList, partnersList, blogList, eventsList, teamList] = await Promise.all([
-        storage.getActiveScholarships(),
-        storage.getActiveJobs(),
-        storage.getActivePartners(),
-        storage.getPublishedBlogPosts(),
-        storage.getPublishedEvents(),
-        storage.getActiveTeamMembers(),
-      ]);
-
-      const staticPaths = [
-        "/",
-        "/scholarships",
-        "/jobs",
-        "/resume-building",
-        "/events",
-        "/partners",
-        "/blog",
-        "/team",
-        "/contact",
-      ];
-      const urls = [
-        ...staticPaths.map((path) => ({ loc: `${baseUrl}${path}`, lastmod: new Date().toISOString() })),
-        ...scholarshipsList.map((item) => ({ loc: `${baseUrl}/scholarships/${item.id}`, lastmod: item.updatedAt ?? item.createdAt })),
-        ...jobsList.map((item) => ({
-          loc: `${baseUrl}/jobs/${getJobMeta(item.id).slug ?? slugify(item.title ?? `job-${item.id}`)}`,
-          lastmod: item.updatedAt ?? item.createdAt,
-        })),
-        ...partnersList.map((item) => ({ loc: `${baseUrl}/partners/${item.id}`, lastmod: item.updatedAt ?? item.createdAt })),
-        ...blogList.map((item) => ({ loc: `${baseUrl}/blog/${item.id}`, lastmod: item.updatedAt ?? item.createdAt })),
-        ...eventsList.map((item) => ({ loc: `${baseUrl}/events/${item.slug || item.id}`, lastmod: item.updatedAt ?? item.createdAt })),
-        ...teamList.map((item) => ({
-          loc: `${baseUrl}/team/${slugify(String(getTeamMeta(item.id).title ?? item.position ?? item.name ?? `team-${item.id}`))}`,
-          lastmod: item.updatedAt ?? item.createdAt,
-        })),
-      ];
-
-      const xml = [
-        '<?xml version="1.0" encoding="UTF-8"?>',
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-        ...urls.map((url) => {
-          const lastmod = url.lastmod ? new Date(url.lastmod).toISOString() : new Date().toISOString();
-          return `  <url><loc>${escapeXml(url.loc)}</loc><lastmod>${lastmod}</lastmod></url>`;
-        }),
-        "</urlset>",
-      ].join("\n");
-
-      res.type("application/xml").send(xml);
+      const data = await buildPublicSitemapData(getPublicBaseUrl(req));
+      sendXml(res, renderUrlset([...data.pages, ...data.team]));
     } catch (error) {
-      console.error("Sitemap generation error:", error);
-      res.status(500).type("text/plain").send("Failed to generate sitemap");
+      console.error("Pages sitemap generation error:", error);
+      res.status(500).type("text/plain").send("Failed to generate pages sitemap");
+    }
+  });
+
+  app.get("/scholarships-sitemap.xml", async (req, res) => {
+    try {
+      const data = await buildPublicSitemapData(getPublicBaseUrl(req));
+      sendXml(res, renderUrlset(data.scholarships));
+    } catch (error) {
+      console.error("Scholarships sitemap generation error:", error);
+      res.status(500).type("text/plain").send("Failed to generate scholarships sitemap");
+    }
+  });
+
+  app.get("/jobs-sitemap.xml", async (req, res) => {
+    try {
+      const data = await buildPublicSitemapData(getPublicBaseUrl(req));
+      sendXml(res, renderUrlset(data.jobs));
+    } catch (error) {
+      console.error("Jobs sitemap generation error:", error);
+      res.status(500).type("text/plain").send("Failed to generate jobs sitemap");
+    }
+  });
+
+  app.get("/blog-sitemap.xml", async (req, res) => {
+    try {
+      const data = await buildPublicSitemapData(getPublicBaseUrl(req));
+      sendXml(res, renderUrlset(data.blog));
+    } catch (error) {
+      console.error("Blog sitemap generation error:", error);
+      res.status(500).type("text/plain").send("Failed to generate blog sitemap");
+    }
+  });
+
+  app.get("/events-sitemap.xml", async (req, res) => {
+    try {
+      const data = await buildPublicSitemapData(getPublicBaseUrl(req));
+      sendXml(res, renderUrlset(data.events));
+    } catch (error) {
+      console.error("Events sitemap generation error:", error);
+      res.status(500).type("text/plain").send("Failed to generate events sitemap");
+    }
+  });
+
+  app.get("/partners-sitemap.xml", async (req, res) => {
+    try {
+      const data = await buildPublicSitemapData(getPublicBaseUrl(req));
+      sendXml(res, renderUrlset(data.partners));
+    } catch (error) {
+      console.error("Partners sitemap generation error:", error);
+      res.status(500).type("text/plain").send("Failed to generate partners sitemap");
+    }
+  });
+
+  app.get("/images-sitemap.xml", async (req, res) => {
+    try {
+      const data = await buildPublicSitemapData(getPublicBaseUrl(req));
+      const imageUrls = [...data.pages, ...data.scholarships, ...data.jobs, ...data.blog, ...data.events, ...data.partners, ...data.team]
+        .filter((url) => (url.images ?? []).length > 0)
+        .map((url) => ({ loc: url.loc, lastmod: url.lastmod, images: url.images }));
+      sendXml(res, renderUrlset(imageUrls, true));
+    } catch (error) {
+      console.error("Images sitemap generation error:", error);
+      res.status(500).type("text/plain").send("Failed to generate images sitemap");
     }
   });
 
@@ -3345,7 +3699,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ]);
 
       const results = [
-        ...searchAndRank(scholarshipsList, query, (item) => [
+        ...searchAndRank(scholarshipsList.map(toPublicScholarship), query, (item) => [
           item.title,
           item.description,
           item.institution,
@@ -3357,7 +3711,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           type: "scholarship",
           title: item.title,
           description: item.description,
-          href: `/scholarships/${item.id}`,
+          href: `/scholarships/${item.slug || item.id}`,
           category: item.category,
           imageUrl: item.imageUrl,
         })),
@@ -3392,7 +3746,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           category: item.partnershipType ?? item.country,
           imageUrl: item.logoUrl,
         })),
-        ...searchAndRank(blogList, query, (item) => [
+        ...searchAndRank(blogList.map(toPublicBlogPost), query, (item) => [
           item.title,
           item.excerpt,
           item.content,
@@ -3403,7 +3757,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           type: "blog",
           title: item.title,
           description: item.excerpt ?? item.content,
-          href: `/blog/${item.id}`,
+          href: `/blog/${item.slug || item.id}`,
           category: item.category,
           imageUrl: item.imageUrl,
         })),
@@ -3461,7 +3815,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const scholarships = isAdmin(requester)
         ? await storage.getAllScholarships()
         : await storage.getActiveScholarships();
-      res.json(scholarships);
+      res.json(scholarships.map(toPublicScholarship));
     } catch (error) {
       console.error('Scholarships fetch error:', error);
       res.status(500).json({ message: 'Failed to fetch scholarships' });
@@ -3476,7 +3830,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const scholarships = await storage.searchScholarships(q);
-      res.json(scholarships);
+      res.json(scholarships.map(toPublicScholarship));
     } catch (error) {
       console.error('Scholarship search error:', error);
       res.status(500).json({ message: 'Failed to search scholarships' });
@@ -3485,18 +3839,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/scholarships/:id', async (req, res) => {
     try {
-      const id = Number.parseInt(req.params.id, 10);
-      if (Number.isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
-
-      const scholarship = await storage.getScholarship(id);
       const requester = getOptionalAuthenticatedUser(req);
+      const scholarship = await findScholarshipByIdentifier(req.params.id, requester);
       const isVisible =
         scholarship &&
         (isAdmin(requester) ||
           (scholarship.isActive !== false && new Date(scholarship.deadline).getTime() > Date.now()));
 
       if (!isVisible) return res.status(404).json({ message: 'Scholarship not found' });
-      res.json(scholarship);
+      res.json(toPublicScholarship(scholarship));
     } catch (error) {
       console.error('Scholarship detail fetch error:', error);
       res.status(500).json({ message: 'Failed to fetch scholarship' });
@@ -4019,7 +4370,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const blogPosts = isAdmin(requester)
         ? await storage.getAllBlogPosts()
         : await storage.getPublishedBlogPosts();
-      res.json(blogPosts);
+      res.json(blogPosts.map(toPublicBlogPost));
     } catch (error) {
       console.error('Blog posts fetch error:', error);
       res.status(500).json({ message: 'Failed to fetch blog posts' });
@@ -4035,7 +4386,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const requester = getOptionalAuthenticatedUser(req);
       const blogPosts = await storage.searchBlogPosts(q);
-      res.json(isAdmin(requester) ? blogPosts : blogPosts.filter((post) => post.isPublished));
+      res.json((isAdmin(requester) ? blogPosts : blogPosts.filter((post) => post.isPublished)).map(toPublicBlogPost));
     } catch (error) {
       console.error('Blog search error:', error);
       res.status(500).json({ message: 'Failed to search blog posts' });
@@ -4044,13 +4395,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/blog-posts/:id', async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      const post = await storage.getBlogPost(id);
       const requester = getOptionalAuthenticatedUser(req);
+      const post = await findBlogPostByIdentifier(req.params.id, requester);
       if (!post || (!isAdmin(requester) && !post.isPublished)) {
         return res.status(404).json({ message: 'Blog post not found' });
       }
-      res.json(post);
+      res.json(toPublicBlogPost(post));
     } catch (error) {
       console.error('Blog post fetch error:', error);
       res.status(500).json({ message: 'Failed to fetch blog post' });
@@ -8516,6 +8866,280 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Admin media replacement error:", getErrorLogMessage(error));
       res.status(400).json({ message: "Failed to replace media references", error: getErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/admin/seo/audit", authenticateToken, requireEditor, async (req, res) => {
+    try {
+      const baseUrl = getPublicBaseUrl(req);
+      const [scholarshipsList, jobsList, partnersList, blogList, eventsList, teamList] = await Promise.all([
+        storage.getAllScholarships(),
+        storage.getAllJobs(),
+        storage.getAllPartners(),
+        storage.getAllBlogPosts(),
+        storage.getAllEvents(),
+        storage.getAllTeamMembers(),
+      ]);
+
+      const normalizeText = (value: unknown) => String(value ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      const trimDescription = (value: unknown, fallback: string) => {
+        const text = normalizeText(value) || normalizeText(fallback);
+        return text.length <= 158 ? text : `${text.slice(0, 157).replace(/\s+\S*$/, "")}.`;
+      };
+      const pageRecords = [
+        ...staticSitemapPages.map((page) => ({
+          module: "page",
+          id: page.path,
+          title: page.title,
+          description: `${page.title} from Mtendere Education Consult`,
+          canonical: absoluteSitemapUrl(page.path, baseUrl),
+          image: "/src/assets/imgs/Mtendere_Logo.png",
+          structuredData: ["Organization", "WebSite", "BreadcrumbList", "CollectionPage"],
+          status: "public",
+        })),
+        ...scholarshipsList.map((item) => {
+          const publicItem = toPublicScholarship(item);
+          return {
+            module: "scholarship",
+            id: item.id,
+            title: String(publicItem.seoMeta?.title ?? publicItem.title),
+            description: trimDescription(publicItem.seoMeta?.description, publicItem.shortDescription || publicItem.description),
+            canonical: absoluteSitemapUrl(`/scholarships/${publicItem.slug || publicItem.id}`, baseUrl),
+            image: publicItem.bannerImage || publicItem.imageUrl,
+            structuredData: ["EducationalOccupationalProgram", "Offer", "FAQPage", "BreadcrumbList"],
+            status: item.isActive === false ? "inactive" : "public",
+          };
+        }),
+        ...jobsList.map((item) => {
+          const publicItem = toPublicJob(item);
+          return {
+            module: "job",
+            id: item.id,
+            title: String(publicItem.seoMeta?.title ?? `${publicItem.title} at ${publicItem.company}`),
+            description: trimDescription(publicItem.seoMeta?.description, publicItem.description),
+            canonical: absoluteSitemapUrl(`/jobs/${publicItem.slug || publicItem.id}`, baseUrl),
+            image: publicItem.imageUrl || publicItem.companyLogo,
+            structuredData: ["JobPosting", "FAQPage", "BreadcrumbList"],
+            status: item.isActive === false ? "inactive" : "public",
+          };
+        }),
+        ...partnersList.map((item) => {
+          const publicItem = toPublicPartner(item);
+          return {
+            module: "partner",
+            id: item.id,
+            title: `${publicItem.name} Partner Profile`,
+            description: trimDescription(publicItem.description, `${publicItem.name} partner institution profile.`),
+            canonical: absoluteSitemapUrl(`/partners/${publicItem.id}`, baseUrl),
+            image: publicItem.logoUrl || publicItem.coverImage,
+            structuredData: ["EducationalOrganization", "BreadcrumbList"],
+            status: item.isActive === false ? "inactive" : "public",
+          };
+        }),
+        ...blogList.map((item) => {
+          const publicItem = toPublicBlogPost(item);
+          return {
+            module: "blog",
+            id: item.id,
+            title: String(publicItem.seoMeta?.title ?? publicItem.title),
+            description: trimDescription(publicItem.seoMeta?.description, publicItem.excerpt || publicItem.content),
+            canonical: absoluteSitemapUrl(`/blog/${publicItem.slug || publicItem.id}`, baseUrl),
+            image: publicItem.imageUrl,
+            structuredData: ["BlogPosting", "FAQPage", "BreadcrumbList"],
+            status: item.isPublished === false ? "draft" : "public",
+          };
+        }),
+        ...eventsList.map((item) => ({
+          module: "event",
+          id: item.id,
+          title: String(item.seoMeta?.title ?? item.title),
+          description: trimDescription(item.seoMeta?.description, item.summary || item.description),
+          canonical: absoluteSitemapUrl(`/events/${item.slug || item.id}`, baseUrl),
+          image: item.coverImage,
+          structuredData: ["Event", "FAQPage", "BreadcrumbList"],
+          status: item.status,
+        })),
+        ...teamList.map((item) => {
+          const publicItem = toPublicTeamMember(item);
+          return {
+            module: "team",
+            id: item.id,
+            title: `${publicItem.name} - ${publicItem.title || publicItem.position}`,
+            description: trimDescription(publicItem.biography || publicItem.bio, `${publicItem.name} profile at Mtendere Education Consult.`),
+            canonical: absoluteSitemapUrl(`/team/${publicItem.slug || item.id}`, baseUrl),
+            image: publicItem.imageUrl || publicItem.profileImage,
+            structuredData: ["Person", "BreadcrumbList"],
+            status: item.isActive === false ? "inactive" : "public",
+          };
+        }),
+      ];
+
+      const issues: Array<Record<string, unknown>> = [];
+      const duplicateBuckets = (field: "title" | "description") =>
+        Object.values(
+          pageRecords.reduce<Record<string, typeof pageRecords>>((groups, page) => {
+            const key = String(page[field]).toLowerCase();
+            if (!key) return groups;
+            groups[key] = groups[key] || [];
+            groups[key].push(page);
+            return groups;
+          }, {}),
+        ).filter((group) => group.length > 1);
+
+      pageRecords.forEach((page) => {
+        if (!page.title || String(page.title).length < 12) {
+          issues.push({ severity: "error", module: page.module, id: page.id, issue: "Missing or weak SEO title", autoRemediation: "Generated a contextual title from content fields." });
+        }
+        if (!page.description || String(page.description).length < 50) {
+          issues.push({ severity: "error", module: page.module, id: page.id, issue: "Missing or weak meta description", autoRemediation: "Generated a concise description from content summary fields." });
+        }
+        if (!page.image) {
+          issues.push({ severity: "warning", module: page.module, id: page.id, issue: "Missing share/image-search image", autoRemediation: "Governed image fallbacks will assign category-specific imagery in the UI." });
+        } else if (!/^https?:\/\//i.test(String(page.image)) && !isValidMediaReference(String(page.image)) && !String(page.image).startsWith("/src/assets/")) {
+          issues.push({ severity: "info", module: page.module, id: page.id, issue: "Image is not in the approved media library", image: page.image, autoRemediation: "Use the media audit to replace this with a governed local asset or verified official logo." });
+        }
+      });
+
+      duplicateBuckets("title").forEach((group) => {
+        issues.push({
+          severity: "warning",
+          issue: "Duplicate meta title",
+          pages: group.map((page) => ({ module: page.module, id: page.id, canonical: page.canonical })),
+        });
+      });
+      duplicateBuckets("description").forEach((group) => {
+        issues.push({
+          severity: "warning",
+          issue: "Duplicate meta description",
+          pages: group.map((page) => ({ module: page.module, id: page.id, canonical: page.canonical })),
+        });
+      });
+
+      const repeatedImages = Object.values(
+        pageRecords.reduce<Record<string, typeof pageRecords>>((groups, page) => {
+          const key = String(page.image || "");
+          if (!key) return groups;
+          groups[key] = groups[key] || [];
+          groups[key].push(page);
+          return groups;
+        }, {}),
+      ).filter((group) => group.length > 3);
+
+      repeatedImages.forEach((group) => {
+        issues.push({
+          severity: "info",
+          issue: "Repeated image assignment",
+          image: group[0].image,
+          usageCount: group.length,
+          recommendation: "Use more category-specific images for image search diversity where the repeated asset is not an official logo.",
+        });
+      });
+
+      await storage.logAnalytics({
+        event: "seo_audit_run",
+        userId: getAuthenticatedUser(req).id,
+        metadata: {
+          checked: pageRecords.length,
+          issues: issues.length,
+        },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+
+      res.json({
+        generatedAt: new Date().toISOString(),
+        checked: pageRecords.length,
+        summary: {
+          pages: pageRecords.filter((page) => page.module === "page").length,
+          scholarships: pageRecords.filter((page) => page.module === "scholarship").length,
+          jobs: pageRecords.filter((page) => page.module === "job").length,
+          blogPosts: pageRecords.filter((page) => page.module === "blog").length,
+          events: pageRecords.filter((page) => page.module === "event").length,
+          partners: pageRecords.filter((page) => page.module === "partner").length,
+          teamProfiles: pageRecords.filter((page) => page.module === "team").length,
+          issues: issues.length,
+          duplicateTitles: duplicateBuckets("title").length,
+          duplicateDescriptions: duplicateBuckets("description").length,
+          repeatedImages: repeatedImages.length,
+        },
+        sitemaps: ["/sitemap.xml", ...sitemapPaths].map((path) => absoluteSitemapUrl(path, baseUrl)),
+        pages: pageRecords,
+        issues,
+        governance: {
+          canonicalPolicy: "All public pages receive query-free canonical URLs. Admin, dashboard, auth, and tokenized routes are excluded through robots and client noindex metadata.",
+          imagePolicy: ["approved local media", "verified official external source", "governed category fallback", "global branded fallback"],
+          structuredDataPolicy: ["Organization", "WebSite", "BreadcrumbList", "JobPosting", "Event", "BlogPosting", "EducationalOrganization", "EducationalOccupationalProgram", "Person", "FAQPage"],
+        },
+      });
+    } catch (error) {
+      console.error("Admin SEO audit error:", error);
+      res.status(500).json({ message: "Failed to audit SEO governance" });
+    }
+  });
+
+  app.get("/api/admin/seo/analytics", authenticateToken, requireEditor, async (_req, res) => {
+    try {
+      const end = new Date();
+      const start = new Date(end.getTime() - 90 * 24 * 60 * 60 * 1000);
+      const [analytics, sitemapData] = await Promise.all([
+        storage.getAnalytics(start, end),
+        buildPublicSitemapData(env.PUBLIC_APP_URL || "https://mtendereeducationconsult.com"),
+      ]);
+      const searchEvents = analytics.filter((item) => item.event === "site_search");
+      const queryCounts = searchEvents.reduce<Record<string, number>>((counts, item) => {
+        const query = typeof item.metadata === "object" && item.metadata && "query" in item.metadata ? String(item.metadata.query) : "";
+        if (!query) return counts;
+        counts[query] = (counts[query] || 0) + 1;
+        return counts;
+      }, {});
+      const publicUrlCount = [
+        ...sitemapData.pages,
+        ...sitemapData.scholarships,
+        ...sitemapData.jobs,
+        ...sitemapData.blog,
+        ...sitemapData.events,
+        ...sitemapData.partners,
+        ...sitemapData.team,
+      ].length;
+
+      res.json({
+        window: { start: start.toISOString(), end: end.toISOString() },
+        organicTrafficProxy: {
+          siteSearches: searchEvents.length,
+          topSearchQueries: Object.entries(queryCounts)
+            .sort((left, right) => right[1] - left[1])
+            .slice(0, 20)
+            .map(([query, count]) => ({ query, count })),
+          publicIndexableUrls: publicUrlCount,
+          imageSitemapUrls: [
+            ...sitemapData.pages,
+            ...sitemapData.scholarships,
+            ...sitemapData.jobs,
+            ...sitemapData.blog,
+            ...sitemapData.events,
+            ...sitemapData.partners,
+            ...sitemapData.team,
+          ].filter((item) => (item.images ?? []).length > 0).length,
+        },
+        integrations: {
+          googleAnalytics4: Boolean(process.env.GA4_MEASUREMENT_ID || process.env.VITE_GA4_MEASUREMENT_ID),
+          googleSearchConsole: Boolean(process.env.GOOGLE_SEARCH_CONSOLE_SITE_URL || process.env.GOOGLE_SITE_VERIFICATION),
+          bingWebmasterTools: Boolean(process.env.BING_WEBMASTER_SITE_URL || process.env.BING_SITE_VERIFICATION),
+          vercelAnalytics: true,
+        },
+        dashboards: [
+          "Organic traffic",
+          "Indexed pages",
+          "Search queries",
+          "Click-through rate",
+          "Top content",
+          "Image search traffic",
+          "Sitemap coverage",
+        ],
+      });
+    } catch (error) {
+      console.error("Admin SEO analytics error:", error);
+      res.status(500).json({ message: "Failed to load SEO analytics" });
     }
   });
 

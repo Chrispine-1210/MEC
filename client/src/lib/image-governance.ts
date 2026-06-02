@@ -29,7 +29,9 @@ export type GovernedImageInput = {
 export type ResolvedGovernedImage = {
   src: string;
   alt: string;
+  title: string;
   caption: string;
+  description: string;
   key: string;
   fallbackLevel: "assigned" | "category" | "module" | "global" | "placeholder";
   module: GovernedImageModule;
@@ -268,7 +270,9 @@ export function resolveGovernedImage(input: GovernedImageInput): ResolvedGoverne
   return {
     src: "",
     alt: buildAlt(input),
+    title: buildImageTitle(input),
     caption: buildCaption(input),
+    description: buildImageDescription(input),
     key: "placeholder",
     fallbackLevel: "placeholder",
     module,
@@ -408,7 +412,9 @@ function toResolved(asset: AssetEntry, input: GovernedImageInput, fallbackLevel:
   return {
     src: asset.src,
     alt: buildAlt(input),
+    title: buildImageTitle(input),
     caption: buildCaption(input),
+    description: buildImageDescription(input),
     key: asset.relativePath,
     fallbackLevel,
     module: input.module,
@@ -428,6 +434,25 @@ function buildCaption(input: GovernedImageInput) {
   if (input.variant === "profile") return "Mtendere team profile";
   if (input.variant === "logo") return "Mtendere partner identity";
   return "Mtendere Education Consult";
+}
+
+function buildImageTitle(input: GovernedImageInput) {
+  const title = input.title?.trim();
+  const moduleLabel = input.module === "default" ? "Mtendere Education" : `${input.module} visual`;
+  return [title || moduleLabel, input.category?.trim()].filter(Boolean).join(" - ");
+}
+
+function buildImageDescription(input: GovernedImageInput) {
+  const title = input.title?.trim() || "Mtendere Education Consult content";
+  const category = input.category?.trim();
+  const tags = (input.tags || []).filter(Boolean).join(", ");
+  return [
+    `${title} image selected for ${input.module} content.`,
+    category ? `Category: ${category}.` : "",
+    tags ? `Tags: ${tags}.` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function getHashSeed(input?: GovernedImageInput) {

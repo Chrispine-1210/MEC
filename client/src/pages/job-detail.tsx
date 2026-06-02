@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
 import ExpandingNav from "@/components/expanding-nav";
@@ -9,6 +8,16 @@ import GovernedImage from "@/components/governed-image";
 import RichContent from "@/components/rich-content";
 import { SEO } from "@/components/SEO";
 import { publicContentQueryOptions } from "@/lib/realtime-content";
+import {
+  buildBreadcrumbSchema,
+  buildFaqSchema,
+  buildJobPostingSchema,
+  buildOrganizationSchema,
+  buildWebsiteSchema,
+  canonicalUrl,
+  generateKeywords,
+  seoDescription,
+} from "@/lib/seo";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -88,48 +97,6 @@ export default function JobDetail() {
   const related = (jobs || [])
     .filter((item) => item.id !== resolved?.id && (item.category || item.jobType) === (resolved?.category || resolved?.jobType))
     .slice(0, 3);
-
-  useEffect(() => {
-    if (!resolved || typeof document === "undefined") return;
-
-    const canonicalHref = `${window.location.origin}/jobs/${resolved.slug || resolved.id}`;
-    let canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
-    if (!canonical) {
-      canonical = document.createElement("link");
-      canonical.rel = "canonical";
-      document.head.appendChild(canonical);
-    }
-    canonical.href = canonicalHref;
-
-    const structuredData = {
-      "@context": "https://schema.org",
-      "@type": "JobPosting",
-      title: resolved.title,
-      description: resolved.description,
-      datePosted: resolved.createdAt,
-      validThrough: resolved.deadline,
-      employmentType: resolved.employmentType || resolved.jobType,
-      hiringOrganization: {
-        "@type": "Organization",
-        name: resolved.company,
-        logo: resolved.companyLogo || undefined,
-      },
-      jobLocationType: resolved.workMode === "Remote" ? "TELECOMMUTE" : undefined,
-      jobLocation: {
-        "@type": "Place",
-        address: resolved.location,
-      },
-      applicantLocationRequirements: resolved.workMode === "Remote" ? { "@type": "Country", name: "Global" } : undefined,
-    };
-    let script = document.querySelector<HTMLScriptElement>('script[data-mtendere-job-jsonld="true"]');
-    if (!script) {
-      script = document.createElement("script");
-      script.type = "application/ld+json";
-      script.dataset.mtendereJobJsonld = "true";
-      document.head.appendChild(script);
-    }
-    script.textContent = JSON.stringify(structuredData);
-  }, [resolved]);
 
   if (jobLoading && listLoading) {
     return (
@@ -317,14 +284,54 @@ export default function JobDetail() {
     "Prepare short evidence-based examples before any screening call starts.",
     "Use one advisor session if you need help tightening your CV or interview positioning.",
   ];
+  const jobKeywords = generateKeywords({
+    module: "job",
+    title: resolved.title,
+    category: resolved.category || resolved.jobType,
+    location: resolved.location,
+    company: resolved.company,
+    tags: resolved.tags,
+  });
+  const detailStructuredData = [
+    buildOrganizationSchema(),
+    buildWebsiteSchema(),
+    buildBreadcrumbSchema([
+      { name: "Home", url: "/" },
+      { name: "Jobs", url: "/jobs" },
+      { name: resolved.title, url: `/jobs/${resolved.slug || resolved.id}` },
+    ]),
+    buildJobPostingSchema(resolved),
+    buildFaqSchema([
+      {
+        question: `How do I apply for ${resolved.title}?`,
+        answer:
+          resolved.applicationInstructions ||
+          "Use the Apply Now button on this page and submit your resume, cover letter, and role-specific answers through Mtendere.",
+      },
+      {
+        question: `What skills are required for ${resolved.title}?`,
+        answer: skills.join(", ") || "The required skills are listed in the role requirements and quick facts on this page.",
+      },
+    ]),
+  ].filter(Boolean) as Record<string, unknown>[];
 
   return (
     <div className="min-h-screen bg-background">
       <SEO
         title={resolved.title}
-        description={`${resolved.title} at ${resolved.company}. ${resolved.location}.`}
+        description={seoDescription(
+          String(resolved.seoMeta?.description || ""),
+          `${resolved.title} at ${resolved.company}. ${resolved.location}. ${overviewContent}`,
+        )}
         image={resolved.imageUrl || undefined}
+        imageAlt={`${resolved.title} at ${resolved.company}`}
+        canonical={canonicalUrl(`/jobs/${resolved.slug || resolved.id}`)}
         type="article"
+        keywords={jobKeywords}
+        section={resolved.category || resolved.jobType}
+        publishedTime={resolved.createdAt}
+        modifiedTime={resolved.updatedAt || resolved.createdAt}
+        structuredData={detailStructuredData}
       />
       <ExpandingNav />
 
