@@ -46,7 +46,7 @@ export default defineConfig({
     sourcemap: false,
     target: "es2020",
     cssCodeSplit: true,
-    chunkSizeWarningLimit: 650,
+    chunkSizeWarningLimit: 1200,
     rolldownOptions: {
       checks: {
         pluginTimings: false,

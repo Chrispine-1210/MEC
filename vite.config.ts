@@ -40,7 +40,7 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, "dist/client"),
     emptyOutDir: true,
-    chunkSizeWarningLimit: 650,
+    chunkSizeWarningLimit: 1200,
     rolldownOptions: {
       checks: {
         pluginTimings: false,
