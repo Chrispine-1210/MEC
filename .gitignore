@@ -13,3 +13,4 @@ logs/*
 dist/index.js
 dist/client/admin/
 server-build/
+vercel-media-assets/

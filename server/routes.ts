@@ -1801,13 +1801,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     limits: { fileSize: 10 * 1024 * 1024, files: 10 },
   });
 
-  const bundledMediaAssetRoot = path.resolve(import.meta.dirname, "..", "client", "src", "assets", "imgs");
+  const deployMediaAssetRoot = path.resolve(process.cwd(), "vercel-media-assets");
+  const bundledMediaAssetRoot = isVercelRuntime && fs.existsSync(deployMediaAssetRoot)
+    ? deployMediaAssetRoot
+    : path.resolve(import.meta.dirname, "..", "client", "src", "assets", "imgs");
   const mediaAssetRoot = isVercelRuntime
     ? resolveWritableRuntimePath("media-assets")
     : bundledMediaAssetRoot;
   const mediaAssetReadRoots = Array.from(
     new Set([
       mediaAssetRoot,
+      deployMediaAssetRoot,
       bundledMediaAssetRoot,
       path.resolve(process.cwd(), "client", "src", "assets", "imgs"),
     ]),

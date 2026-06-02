@@ -6,10 +6,10 @@
   "outputDirectory": "dist/client",
   "functions": {
     "api/index.js": {
-      "includeFiles": "{server-build,dist,client/src/assets/imgs}/**"
+      "includeFiles": "{server-build,dist,vercel-media-assets}/**"
     },
     "api/[...path].js": {
-      "includeFiles": "{server-build,dist,client/src/assets/imgs}/**"
+      "includeFiles": "{server-build,dist,vercel-media-assets}/**"
     }
   },
   "redirects": [

@@ -19,7 +19,7 @@
     "build:admin:vercel": "node scripts/run-vite-build.cjs --cwd Admin --env ADMIN_BUILD_OUT_DIR=dist/client/admin --env VITE_ADMIN_BASE_PATH=/admin/",
     "build:server": "node scripts/run-esbuild.cjs server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "build:server:vercel": "node scripts/run-esbuild.cjs server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=server-build",
-    "build:vercel": "node scripts/clean-vercel-artifacts.cjs && npm run build:client && npm run build:admin:vercel && npm run build:server:vercel && node scripts/clean-vercel-artifacts.cjs",
+    "build:vercel": "node scripts/clean-vercel-artifacts.cjs && npm run build:client && npm run build:admin:vercel && npm run build:server:vercel && node scripts/prepare-vercel-media-assets.cjs && node scripts/clean-vercel-artifacts.cjs",
     "build": "npm run build:client && npm run build:admin && npm run build:server",
     "start": "node scripts/start-production.cjs",
     "pm2:start": "pm2 start ecosystem.config.cjs --env production",
