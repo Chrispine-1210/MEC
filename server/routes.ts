@@ -9572,12 +9572,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const verificationUrl = `${baseUrl}/api/subscribers/verify/${verificationToken}`;
       const unsubscribeUrl = `${baseUrl}/api/subscribers/unsubscribe/${unsubscribeToken}`;
 
-      void sendSubscriptionConfirmation({
+      const confirmationEmail = await sendSubscriptionConfirmation({
         email: subscriber.email,
         name: subscriber.name,
         verificationUrl,
         unsubscribeUrl,
-      });
+      }, { awaitDelivery: true });
+
+      if (confirmationEmail.status !== "sent") {
+        console.error(
+          "Subscription confirmation email failed:",
+          getErrorLogMessage({
+            emailJobId: confirmationEmail.id,
+            status: confirmationEmail.status,
+            provider: confirmationEmail.provider,
+            error: confirmationEmail.error || confirmationEmail.lastError || "Email provider did not accept the message",
+          }),
+        );
+        return res.status(503).json({
+          message:
+            "Your subscription was saved, but we could not send the confirmation email right now. Please try again shortly or contact support.",
+          deliveryStatus: confirmationEmail.status,
+        });
+      }
 
       void logAnalyticsBestEffort({
         event: "subscriber_created",
@@ -9588,6 +9605,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           consentAccepted: payload.consentAccepted,
           recaptchaSkipped: "skipped" in recaptcha ? recaptcha.skipped : false,
           recaptchaScore: "score" in recaptcha ? recaptcha.score : undefined,
+          emailJobId: confirmationEmail.id,
+          emailProvider: confirmationEmail.provider,
         },
         ipAddress: req.ip,
         userAgent: req.get("user-agent"),
@@ -9600,6 +9619,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           email: subscriber.email,
           status: subscriber.status,
           preferences: subscriber.preferences,
+        },
+        delivery: {
+          status: confirmationEmail.status,
+          provider: confirmationEmail.provider,
         },
       });
     } catch (error) {

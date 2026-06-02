@@ -102,6 +102,19 @@ const trackingSecret = env.EMAIL_TRACKING_SECRET || env.JWT_SECRET;
 let isProcessing = false;
 let workerTimer: NodeJS.Timeout | null = null;
 
+type EmailEnqueueOptions = {
+  awaitDelivery?: boolean;
+};
+
+type EmailEnqueueResult = {
+  id: string;
+  status: string;
+  error?: string;
+  provider?: string | null;
+  providerMessageId?: string | null;
+  lastError?: string | null;
+};
+
 const emailPreferenceCategories = [
   "scholarships",
   "jobs",
@@ -841,7 +854,7 @@ export const startEmailQueueWorker = () => {
   void processEmailQueue();
 };
 
-export const enqueueEmail = async (payload: EmailPayload) => {
+export const enqueueEmail = async (payload: EmailPayload, options: EmailEnqueueOptions = {}): Promise<EmailEnqueueResult> => {
   const id = randomUUID();
   const normalizedRecipient = normalizeEmail(payload.to);
 
@@ -889,7 +902,22 @@ export const enqueueEmail = async (payload: EmailPayload) => {
       category: job.category,
       metadata: payload.metadata,
     });
-    void processEmailQueue();
+    if (options.awaitDelivery) {
+      await processEmailQueue();
+      const processedJob = await storage.getEmailJob(job.id).catch(() => null);
+      if (processedJob) {
+        return {
+          id: processedJob.id,
+          status: processedJob.status,
+          provider: processedJob.provider,
+          providerMessageId: processedJob.providerMessageId,
+          lastError: processedJob.lastError,
+        };
+      }
+    } else {
+      void processEmailQueue();
+    }
+
     return { id: job.id, status: job.status };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown email enqueue error";
@@ -1050,7 +1078,7 @@ export const sendSubscriptionConfirmation = (input: {
   name?: string | null;
   verificationUrl: string;
   unsubscribeUrl: string;
-}) =>
+}, options?: EmailEnqueueOptions) =>
   enqueueEmail({
     to: input.email,
     subject: "Confirm your Mtendere updates subscription",
@@ -1068,7 +1096,7 @@ export const sendSubscriptionConfirmation = (input: {
       cta: { href: input.verificationUrl, label: "Confirm subscription" },
     }),
     metadata: { flow: "double_opt_in", source: "newsletter" },
-  });
+  }, options);
 
 export const sendAccountVerification = (input: {
   email: string;
