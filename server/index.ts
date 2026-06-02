@@ -83,6 +83,10 @@ const productionBrowserOrigins = [
 const trustedProductionDomain = "mtendereeducationconsult.com";
 
 const vercelOrigin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined;
+const vercelBranchOrigin = process.env.VERCEL_BRANCH_URL ? `https://${process.env.VERCEL_BRANCH_URL}` : undefined;
+const vercelProductionOrigin = process.env.VERCEL_PROJECT_PRODUCTION_URL
+  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+  : undefined;
 
 const hostnameFromUrl = (value?: string) => {
   if (!value) return null;
@@ -140,6 +144,8 @@ const allowedOrigins = new Set(
         env.ADMIN_APP_URL,
         env.VITE_SITE_URL,
         vercelOrigin,
+        vercelBranchOrigin,
+        vercelProductionOrigin,
         ...splitOriginList(env.CORS_ORIGIN),
         ...splitOriginList(env.CORS_ORIGINS),
         ...splitOriginList(env.ALLOWED_ORIGINS),
@@ -174,8 +180,15 @@ const isAllowedOrigin = (origin: string | undefined, req: Request) => {
     const isTrustedProductionHost =
       parsedOrigin.protocol === "https:" &&
       (hostname === trustedProductionDomain || hostname.endsWith(`.${trustedProductionDomain}`));
+    const isTrustedVercelHost =
+      parsedOrigin.protocol === "https:" &&
+      hostname.endsWith(".vercel.app") &&
+      (/^(mec|mtendere)(?:-|$)/.test(hostname) ||
+        hostname.includes("mtendereeducationconsult") ||
+        hostname.includes("chrispine-1210"));
 
     if (isTrustedProductionHost) return true;
+    if (isTrustedVercelHost) return true;
   } catch {
     // Fall back to the explicit allowlist for malformed values.
   }
