@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
 import ExpandingNav from "@/components/expanding-nav";
@@ -6,6 +7,7 @@ import ApplicationDialog from "@/components/application-dialog";
 import SaveItemButton from "@/components/save-item-button";
 import GovernedImage from "@/components/governed-image";
 import RichContent from "@/components/rich-content";
+import { SEO } from "@/components/SEO";
 import { publicContentQueryOptions } from "@/lib/realtime-content";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,7 +24,10 @@ import {
   DollarSign,
   ExternalLink,
   LineChart,
+  Mail,
   MapPin,
+  Printer,
+  Share2,
   ShieldCheck,
   Sparkles,
   Target,
@@ -59,11 +64,11 @@ const getDaysLeft = (dateString?: string | null) => {
 
 export default function JobDetail() {
   const [, params] = useRoute("/jobs/:id");
-  const id = Number(params?.id ?? 0);
+  const identifier = params?.id ?? "";
 
   const { data: job, isLoading: jobLoading } = useQuery<ApiJob>({
-    queryKey: [`/api/jobs/${id}`],
-    enabled: Number.isFinite(id) && id > 0,
+    queryKey: [`/api/jobs/${identifier}`],
+    enabled: Boolean(identifier),
     ...publicContentQueryOptions,
   });
 
@@ -72,10 +77,59 @@ export default function JobDetail() {
     ...publicContentQueryOptions,
   });
 
-  const resolved = job || jobs?.find((item) => item.id === id);
+  const numericId = Number(identifier);
+  const resolved =
+    job ||
+    jobs?.find((item) =>
+      Number.isFinite(numericId) && numericId > 0
+        ? item.id === numericId
+        : item.slug === identifier,
+    );
   const related = (jobs || [])
-    .filter((item) => item.id !== id && item.jobType === resolved?.jobType)
+    .filter((item) => item.id !== resolved?.id && (item.category || item.jobType) === (resolved?.category || resolved?.jobType))
     .slice(0, 3);
+
+  useEffect(() => {
+    if (!resolved || typeof document === "undefined") return;
+
+    const canonicalHref = `${window.location.origin}/jobs/${resolved.slug || resolved.id}`;
+    let canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement("link");
+      canonical.rel = "canonical";
+      document.head.appendChild(canonical);
+    }
+    canonical.href = canonicalHref;
+
+    const structuredData = {
+      "@context": "https://schema.org",
+      "@type": "JobPosting",
+      title: resolved.title,
+      description: resolved.description,
+      datePosted: resolved.createdAt,
+      validThrough: resolved.deadline,
+      employmentType: resolved.employmentType || resolved.jobType,
+      hiringOrganization: {
+        "@type": "Organization",
+        name: resolved.company,
+        logo: resolved.companyLogo || undefined,
+      },
+      jobLocationType: resolved.workMode === "Remote" ? "TELECOMMUTE" : undefined,
+      jobLocation: {
+        "@type": "Place",
+        address: resolved.location,
+      },
+      applicantLocationRequirements: resolved.workMode === "Remote" ? { "@type": "Country", name: "Global" } : undefined,
+    };
+    let script = document.querySelector<HTMLScriptElement>('script[data-mtendere-job-jsonld="true"]');
+    if (!script) {
+      script = document.createElement("script");
+      script.type = "application/ld+json";
+      script.dataset.mtendereJobJsonld = "true";
+      document.head.appendChild(script);
+    }
+    script.textContent = JSON.stringify(structuredData);
+  }, [resolved]);
 
   if (jobLoading && listLoading) {
     return (
@@ -128,17 +182,44 @@ export default function JobDetail() {
     Array.isArray(resolved.benefits) && resolved.benefits.length > 0
       ? resolved.benefits
       : ["Career development support", "Mentorship from senior team members", "Flexible work options"];
+  const responsibilities =
+    Array.isArray(resolved.responsibilities) && resolved.responsibilities.length > 0
+      ? resolved.responsibilities
+      : [
+          "Deliver assigned work with reliability, ownership, and clear communication.",
+          "Collaborate with managers and team members to meet agreed outcomes.",
+          "Share progress, risks, and ideas that improve team performance.",
+        ];
+  const qualifications =
+    Array.isArray(resolved.qualifications) && resolved.qualifications.length > 0
+      ? resolved.qualifications
+      : Array.isArray(resolved.educationRequirements) && resolved.educationRequirements.length > 0
+        ? resolved.educationRequirements
+        : ["Relevant education, training, or experience for this role."];
+  const skills =
+    Array.isArray(resolved.requiredSkills) && resolved.requiredSkills.length > 0
+      ? resolved.requiredSkills
+      : Array.isArray(resolved.skills) && resolved.skills.length > 0
+        ? resolved.skills
+        : requirements.slice(0, 5);
   const compensationLabel = formatCurrency(resolved.salary, resolved.currency);
-  const workMode = resolved.isRemote ? "Remote-friendly" : "On-site or hybrid";
+  const workMode = resolved.workMode || (resolved.isRemote ? "Remote-friendly" : "On-site or hybrid");
   const heroStats = [
     { label: "Company", value: resolved.company, icon: Building },
-    { label: "Compensation", value: compensationLabel, icon: DollarSign },
+    { label: "Compensation", value: resolved.salaryRange || compensationLabel, icon: DollarSign },
     { label: "Work mode", value: workMode, icon: resolved.isRemote ? Wifi : Briefcase },
     {
       label: "Deadline",
       value: daysLeft !== null && daysLeft > 0 ? `${daysLeft} days left` : formatDate(resolved.deadline),
       icon: Calendar,
     },
+  ];
+  const quickFacts = [
+    ...heroStats,
+    { label: "Job type", value: resolved.employmentType || resolved.jobType, icon: Briefcase },
+    { label: "Experience", value: resolved.experienceLevel || "Open to qualified candidates", icon: Target },
+    { label: "Education", value: qualifications[0] || "Relevant qualification", icon: ShieldCheck },
+    { label: "Positions", value: resolved.numberOfPositions || "1", icon: Users },
   ];
   const roleHighlights = [
     {
@@ -239,6 +320,12 @@ export default function JobDetail() {
 
   return (
     <div className="min-h-screen bg-background">
+      <SEO
+        title={resolved.title}
+        description={`${resolved.title} at ${resolved.company}. ${resolved.location}.`}
+        image={resolved.imageUrl || undefined}
+        type="article"
+      />
       <ExpandingNav />
 
       <section className="relative mt-16 overflow-hidden py-20 text-white">
@@ -267,7 +354,8 @@ export default function JobDetail() {
           <div className="grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_360px] lg:items-end">
             <div className="hero-panel hero-safe-copy max-w-4xl rounded-3xl p-7 md:p-10">
               <div className="mb-4 flex flex-wrap items-center gap-3">
-                <Badge className="bg-mtendere-green text-white font-semibold">{resolved.jobType}</Badge>
+                <Badge className="bg-mtendere-green text-white font-semibold">{resolved.employmentType || resolved.jobType}</Badge>
+                {resolved.category && <Badge className="bg-white/12 text-white">{resolved.category}</Badge>}
                 {resolved.isRemote && (
                   <Badge className="bg-mtendere-blue text-white">
                     <Wifi className="mr-1 h-3 w-3" />
@@ -283,6 +371,19 @@ export default function JobDetail() {
               </div>
 
               <h1 className="mb-6 text-3xl font-bold md:text-5xl">{resolved.title}</h1>
+              {resolved.companyLogo && (
+                <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-xl border border-white/25 bg-white/90 p-2">
+                  <GovernedImage
+                    module="job"
+                    src={resolved.companyLogo}
+                    title={`${resolved.company} logo`}
+                    variant="logo"
+                    aspectRatio="1 / 1"
+                    className="h-full w-full"
+                    wrapperClassName="h-full rounded-none shadow-none"
+                  />
+                </div>
+              )}
               <p className="max-w-3xl text-base leading-relaxed text-white/85 md:text-lg">
                 Use this page to understand the role clearly, tailor your application intentionally, and move into the
                 hiring process with stronger preparation.
@@ -291,7 +392,7 @@ export default function JobDetail() {
               <div className="mt-8 flex flex-wrap items-center gap-6 text-sm text-white/85">
                 <span className="flex items-center gap-2">
                   <Building className="h-4 w-4" />
-                  {resolved.company}
+                  {resolved.company}{resolved.department ? ` - ${resolved.department}` : ""}
                 </span>
                 <span className="flex items-center gap-2">
                   <MapPin className="h-4 w-4" />
@@ -301,6 +402,24 @@ export default function JobDetail() {
                   <Calendar className="h-4 w-4" />
                   Deadline {formatDate(resolved.deadline)}
                 </span>
+              </div>
+
+              <div className="mt-8 flex flex-wrap gap-3">
+                <ApplicationDialog
+                  type="job"
+                  referenceId={resolved.id}
+                  title={resolved.title}
+                  job={resolved}
+                  trigger={
+                    <Button className="bg-mtendere-orange font-bold text-white hover:bg-mtendere-orange/90">
+                      Apply Now
+                    </Button>
+                  }
+                />
+                <Button variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white hover:text-mtendere-blue" onClick={() => window.print()}>
+                  <Printer className="mr-2 h-4 w-4" />
+                  Print
+                </Button>
               </div>
             </div>
 
@@ -378,7 +497,21 @@ export default function JobDetail() {
             </section>
 
             <section>
-              <h2 className="mb-4 text-2xl font-bold text-mtendere-blue">What the employer is likely looking for</h2>
+              <h2 className="mb-4 text-2xl font-bold text-mtendere-blue">Responsibilities</h2>
+              <Card className="border-0 bg-mtendere-gray/60 shadow-sm">
+                <CardContent className="space-y-4 p-6">
+                  {responsibilities.map((item, idx) => (
+                    <div key={`${item}-${idx}`} className="flex items-start gap-3">
+                      <CheckCircle className="mt-0.5 h-5 w-5 text-mtendere-green" />
+                      <p className="font-medium text-foreground/90">{item}</p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </section>
+
+            <section>
+              <h2 className="mb-4 text-2xl font-bold text-mtendere-blue">Requirements</h2>
               <Card className="border-0 bg-mtendere-gray/60 shadow-sm">
                 <CardContent className="space-y-4 p-6">
                   {requirements.map((req, idx) => (
@@ -389,6 +522,42 @@ export default function JobDetail() {
                   ))}
                 </CardContent>
               </Card>
+            </section>
+
+            <section>
+              <h2 className="mb-4 text-2xl font-bold text-mtendere-blue">Qualifications and skills</h2>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Card className="border border-border/60">
+                  <CardHeader>
+                    <CardTitle className="text-lg text-foreground">Qualifications</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {qualifications.map((item) => (
+                      <div key={item} className="flex items-start gap-3">
+                        <ShieldCheck className="mt-0.5 h-4 w-4 text-mtendere-blue" />
+                        <p className="text-sm text-foreground/80">{item}</p>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+                <Card className="border border-border/60">
+                  <CardHeader>
+                    <CardTitle className="text-lg text-foreground">Skills</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-wrap gap-2">
+                    {skills.map((item) => (
+                      <Badge key={item} variant="outline" className="border-mtendere-green/30 text-mtendere-green">
+                        {item}
+                      </Badge>
+                    ))}
+                    {(resolved.preferredSkills || []).map((item) => (
+                      <Badge key={item} variant="secondary">
+                        {item}
+                      </Badge>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
             </section>
 
             <section>
@@ -430,6 +599,51 @@ export default function JobDetail() {
                 ))}
               </div>
             </section>
+
+            <section>
+              <h2 className="mb-4 text-2xl font-bold text-mtendere-blue">Company information</h2>
+              <Card className="border border-border/60">
+                <CardContent className="space-y-5 p-6">
+                  <RichContent html={resolved.companyOverview || resolved.companyProfile || `Learn more about ${resolved.company} during the application process.`} />
+                  {resolved.aboutTeam && (
+                    <div className="rounded-lg border border-border/60 bg-muted/30 p-4">
+                      <h3 className="mb-2 font-semibold text-foreground">About the team</h3>
+                      <RichContent html={resolved.aboutTeam} compact />
+                    </div>
+                  )}
+                  {resolved.applicationInstructions && (
+                    <div className="rounded-lg border border-border/60 bg-muted/30 p-4">
+                      <h3 className="mb-2 font-semibold text-foreground">Application instructions</h3>
+                      <RichContent html={resolved.applicationInstructions} compact />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </section>
+
+            {Array.isArray(resolved.attachments) && resolved.attachments.length > 0 && (
+              <section>
+                <h2 className="mb-4 text-2xl font-bold text-mtendere-blue">Attachments and documents</h2>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {resolved.attachments.map((attachment, index) => {
+                    const label = String(attachment.title ?? attachment.name ?? `Document ${index + 1}`);
+                    const url = String(attachment.url ?? attachment.href ?? "");
+                    return (
+                      <a
+                        key={`${label}-${index}`}
+                        href={url || undefined}
+                        target={url ? "_blank" : undefined}
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between rounded-lg border border-border/60 p-4 text-sm transition-colors hover:bg-muted/40"
+                      >
+                        <span className="font-semibold text-foreground">{label}</span>
+                        <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                      </a>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
             <section>
               <h2 className="mb-4 text-2xl font-bold text-mtendere-blue">What success could look like in the first 90 days</h2>
@@ -493,8 +707,9 @@ export default function JobDetail() {
 
                 <ApplicationDialog
                   type="job"
-                  referenceId={id}
+                  referenceId={resolved.id}
                   title={resolved.title}
+                  job={resolved}
                   customFields={[
                     { name: "availability", label: "Earliest availability", required: true },
                     { name: "fitSummary", label: "Why are you a strong fit for this role?", type: "textarea", required: true },
@@ -508,9 +723,39 @@ export default function JobDetail() {
 
                 <SaveItemButton
                   type="job"
-                  referenceId={id}
+                  referenceId={resolved.id}
                   className="w-full border-mtendere-green text-mtendere-green hover:bg-mtendere-green hover:text-white"
                 />
+
+                <div className="grid grid-cols-3 gap-2">
+                  <Button variant="outline" size="icon" aria-label="Print job" onClick={() => window.print()}>
+                    <Printer className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label="Email job"
+                    onClick={() => {
+                      window.location.href = `mailto:?subject=${encodeURIComponent(resolved.title)}&body=${encodeURIComponent(window.location.href)}`;
+                    }}
+                  >
+                    <Mail className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label="Share job"
+                    onClick={() => {
+                      if (navigator.share) {
+                        navigator.share({ title: resolved.title, url: window.location.href });
+                      } else {
+                        navigator.clipboard?.writeText(window.location.href);
+                      }
+                    }}
+                  >
+                    <Share2 className="h-4 w-4" />
+                  </Button>
+                </div>
 
                 <Button asChild variant="ghost" className="w-full text-muted-foreground">
                   <Link href="/contact">Talk to an advisor</Link>
@@ -523,7 +768,7 @@ export default function JobDetail() {
                 <CardTitle className="text-lg text-foreground">Quick facts</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
-                {heroStats.map(({ label, value, icon: Icon }) => (
+                {quickFacts.map(({ label, value, icon: Icon }) => (
                   <div key={label} className="flex items-center justify-between gap-4">
                     <span className="flex items-center gap-2 text-muted-foreground">
                       <Icon className="h-4 w-4 text-mtendere-green" />
@@ -556,7 +801,7 @@ export default function JobDetail() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {related.map((item) => (
-                    <Link key={item.id} href={`/jobs/${item.id}`}>
+                    <Link key={item.id} href={`/jobs/${item.slug || item.id}`}>
                       <div className="flex items-center justify-between rounded-lg border border-border/60 p-3 transition-colors hover:bg-muted/40">
                         <div>
                           <p className="line-clamp-1 text-sm font-semibold text-foreground">{item.title}</p>

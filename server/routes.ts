@@ -32,6 +32,14 @@ import { z } from "zod";
 import { env } from "./env";
 import { getChatResponse } from "./ai";
 import {
+  createEmailPreferenceToken,
+  createEmailPreferenceTokenHash,
+  createEmailTokenHash,
+  getEmailPlatformHealth,
+  isTransactionalEmailDeliveryReady,
+  recordEmailClick,
+  recordEmailOpen,
+  recordProviderWebhookEvent,
   sendAdminNotification,
   sendAccountVerification,
   sendApplicationConfirmation,
@@ -44,6 +52,8 @@ import {
   sendPartnerOnboardingEmail,
   sendSubscriptionConfirmation,
   sendWelcomeEmail,
+  verifyEmailPreferenceToken,
+  verifyEmailTrackingSignature,
 } from "./email";
 import {
   deleteBlogMeta,
@@ -217,10 +227,20 @@ const commissionRuleRequestSchema = z.object({
   status: z.enum(["active", "paused", "archived"]).default("active"),
 });
 
+const subscriptionPreferenceCategories = [
+  "scholarships",
+  "jobs",
+  "news",
+  "events",
+  "blog_updates",
+  "partner_updates",
+  "marketing",
+] as const;
+
 const subscriberRequestSchema = z.object({
   email: z.string().trim().email().transform((value) => value.toLowerCase()),
   name: z.string().trim().max(160).optional(),
-  preferences: z.array(z.string().trim().min(1).max(80)).max(12).optional(),
+  preferences: z.array(z.enum(subscriptionPreferenceCategories)).max(subscriptionPreferenceCategories.length).optional(),
   source: z.string().trim().max(80).default("website"),
   website: z.string().optional(),
   recaptchaToken: z.string().trim().max(4096).optional(),
@@ -263,9 +283,24 @@ const forgotPasswordSchema = z.object({
   email: z.string().trim().email().transform((value) => value.toLowerCase()),
 });
 
+const resendVerificationSchema = z.object({
+  email: z.string().trim().email().transform((value) => value.toLowerCase()),
+});
+
+const changeVerificationEmailSchema = z.object({
+  currentEmail: z.string().trim().email().transform((value) => value.toLowerCase()),
+  newEmail: z.string().trim().email().transform((value) => value.toLowerCase()),
+  password: z.string().min(1),
+});
+
 const resetPasswordSchema = z.object({
   token: z.string().trim().min(20),
   password: strongPasswordSchema,
+});
+
+const emailPreferenceUpdateSchema = z.object({
+  categories: z.record(z.boolean()).optional(),
+  unsubscribeAll: z.boolean().optional(),
 });
 
 const publicApplicationRequestSchema = z.object({
@@ -352,12 +387,27 @@ const eventRegistrationReviewSchema = z.object({
 });
 
 const adminApplicationReviewSchema = z.object({
-  status: z.enum(["pending", "under_review", "approved", "rejected", "waitlisted"]).optional(),
+  status: z
+    .enum([
+      "pending",
+      "under_review",
+      "shortlisted",
+      "interview",
+      "assessment",
+      "offer",
+      "hired",
+      "approved",
+      "rejected",
+      "waitlisted",
+    ])
+    .optional(),
   reviewNotes: z.string().trim().max(4000).optional(),
   stage: z.string().trim().max(120).optional(),
   score: z.coerce.number().int().min(0).max(100).optional(),
+  evaluationScores: z.array(z.record(z.unknown())).optional(),
   shortlist: z.boolean().optional(),
   interviewAt: z.coerce.date().optional().nullable(),
+  interviewNotes: z.string().trim().max(4000).optional(),
   verificationChecks: z.array(z.record(z.unknown())).optional(),
 });
 
@@ -466,6 +516,7 @@ type JwtUser = {
   role: string;
   type?: "access" | "refresh" | "email_verification" | "password_reset";
   pwd?: string;
+  jti?: string;
   iat?: number;
 };
 
@@ -513,6 +564,9 @@ const isTransientDbConnectivityError = (error: unknown) => {
 
 const getRequestBaseUrl = (req: Request) =>
   env.PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`;
+
+const getApiRequestBaseUrl = (req: Request) =>
+  env.API_APP_URL || getRequestBaseUrl(req);
 
 const getAdminBaseUrl = (req: Request) =>
   env.ADMIN_APP_URL || `${req.protocol}://${req.get("host")}/admin`;
@@ -675,7 +729,7 @@ const parseStringArray = (value: unknown) => {
   if (Array.isArray(value)) return value.map(String).filter(Boolean);
   if (typeof value === "string") {
     return value
-      .split(",")
+      .split(/[\n,;]+/)
       .map((item) => item.trim())
       .filter(Boolean);
   }
@@ -777,19 +831,37 @@ const buildScholarshipMetaFromBody = (body: Record<string, unknown>, featuredIma
 const buildJobMetaFromBody = (body: Record<string, unknown>, featuredImage?: string): JobMeta =>
   compactRecord({
     slug: typeof body.slug === "string" ? slugify(body.slug) : typeof body.title === "string" ? slugify(body.title) : undefined,
+    category: typeof body.category === "string" ? body.category : undefined,
     department: typeof body.department === "string" ? body.department : undefined,
+    companyLogo: typeof body.companyLogo === "string" ? body.companyLogo : undefined,
+    companyProfile: typeof body.companyProfile === "string" ? body.companyProfile : undefined,
+    companyOverview: typeof body.companyOverview === "string" ? body.companyOverview : undefined,
+    aboutTeam: typeof body.aboutTeam === "string" ? body.aboutTeam : undefined,
+    workMode: typeof body.workMode === "string" ? body.workMode : undefined,
     responsibilities: parseStringArray(body.responsibilities),
     qualifications: parseStringArray(body.qualifications),
+    educationRequirements: parseStringArray(body.educationRequirements),
+    requiredSkills: parseStringArray(body.requiredSkills),
+    preferredSkills: parseStringArray(body.preferredSkills),
+    requirements: parseStringArray(body.requirements),
     skills: parseStringArray(body.skills),
     experienceLevel: typeof body.experienceLevel === "string" ? body.experienceLevel : undefined,
     employmentType: typeof body.employmentType === "string" ? body.employmentType : undefined,
+    numberOfPositions: typeof body.numberOfPositions === "string" ? body.numberOfPositions : undefined,
     salaryMin: typeof body.salaryMin === "string" ? body.salaryMin : undefined,
     salaryMax: typeof body.salaryMax === "string" ? body.salaryMax : undefined,
+    applicationInstructions: typeof body.applicationInstructions === "string" ? body.applicationInstructions : undefined,
+    contactInformation: parseRecord(body.contactInformation),
     attachments: parseRecordArray(body.attachments),
     seoMeta: parseRecord(body.seoMeta),
     socialMeta: parseRecord(body.socialMeta),
     tags: parseStringArray(body.tags),
     isFeatured: parseOptionalBoolean(body.isFeatured),
+    dynamicQuestions: parseRecordArray(body.dynamicQuestions),
+    conditionalRules: parseRecordArray(body.conditionalRules),
+    assessments: parseRecordArray(body.assessments),
+    interviewTasks: parseRecordArray(body.interviewTasks),
+    applicationForm: parseRecordArray(body.applicationForm),
     pipelineStages: parseRecordArray(body.pipelineStages),
     emailTemplates: parseRecordArray(body.emailTemplates),
     recruiterNotes: parseRecordArray(body.recruiterNotes),
@@ -849,6 +921,17 @@ const buildApplicationMetaFromBody = (body: Record<string, unknown>): Applicatio
     workflowType: typeof body.workflowType === "string" ? body.workflowType : undefined,
     stage: typeof body.stage === "string" ? body.stage : undefined,
     score: typeof body.score === "number" ? body.score : undefined,
+    source: typeof body.source === "string" ? body.source : undefined,
+    applicantSnapshot: parseRecord(body.applicantSnapshot),
+    professionalSnapshot: parseRecord(body.professionalSnapshot),
+    educationHistory: parseRecordArray(body.educationHistory),
+    experienceHistory: parseRecordArray(body.experienceHistory),
+    references: parseRecordArray(body.references),
+    roleAnswers: parseRecord(body.roleAnswers),
+    cvBuilderSnapshot: parseRecord(body.cvBuilderSnapshot),
+    atsScore: typeof body.atsScore === "number" ? body.atsScore : undefined,
+    evaluationScores: parseRecordArray(body.evaluationScores),
+    interviewNotes: parseRecordArray(body.interviewNotes),
     reviewerComments: parseRecordArray(body.reviewerComments),
     reviewHistory: parseRecordArray(body.reviewHistory),
     documents: parseRecordArray(body.documents),
@@ -914,14 +997,22 @@ const toAdminScholarship = (scholarship: any) => {
 
 const toAdminJob = (job: any) => {
   const meta = getJobMeta(job.id);
+  const requirements = meta.requirements ?? (Array.isArray(job.requirements) ? job.requirements : []);
+  const requiredSkills = meta.requiredSkills ?? meta.skills ?? [];
   return {
     id: String(job.id),
     title: job.title,
     slug: meta.slug ?? slugify(job.title ?? `job-${job.id}`),
     description: job.description,
+    category: meta.category ?? job.jobType ?? "General",
     company: job.company,
+    companyLogo: meta.companyLogo ?? "",
+    companyProfile: meta.companyProfile ?? "",
+    companyOverview: meta.companyOverview ?? "",
+    aboutTeam: meta.aboutTeam ?? "",
     department: meta.department ?? "",
     location: job.location,
+    workMode: meta.workMode ?? (job.isRemote ? "Remote" : "Onsite"),
     region: meta.region ?? "Global",
     salaryRange: meta.salaryRange ?? "",
     salaryMin: meta.salaryMin ?? "",
@@ -929,15 +1020,26 @@ const toAdminJob = (job: any) => {
     jobType: job.jobType,
     employmentType: meta.employmentType ?? job.jobType,
     experienceLevel: meta.experienceLevel ?? "",
+    educationRequirements: meta.educationRequirements ?? [],
+    requiredSkills,
+    preferredSkills: meta.preferredSkills ?? [],
+    numberOfPositions: meta.numberOfPositions ?? "1",
     responsibilities: meta.responsibilities ?? [],
     qualifications: meta.qualifications ?? [],
-    skills: meta.skills ?? [],
-    requirements: job.requirements ?? [],
+    skills: requiredSkills,
+    requirements,
     benefits: meta.benefits ?? "",
+    applicationInstructions: meta.applicationInstructions ?? "",
+    contactInformation: meta.contactInformation ?? {},
     attachments: meta.attachments ?? [],
     seoMeta: meta.seoMeta ?? {},
     socialMeta: meta.socialMeta ?? {},
     tags: meta.tags ?? [],
+    dynamicQuestions: meta.dynamicQuestions ?? [],
+    conditionalRules: meta.conditionalRules ?? [],
+    assessments: meta.assessments ?? [],
+    interviewTasks: meta.interviewTasks ?? [],
+    applicationForm: meta.applicationForm ?? [],
     pipelineStages: meta.pipelineStages ?? [],
     emailTemplates: meta.emailTemplates ?? [],
     recruiterNotes: meta.recruiterNotes ?? [],
@@ -959,13 +1061,82 @@ const toAdminJob = (job: any) => {
 
 const toPublicJob = (job: any) => {
   const meta = getJobMeta(job.id);
+  const requirements = meta.requirements ?? (Array.isArray(job.requirements) ? job.requirements : []);
+  const requiredSkills = meta.requiredSkills ?? meta.skills ?? [];
+  const benefits =
+    Array.isArray(job.benefits)
+      ? job.benefits
+      : typeof meta.benefits === "string"
+        ? parseStringArray(meta.benefits) ?? []
+        : [];
   return {
     ...job,
+    slug: meta.slug ?? slugify(job.title ?? `job-${job.id}`),
     imageUrl: meta.featuredImage ?? job.imageUrl ?? null,
+    category: meta.category ?? job.jobType ?? "General",
+    department: meta.department ?? null,
+    employmentType: meta.employmentType ?? job.jobType,
+    companyLogo: meta.companyLogo ?? null,
+    companyProfile: meta.companyProfile ?? null,
+    companyOverview: meta.companyOverview ?? null,
+    aboutTeam: meta.aboutTeam ?? null,
+    workMode: meta.workMode ?? (job.isRemote ? "Remote" : "Onsite"),
+    numberOfPositions: meta.numberOfPositions ?? "1",
+    experienceLevel: meta.experienceLevel ?? null,
+    educationRequirements: meta.educationRequirements ?? [],
+    requiredSkills,
+    preferredSkills: meta.preferredSkills ?? [],
+    responsibilities: meta.responsibilities ?? [],
+    qualifications: meta.qualifications ?? [],
+    requirements,
+    benefits,
+    skills: requiredSkills,
     salaryRange: meta.salaryRange ?? null,
+    salaryMin: meta.salaryMin ?? null,
+    salaryMax: meta.salaryMax ?? null,
+    applicationInstructions: meta.applicationInstructions ?? null,
+    contactInformation: meta.contactInformation ?? null,
+    attachments: meta.attachments ?? [],
+    seoMeta: meta.seoMeta ?? {},
+    socialMeta: meta.socialMeta ?? {},
+    tags: meta.tags ?? [],
+    isFeatured: meta.isFeatured ?? false,
+    dynamicQuestions: meta.dynamicQuestions ?? [],
+    conditionalRules: meta.conditionalRules ?? [],
+    assessments: meta.assessments ?? [],
+    interviewTasks: meta.interviewTasks ?? [],
+    applicationForm: meta.applicationForm ?? [],
     applicationUrl: meta.applicationUrl ?? null,
     region: meta.region ?? null,
   };
+};
+
+const findJobByIdentifier = async (identifier: string, requester?: JwtUser | null) => {
+  const numericId = Number.parseInt(identifier, 10);
+  if (!Number.isNaN(numericId) && String(numericId) === identifier) {
+    return storage.getJob(numericId);
+  }
+
+  const normalized = slugify(identifier);
+  const jobs = isAdmin(requester ?? null) ? await storage.getAllJobs() : await storage.getActiveJobs();
+  return jobs.find((job) => {
+    const meta = getJobMeta(job.id);
+    return (meta.slug ?? slugify(job.title ?? `job-${job.id}`)) === normalized;
+  });
+};
+
+const findTeamMemberByIdentifier = async (identifier: string, requester?: JwtUser | null) => {
+  const numericId = Number.parseInt(identifier, 10);
+  if (!Number.isNaN(numericId) && String(numericId) === identifier) {
+    return storage.getTeamMember(numericId);
+  }
+
+  const normalized = slugify(identifier);
+  const members = isAdmin(requester ?? null) ? await storage.getAllTeamMembers() : await storage.getActiveTeamMembers();
+  return members.find((member) => {
+    const meta = getTeamMeta(member.id);
+    return slugify(String(meta.title ?? member.position ?? member.name ?? `team-${member.id}`)) === normalized || slugify(member.name ?? "") === normalized;
+  });
 };
 
 const toAdminPartner = (partner: any) => {
@@ -1075,6 +1246,30 @@ const toAdminTeamMember = (member: any) => {
     createdBy: null,
     createdAt: member.createdAt ?? null,
     updatedAt: member.updatedAt ?? null,
+  };
+};
+
+const toPublicTeamMember = (member: any) => {
+  const meta = getTeamMeta(member.id);
+  const title = meta.title ?? member.position ?? "";
+  return {
+    ...member,
+    slug: slugify(String(title || member.name || `team-${member.id}`)),
+    title,
+    bio: meta.biography ?? member.bio ?? "",
+    biography: meta.biography ?? member.bio ?? "",
+    imageUrl: meta.profileImage ?? member.imageUrl ?? null,
+    profileImage: meta.profileImage ?? member.imageUrl ?? null,
+    department: meta.department ?? null,
+    cvUrl: meta.cvUrl ?? null,
+    skills: meta.skills ?? [],
+    achievements: meta.achievements ?? [],
+    certifications: meta.certifications ?? [],
+    socialLinks: meta.socialLinks ?? {},
+    contactInfo: meta.contactInfo ?? {},
+    visibility: meta.visibility ?? "public",
+    leadershipLevel: meta.leadershipLevel ?? null,
+    displayGroup: meta.displayGroup ?? null,
   };
 };
 
@@ -1252,7 +1447,10 @@ const signRefreshToken = (user: { id: number; email: string; role: string; passw
     expiresIn: "7d",
   });
 
-const signEmailVerificationToken = (user: { id: number; email: string; role: string; password: string }) =>
+const signEmailVerificationToken = (
+  user: { id: number; email: string; role: string; password: string },
+  jwtId = randomUUID(),
+) =>
   jwt.sign(
     {
       id: user.id,
@@ -1260,10 +1458,76 @@ const signEmailVerificationToken = (user: { id: number; email: string; role: str
       role: user.role,
       type: "email_verification",
       pwd: passwordFingerprint(user.password),
+      jti: jwtId,
     },
     JWT_SECRET,
     { expiresIn: "24h" },
   );
+
+const issueAccountVerificationEmail = async (
+  req: Request,
+  user: { id: number; email: string; firstName: string; lastName: string; role: string; password: string },
+) => {
+  const normalizedEmail = user.email.toLowerCase();
+  const since = new Date(Date.now() - 60 * 60 * 1000);
+  const recentRequests = await storage.countEmailVerificationRequests(normalizedEmail, since);
+  if (recentRequests >= 3) {
+    const retryAfterSeconds = Math.max(60, Math.ceil((since.getTime() + 60 * 60 * 1000 - Date.now()) / 1000));
+    return {
+      ok: false as const,
+      statusCode: 429,
+      retryAfterSeconds,
+      message: "Maximum verification requests reached. Please try again later.",
+    };
+  }
+
+  await storage.revokePendingEmailVerificationTokens(user.id);
+  const jwtId = randomUUID();
+  const token = signEmailVerificationToken(user, jwtId);
+  const tokenRecord = await storage.createEmailVerificationToken({
+    userId: user.id,
+    email: normalizedEmail,
+    tokenHash: createEmailTokenHash(token),
+    jwtId,
+    status: "pending",
+    requestIpAddress: getClientIp(req),
+    requestUserAgent: req.get("user-agent") || null,
+    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    usedAt: null,
+    replacedAt: null,
+  });
+  const verificationUrl = `${getApiRequestBaseUrl(req)}/api/auth/verify-email/${encodeURIComponent(token)}`;
+  const queued = await sendAccountVerification({
+    email: normalizedEmail,
+    name: `${user.firstName} ${user.lastName}`.trim(),
+    verificationUrl,
+    tokenId: tokenRecord.id,
+  });
+
+  if (queued?.status === "failed") {
+    return {
+      ok: false as const,
+      statusCode: 503,
+      retryAfterSeconds: 60,
+      message: "Verification email could not be queued. Please try again shortly.",
+    };
+  }
+
+  await storage.logAnalytics({
+    event: "email_verification_requested",
+    userId: user.id,
+    metadata: {
+      email: normalizedEmail,
+      tokenId: tokenRecord.id,
+      emailJobId: queued?.id,
+      emailJobStatus: queued?.status,
+    },
+    ipAddress: req.ip,
+    userAgent: req.get("user-agent"),
+  });
+
+  return { ok: true as const, tokenRecord, queued };
+};
 
 const signPasswordResetToken = (user: { id: number; email: string; role: string; password: string }) =>
   jwt.sign(
@@ -1611,6 +1875,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   });
 
+  const getPublicBaseUrl = (req: Request) =>
+    (env.PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
+
+  const escapeXml = (value: string) =>
+    value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&apos;");
+
+  app.get("/robots.txt", (req, res) => {
+    const baseUrl = getPublicBaseUrl(req);
+    res.type("text/plain").send(["User-agent: *", "Allow: /", `Sitemap: ${baseUrl}/sitemap.xml`].join("\n"));
+  });
+
+  app.get("/sitemap.xml", async (req, res) => {
+    try {
+      const baseUrl = getPublicBaseUrl(req);
+      const [scholarshipsList, jobsList, partnersList, blogList, eventsList, teamList] = await Promise.all([
+        storage.getActiveScholarships(),
+        storage.getActiveJobs(),
+        storage.getActivePartners(),
+        storage.getPublishedBlogPosts(),
+        storage.getPublishedEvents(),
+        storage.getActiveTeamMembers(),
+      ]);
+
+      const staticPaths = [
+        "/",
+        "/scholarships",
+        "/jobs",
+        "/resume-building",
+        "/events",
+        "/partners",
+        "/blog",
+        "/team",
+        "/contact",
+      ];
+      const urls = [
+        ...staticPaths.map((path) => ({ loc: `${baseUrl}${path}`, lastmod: new Date().toISOString() })),
+        ...scholarshipsList.map((item) => ({ loc: `${baseUrl}/scholarships/${item.id}`, lastmod: item.updatedAt ?? item.createdAt })),
+        ...jobsList.map((item) => ({
+          loc: `${baseUrl}/jobs/${getJobMeta(item.id).slug ?? slugify(item.title ?? `job-${item.id}`)}`,
+          lastmod: item.updatedAt ?? item.createdAt,
+        })),
+        ...partnersList.map((item) => ({ loc: `${baseUrl}/partners/${item.id}`, lastmod: item.updatedAt ?? item.createdAt })),
+        ...blogList.map((item) => ({ loc: `${baseUrl}/blog/${item.id}`, lastmod: item.updatedAt ?? item.createdAt })),
+        ...eventsList.map((item) => ({ loc: `${baseUrl}/events/${item.slug || item.id}`, lastmod: item.updatedAt ?? item.createdAt })),
+        ...teamList.map((item) => ({
+          loc: `${baseUrl}/team/${slugify(String(getTeamMeta(item.id).title ?? item.position ?? item.name ?? `team-${item.id}`))}`,
+          lastmod: item.updatedAt ?? item.createdAt,
+        })),
+      ];
+
+      const xml = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+        ...urls.map((url) => {
+          const lastmod = url.lastmod ? new Date(url.lastmod).toISOString() : new Date().toISOString();
+          return `  <url><loc>${escapeXml(url.loc)}</loc><lastmod>${lastmod}</lastmod></url>`;
+        }),
+        "</urlset>",
+      ].join("\n");
+
+      res.type("application/xml").send(xml);
+    } catch (error) {
+      console.error("Sitemap generation error:", error);
+      res.status(500).type("text/plain").send("Failed to generate sitemap");
+    }
+  });
+
   // Broadcast function for real-time updates
   const broadcast = (channel: string, data: any) => {
     wss.clients.forEach((client) => {
@@ -1770,8 +2106,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const uploadsDir = resolveWritableRuntimePath("uploads");
   fs.mkdirSync(uploadsDir, { recursive: true });
-  app.use("/uploads", express.static(uploadsDir));
-  app.use("/api/uploads", express.static(uploadsDir));
+  const uploadStaticOptions: NonNullable<Parameters<typeof express.static>[1]> = {
+    dotfiles: "deny",
+    fallthrough: true,
+    index: false,
+    redirect: false,
+    setHeaders: (res, filePath) => {
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Cache-Control", "public, max-age=300");
+      if (!/\.(?:jpe?g|png|webp|pdf)$/i.test(filePath)) {
+        res.setHeader("Content-Disposition", "attachment");
+      }
+    },
+  };
+  app.use("/uploads", express.static(uploadsDir, uploadStaticOptions));
+  app.use("/api/uploads", express.static(uploadsDir, uploadStaticOptions));
 
   const allowedUploadMimeTypes = new Set([
     "application/pdf",
@@ -2148,6 +2497,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      res.setHeader("X-Content-Type-Options", "nosniff");
       res.sendFile(fullPath);
     } catch (error) {
       console.error("Media asset delivery error:", error);
@@ -2206,6 +2556,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      if (!isTransactionalEmailDeliveryReady()) {
+        return res.status(503).json({
+          message: "Email delivery is not configured. Please contact support before creating an account.",
+        });
+      }
+
       // Hash password
       const hashedPassword = await bcrypt.hash(userData.password, PASSWORD_HASH_ROUNDS);
       
@@ -2234,16 +2590,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       broadcast('user_activity', { type: 'user_registered', user: buildPublicUser(user) });
 
-      const verificationUrl = `${getRequestBaseUrl(req)}/api/auth/verify-email/${signEmailVerificationToken(user)}`;
-      void sendAccountVerification({
-        email: user.email,
-        name: `${user.firstName} ${user.lastName}`.trim(),
-        verificationUrl,
-      });
+      const verification = await issueAccountVerificationEmail(req, user);
+      if (!verification.ok) {
+        return res.status(verification.statusCode).json({
+          message: verification.message,
+          retryAfterSeconds: verification.retryAfterSeconds,
+        });
+      }
 
       res.status(201).json({
         message: 'Account created. Please verify your email before signing in.',
         requiresEmailVerification: true,
+        verificationEmailJobId: verification.queued?.id,
         user: buildPublicUser(user),
       });
     } catch (error) {
@@ -2338,13 +2696,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const verifyEmailHandler = async (req: Request, res: Response) => {
     try {
-      const decoded = jwt.verify(req.params.token, JWT_SECRET) as JwtUser;
+      const rawToken = req.params.token;
+      const decoded = jwt.verify(rawToken, JWT_SECRET) as JwtUser;
       if (decoded.type !== "email_verification" || !decoded.id || !decoded.email || !decoded.pwd) {
         return res.status(400).json({ message: "Invalid verification link" });
       }
 
+      const tokenRecord = await storage.getEmailVerificationTokenByHash(createEmailTokenHash(rawToken));
+      if (!tokenRecord || tokenRecord.status !== "pending") {
+        return res.status(400).json({ message: "Verification link has already been used or replaced" });
+      }
+
+      if (tokenRecord.expiresAt.getTime() <= Date.now()) {
+        return res.status(400).json({ message: "Verification link has expired" });
+      }
+
+      if (decoded.jti && tokenRecord.jwtId !== decoded.jti) {
+        return res.status(400).json({ message: "Invalid verification link" });
+      }
+
       const user = await storage.getUser(Number(decoded.id));
-      if (!user || user.email.toLowerCase() !== decoded.email.toLowerCase()) {
+      if (
+        !user ||
+        user.id !== tokenRecord.userId ||
+        user.email.toLowerCase() !== decoded.email.toLowerCase() ||
+        tokenRecord.email.toLowerCase() !== decoded.email.toLowerCase()
+      ) {
         return res.status(400).json({ message: "Invalid verification link" });
       }
 
@@ -2355,11 +2732,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const verifiedUser = user.isActive === false
         ? await storage.updateUser(user.id, { isActive: true })
         : user;
+      await storage.useEmailVerificationToken(tokenRecord.id);
 
       await storage.logAnalytics({
         event: "email_verified",
         userId: verifiedUser.id,
-        metadata: { role: verifiedUser.role },
+        metadata: { role: verifiedUser.role, tokenId: tokenRecord.id },
         ipAddress: req.ip,
         userAgent: req.get("user-agent"),
       });
@@ -2379,6 +2757,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/auth/verify-email/:token', verifyEmailHandler);
   app.get('/auth/verify-email/:token', verifyEmailHandler);
+
+  const resendVerificationHandler = async (req: Request, res: Response) => {
+    try {
+      if (!guardPublicFlowRateLimit(req, res, "resend_verification", 8, 60 * 60 * 1000)) return;
+      const payload = resendVerificationSchema.parse(req.body);
+      const user = await storage.getUserByEmail(payload.email);
+
+      if (user && user.isActive === false) {
+        const verification = await issueAccountVerificationEmail(req, user);
+        if (!verification.ok) {
+          res.setHeader("Retry-After", String(verification.retryAfterSeconds));
+          return res.status(verification.statusCode).json({
+            message: verification.message,
+            retryAfterSeconds: verification.retryAfterSeconds,
+          });
+        }
+      }
+
+      res.json({
+        message: "If an unverified account exists for that email, a new verification link has been sent.",
+      });
+    } catch (error) {
+      console.error("Resend verification error:", getErrorLogMessage(error));
+      res.status(400).json({ message: "Verification resend failed", error: getErrorMessage(error) });
+    }
+  };
+
+  const changeVerificationEmailHandler = async (req: Request, res: Response) => {
+    try {
+      if (!guardPublicFlowRateLimit(req, res, "change_verification_email", 5, 60 * 60 * 1000)) return;
+      const payload = changeVerificationEmailSchema.parse(req.body);
+      if (payload.currentEmail === payload.newEmail) {
+        return res.status(400).json({ message: "Use a different email address for the update" });
+      }
+
+      const user = await storage.getUserByEmail(payload.currentEmail);
+      if (!user || user.isActive !== false) {
+        return res.status(400).json({ message: "Pending verification account not found" });
+      }
+
+      const isPasswordValid = await bcrypt.compare(payload.password, user.password);
+      if (!isPasswordValid) {
+        return res.status(401).json({ message: "Password confirmation failed" });
+      }
+
+      const existingNewEmail = await storage.getUserByEmail(payload.newEmail);
+      if (existingNewEmail) {
+        return res.status(409).json({ message: "This email address is already registered" });
+      }
+
+      const updatedUser = await storage.updateUser(user.id, { email: payload.newEmail });
+      const verification = await issueAccountVerificationEmail(req, updatedUser);
+      if (!verification.ok) {
+        res.setHeader("Retry-After", String(verification.retryAfterSeconds));
+        return res.status(verification.statusCode).json({
+          message: verification.message,
+          retryAfterSeconds: verification.retryAfterSeconds,
+        });
+      }
+
+      await storage.logAnalytics({
+        event: "verification_email_changed",
+        userId: updatedUser.id,
+        metadata: { from: payload.currentEmail, to: payload.newEmail },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+
+      res.json({ message: "Email address updated. Please check the new inbox for verification." });
+    } catch (error) {
+      console.error("Change verification email error:", getErrorLogMessage(error));
+      res.status(400).json({ message: "Email change failed", error: getErrorMessage(error) });
+    }
+  };
+
+  app.post('/api/auth/resend-verification', resendVerificationHandler);
+  app.post('/auth/resend-verification', resendVerificationHandler);
+  app.post('/api/auth/change-verification-email', changeVerificationEmailHandler);
+  app.post('/auth/change-verification-email', changeVerificationEmailHandler);
 
   const forgotPasswordHandler = async (req: Request, res: Response) => {
     try {
@@ -2464,6 +2921,232 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/auth/forgot-password', forgotPasswordHandler);
   app.post('/api/auth/reset-password', resetPasswordHandler);
   app.post('/auth/reset-password', resetPasswordHandler);
+
+  app.get('/api/email/track/open/:jobId', async (req, res) => {
+    try {
+      const jobId = req.params.jobId;
+      const signature = typeof req.query.s === "string" ? req.query.s : null;
+      if (!verifyEmailTrackingSignature(jobId, signature)) {
+        return res.status(400).send("Invalid tracking signature");
+      }
+
+      await recordEmailOpen({
+        jobId,
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent") || null,
+      });
+
+      const pixel = Buffer.from("R0lGODlhAQABAPAAAP///wAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==", "base64");
+      res.setHeader("Content-Type", "image/gif");
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      res.end(pixel);
+    } catch (error) {
+      console.error("Email open tracking error:", getErrorLogMessage(error));
+      res.status(400).send("Tracking failed");
+    }
+  });
+
+  app.get('/api/email/track/click/:jobId', async (req, res) => {
+    try {
+      const jobId = req.params.jobId;
+      const url = typeof req.query.u === "string" ? req.query.u : "";
+      const signature = typeof req.query.s === "string" ? req.query.s : null;
+      if (!/^https?:\/\//i.test(url) || !verifyEmailTrackingSignature(`${jobId}:${url}`, signature)) {
+        return res.status(400).send("Invalid tracking link");
+      }
+
+      await recordEmailClick({
+        jobId,
+        url,
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent") || null,
+      });
+      res.redirect(302, url);
+    } catch (error) {
+      console.error("Email click tracking error:", getErrorLogMessage(error));
+      res.status(400).send("Tracking failed");
+    }
+  });
+
+  app.post('/api/email/webhooks/:provider', async (req, res) => {
+    try {
+      if (env.EMAIL_WEBHOOK_SIGNING_SECRET) {
+        const providedSecret = req.get("x-mec-webhook-secret");
+        if (providedSecret !== env.EMAIL_WEBHOOK_SIGNING_SECRET) {
+          return res.status(401).json({ message: "Invalid webhook secret" });
+        }
+      }
+
+      await recordProviderWebhookEvent(req.params.provider, req.body);
+      res.json({ received: true });
+    } catch (error) {
+      console.error("Email provider webhook error:", getErrorLogMessage(error));
+      res.status(400).json({ message: "Webhook processing failed", error: getErrorMessage(error) });
+    }
+  });
+
+  const preferenceLabels: Record<string, string> = {
+    scholarships: "Scholarships",
+    jobs: "Jobs",
+    news: "News",
+    events: "Events",
+    blog_updates: "Blog Updates",
+    partner_updates: "Partner Updates",
+    marketing: "Marketing Emails",
+  };
+
+  const getPreferenceRecord = async (token: string) => {
+    const decoded = verifyEmailPreferenceToken(token);
+    const tokenHash = createEmailPreferenceTokenHash(token);
+    const existing =
+      (await storage.getEmailPreferenceByTokenHash(tokenHash)) ||
+      (await storage.getEmailPreferenceByEmail(decoded.email));
+    if (existing) return existing;
+
+    return storage.upsertEmailPreference({
+      userId: null,
+      email: decoded.email,
+      categories: Object.fromEntries(subscriptionPreferenceCategories.map((category) => [category, true])),
+      consentStatus: "pending",
+      consentSource: "preference_center",
+      consentAt: null,
+      unsubscribedAt: null,
+      unsubscribeTokenHash: tokenHash,
+      auditTrail: [{ action: "created_from_preference_center", at: new Date().toISOString() }],
+    });
+  };
+
+  const renderPreferenceCenter = (token: string, email: string, categories: Record<string, boolean>, saved = false) => `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Email Preferences | Mtendere Education Consult</title>
+      </head>
+      <body style="margin:0; font-family:Arial,sans-serif; background:#eef4f8; color:#1f2937;">
+        <main style="max-width:640px; margin:40px auto; background:#fff; border:1px solid #dbe4ea; border-radius:8px; padding:28px;">
+          <h1 style="margin:0 0 8px; color:#0f4c81;">Email Preferences</h1>
+          <p style="margin:0 0 20px; color:#64748b;">${escapeHtml(email)}</p>
+          ${saved ? `<p style="background:#dcfce7; color:#166534; padding:12px; border-radius:8px;">Your preferences have been updated.</p>` : ""}
+          <form method="post" action="/api/email/preferences/${encodeURIComponent(token)}">
+            ${subscriptionPreferenceCategories
+              .map(
+                (category) => `
+                  <label style="display:flex; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid #edf2f7;">
+                    <input type="checkbox" name="${category}" value="true" ${categories[category] !== false ? "checked" : ""}>
+                    <span>${preferenceLabels[category]}</span>
+                  </label>
+                `,
+              )
+              .join("")}
+            <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:22px;">
+              <button type="submit" style="border:0; background:#0f4c81; color:#fff; padding:12px 16px; border-radius:8px; font-weight:700;">Save Preferences</button>
+              <button type="submit" name="unsubscribeAll" value="true" style="border:1px solid #dc2626; background:#fff; color:#dc2626; padding:12px 16px; border-radius:8px; font-weight:700;">Unsubscribe All</button>
+            </div>
+          </form>
+        </main>
+      </body>
+    </html>
+  `;
+
+  const updatePreferenceRecord = async (
+    token: string,
+    categories: Record<string, boolean>,
+    unsubscribeAll: boolean,
+  ) => {
+    const existing = await getPreferenceRecord(token);
+    const nextCategories = unsubscribeAll
+      ? Object.fromEntries(subscriptionPreferenceCategories.map((category) => [category, false]))
+      : { ...(existing.categories || {}), ...categories };
+    const isFullyUnsubscribed = subscriptionPreferenceCategories.every((category) => nextCategories[category] === false);
+    const updated = await storage.updateEmailPreference(existing.id, {
+      categories: nextCategories,
+      consentStatus: isFullyUnsubscribed ? "unsubscribed" : "active",
+      unsubscribedAt: isFullyUnsubscribed ? new Date() : null,
+      auditTrail: [
+        ...(existing.auditTrail || []),
+        {
+          action: isFullyUnsubscribed ? "unsubscribe_all" : "update_preferences",
+          categories: nextCategories,
+          at: new Date().toISOString(),
+        },
+      ],
+    });
+
+    const subscriber = await storage.getSubscriberByEmail(existing.email);
+    if (subscriber) {
+      await storage.updateSubscriber(subscriber.id, {
+        preferences: subscriptionPreferenceCategories.filter((category) => nextCategories[category] !== false),
+        status: isFullyUnsubscribed ? "unsubscribed" : "active",
+        unsubscribedAt: isFullyUnsubscribed ? new Date() : null,
+      });
+    }
+
+    return updated;
+  };
+
+  app.get('/api/email/preferences/:token', async (req, res) => {
+    try {
+      const preference = await getPreferenceRecord(req.params.token);
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.send(renderPreferenceCenter(req.params.token, preference.email, preference.categories || {}));
+    } catch (error) {
+      console.error("Email preference center error:", getErrorLogMessage(error));
+      res.status(400).send("Invalid email preference link");
+    }
+  });
+
+  app.post('/api/email/preferences/:token', async (req, res) => {
+    try {
+      const isJsonRequest = req.is("application/json");
+      const payload = isJsonRequest ? emailPreferenceUpdateSchema.parse(req.body) : null;
+      const unsubscribeAll = Boolean(payload?.unsubscribeAll || req.body.unsubscribeAll);
+      const categories = payload?.categories || Object.fromEntries(
+        subscriptionPreferenceCategories.map((category) => [category, Boolean(req.body[category])]),
+      );
+      const updated = await updatePreferenceRecord(req.params.token, categories, unsubscribeAll);
+
+      if (isJsonRequest) {
+        return res.json({ message: "Email preferences updated", preferences: updated.categories });
+      }
+
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.send(renderPreferenceCenter(req.params.token, updated.email, updated.categories || {}, true));
+    } catch (error) {
+      console.error("Email preference update error:", getErrorLogMessage(error));
+      res.status(400).json({ message: "Preference update failed", error: getErrorMessage(error) });
+    }
+  });
+
+  app.get('/api/email/unsubscribe/:token', async (req, res) => {
+    try {
+      await updatePreferenceRecord(req.params.token, {}, true);
+      res.redirect(302, `${getRequestBaseUrl(req)}/?subscription=unsubscribed`);
+    } catch (error) {
+      console.error("Email unsubscribe error:", getErrorLogMessage(error));
+      res.status(400).send("Invalid unsubscribe link");
+    }
+  });
+
+  app.get('/api/admin/email/stats', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const days = Number(req.query.days ?? 30);
+      res.json(await getEmailPlatformHealth(Number.isFinite(days) ? days : 30));
+    } catch (error) {
+      console.error("Admin email stats error:", getErrorLogMessage(error));
+      res.status(500).json({ message: "Failed to fetch email platform stats" });
+    }
+  });
+
+  app.get('/api/admin/email/templates', authenticateToken, requireAdmin, async (_req, res) => {
+    try {
+      const health = await getEmailPlatformHealth(30);
+      res.json({ templates: health.templates });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch email templates" });
+    }
+  });
 
   const logoutHandler = (_req: Request, res: Response) => {
     clearRefreshCookie(res);
@@ -2690,7 +3373,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           type: "job",
           title: item.title,
           description: item.description,
-          href: `/jobs/${item.id}`,
+          href: `/jobs/${getJobMeta(item.id).slug ?? slugify(item.title ?? `job-${item.id}`)}`,
           category: item.jobType,
           imageUrl: getJobMeta(item.id).featuredImage ?? null,
         })),
@@ -2902,11 +3585,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/jobs/:id', async (req, res) => {
     try {
-      const id = Number.parseInt(req.params.id, 10);
-      if (Number.isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
-
-      const job = await storage.getJob(id);
       const requester = getOptionalAuthenticatedUser(req);
+      const job = await findJobByIdentifier(req.params.id, requester);
       const isVisible = job && (isAdmin(requester) || job.isActive !== false);
 
       if (!isVisible) return res.status(404).json({ message: 'Job not found' });
@@ -3042,12 +3722,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       const application = await storage.createApplication(applicationData);
+      const documentsRecord =
+        payload.documents && typeof payload.documents === "object"
+          ? (payload.documents as Record<string, unknown>)
+          : {};
+      const applicantProfile = parseRecord(documentsRecord.applicant);
+      const professionalProfile = parseRecord(documentsRecord.professional);
+      const educationHistory = parseRecordArray(documentsRecord.education);
+      const experienceHistory = parseRecordArray(documentsRecord.experience);
+      const references = parseRecordArray(documentsRecord.references);
+      const roleAnswers = parseRecord(documentsRecord.answers);
+      const cvBuilderSnapshot = parseRecord(documentsRecord.cvBuilder);
+      const atsScore =
+        typeof documentsRecord.atsScore === "number"
+          ? documentsRecord.atsScore
+          : typeof cvBuilderSnapshot?.atsScore === "number"
+            ? cvBuilderSnapshot.atsScore
+            : undefined;
       setApplicationMeta(application.id, {
         workflowType: payload.type,
-        stage: "submitted",
+        stage: payload.type === "job" ? "applied" : "submitted",
+        source: typeof documentsRecord.source === "string" ? documentsRecord.source : "public",
+        applicantSnapshot: applicantProfile,
+        professionalSnapshot: professionalProfile,
+        educationHistory,
+        experienceHistory,
+        references,
+        roleAnswers,
+        cvBuilderSnapshot,
+        atsScore,
+        pipeline:
+          payload.type === "job"
+            ? [
+                { id: "applied", label: "Applied", completedAt: new Date().toISOString() },
+                { id: "under_review", label: "Under Review" },
+                { id: "shortlisted", label: "Shortlisted" },
+                { id: "interview", label: "Interview" },
+                { id: "assessment", label: "Assessment" },
+                { id: "offer", label: "Offer" },
+                { id: "hired", label: "Hired" },
+                { id: "rejected", label: "Rejected" },
+              ]
+            : undefined,
         documents:
-          payload.documents && typeof payload.documents === "object"
-            ? Object.entries(payload.documents).map(([key, value]) => ({
+          Object.keys(documentsRecord).length > 0
+            ? Object.entries(documentsRecord).map(([key, value]) => ({
                 key,
                 value,
                 status: "received",
@@ -3450,7 +4169,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const teamMembers = isAdmin(requester)
         ? await storage.getAllTeamMembers()
         : await storage.getActiveTeamMembers();
-      res.json(teamMembers);
+      res.json(teamMembers.map(toPublicTeamMember));
     } catch (error) {
       console.error('Team members fetch error:', error);
       res.status(500).json({ message: 'Failed to fetch team members' });
@@ -3459,15 +4178,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/team-members/:id', async (req, res) => {
     try {
-      const id = Number.parseInt(req.params.id, 10);
-      if (Number.isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
-
-      const teamMember = await storage.getTeamMember(id);
       const requester = getOptionalAuthenticatedUser(req);
+      const teamMember = await findTeamMemberByIdentifier(req.params.id, requester);
       const isVisible = teamMember && (isAdmin(requester) || teamMember.isActive !== false);
 
       if (!isVisible) return res.status(404).json({ message: 'Team member not found' });
-      res.json(teamMember);
+      res.json(toPublicTeamMember(teamMember));
     } catch (error) {
       console.error('Team member detail fetch error:', error);
       res.status(500).json({ message: 'Failed to fetch team member' });
@@ -5294,11 +6010,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const filtered = searchAndRank(mapped, search, (item) => [
         item.title,
         item.description,
+        item.category,
         item.company,
+        item.companyProfile,
+        item.department,
         item.location,
+        item.workMode,
         item.region,
         item.jobType,
+        item.employmentType,
+        item.experienceLevel,
         item.requirements,
+        item.requiredSkills,
+        item.preferredSkills,
+        item.responsibilities,
         item.benefits,
       ]).filter((item) => {
         const matchesStatus = !statusFilter || item.status === statusFilter;
@@ -5322,12 +6047,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         description: req.body.description ?? "",
         company: req.body.company ?? "",
         location: req.body.location ?? "",
-        salary: parseNumber(req.body.salary),
+        salary: parseNumber(req.body.salary ?? req.body.salaryMax ?? req.body.salaryMin),
         currency: req.body.currency ?? "USD",
-        jobType: req.body.jobType ?? "full-time",
-        requirements: req.body.requirements ?? null,
-        benefits: req.body.benefits ?? null,
-        isRemote: Boolean(req.body.isRemote),
+        jobType: req.body.employmentType ?? req.body.jobType ?? "Full-Time",
+        requirements: parseStringArray(req.body.requirements) ?? parseStringArray(req.body.requiredSkills) ?? null,
+        benefits: parseStringArray(req.body.benefits) ?? null,
+        isRemote: Boolean(req.body.isRemote) || String(req.body.workMode ?? "").toLowerCase() === "remote",
         deadline: req.body.deadline ? new Date(req.body.deadline) : null,
         imageUrl: featuredImage,
         isActive: req.body.status === "published",
@@ -5345,6 +6070,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             isPremium: Boolean(req.body.isPremium),
             price: req.body.price ?? "",
             paymentStatus: req.body.paymentStatus ?? "unpaid",
+            employmentType: req.body.employmentType ?? req.body.jobType ?? "Full-Time",
+            workMode: req.body.workMode ?? (req.body.isRemote ? "Remote" : "Onsite"),
           },
           featuredImage,
         ),
@@ -5375,7 +6102,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (req.body.description !== undefined) payload.description = req.body.description;
       if (req.body.company !== undefined) payload.company = req.body.company;
       if (req.body.location !== undefined) payload.location = req.body.location;
-      if (req.body.jobType !== undefined) payload.jobType = req.body.jobType;
+      if (req.body.jobType !== undefined || req.body.employmentType !== undefined) payload.jobType = req.body.employmentType ?? req.body.jobType;
+      if (req.body.salary !== undefined || req.body.salaryMin !== undefined || req.body.salaryMax !== undefined) {
+        payload.salary = parseNumber(req.body.salary ?? req.body.salaryMax ?? req.body.salaryMin);
+      }
+      if (req.body.currency !== undefined) payload.currency = req.body.currency;
+      if (req.body.requirements !== undefined || req.body.requiredSkills !== undefined) {
+        payload.requirements = parseStringArray(req.body.requirements) ?? parseStringArray(req.body.requiredSkills) ?? null;
+      }
+      if (req.body.benefits !== undefined) payload.benefits = parseStringArray(req.body.benefits) ?? null;
+      if (req.body.isRemote !== undefined || req.body.workMode !== undefined) {
+        payload.isRemote = Boolean(req.body.isRemote) || String(req.body.workMode ?? "").toLowerCase() === "remote";
+      }
       if (req.body.deadline !== undefined) payload.deadline = req.body.deadline ? new Date(req.body.deadline) : null;
       const featuredImage = req.body.featuredImage !== undefined ? ensureMediaReference(req.body.featuredImage, "jobs") : undefined;
       if (featuredImage !== undefined) payload.imageUrl = featuredImage;
@@ -5503,6 +6241,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         acc[stage] = (acc[stage] ?? 0) + 1;
         return acc;
       }, {});
+      const byLocation = mapped.reduce<Record<string, number>>((acc, item) => {
+        acc[item.location || "Unspecified"] = (acc[item.location || "Unspecified"] ?? 0) + 1;
+        return acc;
+      }, {});
+      const sourceTracking = jobApps.reduce<Record<string, number>>((acc, app) => {
+        const source = getApplicationMeta(app.id).source ?? "public";
+        acc[source] = (acc[source] ?? 0) + 1;
+        return acc;
+      }, {});
+      const byCountry = jobApps.reduce<Record<string, number>>((acc, app) => {
+        const country = String(getApplicationMeta(app.id).applicantSnapshot?.country ?? "Unspecified");
+        acc[country] = (acc[country] ?? 0) + 1;
+        return acc;
+      }, {});
       res.json({
         totalJobs: mapped.length,
         publishedJobs: mapped.filter((item) => item.status === "published").length,
@@ -5513,6 +6265,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         conversionRate: mapped.length ? Math.round((jobApps.length / mapped.length) * 100) : 0,
         byType,
         byStage,
+        byLocation,
+        byCountry,
+        sourceTracking,
         topJobs: mapped
           .map((item) => ({
             id: item.id,
@@ -6952,9 +7707,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         acc[stage] = (acc[stage] ?? 0) + 1;
         return acc;
       }, {});
+      const byCountry = applications.reduce<Record<string, number>>((acc, app) => {
+        const applicant = getApplicationMeta(app.id).applicantSnapshot;
+        const country = String(applicant?.country ?? "Unspecified");
+        acc[country] = (acc[country] ?? 0) + 1;
+        return acc;
+      }, {});
+      const sourceTracking = applications.reduce<Record<string, number>>((acc, app) => {
+        const source = getApplicationMeta(app.id).source ?? "public";
+        acc[source] = (acc[source] ?? 0) + 1;
+        return acc;
+      }, {});
       const scores = applications
         .map((app) => getApplicationMeta(app.id).score)
         .filter((score): score is number => typeof score === "number");
+      const offerOrHired = applications.filter((app) => ["offer", "hired", "approved"].includes(app.status)).length;
       res.json({
         totalApplications: applications.length,
         pendingApplications: applications.filter((app) => app.status === "pending").length,
@@ -6963,9 +7730,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         shortlisted: applications.filter((app) => getApplicationMeta(app.id).shortlist).length,
         interviewsScheduled: applications.reduce((sum, app) => sum + (getApplicationMeta(app.id).interviewSchedule?.length ?? 0), 0),
         averageScore: scores.length ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : 0,
+        conversionRate: applications.length ? Math.round((offerOrHired / applications.length) * 100) : 0,
         byType,
         byStatus,
         byStage,
+        byCountry,
+        sourceTracking,
       });
     } catch (error) {
       console.error("Admin application analytics error:", error);
@@ -7078,10 +7848,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         notes: payload.reviewNotes ?? "",
       });
       setApplicationMeta(id, {
-        stage: payload.stage ?? (payload.status === "approved" ? "approved" : applicationMeta.stage ?? "review"),
+        stage:
+          payload.stage ??
+          (payload.status === "approved" ? "approved" : payload.status && payload.status !== "pending" ? payload.status : applicationMeta.stage ?? "review"),
         score: payload.score ?? applicationMeta.score,
         shortlist: payload.shortlist ?? applicationMeta.shortlist,
         verificationChecks: payload.verificationChecks ?? applicationMeta.verificationChecks,
+        evaluationScores: payload.evaluationScores
+          ? [
+              ...payload.evaluationScores.map((score) =>
+                createOperationalRecord({
+                  ...score,
+                  reviewerId: getAuthenticatedUser(req).id,
+                }),
+              ),
+              ...(applicationMeta.evaluationScores ?? []),
+            ].slice(0, 100)
+          : applicationMeta.evaluationScores,
+        interviewNotes: payload.interviewNotes
+          ? [
+              createOperationalRecord({
+                note: payload.interviewNotes,
+                reviewerId: getAuthenticatedUser(req).id,
+              }),
+              ...(applicationMeta.interviewNotes ?? []),
+            ].slice(0, 100)
+          : applicationMeta.interviewNotes,
         interviewSchedule: payload.interviewAt
           ? [
               createOperationalRecord({
@@ -7984,11 +8776,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const subscriberPayload = insertSubscriberSchema.parse({
         email: payload.email,
         name: payload.name ?? existing?.name ?? null,
-        preferences: payload.preferences ?? existing?.preferences ?? ["scholarships", "jobs", "study-abroad"],
+        preferences: payload.preferences ?? existing?.preferences ?? ["scholarships", "jobs", "news"],
         source: payload.source,
         status: "pending",
         verificationToken,
         unsubscribeToken,
+        consentAccepted: payload.consentAccepted,
+        consentSource: payload.source,
+        consentAt: payload.consentAccepted ? new Date() : null,
+        consentIpAddress: getClientIp(req),
+        consentUserAgent: req.get("user-agent") || null,
         verifiedAt: null,
         unsubscribedAt: null,
       });
@@ -7997,7 +8794,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? await storage.updateSubscriber(existing.id, subscriberPayload)
         : await storage.createSubscriber(subscriberPayload);
 
-      const baseUrl = env.PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`;
+      const emailPreferenceToken = createEmailPreferenceToken(subscriber.email);
+      await storage.upsertEmailPreference({
+        userId: null,
+        email: subscriber.email,
+        categories: Object.fromEntries(
+          subscriptionPreferenceCategories.map((category) => [
+            category,
+            (subscriber.preferences || []).includes(category),
+          ]),
+        ),
+        consentStatus: payload.consentAccepted ? "pending_double_opt_in" : "pending",
+        consentSource: payload.source,
+        consentAt: payload.consentAccepted ? new Date() : null,
+        unsubscribedAt: null,
+        unsubscribeTokenHash: createEmailPreferenceTokenHash(emailPreferenceToken),
+        auditTrail: [
+          {
+            action: "newsletter_signup",
+            preferences: subscriber.preferences,
+            consentAccepted: payload.consentAccepted,
+            at: new Date().toISOString(),
+          },
+        ],
+      });
+
+      const baseUrl = getApiRequestBaseUrl(req);
       const verificationUrl = `${baseUrl}/api/subscribers/verify/${verificationToken}`;
       const unsubscribeUrl = `${baseUrl}/api/subscribers/unsubscribe/${unsubscribeToken}`;
 
@@ -8014,6 +8836,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           email: subscriber.email,
           source: payload.source,
           preferences: subscriber.preferences,
+          consentAccepted: payload.consentAccepted,
           recaptchaSkipped: "skipped" in recaptcha ? recaptcha.skipped : false,
           recaptchaScore: "score" in recaptcha ? recaptcha.score : undefined,
         },
@@ -8044,8 +8867,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.updateSubscriber(subscriber.id, {
         status: "active",
         verifiedAt: new Date(),
+        consentAccepted: true,
+        consentAt: subscriber.consentAt || new Date(),
+        consentSource: subscriber.consentSource || "double_opt_in",
         verificationToken: null,
       });
+      const preference = await storage.getEmailPreferenceByEmail(subscriber.email);
+      if (preference) {
+        await storage.updateEmailPreference(preference.id, {
+          consentStatus: "active",
+          consentAt: preference.consentAt || new Date(),
+          categories: Object.fromEntries(
+            subscriptionPreferenceCategories.map((category) => [
+              category,
+              (subscriber.preferences || []).includes(category),
+            ]),
+          ),
+          auditTrail: [
+            ...(preference.auditTrail || []),
+            { action: "double_opt_in_verified", at: new Date().toISOString() },
+          ],
+        });
+      }
 
       const redirectUrl = `${env.PUBLIC_APP_URL || "/"}${env.PUBLIC_APP_URL ? "" : ""}`;
       res.redirect(302, `${redirectUrl}?subscription=verified`);
@@ -8064,6 +8907,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "unsubscribed",
         unsubscribedAt: new Date(),
       });
+      const preference = await storage.getEmailPreferenceByEmail(subscriber.email);
+      if (preference) {
+        await storage.updateEmailPreference(preference.id, {
+          categories: Object.fromEntries(subscriptionPreferenceCategories.map((category) => [category, false])),
+          consentStatus: "unsubscribed",
+          unsubscribedAt: new Date(),
+          auditTrail: [
+            ...(preference.auditTrail || []),
+            { action: "subscriber_token_unsubscribe", at: new Date().toISOString() },
+          ],
+        });
+      }
 
       const redirectUrl = env.PUBLIC_APP_URL || "/";
       res.redirect(302, `${redirectUrl}?subscription=unsubscribed`);
@@ -8082,6 +8937,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: "unsubscribed",
           unsubscribedAt: new Date(),
         });
+        const preference = await storage.getEmailPreferenceByEmail(subscriber.email);
+        if (preference) {
+          await storage.updateEmailPreference(preference.id, {
+            categories: Object.fromEntries(subscriptionPreferenceCategories.map((category) => [category, false])),
+            consentStatus: "unsubscribed",
+            unsubscribedAt: new Date(),
+            auditTrail: [
+              ...(preference.auditTrail || []),
+              { action: "email_unsubscribe_request", at: new Date().toISOString() },
+            ],
+          });
+        }
       }
 
       res.json({ message: "Subscription preferences updated." });

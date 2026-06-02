@@ -87,7 +87,6 @@ export default function GovernedImage({
       alt={effectiveAlt}
       loading={priority ? "eager" : "lazy"}
       decoding="async"
-      fetchPriority={priority ? "high" : "auto"}
       sizes={imageSizes}
       className={cn(
         "h-full w-full transition duration-700 ease-out",

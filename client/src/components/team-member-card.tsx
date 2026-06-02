@@ -1,11 +1,12 @@
-import { Award, GraduationCap } from "lucide-react";
+import { Link } from "wouter";
+import { Award, ExternalLink, GraduationCap } from "lucide-react";
 import TeamMemberDialog from "@/components/team-member-dialog";
 import TeamPortrait from "@/components/team-portrait";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { richTextToPlainText } from "@/lib/rich-text";
-import type { DisplayTeamMember } from "@/lib/team-display";
+import { getTeamMemberSlug, type DisplayTeamMember } from "@/lib/team-display";
 import { cn } from "@/lib/utils";
 
 type TeamMemberCardProps = {
@@ -16,6 +17,7 @@ type TeamMemberCardProps = {
 
 export default function TeamMemberCard({ member, featured = false, className }: TeamMemberCardProps) {
   const bioSummary = richTextToPlainText(member.bio) || "Profile details for this team member will be shared soon.";
+  const profileHref = `/team/${getTeamMemberSlug(member)}`;
 
   if (featured) {
     return (
@@ -55,14 +57,22 @@ export default function TeamMemberCard({ member, featured = false, className }: 
               </div>
             ) : null}
 
-            <TeamMemberDialog
-              member={member}
-              trigger={
-                <Button variant="outline" className="border-mtendere-blue/20 text-mtendere-blue hover:bg-mtendere-blue hover:text-white">
-                  View profile
-                </Button>
-              }
-            />
+            <div className="flex flex-wrap gap-3">
+              <Button asChild className="bg-mtendere-blue hover:bg-mtendere-blue/90">
+                <Link href={profileHref}>
+                  Open profile
+                  <ExternalLink className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+              <TeamMemberDialog
+                member={member}
+                trigger={
+                  <Button variant="outline" className="border-mtendere-blue/20 text-mtendere-blue hover:bg-mtendere-blue hover:text-white">
+                    Quick view
+                  </Button>
+                }
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -98,14 +108,19 @@ export default function TeamMemberCard({ member, featured = false, className }: 
           </div>
         )}
         <p className="line-clamp-4 text-sm leading-relaxed text-muted-foreground">{bioSummary}</p>
-        <TeamMemberDialog
-          member={member}
-          trigger={
-            <Button variant="outline" className="w-full border-mtendere-blue/20 text-mtendere-blue hover:bg-mtendere-blue hover:text-white">
-              View profile
-            </Button>
-          }
-        />
+        <div className="grid gap-2">
+          <Button asChild className="w-full bg-mtendere-blue hover:bg-mtendere-blue/90">
+            <Link href={profileHref}>Open profile</Link>
+          </Button>
+          <TeamMemberDialog
+            member={member}
+            trigger={
+              <Button variant="outline" className="w-full border-mtendere-blue/20 text-mtendere-blue hover:bg-mtendere-blue hover:text-white">
+                Quick view
+              </Button>
+            }
+          />
+        </div>
       </CardContent>
     </Card>
   );

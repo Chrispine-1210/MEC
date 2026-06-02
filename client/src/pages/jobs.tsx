@@ -27,7 +27,8 @@ import {
   Clock,
   Wifi,
   Users,
-  X
+  X,
+  Star
 } from "lucide-react";
 
 interface Job {
@@ -49,6 +50,7 @@ interface Job {
 export default function Jobs() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("");
   const debouncedSearchQuery = useDebouncedValue(searchQuery.trim(), 300);
 
@@ -64,11 +66,13 @@ export default function Jobs() {
   });
 
   const displayJobs = debouncedSearchQuery.length >= 2 ? searchResults : jobs;
-  const jobTypes = [...new Set(jobs?.map(j => j.jobType) || [])];
+  const jobTypes = [...new Set(jobs?.map(j => j.employmentType || j.jobType) || [])];
+  const categories = [...new Set(jobs?.map(j => j.category || j.jobType).filter(Boolean) || [])];
   const locations = [...new Set(jobs?.map(j => j.location) || [])];
 
   const filteredJobs = displayJobs?.filter(job => 
-    (!selectedType || job.jobType === selectedType) &&
+    (!selectedType || (job.employmentType || job.jobType) === selectedType) &&
+    (!selectedCategory || (job.category || job.jobType) === selectedCategory) &&
     (!selectedLocation || job.location === selectedLocation)
   );
 
@@ -164,7 +168,7 @@ export default function Jobs() {
         <div className="flex flex-wrap items-center gap-4 mb-4">
             <div className="flex items-center space-x-2">
               <Filter className="w-5 h-5 text-muted-foreground" />
-              <span className="font-medium text-foreground/80">Filter by type:</span>
+            <span className="font-medium text-foreground/80">Filter by employment type:</span>
             </div>
             <Button
               variant={selectedType === "" ? "default" : "outline"}
@@ -187,7 +191,33 @@ export default function Jobs() {
             ))}
           </div>
 
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4 border-t border-border/60 pt-4">
+            <div className="flex items-center space-x-2">
+              <Briefcase className="w-5 h-5 text-muted-foreground" />
+              <span className="font-medium text-foreground/80">Filter by category:</span>
+            </div>
+            <Button
+              variant={selectedCategory === "" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSelectedCategory("")}
+              className={selectedCategory === "" ? "bg-mtendere-blue text-white" : ""}
+            >
+              All Categories
+            </Button>
+            {categories.slice(0, 8).map((category) => (
+              <Button
+                key={category}
+                variant={selectedCategory === category ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedCategory(category)}
+                className={selectedCategory === category ? "bg-mtendere-blue text-white" : ""}
+              >
+                {category}
+              </Button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4 border-t border-border/60 pt-4">
             <div className="flex items-center space-x-2">
               <MapPin className="w-5 h-5 text-muted-foreground" />
               <span className="font-medium text-foreground/80">Filter by location:</span>
@@ -219,6 +249,7 @@ export default function Jobs() {
             Showing {filteredJobs?.length || 0} job{filteredJobs?.length !== 1 ? 's' : ''}
             {debouncedSearchQuery && ` for "${debouncedSearchQuery}"`}
             {selectedType && ` in ${selectedType}`}
+            {selectedCategory && ` for ${selectedCategory}`}
             {selectedLocation && ` at ${selectedLocation}`}
           </p>
         </div>
@@ -258,10 +289,15 @@ export default function Jobs() {
                       wrapperClassName="h-full rounded-t-lg rounded-b-none shadow-none"
                     />
                     <div className="absolute top-3 left-3 flex gap-2">
-                      <Badge className="bg-mtendere-green text-white font-bold text-xs">{job.jobType}</Badge>
-                      {job.isRemote && (
+                      <Badge className="bg-mtendere-green text-white font-bold text-xs">{job.employmentType || job.jobType}</Badge>
+                      {job.isFeatured && (
+                        <Badge className="bg-mtendere-orange text-white text-xs">
+                          <Star className="w-3 h-3 mr-1" />Featured
+                        </Badge>
+                      )}
+                      {(job.workMode || job.isRemote) && (
                         <Badge className="bg-mtendere-blue text-white text-xs">
-                          <Wifi className="w-3 h-3 mr-1" />Remote
+                          <Wifi className="w-3 h-3 mr-1" />{job.workMode || "Remote"}
                         </Badge>
                       )}
                       {job.deadline && isDeadlineApproaching(job.deadline) && (
@@ -284,6 +320,7 @@ export default function Jobs() {
                     <CardDescription className="flex items-center gap-2 text-sm">
                       <Building className="w-3.5 h-3.5 text-mtendere-blue" />
                       {job.company}
+                      {job.department ? <span className="text-muted-foreground">- {job.department}</span> : null}
                     </CardDescription>
                   </CardHeader>
 
@@ -299,7 +336,7 @@ export default function Jobs() {
                           Salary
                         </span>
                         <span className="font-semibold text-mtendere-green">
-                          {job.salary ? formatCurrency(job.salary, job.currency || 'USD') : 'Competitive'}
+                          {job.salaryRange || (job.salary ? formatCurrency(job.salary, job.currency || 'USD') : 'Competitive')}
                         </span>
                       </div>
 
@@ -317,18 +354,32 @@ export default function Jobs() {
                     </div>
 
                     {/* Requirements Preview */}
-                    {job.requirements && (
+                    {(job.requiredSkills || job.skills || job.requirements) && (
                       <div className="mb-4">
-                        <h4 className="text-sm font-semibold text-foreground/80 mb-2">Key Requirements:</h4>
+                        <h4 className="text-sm font-semibold text-foreground/80 mb-2">Key Skills:</h4>
                         <div className="flex flex-wrap gap-1">
-                          {(Array.isArray(job.requirements) ? job.requirements : []).slice(0, 3).map((req, index) => (
+                          {(Array.isArray(job.requiredSkills) && job.requiredSkills.length
+                            ? job.requiredSkills
+                            : Array.isArray(job.skills) && job.skills.length
+                              ? job.skills
+                              : Array.isArray(job.requirements)
+                                ? job.requirements
+                                : []
+                          ).slice(0, 3).map((req, index) => (
                             <Badge key={index} variant="outline" className="text-xs">
                               {req}
                             </Badge>
                           ))}
-                          {(Array.isArray(job.requirements) ? job.requirements : []).length > 3 && (
+                          {(Array.isArray(job.requiredSkills) && job.requiredSkills.length
+                            ? job.requiredSkills
+                            : Array.isArray(job.skills) && job.skills.length
+                              ? job.skills
+                              : Array.isArray(job.requirements)
+                                ? job.requirements
+                                : []
+                          ).length > 3 && (
                             <Badge variant="outline" className="text-xs">
-                              +{(job.requirements as any[]).length - 3} more
+                              +{(job.requiredSkills || job.skills || job.requirements || []).length - 3} more
                             </Badge>
                           )}
                         </div>
@@ -340,6 +391,7 @@ export default function Jobs() {
                         type="job"
                         referenceId={job.id}
                         title={job.title}
+                        job={job}
                         trigger={
                           <Button className="flex-1 bg-mtendere-green hover:bg-mtendere-green/90">
                             <Users className="w-4 h-4 mr-2" />
@@ -349,7 +401,7 @@ export default function Jobs() {
                       />
 
                       <Button asChild variant="outline" size="icon" aria-label={`View ${job.title}`}>
-                        <Link href={`/jobs/${job.id}`}>
+                        <Link href={`/jobs/${job.slug || job.id}`}>
                           <ExternalLink className="w-4 h-4" />
                         </Link>
                       </Button>
@@ -374,6 +426,7 @@ export default function Jobs() {
               onClick={() => {
                 setSearchQuery("");
                 setSelectedType("");
+                setSelectedCategory("");
                 setSelectedLocation("");
               }}
               variant="outline"

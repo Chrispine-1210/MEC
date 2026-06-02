@@ -27,6 +27,7 @@ import Events from "@/pages/events";
 import EventDetail from "@/pages/event-detail";
 import About from "@/pages/about";
 import Team from "@/pages/team";
+import TeamDetail from "@/pages/team-detail";
 import Contact from "@/pages/contact";
 import AIChat from "@/components/ai-chat";
 import BackToTop from "@/components/back-to-top";
@@ -58,6 +59,7 @@ function Router() {
       <Route path="/events/:id" component={EventDetail} />
       <Route path="/events" component={Events} />
       <Route path="/about" component={About} />
+      <Route path="/team/:id" component={TeamDetail} />
       <Route path="/team" component={Team} />
       <Route path="/contact" component={Contact} />
       <Route path="/blog" component={Blog} />

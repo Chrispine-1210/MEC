@@ -10,9 +10,9 @@ export type DisplayTeamMember = ApiTeamMember & {
 export function toDisplayTeamMember(member: ApiTeamMember): DisplayTeamMember {
   return {
     ...member,
-    group: getTeamGroup(member.position),
+    group: getTeamGroup(member.displayGroup || member.position),
     qualification: extractQualification(member.bio),
-    focusAreas: [],
+    focusAreas: member.skills?.slice(0, 4) ?? [],
   };
 }
 
@@ -33,6 +33,10 @@ export function getTeamGroups(members: ApiTeamMember[] = []) {
   };
 }
 
+export function getTeamMemberSlug(member: Pick<ApiTeamMember, "slug" | "position" | "name" | "title" | "id">) {
+  return member.slug || slugify(member.title || member.position || member.name || `team-${member.id}`);
+}
+
 function getTeamGroup(position: string): DisplayTeamMember["group"] {
   const normalized = position.toLowerCase();
   if (normalized.includes("board")) return "Board";
@@ -45,6 +49,10 @@ function getTeamGroup(position: string): DisplayTeamMember["group"] {
     return "Leadership";
   }
   return "Operations";
+}
+
+function slugify(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "team-member";
 }
 
 function extractQualification(bio?: string | null) {

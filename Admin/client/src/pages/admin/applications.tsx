@@ -14,7 +14,23 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { getInitialUrlSearchParam } from "@/hooks/use-url-search-param";
 import DataTable from "@/components/admin/DataTable";
-import { ClipboardList, CheckCircle, XCircle, Clock, AlertCircle, Eye, ChevronRight, Star, CalendarClock } from "lucide-react";
+import {
+  AlertCircle,
+  Briefcase,
+  CalendarClock,
+  CheckCircle,
+  ChevronRight,
+  ClipboardList,
+  Clock,
+  Eye,
+  FileText,
+  GraduationCap,
+  Link as LinkIcon,
+  MapPin,
+  Star,
+  UserRound,
+  XCircle,
+} from "lucide-react";
 import type { Application } from "@shared/schema";
 
 type AdminApplication = Application & {
@@ -33,7 +49,25 @@ const statusConfig: Record<string, { color: string; icon: any; label: string }> 
   rejected: { color: "bg-destructive/15 text-destructive", icon: XCircle, label: "Rejected" },
   waitlisted: { color: "bg-info/15 text-info", icon: AlertCircle, label: "Waitlisted" },
   under_review: { color: "bg-primary/10 text-primary", icon: Eye, label: "Under Review" },
+  shortlisted: { color: "bg-success/15 text-success", icon: Star, label: "Shortlisted" },
+  interview: { color: "bg-info/15 text-info", icon: CalendarClock, label: "Interview" },
+  assessment: { color: "bg-warning/15 text-warning", icon: ClipboardList, label: "Assessment" },
+  offer: { color: "bg-success/15 text-success", icon: CheckCircle, label: "Offer" },
+  hired: { color: "bg-success/20 text-success", icon: CheckCircle, label: "Hired" },
 };
+
+const pipelineStatusOptions = [
+  "pending",
+  "under_review",
+  "shortlisted",
+  "interview",
+  "assessment",
+  "offer",
+  "hired",
+  "approved",
+  "waitlisted",
+  "rejected",
+];
 
 const statCardStyles: Record<string, { card: string; icon: string }> = {
   amber: { card: "border-l-4 border-l-warning bg-warning/5", icon: "text-warning" },
@@ -51,6 +85,8 @@ export default function ApplicationsPage() {
   const [newStatus, setNewStatus] = useState("");
   const [reviewStage, setReviewStage] = useState("review");
   const [reviewScore, setReviewScore] = useState("");
+  const [evaluationCategory, setEvaluationCategory] = useState("Overall fit");
+  const [interviewNotes, setInterviewNotes] = useState("");
   const [interviewAt, setInterviewAt] = useState("");
   const [shortlist, setShortlist] = useState(false);
   const { toast } = useToast();
@@ -123,6 +159,8 @@ export default function ApplicationsPage() {
     setReviewNotes("");
     setReviewStage(app.meta?.stage || "review");
     setReviewScore(typeof app.meta?.score === "number" ? String(app.meta.score) : "");
+    setEvaluationCategory("Overall fit");
+    setInterviewNotes("");
     setInterviewAt("");
     setShortlist(Boolean(app.meta?.shortlist));
   };
@@ -138,14 +176,13 @@ export default function ApplicationsPage() {
           score: reviewScore ? Number(reviewScore) : undefined,
           shortlist,
           interviewAt: interviewAt || undefined,
+          interviewNotes: interviewNotes || undefined,
+          evaluationScores: reviewScore
+            ? [{ category: evaluationCategory || "Overall fit", score: Number(reviewScore), stage: reviewStage }]
+            : undefined,
         },
       });
   };
-
-  // Summary stats
-  const pendingCount = data?.applications?.filter(a => a.status === "pending").length ?? 0;
-  const approvedCount = data?.applications?.filter(a => a.status === "approved").length ?? 0;
-  const rejectedCount = data?.applications?.filter(a => a.status === "rejected").length ?? 0;
 
   const columns = [
     {
@@ -254,11 +291,11 @@ export default function ApplicationsPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="approved">Approved</SelectItem>
-              <SelectItem value="rejected">Rejected</SelectItem>
-              <SelectItem value="waitlisted">Waitlisted</SelectItem>
-              <SelectItem value="under_review">Under Review</SelectItem>
+              {pipelineStatusOptions.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {statusConfig[option]?.label ?? option}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -271,7 +308,7 @@ export default function ApplicationsPage() {
             { label: "Pending Review", count: data.applications.filter(a => a.status === "pending").length, color: "amber", icon: Clock },
             { label: "Approved", count: data.applications.filter(a => a.status === "approved").length, color: "green", icon: CheckCircle },
             { label: "Rejected", count: data.applications.filter(a => a.status === "rejected").length, color: "red", icon: XCircle },
-            { label: "Shortlisted", count: analytics?.shortlisted ?? 0, color: "green", icon: Star },
+            { label: "Shortlisted", count: analytics?.shortlisted ?? analytics?.byStatus?.shortlisted ?? 0, color: "green", icon: Star },
             { label: "Interviews", count: analytics?.interviewsScheduled ?? 0, color: "amber", icon: CalendarClock },
           ].map(({ label, count, color, icon: Icon }) => (
             <Card key={label} className={statCardStyles[color].card}>
@@ -303,7 +340,7 @@ export default function ApplicationsPage() {
 
       {/* Review Dialog */}
       <Dialog open={!!selectedApp} onOpenChange={(open) => { if (!open) setSelectedApp(null); }}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Eye className="h-5 w-5" />
@@ -349,6 +386,8 @@ export default function ApplicationsPage() {
                 </>
               )}
 
+              <CandidateProfile application={selectedApp} analytics={analytics} />
+
               <Separator />
 
               <div className="space-y-3">
@@ -359,18 +398,22 @@ export default function ApplicationsPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="under_review">Under Review</SelectItem>
-                      <SelectItem value="approved">Approved</SelectItem>
-                      <SelectItem value="rejected">Rejected</SelectItem>
-                      <SelectItem value="waitlisted">Waitlisted</SelectItem>
+                      {pipelineStatusOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {statusConfig[option]?.label ?? option}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
                     <label className="text-sm font-medium mb-1.5 block">Review Stage</label>
                     <Input value={reviewStage} onChange={(event) => setReviewStage(event.target.value)} placeholder="review, interview, final" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1.5 block">Score Category</label>
+                    <Input value={evaluationCategory} onChange={(event) => setEvaluationCategory(event.target.value)} placeholder="Technical, culture, academic" />
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-1.5 block">Score</label>
@@ -391,6 +434,15 @@ export default function ApplicationsPage() {
                     value={reviewNotes}
                     onChange={e => setReviewNotes(e.target.value)}
                     placeholder="Add notes about this application..."
+                    rows={3}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1.5 block">Interview Notes</label>
+                  <Textarea
+                    value={interviewNotes}
+                    onChange={e => setInterviewNotes(e.target.value)}
+                    placeholder="Capture interview observations, strengths, risks, and next steps..."
                     rows={3}
                   />
                 </div>
@@ -428,6 +480,233 @@ export default function ApplicationsPage() {
       </Dialog>
     </div>
   );
+}
+
+function CandidateProfile({ application, analytics }: { application: AdminApplication; analytics?: any }) {
+  const meta = application.meta ?? {};
+  const applicant = asRecord(meta.applicantSnapshot);
+  const professional = asRecord(meta.professionalSnapshot);
+  const education = asRecordArray(meta.educationHistory);
+  const experience = asRecordArray(meta.experienceHistory);
+  const references = asRecordArray(meta.references);
+  const roleAnswers = asRecord(meta.roleAnswers);
+  const documents = [
+    ...asRecordArray(meta.documents),
+    ...asRecordArray((application as any).documents),
+  ];
+  const pipeline = asRecordArray(meta.pipeline);
+  const source = typeof meta.source === "string" ? meta.source : "public";
+  const country = textValue(applicant.country) || "Unspecified";
+
+  return (
+    <div className="space-y-4">
+      <Separator />
+      <div className="grid gap-3 md:grid-cols-4">
+        <SnapshotCard icon={UserRound} label="Country" value={country} />
+        <SnapshotCard icon={Briefcase} label="Source" value={source} />
+        <SnapshotCard icon={Star} label="ATS Score" value={textValue(meta.atsScore) || "Not scored"} />
+        <SnapshotCard icon={MapPin} label="Source Volume" value={textValue(analytics?.sourceTracking?.[source]) || "0"} />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <InfoCard
+          icon={UserRound}
+          title="Personal Information"
+          entries={[
+            ["First name", applicant.firstName],
+            ["Last name", applicant.lastName],
+            ["Email", applicant.email || application.applicantEmail],
+            ["Phone", applicant.phone],
+            ["Nationality", applicant.nationality],
+            ["Address", applicant.address],
+          ]}
+        />
+        <InfoCard
+          icon={LinkIcon}
+          title="Professional Links"
+          entries={[
+            ["Resume", professional.resume || professional.cv],
+            ["Cover letter", professional.coverLetter],
+            ["Portfolio", professional.portfolio],
+            ["LinkedIn", professional.linkedin],
+            ["Github", professional.github],
+            ["Behance", professional.behance],
+            ["Website", professional.website],
+          ]}
+        />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <RecordList icon={GraduationCap} title="Education" records={education} empty="No education history was captured." />
+        <RecordList icon={Briefcase} title="Experience" records={experience} empty="No experience history was captured." />
+        <RecordList icon={UserRound} title="References" records={references} empty="No references were captured." />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <AnswerList title="Role-Specific Answers" answers={roleAnswers} />
+        <RecordList icon={FileText} title="Documents" records={documents} empty="No supporting documents were captured." />
+      </div>
+
+      {pipeline.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ClipboardList className="h-4 w-4 text-primary" />
+              Candidate Pipeline
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            {pipeline.map((stage, index) => (
+              <Badge key={`${stage.id ?? stage.label ?? index}`} variant={stage.completedAt ? "default" : "outline"}>
+                {textValue(stage.label) || textValue(stage.id) || `Stage ${index + 1}`}
+              </Badge>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function SnapshotCard({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
+  return (
+    <Card className="border border-border/60">
+      <CardContent className="flex items-center gap-3 p-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Icon className="h-4 w-4" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs text-muted-foreground">{label}</p>
+          <p className="truncate text-sm font-semibold text-foreground">{value}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function InfoCard({
+  icon: Icon,
+  title,
+  entries,
+}: {
+  icon: any;
+  title: string;
+  entries: Array<[string, unknown]>;
+}) {
+  const filtered = entries.filter(([, value]) => textValue(value));
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Icon className="h-4 w-4 text-primary" />
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {filtered.length ? (
+          filtered.map(([label, value]) => <ValueRow key={label} label={label} value={value} />)
+        ) : (
+          <p className="text-sm text-muted-foreground">No details captured.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function RecordList({ icon: Icon, title, records, empty }: { icon: any; title: string; records: Record<string, unknown>[]; empty: string }) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Icon className="h-4 w-4 text-primary" />
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {records.length ? (
+          records.map((record, index) => (
+            <div key={String(record.id ?? index)} className="rounded-lg border border-border/60 p-3">
+              {Object.entries(record)
+                .filter(([key, value]) => key !== "id" && textValue(value))
+                .slice(0, 6)
+                .map(([key, value]) => (
+                  <ValueRow key={key} label={formatKey(key)} value={value} compact />
+                ))}
+            </div>
+          ))
+        ) : (
+          <p className="text-sm text-muted-foreground">{empty}</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function AnswerList({ title, answers }: { title: string; answers: Record<string, unknown> }) {
+  const entries = Object.entries(answers).filter(([, value]) => textValue(value));
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <FileText className="h-4 w-4 text-primary" />
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {entries.length ? (
+          entries.map(([label, value]) => <ValueRow key={label} label={formatKey(label)} value={value} />)
+        ) : (
+          <p className="text-sm text-muted-foreground">No role-specific answers were captured.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ValueRow({ label, value, compact = false }: { label: string; value: unknown; compact?: boolean }) {
+  const text = textValue(value);
+  if (!text) return null;
+  const isLink = /^https?:\/\//i.test(text);
+  return (
+    <div className={compact ? "mb-1" : "flex justify-between gap-4 border-b border-border/50 pb-2 last:border-0"}>
+      <span className="text-xs text-muted-foreground">{label}</span>
+      {isLink ? (
+        <a className="max-w-[70%] truncate text-xs font-medium text-primary underline-offset-4 hover:underline" href={text} target="_blank" rel="noopener noreferrer">
+          {text}
+        </a>
+      ) : (
+        <span className="text-right text-xs font-medium text-foreground/80">{text}</span>
+      )}
+    </div>
+  );
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function asRecordArray(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item))
+    : [];
+}
+
+function textValue(value: unknown): string {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return value.map(textValue).filter(Boolean).join(", ");
+  if (typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([key, item]) => `${formatKey(key)}: ${textValue(item)}`)
+      .filter((item) => !item.endsWith(": "))
+      .join("; ");
+  }
+  return "";
+}
+
+function formatKey(value: string) {
+  return value.replace(/([A-Z])/g, " $1").replace(/[-_]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 
