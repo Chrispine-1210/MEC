@@ -98,6 +98,13 @@ if (entryPoints.length === 0) {
   throw new Error("At least one esbuild entry point is required.");
 }
 
+const outputDir = options.outdir ? path.resolve(cwd, options.outdir) : "";
+const isVercelServerBuild = outputDir === path.resolve(repoRoot, "server-build");
+
+if (isVercelServerBuild) {
+  options.minify = true;
+}
+
 esbuild.build({
   absWorkingDir: cwd,
   entryPoints,
