@@ -22,6 +22,8 @@
     "build:vercel": "node scripts/clean-vercel-artifacts.cjs && npm run build:client && npm run build:admin:vercel && npm run build:server:vercel && node scripts/prepare-vercel-media-assets.cjs && node scripts/clean-vercel-artifacts.cjs",
     "build": "npm run build:client && npm run build:admin && npm run build:server",
     "start": "node scripts/start-production.cjs",
+    "test": "npm run test:unit",
+    "test:unit": "node --import tsx --test tests/unit/*.test.ts",
     "pm2:start": "pm2 start ecosystem.config.cjs --env production",
     "pm2:reload": "pm2 reload ecosystem.config.cjs --env production",
     "pm2:logs": "pm2 logs mec-api",

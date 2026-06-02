@@ -4,9 +4,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, Eye, EyeOff, GraduationCap, Globe, Award, ArrowRight, ArrowLeft } from "lucide-react";
+import { Loader2, Eye, EyeOff, GraduationCap, Globe, Award, ArrowRight, ArrowLeft, MailCheck, RefreshCw } from "lucide-react";
 import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
 import { getGovernedBackgroundImage } from "@/lib/image-governance";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -15,7 +17,12 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState("");
+  const [newVerificationEmail, setNewVerificationEmail] = useState("");
+  const [verificationPassword, setVerificationPassword] = useState("");
+  const [verificationActionLoading, setVerificationActionLoading] = useState<"resend" | "change" | null>(null);
   const { login } = useAuth();
+  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,6 +36,53 @@ export default function Login() {
       console.error("Login error:", error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    const targetEmail = (verificationEmail || email).trim().toLowerCase();
+    if (!targetEmail) return;
+    setVerificationActionLoading("resend");
+    try {
+      const response = await apiRequest("POST", "/api/auth/resend-verification", { email: targetEmail });
+      const payload = await response.json();
+      toast({ title: "Verification email requested", description: payload.message });
+    } catch (error) {
+      toast({
+        title: "Request failed",
+        description: error instanceof Error ? error.message : "Please try again shortly.",
+        variant: "destructive",
+      });
+    } finally {
+      setVerificationActionLoading(null);
+    }
+  };
+
+  const handleChangeVerificationEmail = async () => {
+    const currentEmail = (verificationEmail || email).trim().toLowerCase();
+    const nextEmail = newVerificationEmail.trim().toLowerCase();
+    if (!currentEmail || !nextEmail || !verificationPassword) return;
+    setVerificationActionLoading("change");
+    try {
+      const response = await apiRequest("POST", "/api/auth/change-verification-email", {
+        currentEmail,
+        newEmail: nextEmail,
+        password: verificationPassword,
+      });
+      const payload = await response.json();
+      setEmail(nextEmail);
+      setVerificationEmail(nextEmail);
+      setNewVerificationEmail("");
+      setVerificationPassword("");
+      toast({ title: "Email updated", description: payload.message });
+    } catch (error) {
+      toast({
+        title: "Email update failed",
+        description: error instanceof Error ? error.message : "Please check the details and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setVerificationActionLoading(null);
     }
   };
 
@@ -171,6 +225,69 @@ export default function Login() {
               )}
             </Button>
           </form>
+
+          <div className="mt-6 rounded-xl border border-border/60 bg-muted/30 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <MailCheck className="h-4 w-4 text-mtendere-blue" />
+              <p className="text-sm font-semibold text-foreground">Account not verified?</p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <Input
+                type="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                value={verificationEmail}
+                onChange={(event) => setVerificationEmail(event.target.value)}
+                className="h-10"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleResendVerification}
+                disabled={verificationActionLoading !== null || !(verificationEmail || email).trim()}
+              >
+                {verificationActionLoading === "resend" ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                Resend
+              </Button>
+            </div>
+            <details className="mt-3">
+              <summary className="cursor-pointer text-xs font-semibold text-mtendere-blue">Change pending email</summary>
+              <div className="mt-3 grid gap-2">
+                <Input
+                  type="email"
+                  placeholder="New email address"
+                  value={newVerificationEmail}
+                  onChange={(event) => setNewVerificationEmail(event.target.value)}
+                  className="h-10"
+                />
+                <Input
+                  type="password"
+                  placeholder="Confirm password"
+                  value={verificationPassword}
+                  onChange={(event) => setVerificationPassword(event.target.value)}
+                  className="h-10"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleChangeVerificationEmail}
+                  disabled={
+                    verificationActionLoading !== null ||
+                    !(verificationEmail || email).trim() ||
+                    !newVerificationEmail.trim() ||
+                    !verificationPassword
+                  }
+                >
+                  {verificationActionLoading === "change" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Update Email
+                </Button>
+              </div>
+            </details>
+          </div>
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             Don't have an account?{" "}

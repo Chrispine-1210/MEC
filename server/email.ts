@@ -1,23 +1,52 @@
 import fs from "fs";
 import path from "path";
-import { randomUUID } from "crypto";
+import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
+import jwt from "jsonwebtoken";
 import { env } from "./env";
 import { resolveWritableRuntimePath } from "./runtime-paths";
+import { storage } from "./storage";
+import type { EmailJob } from "@shared/schema";
 
 type EmailCategory =
   | "account_verification"
   | "welcome"
+  | "account_activated"
   | "password_reset"
   | "password_changed"
+  | "security_alert"
+  | "login_alert"
+  | "profile_updated"
+  | "new_role_assigned"
+  | "permission_changed"
+  | "account_suspended"
+  | "account_reactivated"
   | "subscription_confirmation"
   | "application_confirmation"
   | "application_status_update"
+  | "application_submitted"
+  | "application_under_review"
+  | "application_approved"
+  | "application_rejected"
+  | "additional_documents_requested"
   | "event_registration_confirmation"
   | "event_registration_status_update"
   | "partner_onboarding"
   | "contact_acknowledgement"
   | "admin_notification"
-  | "newsletter";
+  | "newsletter"
+  | "scholarship_alert"
+  | "scholarship_recommended"
+  | "scholarship_deadline_reminder"
+  | "scholarship_application_started"
+  | "scholarship_application_reminder"
+  | "scholarship_application_submitted"
+  | "scholarship_application_outcome"
+  | "jobs"
+  | "news"
+  | "events"
+  | "blog_updates"
+  | "partner_updates"
+  | "marketing";
 
 type EmailPayload = {
   to: string;
@@ -26,142 +55,503 @@ type EmailPayload = {
   text: string;
   category: EmailCategory;
   metadata?: Record<string, unknown>;
+  headers?: Record<string, string>;
+  priority?: number;
 };
 
-type EmailJob = EmailPayload & {
+type StoredEmailPayload = EmailPayload & {
+  from: string;
+};
+
+type ProviderResult = {
+  provider: string;
+  messageId?: string | null;
+};
+
+type Provider = {
+  name: string;
+  isConfigured: () => boolean;
+  send: (message: DeliverableEmail) => Promise<ProviderResult>;
+};
+
+type DeliverableEmail = {
   id: string;
-  status: "queued" | "processing" | "sent" | "failed";
-  attempts: number;
-  queuedAt: string;
-  lastError?: string;
+  from: string;
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  category: EmailCategory;
+  metadata: Record<string, unknown>;
+  headers: Record<string, string>;
 };
 
 const dataDir = resolveWritableRuntimePath("data");
 const emailLogPath = path.join(dataDir, "email-events.jsonl");
-const queue: EmailJob[] = [];
-const sentTimestamps: number[] = [];
-let isProcessing = false;
-
 fs.mkdirSync(dataDir, { recursive: true });
 
-const fromAddress = env.EMAIL_FROM || "Mtendere Education Consult <no-reply@mtendere.local>";
-const maxAttempts = 3;
-const maxEmailsPerMinute = 60;
+const fromAddress = env.EMAIL_FROM || "Mtendere Education Consult <no-reply@mtendereeducationconsult.com>";
+const publicAppUrl = (env.PUBLIC_APP_URL || env.FRONTEND_URL || env.VITE_SITE_URL || "").replace(/\/+$/, "");
+const apiAppUrl = (env.API_APP_URL || env.PUBLIC_APP_URL || env.VITE_API_URL || "").replace(/\/+$/, "");
+const emailBaseUrl = apiAppUrl || publicAppUrl;
+const retryDelaysMs = [0, 60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000];
+const defaultMaxAttempts = retryDelaysMs.length;
+const queuePollMs = env.EMAIL_QUEUE_WORKER_INTERVAL_MS;
+const dryRunEnabled = env.EMAIL_DRY_RUN ?? env.NODE_ENV !== "production";
+const trackingSecret = env.EMAIL_TRACKING_SECRET || env.JWT_SECRET;
+let isProcessing = false;
+let workerTimer: NodeJS.Timeout | null = null;
 
-const escapeHtml = (value: string | null | undefined) =>
-  String(value || "")
+const emailPreferenceCategories = [
+  "scholarships",
+  "jobs",
+  "news",
+  "events",
+  "blog_updates",
+  "partner_updates",
+  "marketing",
+] as const;
+
+const commercialCategories = new Set<EmailCategory>([
+  "newsletter",
+  "scholarship_alert",
+  "scholarship_recommended",
+  "scholarship_deadline_reminder",
+  "scholarship_application_started",
+  "scholarship_application_reminder",
+  "scholarship_application_submitted",
+  "scholarship_application_outcome",
+  "jobs",
+  "news",
+  "events",
+  "blog_updates",
+  "partner_updates",
+  "marketing",
+]);
+
+const categoryPreferenceMap: Partial<Record<EmailCategory, (typeof emailPreferenceCategories)[number]>> = {
+  newsletter: "news",
+  scholarship_alert: "scholarships",
+  scholarship_recommended: "scholarships",
+  scholarship_deadline_reminder: "scholarships",
+  scholarship_application_started: "scholarships",
+  scholarship_application_reminder: "scholarships",
+  scholarship_application_submitted: "scholarships",
+  scholarship_application_outcome: "scholarships",
+  jobs: "jobs",
+  news: "news",
+  events: "events",
+  blog_updates: "blog_updates",
+  partner_updates: "partner_updates",
+  marketing: "marketing",
+};
+
+export const emailTemplateCatalog = [
+  { key: "auth.welcome", category: "Authentication", name: "Welcome Email" },
+  { key: "auth.verify", category: "Authentication", name: "Email Verification" },
+  { key: "auth.activated", category: "Authentication", name: "Account Activated" },
+  { key: "auth.password-reset", category: "Authentication", name: "Password Reset" },
+  { key: "auth.password-changed", category: "Authentication", name: "Password Changed" },
+  { key: "auth.security-alert", category: "Authentication", name: "Security Alert" },
+  { key: "auth.login-alert", category: "Authentication", name: "Login Alert" },
+  { key: "user.profile-updated", category: "User Management", name: "Profile Updated" },
+  { key: "user.role-assigned", category: "User Management", name: "New Role Assigned" },
+  { key: "user.permission-changed", category: "User Management", name: "Permission Changed" },
+  { key: "user.suspended", category: "User Management", name: "Account Suspended" },
+  { key: "user.reactivated", category: "User Management", name: "Account Reactivated" },
+  { key: "applications.submitted", category: "Applications", name: "Application Submitted" },
+  { key: "applications.under-review", category: "Applications", name: "Application Under Review" },
+  { key: "applications.approved", category: "Applications", name: "Application Approved" },
+  { key: "applications.rejected", category: "Applications", name: "Application Rejected" },
+  { key: "applications.documents-requested", category: "Applications", name: "Additional Documents Requested" },
+  { key: "scholarships.available", category: "Scholarships", name: "Scholarship Available" },
+  { key: "scholarships.recommended", category: "Scholarships", name: "Scholarship Recommended" },
+  { key: "scholarships.started", category: "Scholarships", name: "Application Started" },
+  { key: "scholarships.reminder", category: "Scholarships", name: "Application Reminder" },
+  { key: "scholarships.deadline", category: "Scholarships", name: "Deadline Reminder" },
+  { key: "scholarships.submitted", category: "Scholarships", name: "Application Submitted" },
+  { key: "scholarships.outcome", category: "Scholarships", name: "Application Outcome" },
+  { key: "subscriptions.confirm", category: "Subscriptions", name: "Double Opt-In Confirmation" },
+  { key: "campaign.newsletter", category: "Campaigns", name: "Newsletter Campaign" },
+  { key: "campaign.jobs", category: "Campaigns", name: "Jobs Alert" },
+  { key: "campaign.events", category: "Campaigns", name: "Events Alert" },
+  { key: "campaign.partner", category: "Campaigns", name: "Partner Update" },
+];
+
+const appendEmailEvent = (event: Record<string, unknown>) => {
+  fs.appendFileSync(emailLogPath, `${JSON.stringify({ ...event, at: new Date().toISOString() })}\n`);
+};
+
+const escapeHtml = (value: string | number | null | undefined) =>
+  String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 
-const appendEmailEvent = (event: Record<string, unknown>) => {
-  fs.appendFileSync(emailLogPath, `${JSON.stringify({ ...event, at: new Date().toISOString() })}\n`);
+const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
+const sha256Hex = (value: string) => createHash("sha256").update(value).digest("hex");
+
+const hmacHex = (value: string, secret = trackingSecret) =>
+  createHmac("sha256", secret).update(value).digest("hex");
+
+const safeCompare = (left: string, right: string) => {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
 };
 
-const canSendNow = () => {
-  const now = Date.now();
-  while (sentTimestamps.length > 0 && now - sentTimestamps[0] > 60_000) {
-    sentTimestamps.shift();
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+
+export const createEmailTokenHash = (token: string) => hmacHex(`email-token:${token}`);
+
+export const createEmailPreferenceToken = (email: string) =>
+  jwt.sign(
+    {
+      type: "email_preferences",
+      email: normalizeEmail(email),
+    },
+    trackingSecret,
+    { noTimestamp: true },
+  );
+
+export const createEmailPreferenceTokenHash = (token: string) =>
+  hmacHex(`email-preference:${token}`);
+
+export const verifyEmailPreferenceToken = (token: string) => {
+  const decoded = jwt.verify(token, trackingSecret) as { type?: string; email?: string };
+  if (decoded.type !== "email_preferences" || !decoded.email) {
+    throw new Error("Invalid email preference token");
   }
-  return sentTimestamps.length < maxEmailsPerMinute;
+  return { email: normalizeEmail(decoded.email) };
 };
 
-const deliverEmail = async (job: EmailJob) => {
-  if (env.EMAIL_API_URL) {
-    const response = await fetch(env.EMAIL_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(env.EMAIL_API_KEY ? { Authorization: `Bearer ${env.EMAIL_API_KEY}` } : {}),
+export const signEmailTrackingValue = (value: string) => hmacHex(`email-track:${value}`);
+
+export const verifyEmailTrackingSignature = (value: string, signature?: string | null) =>
+  Boolean(signature && safeCompare(signEmailTrackingValue(value), signature));
+
+const getPreferenceUrl = (email: string) =>
+  emailBaseUrl ? `${emailBaseUrl}/api/email/preferences/${encodeURIComponent(createEmailPreferenceToken(email))}` : "";
+
+const getUnsubscribeUrl = (email: string) =>
+  emailBaseUrl ? `${emailBaseUrl}/api/email/unsubscribe/${encodeURIComponent(createEmailPreferenceToken(email))}` : "";
+
+const defaultEmailPreferences = () =>
+  Object.fromEntries(emailPreferenceCategories.map((category) => [category, true])) as Record<string, boolean>;
+
+const ensureEmailPreference = async (
+  email: string,
+  category: EmailCategory,
+  metadata?: Record<string, unknown>,
+) => {
+  const normalizedEmail = normalizeEmail(email);
+  const token = createEmailPreferenceToken(normalizedEmail);
+  const tokenHash = createEmailPreferenceTokenHash(token);
+  const existing = await storage.getEmailPreferenceByEmail(normalizedEmail);
+
+  if (existing) {
+    return existing;
+  }
+
+  return storage.upsertEmailPreference({
+    userId: typeof metadata?.userId === "number" ? metadata.userId : null,
+    email: normalizedEmail,
+    categories: defaultEmailPreferences(),
+    consentStatus: commercialCategories.has(category) ? "pending" : "transactional",
+    consentSource: String(metadata?.source || "system"),
+    consentAt: commercialCategories.has(category) ? null : new Date(),
+    unsubscribedAt: null,
+    unsubscribeTokenHash: tokenHash,
+    auditTrail: [
+      {
+        action: "created",
+        source: metadata?.source || "system",
+        category,
+        at: new Date().toISOString(),
       },
-      body: JSON.stringify({
-        from: fromAddress,
-        to: job.to,
-        subject: job.subject,
-        html: job.html,
-        text: job.text,
-        category: job.category,
-        metadata: job.metadata,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Email API returned ${response.status}`);
-    }
-  } else {
-    console.info(`[email:${job.category}] ${job.subject} -> ${job.to}`);
-  }
-
-  sentTimestamps.push(Date.now());
+    ],
+  });
 };
 
-const processEmailQueue = async () => {
-  if (isProcessing) return;
-  isProcessing = true;
+const shouldSuppressForPreferences = async (payload: EmailPayload) => {
+  if (!commercialCategories.has(payload.category)) return false;
 
-  try {
-    while (queue.length > 0) {
-      if (!canSendNow()) {
-        setTimeout(() => void processEmailQueue(), 5_000);
-        return;
-      }
+  const preference = await ensureEmailPreference(payload.to, payload.category, payload.metadata);
+  const mappedPreference = categoryPreferenceMap[payload.category];
+  if (!mappedPreference) return Boolean(preference.unsubscribedAt);
 
-      const job = queue.shift();
-      if (!job) continue;
-
-      job.status = "processing";
-      job.attempts += 1;
-      appendEmailEvent({ id: job.id, status: "processing", category: job.category, to: job.to });
-
-      try {
-        await deliverEmail(job);
-        job.status = "sent";
-        appendEmailEvent({ id: job.id, status: "sent", category: job.category, to: job.to });
-      } catch (error) {
-        job.status = "failed";
-        job.lastError = error instanceof Error ? error.message : "Unknown email delivery error";
-        appendEmailEvent({
-          id: job.id,
-          status: "failed",
-          category: job.category,
-          to: job.to,
-          attempts: job.attempts,
-          error: job.lastError,
-        });
-
-        if (job.attempts < maxAttempts) {
-          queue.push(job);
-        }
-      }
-    }
-  } finally {
-    isProcessing = false;
-  }
+  return Boolean(preference.unsubscribedAt || preference.categories?.[mappedPreference] === false);
 };
 
-export const enqueueEmail = (payload: EmailPayload) => {
-  const job: EmailJob = {
-    ...payload,
-    id: randomUUID(),
-    status: "queued",
-    attempts: 0,
-    queuedAt: new Date().toISOString(),
+const parseAddress = (value: string) => {
+  const match = value.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
+  if (!match) return { email: value.trim(), name: undefined as string | undefined };
+  return {
+    name: match[1].replace(/^"|"$/g, "").trim() || undefined,
+    email: match[2].trim(),
   };
-
-  queue.push(job);
-  appendEmailEvent({ id: job.id, status: "queued", category: job.category, to: job.to });
-  void processEmailQueue();
-  return { id: job.id, status: job.status };
 };
+
+const responseError = async (response: Response) => {
+  const text = await response.text().catch(() => "");
+  return `${response.status} ${response.statusText}${text ? `: ${text.slice(0, 500)}` : ""}`;
+};
+
+const sendWithResend: Provider["send"] = async (message) => {
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: message.from,
+      to: [message.to],
+      subject: message.subject,
+      html: message.html,
+      text: message.text,
+      headers: {
+        ...message.headers,
+        "X-MEC-Email-Job": message.id,
+        "X-MEC-Email-Category": message.category,
+      },
+      tags: [
+        { name: "category", value: message.category },
+        { name: "job_id", value: message.id },
+      ],
+    }),
+  });
+
+  if (!response.ok) throw new Error(await responseError(response));
+  const data = (await response.json().catch(() => ({}))) as { id?: string };
+  return { provider: "resend", messageId: data.id || response.headers.get("x-message-id") };
+};
+
+const sendWithSendGrid: Provider["send"] = async (message) => {
+  const from = parseAddress(message.from);
+  const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.SENDGRID_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      personalizations: [
+        {
+          to: [{ email: message.to }],
+          custom_args: {
+            mec_email_job_id: message.id,
+            mec_email_category: message.category,
+          },
+        },
+      ],
+      from,
+      subject: message.subject,
+      content: [
+        { type: "text/plain", value: message.text },
+        { type: "text/html", value: message.html },
+      ],
+      tracking_settings: {
+        click_tracking: { enable: false, enable_text: false },
+        open_tracking: { enable: false },
+      },
+      headers: {
+        ...message.headers,
+        "X-MEC-Email-Job": message.id,
+        "X-MEC-Email-Category": message.category,
+      },
+    }),
+  });
+
+  if (!response.ok) throw new Error(await responseError(response));
+  return { provider: "sendgrid", messageId: response.headers.get("x-message-id") };
+};
+
+const sendWithPostmark: Provider["send"] = async (message) => {
+  const response = await fetch("https://api.postmarkapp.com/email", {
+    method: "POST",
+    headers: {
+      "X-Postmark-Server-Token": String(env.POSTMARK_SERVER_TOKEN),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      From: message.from,
+      To: message.to,
+      Subject: message.subject,
+      HtmlBody: message.html,
+      TextBody: message.text,
+      MessageStream: env.POSTMARK_MESSAGE_STREAM || "outbound",
+      Tag: message.category,
+      Metadata: {
+        mec_email_job_id: message.id,
+        mec_email_category: message.category,
+      },
+      Headers: Object.entries(message.headers).map(([Name, Value]) => ({ Name, Value })),
+      TrackOpens: false,
+      TrackLinks: "None",
+    }),
+  });
+
+  if (!response.ok) throw new Error(await responseError(response));
+  const data = (await response.json().catch(() => ({}))) as { MessageID?: string };
+  return { provider: "postmark", messageId: data.MessageID || null };
+};
+
+const getAwsSigningKey = (secret: string, dateStamp: string, region: string, service: string) => {
+  const kDate = createHmac("sha256", `AWS4${secret}`).update(dateStamp).digest();
+  const kRegion = createHmac("sha256", kDate).update(region).digest();
+  const kService = createHmac("sha256", kRegion).update(service).digest();
+  return createHmac("sha256", kService).update("aws4_request").digest();
+};
+
+const sendWithSes: Provider["send"] = async (message) => {
+  const region = env.AWS_SES_REGION || "us-east-1";
+  const host = `email.${region}.amazonaws.com`;
+  const endpoint = `https://${host}/v2/email/outbound-emails`;
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
+  const dateStamp = amzDate.slice(0, 8);
+  const body = JSON.stringify({
+    FromEmailAddress: message.from,
+    Destination: { ToAddresses: [message.to] },
+    Content: {
+      Simple: {
+        Subject: { Data: message.subject, Charset: "UTF-8" },
+        Body: {
+          Text: { Data: message.text, Charset: "UTF-8" },
+          Html: { Data: message.html, Charset: "UTF-8" },
+        },
+      },
+    },
+    ConfigurationSetName: env.AWS_SES_CONFIGURATION_SET || undefined,
+    EmailTags: [
+      { Name: "mec_email_job_id", Value: message.id },
+      { Name: "mec_email_category", Value: message.category },
+    ],
+  });
+  const payloadHash = sha256Hex(body);
+  const credentialScope = `${dateStamp}/${region}/ses/aws4_request`;
+  const canonicalHeaders = [
+    "content-type:application/json",
+    `host:${host}`,
+    `x-amz-content-sha256:${payloadHash}`,
+    `x-amz-date:${amzDate}`,
+  ].join("\n");
+  const canonicalRequest = [
+    "POST",
+    "/v2/email/outbound-emails",
+    "",
+    `${canonicalHeaders}\n`,
+    "content-type;host;x-amz-content-sha256;x-amz-date",
+    payloadHash,
+  ].join("\n");
+  const stringToSign = [
+    "AWS4-HMAC-SHA256",
+    amzDate,
+    credentialScope,
+    sha256Hex(canonicalRequest),
+  ].join("\n");
+  const signingKey = getAwsSigningKey(String(env.AWS_SES_SECRET_ACCESS_KEY), dateStamp, region, "ses");
+  const signature = createHmac("sha256", signingKey).update(stringToSign).digest("hex");
+  const authorization = [
+    `AWS4-HMAC-SHA256 Credential=${env.AWS_SES_ACCESS_KEY_ID}/${credentialScope}`,
+    "SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date",
+    `Signature=${signature}`,
+  ].join(", ");
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: authorization,
+      "Content-Type": "application/json",
+      "X-Amz-Content-Sha256": payloadHash,
+      "X-Amz-Date": amzDate,
+    },
+    body,
+  });
+
+  if (!response.ok) throw new Error(await responseError(response));
+  const data = (await response.json().catch(() => ({}))) as { MessageId?: string };
+  return { provider: "ses", messageId: data.MessageId || null };
+};
+
+const sendWithCustomApi: Provider["send"] = async (message) => {
+  const response = await fetch(String(env.EMAIL_API_URL), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(env.EMAIL_API_KEY ? { Authorization: `Bearer ${env.EMAIL_API_KEY}` } : {}),
+    },
+    body: JSON.stringify(message),
+  });
+
+  if (!response.ok) throw new Error(await responseError(response));
+  const data = (await response.json().catch(() => ({}))) as { id?: string; messageId?: string };
+  return { provider: "custom", messageId: data.messageId || data.id || null };
+};
+
+const providers: Record<string, Provider> = {
+  resend: {
+    name: "resend",
+    isConfigured: () => Boolean(env.RESEND_API_KEY),
+    send: sendWithResend,
+  },
+  sendgrid: {
+    name: "sendgrid",
+    isConfigured: () => Boolean(env.SENDGRID_API_KEY),
+    send: sendWithSendGrid,
+  },
+  postmark: {
+    name: "postmark",
+    isConfigured: () => Boolean(env.POSTMARK_SERVER_TOKEN),
+    send: sendWithPostmark,
+  },
+  ses: {
+    name: "ses",
+    isConfigured: () => Boolean(env.AWS_SES_ACCESS_KEY_ID && env.AWS_SES_SECRET_ACCESS_KEY && env.AWS_SES_REGION),
+    send: sendWithSes,
+  },
+  custom: {
+    name: "custom",
+    isConfigured: () => Boolean(env.EMAIL_API_URL),
+    send: sendWithCustomApi,
+  },
+  dry_run: {
+    name: "dry_run",
+    isConfigured: () => dryRunEnabled,
+    send: async (message) => {
+      console.info(`[email:${message.category}] ${message.subject} -> ${message.to}`);
+      return { provider: "dry_run", messageId: `dry-run-${message.id}` };
+    },
+  },
+};
+
+const getProviderOrder = () => {
+  const configuredOrder = (env.EMAIL_PROVIDER_ORDER || "resend,sendgrid,postmark,ses,custom")
+    .split(",")
+    .map((provider) => provider.trim().toLowerCase())
+    .filter(Boolean);
+  const uniqueOrder = Array.from(new Set([...configuredOrder, "custom"]));
+  const activeProviders = uniqueOrder
+    .map((providerName) => providers[providerName])
+    .filter((provider): provider is Provider => Boolean(provider?.isConfigured()));
+
+  if (activeProviders.length > 0) return activeProviders;
+  return dryRunEnabled ? [providers.dry_run] : [];
+};
+
+export const isTransactionalEmailDeliveryReady = () => getProviderOrder().length > 0;
 
 const ctaButton = (href: string, label: string) => `
   <table role="presentation" cellspacing="0" cellpadding="0" style="margin: 28px 0;">
     <tr>
       <td style="border-radius: 8px; background: #f97316;">
         <a href="${href}" style="display: inline-block; padding: 13px 20px; color: #ffffff; font-weight: 700; text-decoration: none; font-family: Arial, sans-serif;">
-          ${label}
+          ${escapeHtml(label)}
         </a>
       </td>
     </tr>
@@ -178,39 +568,75 @@ export const renderMtendereEmail = ({
   preheader: string;
   body: string;
   cta?: { href: string; label: string };
-}) => `
+}) => {
+  const logoUrl = publicAppUrl ? `${publicAppUrl}/media-assets/Mtendere_Logo.png` : "";
+
+  return `
 <!doctype html>
 <html>
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
     <title>${escapeHtml(title)}</title>
+    <style>
+      @media (prefers-color-scheme: dark) {
+        .mec-body { background: #071927 !important; }
+        .mec-card { background: #102638 !important; border-color: #24465f !important; }
+        .mec-copy { color: #e5f1fb !important; }
+        .mec-muted { color: #b7cad8 !important; }
+      }
+      @media screen and (max-width: 640px) {
+        .mec-shell { padding: 16px 10px !important; }
+        .mec-header, .mec-content, .mec-footer { padding-left: 22px !important; padding-right: 22px !important; }
+        .mec-title { font-size: 24px !important; }
+      }
+    </style>
   </head>
-  <body style="margin:0; padding:0; background:#f5f7fb;">
+  <body class="mec-body" style="margin:0; padding:0; background:#eef4f8;">
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f5f7fb; padding:24px 12px;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="mec-shell" style="background:#eef4f8; padding:28px 12px;">
       <tr>
         <td align="center">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px; background:#ffffff; border-radius:12px; overflow:hidden; border:1px solid #e5e7eb;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="mec-card" style="max-width:672px; background:#ffffff; border-radius:8px; overflow:hidden; border:1px solid #dbe4ea;">
             <tr>
-              <td style="background:#0f4c81; padding:28px 32px; color:#ffffff; font-family:Arial, sans-serif;">
-                <div style="font-size:13px; letter-spacing:1.8px; text-transform:uppercase; color:#bfdbfe; font-weight:700;">Mtendere Education Consult</div>
-                <h1 style="margin:10px 0 0; font-size:28px; line-height:1.2; color:#ffffff;">${escapeHtml(title)}</h1>
+              <td class="mec-header" style="background:#0f4c81; padding:26px 32px 22px; color:#ffffff; font-family:Arial, sans-serif;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td style="vertical-align:middle;">
+                      ${
+                        logoUrl
+                          ? `<img src="${logoUrl}" width="52" height="52" alt="Mtendere Education Consult" style="display:block; object-fit:contain; border:0;">`
+                          : `<div style="height:52px; width:52px; border-radius:8px; background:#ffffff; color:#0f4c81; display:grid; place-items:center; font-weight:800;">MEC</div>`
+                      }
+                    </td>
+                    <td style="vertical-align:middle; padding-left:14px;">
+                      <div style="font-size:13px; letter-spacing:1.4px; text-transform:uppercase; color:#bfdbfe; font-weight:700;">Mtendere Education Consult</div>
+                      <div style="font-size:13px; color:#e0f2fe; margin-top:4px;">Scholarships | Study abroad | Careers</div>
+                    </td>
+                  </tr>
+                </table>
+                <h1 class="mec-title" style="margin:22px 0 0; font-size:30px; line-height:1.2; color:#ffffff;">${escapeHtml(title)}</h1>
               </td>
             </tr>
             <tr>
-              <td style="padding:32px; color:#1f2937; font-family:Arial, sans-serif; font-size:16px; line-height:1.7;">
+              <td class="mec-content mec-copy" style="padding:34px 32px; color:#1f2937; font-family:Arial, sans-serif; font-size:16px; line-height:1.72;">
                 ${body}
                 ${cta ? ctaButton(cta.href, cta.label) : ""}
               </td>
             </tr>
             <tr>
-              <td style="background:#0b2f4f; padding:24px 32px; color:#dbeafe; font-family:Arial, sans-serif; font-size:13px; line-height:1.6;">
+              <td class="mec-footer" style="background:#0b2f4f; padding:24px 32px; color:#dbeafe; font-family:Arial, sans-serif; font-size:13px; line-height:1.6;">
                 <strong style="color:#ffffff;">Mtendere Education Consult</strong><br>
                 Lilongwe, Malawi<br>
                 mtendereeducation@gmail.com | +265 999 360 325<br>
-                Monday - Friday: 8:00 AM - 5:00 PM | Saturday: 9:00 AM - 1:00 PM<br>
-                <span style="color:#93c5fd;">Scholarships | Study abroad | Career support | Jobs</span>
+                <a href="${publicAppUrl || "https://mtendereeducationconsult.com"}" style="color:#bfdbfe;">Website</a>
+                <span style="color:#93c5fd;"> | </span>
+                <a href="${publicAppUrl || "https://mtendereeducationconsult.com"}/privacy" style="color:#bfdbfe;">Privacy Policy</a>
+                <span style="color:#93c5fd;"> | </span>
+                <a href="${publicAppUrl || "https://mtendereeducationconsult.com"}/terms" style="color:#bfdbfe;">Terms & Conditions</a><br>
+                <span style="color:#93c5fd;">LinkedIn | Facebook | Instagram</span>
               </td>
             </tr>
           </table>
@@ -219,6 +645,405 @@ export const renderMtendereEmail = ({
     </table>
   </body>
 </html>`;
+};
+
+const addComplianceFooter = (html: string, recipient: string) => {
+  if (!emailBaseUrl || html.includes("data-mec-compliance-footer")) return html;
+  const manageUrl = getPreferenceUrl(recipient);
+  const unsubscribeUrl = getUnsubscribeUrl(recipient);
+  const footer = `
+    <div data-mec-compliance-footer="true" style="font-family:Arial,sans-serif; color:#64748b; font-size:12px; line-height:1.6; padding:18px 24px; text-align:center;">
+      You are receiving this because you have an account, application, subscription, or relationship with Mtendere Education Consult.<br>
+      <a href="${manageUrl}" style="color:#0f4c81;">Manage email preferences</a>
+      <span style="color:#cbd5e1;"> | </span>
+      <a href="${unsubscribeUrl}" style="color:#0f4c81;">Unsubscribe</a>
+    </div>
+  `;
+  return html.replace(/<\/body>/i, `${footer}</body>`);
+};
+
+const rewriteTrackedLinks = (html: string, jobId: string) => {
+  if (!emailBaseUrl) return html;
+  return html.replace(/href="([^"]+)"/gi, (match, href: string) => {
+    if (!/^https?:\/\//i.test(href)) return match;
+    if (href.includes("/api/email/track/")) return match;
+    const signature = signEmailTrackingValue(`${jobId}:${href}`);
+    const trackedHref = `${emailBaseUrl}/api/email/track/click/${encodeURIComponent(jobId)}?u=${encodeURIComponent(href)}&s=${signature}`;
+    return `href="${trackedHref}"`;
+  });
+};
+
+const addOpenPixel = (html: string, jobId: string) => {
+  if (!emailBaseUrl || html.includes("data-mec-open-pixel")) return html;
+  const signature = signEmailTrackingValue(jobId);
+  const pixel = `<img data-mec-open-pixel="true" src="${emailBaseUrl}/api/email/track/open/${encodeURIComponent(jobId)}?s=${signature}" width="1" height="1" alt="" style="display:none!important; opacity:0; width:1px; height:1px;">`;
+  return html.replace(/<\/body>/i, `${pixel}</body>`);
+};
+
+const buildDeliverableEmail = (job: EmailJob): DeliverableEmail => {
+  const payload = job.payload as StoredEmailPayload;
+  const withCompliance = addComplianceFooter(payload.html, job.recipient);
+  const withTrackedLinks = rewriteTrackedLinks(withCompliance, job.id);
+  const html = addOpenPixel(withTrackedLinks, job.id);
+  return {
+    id: job.id,
+    from: payload.from || fromAddress,
+    to: payload.to || job.recipient,
+    subject: payload.subject || job.subject,
+    html,
+    text: payload.text,
+    category: payload.category,
+    metadata: payload.metadata || {},
+    headers: payload.headers || {},
+  };
+};
+
+const recordEmailEvent = async (event: {
+  jobId?: string | null;
+  provider?: string | null;
+  eventType: string;
+  recipient?: string | null;
+  category?: string | null;
+  providerMessageId?: string | null;
+  metadata?: Record<string, unknown>;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+}) => {
+  appendEmailEvent(event);
+  try {
+    await storage.createEmailDeliveryEvent({
+      jobId: event.jobId || null,
+      provider: event.provider || null,
+      eventType: event.eventType,
+      recipient: event.recipient || null,
+      category: event.category || null,
+      providerMessageId: event.providerMessageId || null,
+      metadata: event.metadata || null,
+      ipAddress: event.ipAddress || null,
+      userAgent: event.userAgent || null,
+    });
+  } catch (error) {
+    appendEmailEvent({
+      status: "event_persistence_failed",
+      error: error instanceof Error ? error.message : "Unknown email event persistence error",
+      originalEvent: event,
+    });
+  }
+};
+
+const deliverWithFailover = async (job: EmailJob) => {
+  const message = buildDeliverableEmail(job);
+  const activeProviders = getProviderOrder();
+
+  if (activeProviders.length === 0) {
+    throw new Error("No transactional email providers are configured");
+  }
+
+  const failures: string[] = [];
+  for (const provider of activeProviders) {
+    try {
+      const result = await provider.send(message);
+      await recordEmailEvent({
+        jobId: job.id,
+        provider: result.provider,
+        eventType: "sent",
+        recipient: job.recipient,
+        category: job.category,
+        providerMessageId: result.messageId,
+        metadata: { attempt: job.attempts, failoverFailures: failures },
+      });
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown provider error";
+      failures.push(`${provider.name}: ${message}`);
+      await recordEmailEvent({
+        jobId: job.id,
+        provider: provider.name,
+        eventType: "provider_failed",
+        recipient: job.recipient,
+        category: job.category,
+        metadata: { error: message, attempt: job.attempts },
+      });
+    }
+  }
+
+  throw new Error(failures.join(" | "));
+};
+
+const scheduleAdminFailureNotification = (job: EmailJob, error: string) => {
+  if (job.category === "admin_notification") return;
+  void sendAdminNotification({
+    subject: `Email delivery failed: ${job.category}`,
+    message: `Email job ${job.id} to ${job.recipient} failed after ${job.attempts} attempts. Error: ${error}`,
+    metadata: { emailJobId: job.id, category: job.category, recipient: job.recipient },
+  });
+};
+
+export const processEmailQueue = async () => {
+  if (isProcessing) return;
+  isProcessing = true;
+
+  try {
+    const jobs = await storage.getDueEmailJobs(10);
+    for (const dueJob of jobs) {
+      const job = await storage.markEmailJobProcessing(dueJob.id);
+      await recordEmailEvent({
+        jobId: job.id,
+        eventType: "processing",
+        recipient: job.recipient,
+        category: job.category,
+        metadata: { attempt: job.attempts },
+      });
+
+      try {
+        const result = await deliverWithFailover(job);
+        await storage.markEmailJobSent(job.id, result.provider, result.messageId);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown email delivery error";
+        const finalFailure = job.attempts >= job.maxAttempts;
+        const retryDelay = retryDelaysMs[Math.min(job.attempts, retryDelaysMs.length - 1)];
+        const retryAt = new Date(Date.now() + retryDelay);
+        await storage.markEmailJobFailed(job.id, errorMessage, retryAt, finalFailure);
+        await recordEmailEvent({
+          jobId: job.id,
+          eventType: finalFailure ? "failed" : "retry_scheduled",
+          recipient: job.recipient,
+          category: job.category,
+          metadata: {
+            attempt: job.attempts,
+            maxAttempts: job.maxAttempts,
+            retryAt: finalFailure ? null : retryAt.toISOString(),
+            error: errorMessage,
+          },
+        });
+
+        if (finalFailure) {
+          scheduleAdminFailureNotification(job, errorMessage);
+        }
+      }
+    }
+  } catch (error) {
+    appendEmailEvent({
+      status: "queue_processing_failed",
+      error: error instanceof Error ? error.message : "Unknown email queue error",
+    });
+  } finally {
+    isProcessing = false;
+  }
+};
+
+export const startEmailQueueWorker = () => {
+  if (workerTimer || env.EMAIL_QUEUE_WORKER_ENABLED === false) return;
+  workerTimer = setInterval(() => {
+    void processEmailQueue();
+  }, queuePollMs);
+  workerTimer.unref?.();
+  void processEmailQueue();
+};
+
+export const enqueueEmail = async (payload: EmailPayload) => {
+  const id = randomUUID();
+  const normalizedRecipient = normalizeEmail(payload.to);
+
+  try {
+    if (await shouldSuppressForPreferences({ ...payload, to: normalizedRecipient })) {
+      await recordEmailEvent({
+        jobId: id,
+        eventType: "suppressed",
+        recipient: normalizedRecipient,
+        category: payload.category,
+        metadata: { reason: "recipient_preferences" },
+      });
+      return { id, status: "suppressed" };
+    }
+
+    await ensureEmailPreference(normalizedRecipient, payload.category, payload.metadata);
+    const job = await storage.createEmailJob({
+      id,
+      category: payload.category,
+      recipient: normalizedRecipient,
+      subject: payload.subject,
+      payload: {
+        ...payload,
+        to: normalizedRecipient,
+        from: fromAddress,
+      },
+      metadata: payload.metadata || null,
+      status: "queued",
+      priority: payload.priority ?? 100,
+      attempts: 0,
+      maxAttempts: defaultMaxAttempts,
+      provider: null,
+      providerMessageId: null,
+      scheduledFor: new Date(),
+      processingAt: null,
+      sentAt: null,
+      failedAt: null,
+      lastError: null,
+    });
+
+    await recordEmailEvent({
+      jobId: job.id,
+      eventType: "queued",
+      recipient: job.recipient,
+      category: job.category,
+      metadata: payload.metadata,
+    });
+    void processEmailQueue();
+    return { id: job.id, status: job.status };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown email enqueue error";
+    appendEmailEvent({
+      id,
+      status: "enqueue_failed",
+      category: payload.category,
+      to: normalizedRecipient,
+      error: message,
+    });
+    return { id, status: "failed", error: message };
+  }
+};
+
+export const recordEmailOpen = async (input: { jobId: string; ipAddress?: string | null; userAgent?: string | null }) => {
+  const job = await storage.getEmailJob(input.jobId);
+  await recordEmailEvent({
+    jobId: input.jobId,
+    provider: job?.provider || null,
+    eventType: "opened",
+    recipient: job?.recipient || null,
+    category: job?.category || null,
+    providerMessageId: job?.providerMessageId || null,
+    ipAddress: input.ipAddress || null,
+    userAgent: input.userAgent || null,
+  });
+};
+
+export const recordEmailClick = async (input: {
+  jobId: string;
+  url: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+}) => {
+  const job = await storage.getEmailJob(input.jobId);
+  await recordEmailEvent({
+    jobId: input.jobId,
+    provider: job?.provider || null,
+    eventType: "clicked",
+    recipient: job?.recipient || null,
+    category: job?.category || null,
+    providerMessageId: job?.providerMessageId || null,
+    metadata: { url: input.url },
+    ipAddress: input.ipAddress || null,
+    userAgent: input.userAgent || null,
+  });
+};
+
+export const recordProviderWebhookEvent = async (provider: string, payload: unknown) => {
+  const events = Array.isArray(payload) ? payload : [payload];
+
+  for (const rawEvent of events) {
+    const event = rawEvent as Record<string, unknown>;
+    const metadata = event as Record<string, unknown>;
+    const mail = asRecord(event.mail);
+    const eventMetadata = asRecord(event.Metadata || event.metadata);
+    const tags = asRecord(event.tags);
+    const providerMessageId =
+      String(
+        event.email_id ||
+          event.sg_message_id ||
+          event.MessageID ||
+          event.MessageId ||
+          mail.messageId ||
+          "",
+      ) || null;
+    const jobId =
+      String(
+        event.mec_email_job_id ||
+          event.jobId ||
+          eventMetadata.mec_email_job_id ||
+          tags.mec_email_job_id ||
+          "",
+      ) || null;
+    const job = jobId
+      ? await storage.getEmailJob(jobId)
+      : providerMessageId
+        ? await storage.getEmailJobByProviderMessageId(providerMessageId)
+        : undefined;
+    const rawType = String(event.type || event.event || event.RecordType || event.eventType || "").toLowerCase();
+    const eventType = mapProviderEventType(rawType);
+
+    await recordEmailEvent({
+      jobId: job?.id || jobId,
+      provider,
+      eventType,
+      recipient: String(event.email || event.To || event.recipient || job?.recipient || ""),
+      category: job?.category || String(event.category || event.tag || ""),
+      providerMessageId,
+      metadata,
+    });
+  }
+};
+
+const mapProviderEventType = (rawType: string) => {
+  if (rawType.includes("deliver")) return "delivered";
+  if (rawType.includes("open")) return "opened";
+  if (rawType.includes("click")) return "clicked";
+  if (rawType.includes("bounce")) return "bounced";
+  if (rawType.includes("complain") || rawType.includes("spam")) return "spam_complaint";
+  if (rawType.includes("unsubscribe")) return "unsubscribed";
+  if (rawType.includes("reject") || rawType.includes("suppress")) return "suppressed";
+  return rawType || "provider_event";
+};
+
+export const getEmailPlatformHealth = async (days = 30) => {
+  const stats = await storage.getEmailDeliveryStats(days);
+  const providerOrder = getProviderOrder().map((provider) => provider.name);
+  return {
+    ...stats,
+    providers: {
+      active: providerOrder,
+      configured: Object.values(providers)
+        .filter((provider) => provider.name !== "dry_run" && provider.isConfigured())
+        .map((provider) => provider.name),
+      dryRunEnabled,
+    },
+    templates: emailTemplateCatalog,
+  };
+};
+
+export const buildScholarshipRecommendations = (input: {
+  scholarships: Array<{
+    title: string;
+    country?: string | null;
+    degreeLevel?: string | null;
+    field?: string | null;
+    deadline?: string | Date | null;
+    url?: string | null;
+  }>;
+  preferences?: {
+    country?: string | null;
+    degreeLevel?: string | null;
+    field?: string | null;
+    interests?: string[] | null;
+  };
+}) => {
+  const country = input.preferences?.country?.toLowerCase();
+  const degreeLevel = input.preferences?.degreeLevel?.toLowerCase();
+  const field = input.preferences?.field?.toLowerCase();
+  const interests = new Set((input.preferences?.interests || []).map((item) => item.toLowerCase()));
+
+  return input.scholarships
+    .map((scholarship) => {
+      let score = 0;
+      if (country && scholarship.country?.toLowerCase().includes(country)) score += 35;
+      if (degreeLevel && scholarship.degreeLevel?.toLowerCase().includes(degreeLevel)) score += 25;
+      if (field && scholarship.field?.toLowerCase().includes(field)) score += 25;
+      if (scholarship.field && interests.has(scholarship.field.toLowerCase())) score += 15;
+      return { ...scholarship, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6);
+};
 
 export const sendSubscriptionConfirmation = (input: {
   email: string;
@@ -242,13 +1067,14 @@ export const sendSubscriptionConfirmation = (input: {
       `,
       cta: { href: input.verificationUrl, label: "Confirm subscription" },
     }),
-    metadata: { flow: "double_opt_in" },
+    metadata: { flow: "double_opt_in", source: "newsletter" },
   });
 
 export const sendAccountVerification = (input: {
   email: string;
   name?: string | null;
   verificationUrl: string;
+  tokenId?: number | null;
 }) =>
   enqueueEmail({
     to: input.email,
@@ -261,11 +1087,12 @@ export const sendAccountVerification = (input: {
       body: `
         <p>Hello ${escapeHtml(input.name || "there")},</p>
         <p>Your Mtendere account has been created. Please verify this email address before signing in.</p>
-        <p>This link expires for security. If you did not create an account, you can ignore this message.</p>
+        <p>This secure link expires in 24 hours and can only be used once.</p>
+        <p>If you did not create an account, you can ignore this message.</p>
       `,
       cta: { href: input.verificationUrl, label: "Verify account" },
     }),
-    metadata: { flow: "account_verification" },
+    metadata: { flow: "account_verification", tokenId: input.tokenId ?? undefined },
   });
 
 export const sendWelcomeEmail = (input: {
@@ -498,10 +1325,54 @@ export const sendContactAcknowledgement = (input: {
         <p>Thank you for contacting Mtendere Education Consult${input.subject ? ` about <strong>${escapeHtml(input.subject)}</strong>` : ""}.</p>
         <p>Our team will review your message and respond with the right next step.</p>
       `,
-      cta: { href: `${env.PUBLIC_APP_URL || ""}/contact`, label: "Visit contact page" },
+      cta: { href: `${publicAppUrl || ""}/contact`, label: "Visit contact page" },
     }),
     metadata: { subject: input.subject },
   });
+
+export const sendScholarshipRecommendationEmail = (input: {
+  email: string;
+  name?: string | null;
+  recommendations: Array<{
+    title: string;
+    country?: string | null;
+    degreeLevel?: string | null;
+    field?: string | null;
+    deadline?: string | Date | null;
+    url?: string | null;
+    score?: number;
+  }>;
+  preferences?: Record<string, unknown>;
+}) => {
+  const topRecommendation = input.recommendations[0];
+  const list = input.recommendations
+    .map((item) => {
+      const deadline = item.deadline ? new Date(item.deadline).toLocaleDateString("en-US") : "Rolling deadline";
+      const url = item.url || `${publicAppUrl}/scholarships`;
+      return `<li style="margin-bottom:14px;"><strong>${escapeHtml(item.title)}</strong><br><span style="color:#64748b;">${escapeHtml(item.country || "Global")} | ${escapeHtml(item.degreeLevel || "All levels")} | ${escapeHtml(item.field || "Multiple fields")} | Deadline: ${escapeHtml(deadline)}</span><br><a href="${url}" style="color:#0f4c81;">View opportunity</a></li>`;
+    })
+    .join("");
+
+  return enqueueEmail({
+    to: input.email,
+    subject: topRecommendation
+      ? `Scholarship match: ${topRecommendation.title}`
+      : "New scholarship opportunities matching your profile",
+    category: "scholarship_recommended",
+    text: `Hello ${input.name || "there"}, new scholarship opportunities matching your profile are available. View them here: ${publicAppUrl}/scholarships`,
+    html: renderMtendereEmail({
+      title: "Scholarship matches for you",
+      preheader: "Personalized scholarship opportunities based on your profile.",
+      body: `
+        <p>Hello ${escapeHtml(input.name || "there")},</p>
+        <p>We found scholarship opportunities that align with your study preferences and interests.</p>
+        <ul style="padding-left:18px; margin-top:18px;">${list}</ul>
+      `,
+      cta: { href: `${publicAppUrl}/scholarships`, label: "Explore scholarships" },
+    }),
+    metadata: { preferences: input.preferences, recommendationCount: input.recommendations.length },
+  });
+};
 
 export const sendAdminNotification = (input: {
   subject: string;
@@ -509,7 +1380,7 @@ export const sendAdminNotification = (input: {
   metadata?: Record<string, unknown>;
 }) => {
   const to = env.ADMIN_NOTIFICATION_EMAIL || env.EMAIL_FROM;
-  if (!to) return null;
+  if (!to) return Promise.resolve(null);
 
   return enqueueEmail({
     to,
@@ -522,5 +1393,6 @@ export const sendAdminNotification = (input: {
       body: `<p>${escapeHtml(input.message)}</p>`,
     }),
     metadata: input.metadata,
+    priority: 10,
   });
 };

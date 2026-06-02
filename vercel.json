@@ -35,6 +35,18 @@
   ],
   "routes": [
     {
+      "src": "/(.*(?:\\.env(?:\\..*)?|\\.git|\\.svn|\\.hg|\\.DS_Store|Thumbs\\.db|package(?:-lock)?\\.json|pnpm-lock\\.yaml|yarn\\.lock|tsconfig\\.json|vite\\.config\\.(?:ts|js)|drizzle\\.config\\.(?:ts|js)|vercel\\.json|render\\.yaml|ecosystem\\.config\\.cjs|server-build|node_modules|server/|shared/|client/src|Admin/server|migrations/|scripts/|logs/|data/).*)",
+      "mitigate": {
+        "action": "deny"
+      }
+    },
+    {
+      "src": "/(.*(?:wp-admin|wp-login\\.php|xmlrpc\\.php|phpmyadmin|cgi-bin|vendor/phpunit|composer\\.(?:json|lock)|\\.php$|\\.asp$|\\.aspx$|\\.jsp$|\\.map$|etc/passwd|proc/self|actuator|solr|boaform|debug/default).*)",
+      "mitigate": {
+        "action": "deny"
+      }
+    },
+    {
       "src": "/api/index\\.js",
       "dest": "/api/index.js"
     },
@@ -107,7 +119,8 @@
         }
       ],
       "headers": {
-        "Cache-Control": "no-store"
+        "Cache-Control": "no-store",
+        "X-Robots-Tag": "noindex, nofollow, noarchive"
       },
       "dest": "/admin/index.html"
     },
@@ -120,7 +133,8 @@
         }
       ],
       "headers": {
-        "Cache-Control": "no-store"
+        "Cache-Control": "no-store",
+        "X-Robots-Tag": "noindex, nofollow, noarchive"
       },
       "dest": "/admin/index.html"
     },
@@ -130,7 +144,8 @@
     {
       "src": "/admin(?:/.*)?",
       "headers": {
-        "Cache-Control": "no-store"
+        "Cache-Control": "no-store",
+        "X-Robots-Tag": "noindex, nofollow, noarchive"
       },
       "dest": "/admin/index.html"
     },

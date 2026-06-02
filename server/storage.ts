@@ -1,16 +1,19 @@
 import {
-  users, scholarships, jobs, applications, partners, testimonials, blogPosts, teamMembers, events, eventRegistrations, eventComments, eventReactions, referrals, analytics, blogComments, savedItems, messages, subscribers,
+  users, scholarships, jobs, applications, partners, testimonials, blogPosts, teamMembers, events, eventRegistrations, eventComments, eventReactions, referrals, analytics, blogComments, savedItems, messages, subscribers, emailVerificationTokens, emailJobs, emailDeliveryEvents, emailPreferences,
   type User, type InsertUser, type Scholarship, type InsertScholarship, type Job, type InsertJob,
   type Application, type InsertApplication, type Partner, type InsertPartner, type Testimonial, type InsertTestimonial,
   type BlogPost, type InsertBlogPost, type TeamMember, type InsertTeamMember, type Referral, type InsertReferral,
   type Analytics, type InsertAnalytics, type BlogComment, type InsertBlogComment,
   type SavedItem, type InsertSavedItem, type Message, type InsertMessage,
   type Subscriber, type InsertSubscriber,
+  type EmailVerificationToken, type InsertEmailVerificationToken,
+  type EmailJob, type InsertEmailJob, type InsertEmailDeliveryEvent,
+  type EmailPreference, type InsertEmailPreference,
   type Event, type InsertEvent, type EventRegistration, type InsertEventRegistration,
   type EventComment, type InsertEventComment, type EventReaction, type InsertEventReaction
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, asc, and, or, ilike, count, sql } from "drizzle-orm";
+import { eq, desc, asc, and, or, ilike, count, sql, gte, lte, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -140,6 +143,31 @@ export interface IStorage {
   getAllSubscribers(): Promise<Subscriber[]>;
   createSubscriber(subscriber: InsertSubscriber): Promise<Subscriber>;
   updateSubscriber(id: number, subscriber: Partial<InsertSubscriber>): Promise<Subscriber>;
+
+  // Enterprise email
+  createEmailVerificationToken(token: InsertEmailVerificationToken): Promise<EmailVerificationToken>;
+  getEmailVerificationTokenByHash(tokenHash: string): Promise<EmailVerificationToken | undefined>;
+  countEmailVerificationRequests(email: string, since: Date): Promise<number>;
+  revokePendingEmailVerificationTokens(userId: number, replacedAt?: Date): Promise<void>;
+  useEmailVerificationToken(id: number): Promise<EmailVerificationToken>;
+  createEmailJob(job: InsertEmailJob): Promise<EmailJob>;
+  getEmailJob(id: string): Promise<EmailJob | undefined>;
+  getEmailJobByProviderMessageId(providerMessageId: string): Promise<EmailJob | undefined>;
+  getDueEmailJobs(limit?: number): Promise<EmailJob[]>;
+  markEmailJobProcessing(id: string): Promise<EmailJob>;
+  markEmailJobSent(id: string, provider: string, providerMessageId?: string | null): Promise<EmailJob>;
+  markEmailJobFailed(id: string, error: string, scheduledFor?: Date | null, finalFailure?: boolean): Promise<EmailJob>;
+  createEmailDeliveryEvent(event: InsertEmailDeliveryEvent): Promise<void>;
+  getEmailDeliveryStats(days?: number): Promise<{
+    totals: Record<string, number>;
+    byCategory: Record<string, Record<string, number>>;
+    queue: Record<string, number>;
+    recentFailures: EmailJob[];
+  }>;
+  getEmailPreferenceByEmail(email: string): Promise<EmailPreference | undefined>;
+  getEmailPreferenceByTokenHash(tokenHash: string): Promise<EmailPreference | undefined>;
+  upsertEmailPreference(preference: InsertEmailPreference): Promise<EmailPreference>;
+  updateEmailPreference(id: number, preference: Partial<InsertEmailPreference>): Promise<EmailPreference>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -858,6 +886,223 @@ export class DatabaseStorage implements IStorage {
       .where(eq(subscribers.id, id))
       .returning();
     return subscriber;
+  }
+
+  async createEmailVerificationToken(insertToken: InsertEmailVerificationToken): Promise<EmailVerificationToken> {
+    const [token] = await db
+      .insert(emailVerificationTokens)
+      .values(insertToken as typeof emailVerificationTokens.$inferInsert)
+      .returning();
+    return token;
+  }
+
+  async getEmailVerificationTokenByHash(tokenHash: string): Promise<EmailVerificationToken | undefined> {
+    const [token] = await db
+      .select()
+      .from(emailVerificationTokens)
+      .where(eq(emailVerificationTokens.tokenHash, tokenHash));
+    return token || undefined;
+  }
+
+  async countEmailVerificationRequests(email: string, since: Date): Promise<number> {
+    const [result] = await db
+      .select({ value: count() })
+      .from(emailVerificationTokens)
+      .where(and(eq(emailVerificationTokens.email, email.toLowerCase()), gte(emailVerificationTokens.createdAt, since)));
+    return Number(result?.value || 0);
+  }
+
+  async revokePendingEmailVerificationTokens(userId: number, replacedAt = new Date()): Promise<void> {
+    await db
+      .update(emailVerificationTokens)
+      .set({ status: "replaced", replacedAt })
+      .where(and(eq(emailVerificationTokens.userId, userId), eq(emailVerificationTokens.status, "pending")));
+  }
+
+  async useEmailVerificationToken(id: number): Promise<EmailVerificationToken> {
+    const [token] = await db
+      .update(emailVerificationTokens)
+      .set({ status: "used", usedAt: new Date() })
+      .where(eq(emailVerificationTokens.id, id))
+      .returning();
+    return token;
+  }
+
+  async createEmailJob(insertJob: InsertEmailJob): Promise<EmailJob> {
+    const [job] = await db
+      .insert(emailJobs)
+      .values(insertJob as typeof emailJobs.$inferInsert)
+      .returning();
+    return job;
+  }
+
+  async getEmailJob(id: string): Promise<EmailJob | undefined> {
+    const [job] = await db.select().from(emailJobs).where(eq(emailJobs.id, id));
+    return job || undefined;
+  }
+
+  async getEmailJobByProviderMessageId(providerMessageId: string): Promise<EmailJob | undefined> {
+    const [job] = await db
+      .select()
+      .from(emailJobs)
+      .where(eq(emailJobs.providerMessageId, providerMessageId));
+    return job || undefined;
+  }
+
+  async getDueEmailJobs(limit = 10): Promise<EmailJob[]> {
+    return await db
+      .select()
+      .from(emailJobs)
+      .where(
+        and(
+          inArray(emailJobs.status, ["queued", "retry_scheduled"]),
+          lte(emailJobs.scheduledFor, new Date()),
+        ),
+      )
+      .orderBy(asc(emailJobs.priority), asc(emailJobs.scheduledFor), asc(emailJobs.createdAt))
+      .limit(limit);
+  }
+
+  async markEmailJobProcessing(id: string): Promise<EmailJob> {
+    const [job] = await db
+      .update(emailJobs)
+      .set({
+        status: "processing",
+        attempts: sql`${emailJobs.attempts} + 1`,
+        processingAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(emailJobs.id, id))
+      .returning();
+    return job;
+  }
+
+  async markEmailJobSent(id: string, provider: string, providerMessageId?: string | null): Promise<EmailJob> {
+    const [job] = await db
+      .update(emailJobs)
+      .set({
+        status: "sent",
+        provider,
+        providerMessageId: providerMessageId || null,
+        sentAt: new Date(),
+        lastError: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(emailJobs.id, id))
+      .returning();
+    return job;
+  }
+
+  async markEmailJobFailed(
+    id: string,
+    error: string,
+    scheduledFor?: Date | null,
+    finalFailure = false,
+  ): Promise<EmailJob> {
+    const [job] = await db
+      .update(emailJobs)
+      .set({
+        status: finalFailure ? "failed" : "retry_scheduled",
+        lastError: error,
+        failedAt: finalFailure ? new Date() : null,
+        scheduledFor: scheduledFor || new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(emailJobs.id, id))
+      .returning();
+    return job;
+  }
+
+  async createEmailDeliveryEvent(insertEvent: InsertEmailDeliveryEvent): Promise<void> {
+    await db
+      .insert(emailDeliveryEvents)
+      .values(insertEvent as typeof emailDeliveryEvents.$inferInsert);
+  }
+
+  async getEmailDeliveryStats(days = 30): Promise<{
+    totals: Record<string, number>;
+    byCategory: Record<string, Record<string, number>>;
+    queue: Record<string, number>;
+    recentFailures: EmailJob[];
+  }> {
+    const since = new Date(Date.now() - Math.max(1, days) * 24 * 60 * 60 * 1000);
+    const [events, jobs, recentFailures] = await Promise.all([
+      db.select().from(emailDeliveryEvents).where(gte(emailDeliveryEvents.createdAt, since)),
+      db.select().from(emailJobs).where(gte(emailJobs.createdAt, since)),
+      db
+        .select()
+        .from(emailJobs)
+        .where(eq(emailJobs.status, "failed"))
+        .orderBy(desc(emailJobs.updatedAt))
+        .limit(20),
+    ]);
+
+    const totals: Record<string, number> = {};
+    const byCategory: Record<string, Record<string, number>> = {};
+    const queue: Record<string, number> = {};
+
+    for (const event of events) {
+      totals[event.eventType] = (totals[event.eventType] || 0) + 1;
+      const category = event.category || "uncategorized";
+      byCategory[category] = byCategory[category] || {};
+      byCategory[category][event.eventType] = (byCategory[category][event.eventType] || 0) + 1;
+    }
+
+    for (const job of jobs) {
+      queue[job.status] = (queue[job.status] || 0) + 1;
+    }
+
+    return { totals, byCategory, queue, recentFailures };
+  }
+
+  async getEmailPreferenceByEmail(email: string): Promise<EmailPreference | undefined> {
+    const [preference] = await db
+      .select()
+      .from(emailPreferences)
+      .where(eq(emailPreferences.email, email.toLowerCase()));
+    return preference || undefined;
+  }
+
+  async getEmailPreferenceByTokenHash(tokenHash: string): Promise<EmailPreference | undefined> {
+    const [preference] = await db
+      .select()
+      .from(emailPreferences)
+      .where(eq(emailPreferences.unsubscribeTokenHash, tokenHash));
+    return preference || undefined;
+  }
+
+  async upsertEmailPreference(insertPreference: InsertEmailPreference): Promise<EmailPreference> {
+    const [preference] = await db
+      .insert(emailPreferences)
+      .values(insertPreference as typeof emailPreferences.$inferInsert)
+      .onConflictDoUpdate({
+        target: emailPreferences.email,
+        set: {
+          userId: insertPreference.userId ?? null,
+          categories: insertPreference.categories,
+          consentStatus: insertPreference.consentStatus,
+          consentSource: insertPreference.consentSource ?? null,
+          consentAt: insertPreference.consentAt ?? null,
+          unsubscribedAt: insertPreference.unsubscribedAt ?? null,
+          unsubscribeTokenHash: insertPreference.unsubscribeTokenHash,
+          auditTrail: (insertPreference.auditTrail as Array<Record<string, unknown>> | null | undefined) ?? null,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return preference;
+  }
+
+  async updateEmailPreference(
+    id: number,
+    updatePreference: Partial<InsertEmailPreference>,
+  ): Promise<EmailPreference> {
+    const [preference] = await db
+      .update(emailPreferences)
+      .set({ ...updatePreference, updatedAt: new Date() } as Partial<typeof emailPreferences.$inferInsert>)
+      .where(eq(emailPreferences.id, id))
+      .returning();
+    return preference;
   }
 }
 

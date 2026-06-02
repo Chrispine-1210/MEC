@@ -968,12 +968,164 @@ export const subscribers = pgTable("subscribers", {
   source: varchar("source", { length: 80 }).default("website"),
   verificationToken: text("verification_token"),
   unsubscribeToken: text("unsubscribe_token"),
+  consentAccepted: boolean("consent_accepted").default(false),
+  consentSource: varchar("consent_source", { length: 120 }),
+  consentAt: timestamp("consent_at"),
+  consentIpAddress: varchar("consent_ip_address", { length: 45 }),
+  consentUserAgent: text("consent_user_agent"),
   verifiedAt: timestamp("verified_at"),
   unsubscribedAt: timestamp("unsubscribed_at"),
   lastEmailAt: timestamp("last_email_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+export const emailVerificationTokens = pgTable(
+  "email_verification_tokens",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").notNull(),
+    email: varchar("email", { length: 255 }).notNull(),
+    tokenHash: varchar("token_hash", { length: 128 }).notNull(),
+    jwtId: varchar("jwt_id", { length: 80 }).notNull(),
+    status: varchar("status", { length: 40 }).notNull().default("pending"),
+    requestIpAddress: varchar("request_ip_address", { length: 45 }),
+    requestUserAgent: text("request_user_agent"),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    replacedAt: timestamp("replaced_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    tokenHashIdx: uniqueIndex("email_verification_tokens_hash_idx").on(table.tokenHash),
+    jwtIdIdx: uniqueIndex("email_verification_tokens_jti_idx").on(table.jwtId),
+    userStatusIdx: index("email_verification_tokens_user_status_idx").on(table.userId, table.status),
+    emailCreatedIdx: index("email_verification_tokens_email_created_idx").on(table.email, table.createdAt),
+    expiryIdx: index("email_verification_tokens_expiry_idx").on(table.expiresAt),
+  }),
+);
+
+export const emailJobs = pgTable(
+  "email_jobs",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    category: varchar("category", { length: 100 }).notNull(),
+    recipient: varchar("recipient", { length: 255 }).notNull(),
+    subject: text("subject").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown> | null>(),
+    status: varchar("status", { length: 40 }).notNull().default("queued"),
+    priority: integer("priority").notNull().default(100),
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(5),
+    provider: varchar("provider", { length: 40 }),
+    providerMessageId: text("provider_message_id"),
+    scheduledFor: timestamp("scheduled_for").notNull().defaultNow(),
+    processingAt: timestamp("processing_at"),
+    sentAt: timestamp("sent_at"),
+    failedAt: timestamp("failed_at"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    statusScheduleIdx: index("email_jobs_status_schedule_idx").on(table.status, table.scheduledFor),
+    categoryStatusIdx: index("email_jobs_category_status_idx").on(table.category, table.status),
+    recipientIdx: index("email_jobs_recipient_idx").on(table.recipient),
+    providerMessageIdx: index("email_jobs_provider_message_idx").on(table.providerMessageId),
+  }),
+);
+
+export const emailDeliveryEvents = pgTable(
+  "email_delivery_events",
+  {
+    id: serial("id").primaryKey(),
+    jobId: varchar("job_id", { length: 36 }),
+    provider: varchar("provider", { length: 40 }),
+    eventType: varchar("event_type", { length: 80 }).notNull(),
+    recipient: varchar("recipient", { length: 255 }),
+    category: varchar("category", { length: 100 }),
+    providerMessageId: text("provider_message_id"),
+    metadata: jsonb("metadata").$type<Record<string, unknown> | null>(),
+    ipAddress: varchar("ip_address", { length: 45 }),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    jobIdx: index("email_delivery_events_job_idx").on(table.jobId),
+    typeCreatedIdx: index("email_delivery_events_type_created_idx").on(table.eventType, table.createdAt),
+    categoryCreatedIdx: index("email_delivery_events_category_created_idx").on(table.category, table.createdAt),
+    providerMessageIdx: index("email_delivery_events_provider_message_idx").on(table.providerMessageId),
+  }),
+);
+
+export const emailPreferences = pgTable(
+  "email_preferences",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id"),
+    email: varchar("email", { length: 255 }).notNull(),
+    categories: jsonb("categories").$type<Record<string, boolean>>().notNull(),
+    consentStatus: varchar("consent_status", { length: 40 }).notNull().default("pending"),
+    consentSource: varchar("consent_source", { length: 120 }),
+    consentAt: timestamp("consent_at"),
+    unsubscribedAt: timestamp("unsubscribed_at"),
+    unsubscribeTokenHash: varchar("unsubscribe_token_hash", { length: 128 }).notNull(),
+    auditTrail: jsonb("audit_trail").$type<Array<Record<string, unknown>> | null>(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    emailIdx: uniqueIndex("email_preferences_email_idx").on(table.email),
+    tokenIdx: uniqueIndex("email_preferences_token_hash_idx").on(table.unsubscribeTokenHash),
+    userIdx: index("email_preferences_user_idx").on(table.userId),
+    statusIdx: index("email_preferences_status_idx").on(table.consentStatus),
+  }),
+);
+
+export const emailTemplateVersions = pgTable(
+  "email_template_versions",
+  {
+    id: serial("id").primaryKey(),
+    templateKey: varchar("template_key", { length: 120 }).notNull(),
+    version: integer("version").notNull().default(1),
+    status: varchar("status", { length: 40 }).notNull().default("draft"),
+    subject: text("subject").notNull(),
+    preheader: text("preheader"),
+    html: text("html").notNull(),
+    textBody: text("text_body").notNull(),
+    variables: jsonb("variables").$type<string[] | null>(),
+    createdBy: integer("created_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    keyVersionIdx: uniqueIndex("email_template_versions_key_version_idx").on(table.templateKey, table.version),
+    keyStatusIdx: index("email_template_versions_key_status_idx").on(table.templateKey, table.status),
+  }),
+);
+
+export const emailCampaigns = pgTable(
+  "email_campaigns",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    category: varchar("category", { length: 100 }).notNull(),
+    status: varchar("status", { length: 40 }).notNull().default("draft"),
+    subject: text("subject").notNull(),
+    audienceSegment: jsonb("audience_segment").$type<Record<string, unknown> | null>(),
+    templateKey: varchar("template_key", { length: 120 }),
+    scheduledFor: timestamp("scheduled_for"),
+    sentAt: timestamp("sent_at"),
+    metrics: jsonb("metrics").$type<Record<string, unknown> | null>(),
+    createdBy: integer("created_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    statusScheduleIdx: index("email_campaigns_status_schedule_idx").on(table.status, table.scheduledFor),
+    categoryIdx: index("email_campaigns_category_idx").on(table.category),
+  }),
+);
 
 export const usersRelations = relations(users, ({ many }) => ({
   applications: many(applications),
@@ -1735,6 +1887,38 @@ export const insertSubscriberSchema = createInsertSchema(subscribers, {
   updatedAt: true,
 });
 
+export const insertEmailVerificationTokenSchema = createInsertSchema(emailVerificationTokens).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEmailJobSchema = createInsertSchema(emailJobs).omit({
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertEmailDeliveryEventSchema = createInsertSchema(emailDeliveryEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEmailPreferenceSchema = createInsertSchema(emailPreferences).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertEmailTemplateVersionSchema = createInsertSchema(emailTemplateVersions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEmailCampaignSchema = createInsertSchema(emailCampaigns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Scholarship = typeof scholarships.$inferSelect;
@@ -1839,3 +2023,15 @@ export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Subscriber = typeof subscribers.$inferSelect;
 export type InsertSubscriber = z.infer<typeof insertSubscriberSchema>;
+export type EmailVerificationToken = typeof emailVerificationTokens.$inferSelect;
+export type InsertEmailVerificationToken = z.infer<typeof insertEmailVerificationTokenSchema>;
+export type EmailJob = typeof emailJobs.$inferSelect;
+export type InsertEmailJob = z.infer<typeof insertEmailJobSchema>;
+export type EmailDeliveryEvent = typeof emailDeliveryEvents.$inferSelect;
+export type InsertEmailDeliveryEvent = z.infer<typeof insertEmailDeliveryEventSchema>;
+export type EmailPreference = typeof emailPreferences.$inferSelect;
+export type InsertEmailPreference = z.infer<typeof insertEmailPreferenceSchema>;
+export type EmailTemplateVersion = typeof emailTemplateVersions.$inferSelect;
+export type InsertEmailTemplateVersion = z.infer<typeof insertEmailTemplateVersionSchema>;
+export type EmailCampaign = typeof emailCampaigns.$inferSelect;
+export type InsertEmailCampaign = z.infer<typeof insertEmailCampaignSchema>;
