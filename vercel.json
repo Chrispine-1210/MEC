@@ -7,9 +7,6 @@
   "functions": {
     "api/index.js": {
       "includeFiles": "{server-build,dist,vercel-media-assets}/**"
-    },
-    "api/[...path].js": {
-      "includeFiles": "{server-build,dist,vercel-media-assets}/**"
     }
   },
   "redirects": [
