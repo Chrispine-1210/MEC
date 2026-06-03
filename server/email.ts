@@ -1,13 +1,14 @@
 import fs from "fs";
 import path from "path";
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
+import { resolveCname, resolveTxt } from "dns/promises";
 import jwt from "jsonwebtoken";
 import { env } from "./env";
 import { resolveWritableRuntimePath } from "./runtime-paths";
 import { storage } from "./storage";
 import type { EmailJob } from "@shared/schema";
 
-type EmailCategory =
+export type EmailCategory =
   | "account_verification"
   | "welcome"
   | "account_activated"
@@ -119,6 +120,16 @@ let workerTimer: NodeJS.Timeout | null = null;
 
 type EmailEnqueueOptions = {
   awaitDelivery?: boolean;
+};
+
+type DeliverabilityCheck = {
+  name: string;
+  host: string;
+  type: "CNAME" | "TXT";
+  expected: string;
+  actual: string[];
+  status: "pass" | "warn" | "fail";
+  message: string;
 };
 
 type EmailEnqueueResult = {
@@ -603,6 +614,146 @@ export const getEmailDeliveryDiagnostics = () => {
   };
 };
 
+const mtendereEmailDomain = "mtendereeducationconsult.com";
+
+const normalizeDnsValue = (value: string) =>
+  value
+    .trim()
+    .replace(/\.$/, "")
+    .toLowerCase();
+
+const flattenTxtRecords = (records: string[][]) =>
+  records.map((record) => record.join(""));
+
+const dnsWithTimeout = async <T>(lookup: Promise<T>, timeoutMs: number): Promise<T> => {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      lookup,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`DNS lookup timed out after ${timeoutMs}ms`)), timeoutMs);
+        timer.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+
+const cnameCheck = async (
+  host: string,
+  expected: string,
+  timeoutMs: number,
+): Promise<DeliverabilityCheck> => {
+  try {
+    const records = await dnsWithTimeout(resolveCname(host), timeoutMs);
+    const actual = records.map(normalizeDnsValue);
+    const normalizedExpected = normalizeDnsValue(expected);
+    const passed = actual.includes(normalizedExpected);
+    return {
+      name: host,
+      host,
+      type: "CNAME",
+      expected,
+      actual,
+      status: passed ? "pass" : "fail",
+      message: passed
+        ? "CNAME is aligned."
+        : `Expected ${host} to point to ${expected}.`,
+    };
+  } catch (error) {
+    return {
+      name: host,
+      host,
+      type: "CNAME",
+      expected,
+      actual: [],
+      status: "fail",
+      message: error instanceof Error ? error.message : "CNAME lookup failed.",
+    };
+  }
+};
+
+const txtCheck = async (
+  host: string,
+  expected: string,
+  timeoutMs: number,
+  validator: (records: string[]) => boolean,
+  warnOnly = false,
+): Promise<DeliverabilityCheck> => {
+  try {
+    const actual = flattenTxtRecords(await dnsWithTimeout(resolveTxt(host), timeoutMs));
+    const passed = validator(actual);
+    return {
+      name: host,
+      host,
+      type: "TXT",
+      expected,
+      actual,
+      status: passed ? "pass" : warnOnly ? "warn" : "fail",
+      message: passed
+        ? "TXT record is aligned."
+        : `Expected ${host} to include ${expected}.`,
+    };
+  } catch (error) {
+    return {
+      name: host,
+      host,
+      type: "TXT",
+      expected,
+      actual: [],
+      status: warnOnly ? "warn" : "fail",
+      message: error instanceof Error ? error.message : "TXT lookup failed.",
+    };
+  }
+};
+
+export const getEmailDeliverabilityDiagnostics = async (options: { timeoutMs?: number } = {}) => {
+  const timeoutMs = Math.max(500, options.timeoutMs ?? 2_000);
+  const checks = await Promise.all([
+    cnameCheck(`links.${mtendereEmailDomain}`, "sendgrid.net", timeoutMs),
+    cnameCheck(`54085667.${mtendereEmailDomain}`, "sendgrid.net", timeoutMs),
+    cnameCheck(`mail.${mtendereEmailDomain}`, "u54085667.wl168.sendgrid.net", timeoutMs),
+    cnameCheck(`mtd1._domainkey.${mtendereEmailDomain}`, "mtd1.domainkey.u54085667.wl168.sendgrid.net", timeoutMs),
+    cnameCheck(`mtd12._domainkey.${mtendereEmailDomain}`, "mtd12.domainkey.u54085667.wl168.sendgrid.net", timeoutMs),
+    txtCheck(
+      `_dmarc.${mtendereEmailDomain}`,
+      "v=DMARC1; p=none",
+      timeoutMs,
+      (records) => records.some((record) => /^v=DMARC1;.*\bp=(none|quarantine|reject)\b/i.test(record)),
+    ),
+    txtCheck(
+      mtendereEmailDomain,
+      "v=spf1 ... include:sendgrid.net",
+      timeoutMs,
+      (records) => records.some((record) => /^v=spf1\b/i.test(record) && /include:sendgrid\.net/i.test(record)),
+      true,
+    ),
+  ]);
+  const summary = checks.reduce(
+    (acc, check) => {
+      acc[check.status] += 1;
+      return acc;
+    },
+    { pass: 0, warn: 0, fail: 0 },
+  );
+
+  return {
+    domain: mtendereEmailDomain,
+    checkedAt: new Date().toISOString(),
+    ready: summary.fail === 0,
+    summary,
+    checks,
+    recommendedVercelEnv: {
+      EMAIL_FROM: "Mtendere Education Consult <no-reply@mail.mtendereeducationconsult.com>",
+      EMAIL_PROVIDER_ORDER: "sendgrid,resend,postmark,ses,custom",
+      EMAIL_DRY_RUN: "false",
+      SENDGRID_TRACKING_ENABLED: "true",
+      EMAIL_LINK_BASE_URL: "https://links.mtendereeducationconsult.com",
+    },
+  };
+};
+
 const ctaButton = (href: string, label: string) => `
   <table role="presentation" cellspacing="0" cellpadding="0" style="margin: 28px 0;">
     <tr>
@@ -1070,8 +1221,102 @@ const mapProviderEventType = (rawType: string) => {
 export const getEmailPlatformHealth = async (days = 30) => {
   const stats = await storage.getEmailDeliveryStats(days);
   const providerOrder = getProviderOrder().map((provider) => provider.name);
+  const sent = stats.totals.sent || 0;
+  const delivered = stats.totals.delivered || 0;
+  const bounced = stats.totals.bounced || 0;
+  const spamComplaints = stats.totals.spam_complaint || 0;
+  const failed = stats.totals.failed || 0;
+  const queued = stats.queue.queued || 0;
+  const retryScheduled = stats.queue.retry_scheduled || 0;
+  const processing = stats.queue.processing || 0;
+  const deadLetter = stats.queue.failed || 0;
+  const deliverability = await getEmailDeliverabilityDiagnostics({ timeoutMs: 1_500 }).catch((error) => ({
+    ready: false,
+    summary: { pass: 0, warn: 0, fail: 1 },
+    checks: [],
+    error: error instanceof Error ? error.message : "Deliverability diagnostics failed",
+  }));
+  const alerts = [
+    providerOrder.filter((provider) => provider !== "dry_run").length === 0
+      ? {
+          severity: "critical",
+          code: "email_provider_unavailable",
+          message: "No real transactional email provider is configured. Verification and subscription emails cannot be delivered.",
+        }
+      : null,
+    dryRunEnabled
+      ? {
+          severity: "warning",
+          code: "email_dry_run_enabled",
+          message: "EMAIL_DRY_RUN is enabled. Production should use real provider delivery.",
+        }
+      : null,
+    deadLetter > 0
+      ? {
+          severity: "critical",
+          code: "email_dead_letter_jobs",
+          message: `${deadLetter} email job(s) are in the dead-letter queue and need operator review.`,
+        }
+      : null,
+    queued + retryScheduled + processing > 100
+      ? {
+          severity: "warning",
+          code: "email_queue_congestion",
+          message: `${queued + retryScheduled + processing} email job(s) are waiting or processing.`,
+        }
+      : null,
+    sent > 0 && bounced / sent >= 0.02
+      ? {
+          severity: "warning",
+          code: "email_bounce_rate_high",
+          message: `Bounce rate is ${((bounced / sent) * 100).toFixed(1)}% for the selected period.`,
+        }
+      : null,
+    sent > 0 && spamComplaints / sent >= 0.001
+      ? {
+          severity: "critical",
+          code: "email_spam_complaints_high",
+          message: `Spam complaint rate is ${((spamComplaints / sent) * 100).toFixed(2)}% for the selected period.`,
+        }
+      : null,
+    "ready" in deliverability && !deliverability.ready
+      ? {
+          severity: "critical",
+          code: "email_dns_not_ready",
+          message: "One or more sending-domain DNS records are not aligned.",
+        }
+      : null,
+  ].filter(Boolean);
+
   return {
     ...stats,
+    reliability: {
+      sent,
+      delivered,
+      failed,
+      bounced,
+      spamComplaints,
+      deliveryRate: sent > 0 ? delivered / sent : null,
+      bounceRate: sent > 0 ? bounced / sent : null,
+      spamComplaintRate: sent > 0 ? spamComplaints / sent : null,
+    },
+    queueOperations: {
+      queued,
+      retryScheduled,
+      processing,
+      deadLetter,
+      congestion: queued + retryScheduled + processing,
+      priorityBands: {
+        critical: "0-19",
+        high: "20-49",
+        medium: "50-99",
+        low: "100+",
+      },
+      retrySchedule: ["1 minute", "5 minutes", "15 minutes", "1 hour"],
+      deadLetterStatus: "failed",
+    },
+    alerts,
+    deliverability,
     providers: {
       active: providerOrder,
       configured: Object.values(providers)

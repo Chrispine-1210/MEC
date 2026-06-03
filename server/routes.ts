@@ -35,6 +35,7 @@ import {
   createEmailPreferenceToken,
   createEmailPreferenceTokenHash,
   createEmailTokenHash,
+  getEmailDeliverabilityDiagnostics,
   getEmailDeliveryDiagnostics,
   getEmailPlatformHealth,
   isTransactionalEmailDeliveryReady,
@@ -3646,6 +3647,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/admin/email/diagnostics', authenticateToken, requireAdmin, async (_req, res) => {
     res.json(getEmailDeliveryDiagnostics());
+  });
+
+  app.get('/api/admin/email/deliverability', authenticateToken, requireAdmin, async (_req, res) => {
+    try {
+      res.json(await getEmailDeliverabilityDiagnostics());
+    } catch (error) {
+      console.error("Admin email deliverability error:", getErrorLogMessage(error));
+      res.status(500).json({ message: "Failed to fetch email deliverability diagnostics" });
+    }
   });
 
   app.get('/api/admin/email/templates', authenticateToken, requireAdmin, async (_req, res) => {
