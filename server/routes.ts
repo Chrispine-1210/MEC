@@ -591,6 +591,23 @@ const getPublicErrorMessage = (error: unknown, fallback = "Request failed") => {
   return fallback;
 };
 
+const isRealEmailDelivery = (result: { status?: string; provider?: string | null }) =>
+  result.status === "sent" && result.provider !== "dry_run";
+
+const emailDeliveryFailureResponse = (result: {
+  status?: string;
+  provider?: string | null;
+  error?: string;
+  lastError?: string | null;
+}) => ({
+  message:
+    result.provider === "dry_run"
+      ? "The submission was saved, but email delivery is not configured for live sending yet. Please contact support."
+      : "The submission was saved, but we could not send the confirmation email right now. Please try again shortly or contact support.",
+  deliveryStatus: result.status,
+  deliveryProvider: result.provider,
+});
+
 const logAnalyticsBestEffort = async (input: Parameters<typeof storage.logAnalytics>[0]) => {
   try {
     await storage.logAnalytics(input);
@@ -4276,13 +4293,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const dashboardUrl = `${env.PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`}/dashboard`;
       const applicant = await storage.getUser(authUser.id);
 
-      void sendApplicationConfirmation({
+      const applicationConfirmation = await sendApplicationConfirmation({
         email: authUser.email,
         name: applicant ? `${applicant.firstName} ${applicant.lastName}`.trim() : undefined,
         opportunityTitle,
         opportunityType: payload.type,
         dashboardUrl,
       });
+      if (!isRealEmailDelivery(applicationConfirmation)) {
+        console.error(
+          "Application confirmation email failed:",
+          getErrorLogMessage({
+            emailJobId: applicationConfirmation.id,
+            status: applicationConfirmation.status,
+            provider: applicationConfirmation.provider,
+            error:
+              applicationConfirmation.error ||
+              applicationConfirmation.lastError ||
+              "Email provider did not accept the message",
+          }),
+        );
+        return res.status(503).json({
+          ...emailDeliveryFailureResponse(applicationConfirmation),
+          application: { ...application, meta: getApplicationMeta(application.id) },
+        });
+      }
 
       if (getAdminSettings().emailNotifications) {
         void sendAdminNotification({
@@ -5052,7 +5087,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       broadcast('events', { type: 'event_registration_created', eventId: id, registration });
       const ticketUrl = `${env.PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`}/api/events/registrations/${registration.ticketCode}/ticket`;
-      void sendEventRegistrationConfirmation({
+      const registrationEmail = await sendEventRegistrationConfirmation({
         email: registration.email,
         name: registration.fullName,
         eventTitle: event.title,
@@ -5060,6 +5095,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ticketUrl,
         status: registration.status,
       });
+      if (!isRealEmailDelivery(registrationEmail)) {
+        console.error(
+          "Event registration confirmation email failed:",
+          getErrorLogMessage({
+            emailJobId: registrationEmail.id,
+            status: registrationEmail.status,
+            provider: registrationEmail.provider,
+            error:
+              registrationEmail.error ||
+              registrationEmail.lastError ||
+              "Email provider did not accept the message",
+          }),
+        );
+        return res.status(503).json({
+          ...emailDeliveryFailureResponse(registrationEmail),
+          registration,
+          ticketUrl: `/api/events/registrations/${registration.ticketCode}/ticket`,
+        });
+      }
       res.status(201).json({ registration, ticketUrl: `/api/events/registrations/${registration.ticketCode}/ticket` });
     } catch (error) {
       console.error('Event registration error:', error);
@@ -9601,8 +9655,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         unsubscribeUrl,
       }, { awaitDelivery: true });
 
-      const emailWasReallySent = confirmationEmail.status === "sent" && confirmationEmail.provider !== "dry_run";
-      if (!emailWasReallySent) {
+      if (!isRealEmailDelivery(confirmationEmail)) {
         console.error(
           "Subscription confirmation email failed:",
           getErrorLogMessage({
@@ -9615,14 +9668,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 : confirmationEmail.error || confirmationEmail.lastError || "Email provider did not accept the message",
           }),
         );
-        return res.status(503).json({
-          message:
-            confirmationEmail.provider === "dry_run"
-              ? "Your subscription was saved, but email delivery is not configured for live sending yet. Please contact support."
-              : "Your subscription was saved, but we could not send the confirmation email right now. Please try again shortly or contact support.",
-          deliveryStatus: confirmationEmail.status,
-          deliveryProvider: confirmationEmail.provider,
-        });
+        return res.status(503).json(emailDeliveryFailureResponse(confirmationEmail));
       }
 
       void logAnalyticsBestEffort({
@@ -9860,11 +9906,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const message = await storage.createMessage(messageData);
       const ticketCode = `MEC-CONTACT-${String(message.id).padStart(6, "0")}`;
-      void sendContactAcknowledgement({
+      const contactAcknowledgement = await sendContactAcknowledgement({
         email: message.email,
         name: message.name,
         subject: `${message.subject} (${ticketCode})`,
       });
+      if (!isRealEmailDelivery(contactAcknowledgement)) {
+        console.error(
+          "Contact acknowledgement email failed:",
+          getErrorLogMessage({
+            emailJobId: contactAcknowledgement.id,
+            status: contactAcknowledgement.status,
+            provider: contactAcknowledgement.provider,
+            error:
+              contactAcknowledgement.error ||
+              contactAcknowledgement.lastError ||
+              "Email provider did not accept the message",
+          }),
+        );
+        return res.status(503).json({
+          ...emailDeliveryFailureResponse(contactAcknowledgement),
+          ticketCode,
+        });
+      }
       void sendAdminNotification({
         subject: `New Mtendere contact message ${ticketCode}`,
         message: `${message.name} (${message.email}) submitted ${message.subject || "General inquiry"}. Phone: ${message.phone || "not provided"}.`,
