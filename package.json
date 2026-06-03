@@ -29,6 +29,7 @@
     "pm2:reload": "pm2 reload ecosystem.config.cjs --env production",
     "pm2:logs": "pm2 logs mec-api",
     "pm2:save": "pm2 save",
+    "vercel:email:configure": "powershell -ExecutionPolicy Bypass -File scripts/configure-vercel-email.ps1",
     "check": "tsc --pretty false",
     "db:push": "drizzle-kit push",
     "seed:partner-videos": "tsx -r dotenv/config server/seed-partner-videos.ts"

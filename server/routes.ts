@@ -2993,6 +2993,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         activeProviders: emailDiagnostics.activeProviders,
         dryRunEnabled: emailDiagnostics.dryRunEnabled,
         fromConfigured: emailDiagnostics.fromConfigured,
+        linkBaseUrlConfigured: emailDiagnostics.linkBaseUrlConfigured,
+        sendGridTrackingEnabled: emailDiagnostics.sendGridTrackingEnabled,
         providerConfigured: emailDiagnostics.providerConfigured,
       },
     });

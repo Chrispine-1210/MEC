@@ -94,6 +94,21 @@ const fromAddress = env.EMAIL_FROM || "Mtendere Education Consult <no-reply@mten
 const publicAppUrl = (env.PUBLIC_APP_URL || env.FRONTEND_URL || env.VITE_SITE_URL || "").replace(/\/+$/, "");
 const apiAppUrl = (env.API_APP_URL || env.PUBLIC_APP_URL || env.VITE_API_URL || "").replace(/\/+$/, "");
 const emailBaseUrl = apiAppUrl || publicAppUrl;
+const emailLinkBaseUrl = (env.EMAIL_LINK_BASE_URL || "").replace(/\/+$/, "");
+const isUsableSecret = (value?: string) =>
+  Boolean(
+    value &&
+      !/^(your_|replace-|changeme|change-me|example|test|dummy|placeholder)/i.test(value.trim()),
+  );
+const isSendGridApiKey = (value?: string) => isUsableSecret(value) && /^SG\./.test(String(value).trim());
+const sendGridApiKey = isSendGridApiKey(env.SENDGRID_API_KEY)
+  ? env.SENDGRID_API_KEY
+  : /sendgrid\.net$/i.test(env.SMTP_HOST || "") &&
+      (env.SMTP_USER || "").toLowerCase() === "apikey" &&
+      isSendGridApiKey(env.SMTP_PASSWORD)
+    ? env.SMTP_PASSWORD
+    : undefined;
+const sendGridTrackingEnabled = env.SENDGRID_TRACKING_ENABLED ?? true;
 const retryDelaysMs = [0, 60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000];
 const defaultMaxAttempts = retryDelaysMs.length;
 const queuePollMs = env.EMAIL_QUEUE_WORKER_INTERVAL_MS;
@@ -349,7 +364,7 @@ const sendWithSendGrid: Provider["send"] = async (message) => {
   const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${env.SENDGRID_API_KEY}`,
+      Authorization: `Bearer ${sendGridApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -369,8 +384,8 @@ const sendWithSendGrid: Provider["send"] = async (message) => {
         { type: "text/html", value: message.html },
       ],
       tracking_settings: {
-        click_tracking: { enable: false, enable_text: false },
-        open_tracking: { enable: false },
+        click_tracking: { enable: sendGridTrackingEnabled, enable_text: sendGridTrackingEnabled },
+        open_tracking: { enable: sendGridTrackingEnabled },
       },
       headers: {
         ...message.headers,
@@ -510,22 +525,27 @@ const sendWithCustomApi: Provider["send"] = async (message) => {
 const providers: Record<string, Provider> = {
   resend: {
     name: "resend",
-    isConfigured: () => Boolean(env.RESEND_API_KEY),
+    isConfigured: () => isUsableSecret(env.RESEND_API_KEY),
     send: sendWithResend,
   },
   sendgrid: {
     name: "sendgrid",
-    isConfigured: () => Boolean(env.SENDGRID_API_KEY),
+    isConfigured: () => Boolean(sendGridApiKey),
     send: sendWithSendGrid,
   },
   postmark: {
     name: "postmark",
-    isConfigured: () => Boolean(env.POSTMARK_SERVER_TOKEN),
+    isConfigured: () => isUsableSecret(env.POSTMARK_SERVER_TOKEN),
     send: sendWithPostmark,
   },
   ses: {
     name: "ses",
-    isConfigured: () => Boolean(env.AWS_SES_ACCESS_KEY_ID && env.AWS_SES_SECRET_ACCESS_KEY && env.AWS_SES_REGION),
+    isConfigured: () =>
+      Boolean(
+        isUsableSecret(env.AWS_SES_ACCESS_KEY_ID) &&
+          isUsableSecret(env.AWS_SES_SECRET_ACCESS_KEY) &&
+          env.AWS_SES_REGION,
+      ),
     send: sendWithSes,
   },
   custom: {
@@ -566,11 +586,18 @@ export const getEmailDeliveryDiagnostics = () => {
     activeProviders,
     dryRunEnabled,
     fromConfigured: Boolean(env.EMAIL_FROM),
+    linkBaseUrlConfigured: Boolean(emailLinkBaseUrl),
+    sendGridTrackingEnabled,
     providerConfigured: {
-      resend: Boolean(env.RESEND_API_KEY),
-      sendgrid: Boolean(env.SENDGRID_API_KEY),
-      postmark: Boolean(env.POSTMARK_SERVER_TOKEN),
-      ses: Boolean(env.AWS_SES_ACCESS_KEY_ID && env.AWS_SES_SECRET_ACCESS_KEY && env.AWS_SES_REGION),
+      resend: isUsableSecret(env.RESEND_API_KEY),
+      sendgrid: isSendGridApiKey(env.SENDGRID_API_KEY),
+      sendgridSmtpFallback: Boolean(sendGridApiKey && !env.SENDGRID_API_KEY),
+      postmark: isUsableSecret(env.POSTMARK_SERVER_TOKEN),
+      ses: Boolean(
+        isUsableSecret(env.AWS_SES_ACCESS_KEY_ID) &&
+          isUsableSecret(env.AWS_SES_SECRET_ACCESS_KEY) &&
+          env.AWS_SES_REGION,
+      ),
       custom: Boolean(env.EMAIL_API_URL),
     },
   };

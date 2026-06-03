@@ -16,7 +16,7 @@ process.env.API_APP_URL = "http://api.example.test";
 process.env.EMAIL_FROM = "Mtendere Education Consult <no-reply@example.test>";
 process.env.EMAIL_PROVIDER_ORDER = "resend,sendgrid";
 process.env.RESEND_API_KEY = "resend-test-key";
-process.env.SENDGRID_API_KEY = "sendgrid-test-key";
+process.env.SENDGRID_API_KEY = "SG.sendgrid-test-key";
 process.env.EMAIL_DRY_RUN = "false";
 process.env.EMAIL_QUEUE_WORKER_ENABLED = "false";
 
