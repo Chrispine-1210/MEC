@@ -22,7 +22,7 @@ import {
   insertSubscriberSchema,
 } from "@shared/schema";
 import bcrypt from "bcryptjs";
-import { createHash, createHmac, randomBytes, randomUUID } from "crypto";
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "crypto";
 import fs from "fs";
 import jwt from "jsonwebtoken";
 import multer from "multer";
@@ -37,8 +37,10 @@ import {
   createEmailTokenHash,
   getEmailDeliverabilityDiagnostics,
   getEmailDeliveryDiagnostics,
+  getEmailQueueWorkerStatus,
   getEmailPlatformHealth,
   isTransactionalEmailDeliveryReady,
+  processEmailQueue,
   recordEmailClick,
   recordEmailOpen,
   recordProviderWebhookEvent,
@@ -641,6 +643,14 @@ const passwordFingerprint = (passwordHash: string) =>
   createHmac("sha256", JWT_SECRET).update(passwordHash).digest("hex").slice(0, 40);
 
 const getClientIp = (req: Request) => req.ip || req.socket.remoteAddress || "unknown";
+
+const isBearerSecretMatch = (headerValue: string | undefined, expectedSecret: string | undefined) => {
+  if (!expectedSecret || !headerValue?.startsWith("Bearer ")) return false;
+  const supplied = headerValue.slice("Bearer ".length);
+  const suppliedBuffer = Buffer.from(supplied);
+  const expectedBuffer = Buffer.from(expectedSecret);
+  return suppliedBuffer.length === expectedBuffer.length && timingSafeEqual(suppliedBuffer, expectedBuffer);
+};
 
 const flowRateLimits = new Map<string, { count: number; resetAt: number }>();
 
@@ -2999,6 +3009,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/health", (_req, res) => {
     const emailDiagnostics = getEmailDeliveryDiagnostics();
+    const emailQueueWorker = getEmailQueueWorkerStatus();
     res.json({
       status: "ok",
       deployment: {
@@ -3014,6 +3025,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         linkBaseUrlConfigured: emailDiagnostics.linkBaseUrlConfigured,
         sendGridTrackingEnabled: emailDiagnostics.sendGridTrackingEnabled,
         providerConfigured: emailDiagnostics.providerConfigured,
+        queueWorker: emailQueueWorker,
       },
     });
   });
@@ -3634,6 +3646,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(400).send("Invalid unsubscribe link");
     }
   });
+
+  const emailQueueDrainHandler = async (req: Request, res: Response) => {
+    if (!env.CRON_SECRET) {
+      return res.status(503).json({
+        message: "Email queue drain is not configured. Set CRON_SECRET before enabling scheduled drains.",
+      });
+    }
+
+    if (!isBearerSecretMatch(req.get("authorization"), env.CRON_SECRET)) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const result = await processEmailQueue();
+    res.json({
+      message: result.skipped ? "Email queue drain skipped because another run is active" : "Email queue drain completed",
+      result,
+      worker: getEmailQueueWorkerStatus(),
+    });
+  };
+
+  app.get('/api/email/queue/drain', emailQueueDrainHandler);
+  app.post('/api/email/queue/drain', emailQueueDrainHandler);
 
   app.get('/api/admin/email/stats', authenticateToken, requireAdmin, async (req, res) => {
     try {
@@ -9663,9 +9697,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         name: subscriber.name,
         verificationUrl,
         unsubscribeUrl,
-      }, { awaitDelivery: true });
+      });
 
-      if (!isRealEmailDelivery(confirmationEmail)) {
+      const confirmationEmailFailed = confirmationEmail.status === "failed";
+      if (confirmationEmailFailed) {
         console.error(
           "Subscription confirmation email failed:",
           getErrorLogMessage({
@@ -9678,7 +9713,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 : confirmationEmail.error || confirmationEmail.lastError || "Email provider did not accept the message",
           }),
         );
-        return res.status(503).json(emailDeliveryFailureResponse(confirmationEmail));
       }
 
       void logAnalyticsBestEffort({
@@ -9697,8 +9731,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userAgent: req.get("user-agent"),
       });
 
-      res.status(201).json({
-        message: "Please check your inbox to confirm your subscription.",
+      res.status(confirmationEmailFailed ? 202 : 201).json({
+        message: confirmationEmailFailed
+          ? "Your subscription was saved. We could not send the confirmation email immediately; please contact support if it does not arrive."
+          : "Please check your inbox shortly to confirm your subscription.",
         subscriber: {
           id: subscriber.id,
           email: subscriber.email,
@@ -9708,6 +9744,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         delivery: {
           status: confirmationEmail.status,
           provider: confirmationEmail.provider,
+          queued: !confirmationEmailFailed && !isRealEmailDelivery(confirmationEmail),
         },
       });
     } catch (error) {

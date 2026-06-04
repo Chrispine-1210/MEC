@@ -57,6 +57,7 @@ const envSchema = z.object({
   EMAIL_TRACKING_SECRET: optionalEnvString,
   EMAIL_LINK_BASE_URL: optionalEnvString,
   EMAIL_WEBHOOK_SIGNING_SECRET: optionalEnvString,
+  CRON_SECRET: optionalEnvString,
   SENDGRID_TRACKING_ENABLED: optionalEnvBoolean,
   RESEND_API_KEY: optionalEnvString,
   SENDGRID_API_KEY: optionalEnvString,

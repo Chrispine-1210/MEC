@@ -117,6 +117,10 @@ const dryRunEnabled = env.EMAIL_DRY_RUN ?? env.NODE_ENV !== "production";
 const trackingSecret = env.EMAIL_TRACKING_SECRET || env.JWT_SECRET;
 let isProcessing = false;
 let workerTimer: NodeJS.Timeout | null = null;
+let workerStartedAt: Date | null = null;
+let queueLastRunStartedAt: Date | null = null;
+let queueLastRunFinishedAt: Date | null = null;
+let queueLastRunError: string | null = null;
 
 type EmailEnqueueOptions = {
   awaitDelivery?: boolean;
@@ -987,13 +991,48 @@ const scheduleAdminFailureNotification = (job: EmailJob, error: string) => {
   });
 };
 
-export const processEmailQueue = async () => {
-  if (isProcessing) return;
+export type EmailQueueProcessResult = {
+  skipped: boolean;
+  processed: number;
+  startedAt: string;
+  finishedAt: string;
+  error: string | null;
+};
+
+const toIsoString = (value: Date | null) => value?.toISOString() ?? null;
+
+export const getEmailQueueWorkerStatus = () => ({
+  enabled: env.EMAIL_QUEUE_WORKER_ENABLED !== false,
+  running: Boolean(workerTimer),
+  intervalMs: queuePollMs,
+  isProcessing,
+  startedAt: toIsoString(workerStartedAt),
+  lastRunStartedAt: toIsoString(queueLastRunStartedAt),
+  lastRunFinishedAt: toIsoString(queueLastRunFinishedAt),
+  lastError: queueLastRunError,
+});
+
+export const processEmailQueue = async (): Promise<EmailQueueProcessResult> => {
+  const requestedAt = new Date();
+  if (isProcessing) {
+    return {
+      skipped: true,
+      processed: 0,
+      startedAt: requestedAt.toISOString(),
+      finishedAt: new Date().toISOString(),
+      error: null,
+    };
+  }
+
   isProcessing = true;
+  queueLastRunStartedAt = requestedAt;
+  queueLastRunError = null;
+  let processed = 0;
 
   try {
     const jobs = await storage.getDueEmailJobs(10);
     for (const dueJob of jobs) {
+      processed += 1;
       const job = await storage.markEmailJobProcessing(dueJob.id);
       await recordEmailEvent({
         jobId: job.id,
@@ -1031,17 +1070,28 @@ export const processEmailQueue = async () => {
       }
     }
   } catch (error) {
+    queueLastRunError = error instanceof Error ? error.message : "Unknown email queue error";
     appendEmailEvent({
       status: "queue_processing_failed",
-      error: error instanceof Error ? error.message : "Unknown email queue error",
+      error: queueLastRunError,
     });
   } finally {
+    queueLastRunFinishedAt = new Date();
     isProcessing = false;
   }
+
+  return {
+    skipped: false,
+    processed,
+    startedAt: requestedAt.toISOString(),
+    finishedAt: (queueLastRunFinishedAt ?? new Date()).toISOString(),
+    error: queueLastRunError,
+  };
 };
 
 export const startEmailQueueWorker = () => {
   if (workerTimer || env.EMAIL_QUEUE_WORKER_ENABLED === false) return;
+  workerStartedAt = new Date();
   workerTimer = setInterval(() => {
     void processEmailQueue();
   }, queuePollMs);

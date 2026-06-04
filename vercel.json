@@ -4,6 +4,12 @@
   "installCommand": "npm ci --include=dev --include=optional --loglevel=error",
   "buildCommand": "npm run build:vercel",
   "outputDirectory": "dist/client",
+  "crons": [
+    {
+      "path": "/api/email/queue/drain",
+      "schedule": "0 6 * * *"
+    }
+  ],
   "functions": {
     "api/index.js": {
       "includeFiles": "{server-build,dist,vercel-media-assets}/**"

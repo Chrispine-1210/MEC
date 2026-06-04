@@ -19,6 +19,8 @@ process.env.RESEND_API_KEY = "resend-test-key";
 process.env.SENDGRID_API_KEY = "SG.sendgrid-test-key";
 process.env.EMAIL_DRY_RUN = "false";
 process.env.EMAIL_QUEUE_WORKER_ENABLED = "false";
+process.env.RECAPTCHA_SECRET_KEY = "";
+process.env.CRON_SECRET = "cron-test-secret";
 
 type StoragePatch = Record<string, (...args: any[]) => any>;
 
@@ -277,6 +279,141 @@ const installVerificationStorage = async (input: {
 
   return state;
 };
+
+const installSubscriberStorage = async () => {
+  const state = {
+    nextSubscriberId: 1,
+    subscribers: new Map<string, any>(),
+    emailPreferences: new Map<string, any>(),
+    emailJobs: [] as any[],
+    deliveryEvents: [] as any[],
+    analytics: [] as any[],
+  };
+
+  await patchStorage({
+    getSubscriberByEmail: async (email: string) => state.subscribers.get(email.toLowerCase()),
+    createSubscriber: async (insertSubscriber: any) => {
+      const now = new Date();
+      const subscriber = {
+        id: state.nextSubscriberId++,
+        lastEmailAt: null,
+        createdAt: now,
+        updatedAt: now,
+        ...insertSubscriber,
+      };
+      state.subscribers.set(subscriber.email.toLowerCase(), subscriber);
+      return subscriber;
+    },
+    updateSubscriber: async (id: number, updateSubscriber: Record<string, unknown>) => {
+      const existing = Array.from(state.subscribers.values()).find((subscriber) => subscriber.id === id);
+      if (!existing) throw new Error("Subscriber not found");
+      const updated = { ...existing, ...updateSubscriber, updatedAt: new Date() };
+      state.subscribers.set(updated.email.toLowerCase(), updated);
+      return updated;
+    },
+    getEmailPreferenceByEmail: async (email: string) => state.emailPreferences.get(email.toLowerCase()),
+    upsertEmailPreference: async (preference: any) => {
+      const existing = state.emailPreferences.get(preference.email.toLowerCase());
+      const saved = {
+        id: existing?.id ?? state.emailPreferences.size + 1,
+        createdAt: existing?.createdAt ?? new Date(),
+        updatedAt: new Date(),
+        ...preference,
+      };
+      state.emailPreferences.set(saved.email.toLowerCase(), saved);
+      return saved;
+    },
+    createEmailJob: async (job: any) => {
+      const saved = { createdAt: new Date(), updatedAt: new Date(), ...job };
+      state.emailJobs.push(saved);
+      return saved;
+    },
+    getDueEmailJobs: async () => [],
+    createEmailDeliveryEvent: async (event: any) => {
+      state.deliveryEvents.push(event);
+    },
+    logAnalytics: async (analytics: any) => {
+      const saved = { id: state.analytics.length + 1, timestamp: new Date(), ...analytics };
+      state.analytics.push(saved);
+      return saved;
+    },
+  });
+
+  return state;
+};
+
+test("newsletter signup succeeds once the subscriber is saved and confirmation email is queued", { concurrency: false }, async () => {
+  const state = await installSubscriberStorage();
+  const { server, baseUrl } = await startTestServer();
+
+  try {
+    const response = await fetch(`${baseUrl}/api/subscribers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "newsletter-student@example.test",
+        name: "Newsletter Student",
+        preferences: ["news", "jobs"],
+        consentAccepted: true,
+      }),
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 201);
+    assert.equal(body.message, "Please check your inbox shortly to confirm your subscription.");
+    assert.equal(body.subscriber.email, "newsletter-student@example.test");
+    assert.equal(body.subscriber.status, "pending");
+    assert.equal(body.delivery.status, "queued");
+    assert.equal(body.delivery.queued, true);
+    assert.equal(state.subscribers.get("newsletter-student@example.test")?.status, "pending");
+    assert.equal(state.emailJobs.length, 1);
+    assert.equal(state.emailJobs[0].category, "subscription_confirmation");
+    assert.equal(state.deliveryEvents.some((event) => event.eventType === "queued"), true);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("email queue drain requires cron authorization and processes due jobs", { concurrency: false }, async () => {
+  const queue = await installQueueStorage(makeEmailJob({
+    id: "cron-email-job-1",
+    category: "subscription_confirmation",
+    recipient: "newsletter-student@example.test",
+    subject: "Confirm your Mtendere updates subscription",
+  }));
+  const { server, baseUrl } = await startTestServer();
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).startsWith(baseUrl)) {
+      return originalFetch(input, init);
+    }
+
+    return new Response(JSON.stringify({ id: "resend-message-1" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const rejected = await fetch(`${baseUrl}/api/email/queue/drain`);
+    assert.equal(rejected.status, 401);
+    assert.equal(queue.state.job.status, "queued");
+
+    const accepted = await fetch(`${baseUrl}/api/email/queue/drain`, {
+      headers: { Authorization: "Bearer cron-test-secret" },
+    });
+    const body = await accepted.json();
+
+    assert.equal(accepted.status, 200);
+    assert.equal(body.result.skipped, false);
+    assert.equal(body.result.processed, 1);
+    assert.equal(body.worker.enabled, false);
+    assert.equal(queue.state.job.status, "sent");
+    assert.equal(queue.state.job.provider, "resend");
+  } finally {
+    await stopTestServer(server);
+  }
+});
 
 test("verification link activates the account once and redirects to login", { concurrency: false }, async () => {
   const { createEmailTokenHash } = await emailModulePromise;
