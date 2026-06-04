@@ -154,7 +154,7 @@ export interface IStorage {
   getEmailJob(id: string): Promise<EmailJob | undefined>;
   getEmailJobByProviderMessageId(providerMessageId: string): Promise<EmailJob | undefined>;
   getDueEmailJobs(limit?: number): Promise<EmailJob[]>;
-  markEmailJobProcessing(id: string): Promise<EmailJob>;
+  markEmailJobProcessing(id: string): Promise<EmailJob | undefined>;
   markEmailJobSent(id: string, provider: string, providerMessageId?: string | null): Promise<EmailJob>;
   markEmailJobFailed(id: string, error: string, scheduledFor?: Date | null, finalFailure?: boolean): Promise<EmailJob>;
   createEmailDeliveryEvent(event: InsertEmailDeliveryEvent): Promise<void>;
@@ -963,7 +963,7 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
-  async markEmailJobProcessing(id: string): Promise<EmailJob> {
+  async markEmailJobProcessing(id: string): Promise<EmailJob | undefined> {
     const [job] = await db
       .update(emailJobs)
       .set({
@@ -972,9 +972,9 @@ export class DatabaseStorage implements IStorage {
         processingAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(emailJobs.id, id))
+      .where(and(eq(emailJobs.id, id), inArray(emailJobs.status, ["queued", "retry_scheduled"])))
       .returning();
-    return job;
+    return job || undefined;
   }
 
   async markEmailJobSent(id: string, provider: string, providerMessageId?: string | null): Promise<EmailJob> {

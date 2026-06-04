@@ -187,6 +187,32 @@ test("email queue schedules the first retry one minute after an all-provider fai
   assert.equal(queue.deliveryEvents.some((event) => event.eventType === "retry_scheduled"), true);
 });
 
+test("email queue skips jobs that cannot be claimed for processing", { concurrency: false }, async () => {
+  const { processEmailQueue } = await emailModulePromise;
+  const deliveryEvents: any[] = [];
+
+  await patchStorage({
+    getDueEmailJobs: async () => [makeEmailJob({ id: "already-claimed-job" })],
+    markEmailJobProcessing: async () => undefined,
+    createEmailDeliveryEvent: async (event: any) => {
+      deliveryEvents.push(event);
+    },
+  });
+
+  globalThis.fetch = (async () => {
+    throw new Error("provider should not be called for an unavailable job");
+  }) as typeof fetch;
+
+  const result = await processEmailQueue();
+
+  assert.equal(result.processed, 0);
+  assert.equal(result.error, null);
+  assert.deepEqual(
+    deliveryEvents.map((event) => event.eventType),
+    ["processing_skipped"],
+  );
+});
+
 const passwordFingerprint = (passwordHash: string) =>
   createHmac("sha256", process.env.JWT_SECRET as string).update(passwordHash).digest("hex").slice(0, 40);
 

@@ -1032,8 +1032,19 @@ export const processEmailQueue = async (): Promise<EmailQueueProcessResult> => {
   try {
     const jobs = await storage.getDueEmailJobs(10);
     for (const dueJob of jobs) {
-      processed += 1;
       const job = await storage.markEmailJobProcessing(dueJob.id);
+      if (!job) {
+        await recordEmailEvent({
+          jobId: dueJob.id,
+          eventType: "processing_skipped",
+          recipient: dueJob.recipient,
+          category: dueJob.category,
+          metadata: { reason: "job_not_available" },
+        });
+        continue;
+      }
+
+      processed += 1;
       await recordEmailEvent({
         jobId: job.id,
         eventType: "processing",
