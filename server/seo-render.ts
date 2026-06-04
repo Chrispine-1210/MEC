@@ -24,6 +24,8 @@ type SeoPageMeta = {
   author?: string;
   publishedTime?: string | null;
   modifiedTime?: string | null;
+  lastReviewedTime?: string | null;
+  freshnessStatus?: string;
   structuredData: JsonLd[];
 };
 
@@ -33,6 +35,18 @@ type StaticSeoRoute = {
   module: SeoModule;
   category: string;
   image: string;
+};
+
+type SeoFaq = {
+  question: string;
+  answer: string;
+};
+
+type RelatedSeoItem = {
+  name: string;
+  url: string;
+  description?: string;
+  image?: unknown;
 };
 
 type SeoModule =
@@ -52,6 +66,7 @@ const APP_NAME = "Mtendere Education Platform";
 const BRAND_LOGO = "/media-assets/logos/Mtendere_Logo.png";
 const BRAND_THEME_COLOR = "#2563eb";
 const DEFAULT_BASE_URL = "https://mtendereeducationconsult.com";
+const SITE_LAST_REVIEWED_AT = process.env.SITE_LAST_REVIEWED_AT || process.env.BUILD_TIMESTAMP || "2026-06-04T00:00:00.000Z";
 
 const mediaAssetModules = new Set([
   "blogs",
@@ -419,7 +434,8 @@ function buildFallbackSeoMeta(pathname: string, baseUrl: string): SeoPageMeta {
 }
 
 async function resolveScholarshipMeta(identifier: string, baseUrl: string) {
-  const scholarship = await findByIdentifier(await storage.getActiveScholarships(), identifier, (item) => {
+  const scholarships = await storage.getActiveScholarships();
+  const scholarship = await findByIdentifier(scholarships, identifier, (item) => {
     const meta = getScholarshipMeta(item.id);
     return meta.slug || slugify(item.title || `scholarship-${item.id}`);
   });
@@ -434,6 +450,40 @@ async function resolveScholarshipMeta(identifier: string, baseUrl: string) {
     `${scholarship.title} scholarship at ${scholarship.institution} with eligibility, funding, deadline, and application guidance.`,
   );
   const image = meta.featuredImage || scholarship.imageUrl || "/media-assets/scholarships/application-guidance.jpg";
+  const scholarshipFaqs = toFaqs(meta.faq, [
+    {
+      question: `Who is eligible for ${scholarship.title}?`,
+      answer:
+        meta.eligibilityCriteria ||
+        asStringArray((meta as Record<string, unknown>).requirements || scholarship.requirements).join("; ") ||
+        "Eligibility details are listed in the scholarship requirements and should be confirmed before applying.",
+    },
+    {
+      question: `What funding does ${scholarship.title} provide?`,
+      answer:
+        meta.fundingAmount ||
+        asStringArray(meta.benefits).join("; ") ||
+        "Funding details depend on the sponsor and should be reviewed before submission.",
+    },
+    {
+      question: `When is the deadline for ${scholarship.title}?`,
+      answer: scholarship.deadline ? `The listed application deadline is ${formatSeoDate(scholarship.deadline)}.` : "The deadline should be confirmed before applying.",
+    },
+  ]);
+  const relatedScholarships = scholarships
+    .filter((item) => item.id !== scholarship.id)
+    .sort((a, b) => scoreScholarshipRelatedness(b, scholarship) - scoreScholarshipRelatedness(a, scholarship))
+    .slice(0, 4)
+    .map((item) => {
+      const itemMeta = getScholarshipMeta(item.id);
+      const itemSlug = itemMeta.slug || slugify(item.title || `scholarship-${item.id}`);
+      return {
+        name: item.title,
+        url: `/scholarships/${itemSlug}`,
+        description: seoDescription(item.description, `${item.title} scholarship opportunity.`),
+        image: itemMeta.featuredImage || item.imageUrl,
+      };
+    });
 
   return buildMeta({
     title,
@@ -465,14 +515,16 @@ async function resolveScholarshipMeta(identifier: string, baseUrl: string) {
         baseUrl,
       ),
       buildScholarshipSchema({ ...scholarship, ...meta, imageUrl: image, slug }, baseUrl),
-      buildFaqSchema(meta.faq),
+      buildFaqSchema(scholarshipFaqs),
+      buildRelatedItemListSchema("Related scholarships", relatedScholarships, baseUrl),
     ],
     baseUrl,
   });
 }
 
 async function resolveJobMeta(identifier: string, baseUrl: string) {
-  const job = await findByIdentifier(await storage.getActiveJobs(), identifier, (item) => {
+  const jobs = await storage.getActiveJobs();
+  const job = await findByIdentifier(jobs, identifier, (item) => {
     const meta = getJobMeta(item.id);
     return meta.slug || slugify(item.title || `job-${item.id}`);
   });
@@ -487,6 +539,20 @@ async function resolveJobMeta(identifier: string, baseUrl: string) {
     `${job.title} job at ${job.company} with requirements, salary, location, employment type, deadline, and application guidance.`,
   );
   const image = meta.featuredImage || (job as { imageUrl?: string | null }).imageUrl || "/media-assets/jobs/corporate.jpg";
+  const relatedJobs = jobs
+    .filter((item) => item.id !== job.id)
+    .sort((a, b) => scoreJobRelatedness(b, job) - scoreJobRelatedness(a, job))
+    .slice(0, 4)
+    .map((item) => {
+      const itemMeta = getJobMeta(item.id);
+      const itemSlug = itemMeta.slug || slugify(item.title || `job-${item.id}`);
+      return {
+        name: `${item.title} at ${item.company}`,
+        url: `/jobs/${itemSlug}`,
+        description: seoDescription(item.description, `${item.title} job at ${item.company}.`),
+        image: itemMeta.featuredImage || (item as { imageUrl?: string | null }).imageUrl,
+      };
+    });
 
   return buildMeta({
     title,
@@ -522,13 +588,15 @@ async function resolveJobMeta(identifier: string, baseUrl: string) {
         { question: `How do I apply for ${job.title}?`, answer: meta.applicationInstructions || "Use the application option on this page and prepare the requested documents before submission." },
         { question: `What are the requirements for ${job.title}?`, answer: asStringArray(meta.requirements || job.requirements).join("; ") || "Review the requirements and skills listed on the job page before applying." },
       ]),
+      buildRelatedItemListSchema("Related jobs", relatedJobs, baseUrl),
     ],
     baseUrl,
   });
 }
 
 async function resolveBlogMeta(identifier: string, baseUrl: string) {
-  const post = await findByIdentifier(await storage.getPublishedBlogPosts(), identifier, (item) => {
+  const posts = await storage.getPublishedBlogPosts();
+  const post = await findByIdentifier(posts, identifier, (item) => {
     const meta = getBlogMeta(item.id);
     return meta.slug || slugify(item.title || `post-${item.id}`);
   });
@@ -541,6 +609,20 @@ async function resolveBlogMeta(identifier: string, baseUrl: string) {
   const title = stringMeta(meta.seoMeta, "title") || post.title;
   const description = seoDescription(stringMeta(meta.seoMeta, "description") || post.excerpt || post.content, `${post.title} from ${BRAND_NAME}.`);
   const image = meta.featuredImage || post.imageUrl || "/media-assets/blogs/application-guidance.jpg";
+  const relatedPosts = posts
+    .filter((item) => item.id !== post.id)
+    .sort((a, b) => scoreBlogRelatedness(b, post) - scoreBlogRelatedness(a, post))
+    .slice(0, 4)
+    .map((item) => {
+      const itemMeta = getBlogMeta(item.id);
+      const itemSlug = itemMeta.slug || slugify(item.title || `post-${item.id}`);
+      return {
+        name: item.title,
+        url: `/blog/${itemSlug}`,
+        description: seoDescription(item.excerpt || item.content, `${item.title} article.`),
+        image: itemMeta.featuredImage || item.imageUrl,
+      };
+    });
 
   return buildMeta({
     title,
@@ -576,13 +658,15 @@ async function resolveBlogMeta(identifier: string, baseUrl: string) {
         { question: `What is ${post.title} about?`, answer: description },
         { question: "Who published this guide?", answer: `${BRAND_NAME} published this guide for students, professionals, and partners exploring education opportunities.` },
       ]),
+      buildRelatedItemListSchema("Related articles", relatedPosts, baseUrl),
     ],
     baseUrl,
   });
 }
 
 async function resolveEventMeta(identifier: string, baseUrl: string) {
-  const event = await findByIdentifier(await storage.getPublishedEvents(), identifier, (item) => item.slug || slugify(item.title || `event-${item.id}`));
+  const events = await storage.getPublishedEvents();
+  const event = await findByIdentifier(events, identifier, (item) => item.slug || slugify(item.title || `event-${item.id}`));
   if (!event) return resolveSeoMeta("/not-found", baseUrl);
 
   const canonicalPath = `/events/${event.slug || slugify(event.title || `event-${event.id}`)}`;
@@ -592,6 +676,26 @@ async function resolveEventMeta(identifier: string, baseUrl: string) {
     `${event.title} event with date, time, venue, speakers, registration, and event details.`,
   );
   const image = event.coverImage || "/media-assets/events/IMG-20250321-WA0250.jpg";
+  const eventFaqs = toFaqs(event.faqs, [
+    {
+      question: `How do I register for ${event.title}?`,
+      answer: "Use the registration option on the event page to reserve a seat or submit your participation details.",
+    },
+    {
+      question: `Where is ${event.title} hosted?`,
+      answer: event.isVirtual ? "This event is available online." : `This event is hosted at ${event.venueName || event.location || "the listed venue"}.`,
+    },
+  ]);
+  const relatedEvents = events
+    .filter((item) => item.id !== event.id)
+    .sort((a, b) => scoreEventRelatedness(b, event) - scoreEventRelatedness(a, event))
+    .slice(0, 4)
+    .map((item) => ({
+      name: item.title,
+      url: `/events/${item.slug || slugify(item.title || `event-${item.id}`)}`,
+      description: seoDescription(item.summary || item.description, `${item.title} event.`),
+      image: item.coverImage,
+    }));
 
   return buildMeta({
     title,
@@ -622,7 +726,8 @@ async function resolveEventMeta(identifier: string, baseUrl: string) {
         baseUrl,
       ),
       buildEventSchema(event, baseUrl),
-      buildFaqSchema(event.faqs),
+      buildFaqSchema(eventFaqs),
+      buildRelatedItemListSchema("Related events", relatedEvents, baseUrl),
     ],
     baseUrl,
   });
@@ -638,6 +743,30 @@ async function resolvePartnerMeta(identifier: string, baseUrl: string) {
   const title = `${partner.name} Partner Profile`;
   const description = seoDescription(partner.description, `${partner.name} partner institution profile with programs, opportunities, contact details, and application guidance.`);
   const image = meta.logo || partner.logoUrl || meta.coverImage || partner.coverImage || "/media-assets/partners/cu-logo-white.webp";
+  const partners = await storage.getActivePartners();
+  const relatedPartners = partners
+    .filter((item) => item.id !== partner.id)
+    .sort((a, b) => scorePartnerRelatedness(b, partner) - scorePartnerRelatedness(a, partner))
+    .slice(0, 4)
+    .map((item) => {
+      const itemMeta = getPartnerMeta(item.id);
+      return {
+        name: item.name,
+        url: `/partners/${item.id}`,
+        description: seoDescription(item.description, `${item.name} partner profile.`),
+        image: itemMeta.logo || item.logoUrl || item.coverImage,
+      };
+    });
+  const partnerFaqs: SeoFaq[] = [
+    {
+      question: `How can students evaluate ${partner.name}?`,
+      answer: "Compare program fit, tuition, student support, destination requirements, and application timelines before deciding.",
+    },
+    {
+      question: `Can Mtendere help with ${partner.name} applications?`,
+      answer: `${BRAND_NAME} can help students compare this partner, prepare documents, and plan next application steps.`,
+    },
+  ];
 
   return buildMeta({
     title,
@@ -668,6 +797,8 @@ async function resolvePartnerMeta(identifier: string, baseUrl: string) {
         baseUrl,
       ),
       buildPartnerSchema({ ...partner, ...meta, logoUrl: image }, baseUrl),
+      buildFaqSchema(partnerFaqs),
+      buildRelatedItemListSchema("Related partners", relatedPartners, baseUrl),
     ],
     baseUrl,
   });
@@ -733,10 +864,12 @@ function buildMeta(input: {
   author?: string;
   publishedTime?: string | null;
   modifiedTime?: string | null;
+  lastReviewedTime?: string | null;
   structuredData: Array<JsonLd | undefined>;
   baseUrl: string;
 }): SeoPageMeta {
   const canonical = absoluteUrl(input.canonicalPath, input.baseUrl).replace(/[?#].*$/, "").replace(/\/+$/, "") || input.baseUrl;
+  const lastReviewedTime = input.lastReviewedTime || input.modifiedTime || input.publishedTime || SITE_LAST_REVIEWED_AT;
   return {
     title: input.title,
     description: seoDescription(input.description, `${input.title} from ${BRAND_NAME}.`),
@@ -750,6 +883,8 @@ function buildMeta(input: {
     author: input.author || BRAND_NAME,
     publishedTime: input.publishedTime,
     modifiedTime: input.modifiedTime,
+    lastReviewedTime,
+    freshnessStatus: classifyFreshness(lastReviewedTime),
     structuredData: input.structuredData.filter((item): item is JsonLd => Boolean(item)),
   };
 }
@@ -757,8 +892,10 @@ function buildMeta(input: {
 function injectSeoIntoHtml(html: string, meta: SeoPageMeta) {
   const cleaned = html
     .replace(/<title>[\s\S]*?<\/title>\s*/i, "")
-    .replace(/\s*<meta\s+(?:name|property)=["'](?:description|keywords|robots|author|publisher|theme-color|google-site-verification|msvalidate\.01|yandex-verification|baidu-site-verification|og:[^"']+|twitter:[^"']+)["'][^>]*>\s*/gi, "")
+    .replace(/\s*<meta\s+(?:name|property)=["'](?:description|keywords|robots|author|publisher|theme-color|thumbnail|distribution|rating|revisit-after|geo\.region|geo\.placename|content-freshness|last-reviewed|google-site-verification|msvalidate\.01|yandex-verification|baidu-site-verification|og:[^"']+|article:[^"']+|twitter:[^"']+)["'][^>]*>\s*/gi, "")
     .replace(/\s*<link\s+rel=["']canonical["'][^>]*>\s*/gi, "")
+    .replace(/\s*<link\s+rel=["']alternate["'][^>]*>\s*/gi, "")
+    .replace(/\s*<link\s+rel=["']preload["'][^>]*as=["']image["'][^>]*>\s*/gi, "")
     .replace(/\s*<script\s+type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>\s*/gi, "");
 
   const fullTitle = `${meta.title} | ${APP_NAME}`;
@@ -771,17 +908,33 @@ function injectSeoIntoHtml(html: string, meta: SeoPageMeta) {
     .filter((entry): entry is [string, string] => Boolean(entry[1]))
     .map(([name, value]) => `<meta name="${escapeAttribute(name)}" content="${escapeAttribute(value)}" />`);
 
-  const structuredData = JSON.stringify(meta.structuredData).replace(/</g, "\\u003c");
+  const structuredData = JSON.stringify([
+    ...meta.structuredData,
+    buildWebPageSchema(meta),
+    buildPrimaryImageSchema(meta),
+  ]).replace(/</g, "\\u003c");
+  const preloadImage = meta.image && !/noindex/i.test(meta.robots) ? `<link rel="preload" as="image" href="${escapeAttribute(meta.image)}" fetchpriority="high" />` : "";
   const seoHead = [
     `<title>${escapeHtml(fullTitle)}</title>`,
     `<meta name="description" content="${escapeAttribute(meta.description)}" />`,
     `<meta name="keywords" content="${escapeAttribute(meta.keywords.join(", "))}" />`,
+    `<meta name="thumbnail" content="${escapeAttribute(meta.image)}" />`,
     `<meta name="theme-color" content="${BRAND_THEME_COLOR}" />`,
     `<meta name="robots" content="${escapeAttribute(meta.robots)}" />`,
     `<meta name="author" content="${escapeAttribute(meta.author || BRAND_NAME)}" />`,
     `<meta name="publisher" content="${BRAND_NAME}" />`,
+    `<meta name="distribution" content="global" />`,
+    `<meta name="rating" content="general" />`,
+    `<meta name="revisit-after" content="7 days" />`,
+    `<meta name="geo.region" content="MW" />`,
+    `<meta name="geo.placename" content="Malawi" />`,
+    `<meta name="content-freshness" content="${escapeAttribute(meta.freshnessStatus || "evergreen")}" />`,
+    meta.lastReviewedTime ? `<meta name="last-reviewed" content="${escapeAttribute(meta.lastReviewedTime)}" />` : "",
     ...verificationTags,
+    preloadImage,
     `<link rel="canonical" href="${escapeAttribute(meta.canonical)}" />`,
+    `<link rel="alternate" hreflang="en" href="${escapeAttribute(meta.canonical)}" />`,
+    `<link rel="alternate" hreflang="x-default" href="${escapeAttribute(meta.canonical)}" />`,
     `<meta property="og:title" content="${escapeAttribute(fullTitle)}" />`,
     `<meta property="og:description" content="${escapeAttribute(meta.description)}" />`,
     `<meta property="og:image" content="${escapeAttribute(meta.image)}" />`,
@@ -790,10 +943,12 @@ function injectSeoIntoHtml(html: string, meta: SeoPageMeta) {
     `<meta property="og:type" content="${meta.type === "article" ? "article" : "website"}" />`,
     `<meta property="og:site_name" content="${APP_NAME}" />`,
     `<meta property="og:locale" content="en_US" />`,
+    meta.modifiedTime ? `<meta property="og:updated_time" content="${escapeAttribute(meta.modifiedTime)}" />` : "",
     meta.publishedTime ? `<meta property="article:published_time" content="${escapeAttribute(meta.publishedTime)}" />` : "",
     meta.modifiedTime ? `<meta property="article:modified_time" content="${escapeAttribute(meta.modifiedTime)}" />` : "",
     meta.section ? `<meta property="article:section" content="${escapeAttribute(meta.section)}" />` : "",
     meta.author ? `<meta property="article:author" content="${escapeAttribute(meta.author)}" />` : "",
+    ...meta.keywords.slice(0, 8).map((keyword) => `<meta property="article:tag" content="${escapeAttribute(keyword)}" />`),
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<meta name="twitter:title" content="${escapeAttribute(fullTitle)}" />`,
     `<meta name="twitter:description" content="${escapeAttribute(meta.description)}" />`,
@@ -872,6 +1027,69 @@ function buildCollectionPageSchema(route: StaticSeoRoute, path: string, baseUrl:
     url: absoluteUrl(path, baseUrl),
     isPartOf: { "@id": `${baseUrl}/#website` },
     publisher: { "@id": `${baseUrl}/#organization` },
+  };
+}
+
+function buildWebPageSchema(meta: SeoPageMeta): JsonLd {
+  return compactJsonLd({
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "@id": `${meta.canonical}#webpage`,
+    name: meta.title,
+    description: meta.description,
+    url: meta.canonical,
+    isPartOf: { "@id": `${new URL(meta.canonical).origin}/#website` },
+    publisher: { "@id": `${new URL(meta.canonical).origin}/#organization` },
+    primaryImageOfPage: { "@id": `${meta.canonical}#primaryimage` },
+    datePublished: meta.publishedTime || undefined,
+    dateModified: meta.modifiedTime || meta.lastReviewedTime || undefined,
+    reviewedBy: { "@id": `${new URL(meta.canonical).origin}/#organization` },
+    speakable: {
+      "@type": "SpeakableSpecification",
+      cssSelector: ["h1", "main p:first-of-type", "article p:first-of-type"],
+    },
+  });
+}
+
+function buildPrimaryImageSchema(meta: SeoPageMeta): JsonLd {
+  return compactJsonLd({
+    "@context": "https://schema.org",
+    "@type": "ImageObject",
+    "@id": `${meta.canonical}#primaryimage`,
+    url: meta.image,
+    contentUrl: meta.image,
+    caption: meta.imageAlt,
+    name: meta.imageAlt || meta.title,
+    representativeOfPage: true,
+  });
+}
+
+function buildRelatedItemListSchema(name: string, items: RelatedSeoItem[], baseUrl: string): JsonLd | undefined {
+  const related = items
+    .filter((item) => item.name && item.url)
+    .slice(0, 6)
+    .map((item, index) =>
+      compactJsonLd({
+        "@type": "ListItem",
+        position: index + 1,
+        url: absoluteUrl(item.url, baseUrl),
+        name: item.name,
+        item: {
+          "@type": "Thing",
+          name: item.name,
+          url: absoluteUrl(item.url, baseUrl),
+          description: item.description,
+          image: item.image ? resolveImageUrl(item.image, baseUrl) : undefined,
+        },
+      }),
+    );
+  if (!related.length) return undefined;
+  return {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name,
+    itemListOrder: "https://schema.org/ItemListOrderDescending",
+    itemListElement: related,
   };
 }
 
@@ -1047,16 +1265,7 @@ function buildPersonSchema(item: any, baseUrl: string): JsonLd {
 }
 
 function buildFaqSchema(value: unknown): JsonLd | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const faqs = value
-    .map((item) => {
-      if (!item || typeof item !== "object") return null;
-      const record = item as Record<string, unknown>;
-      const question = String(record.question || record.title || record.name || "").trim();
-      const answer = String(record.answer || record.description || record.content || "").trim();
-      return question && answer ? { question, answer } : null;
-    })
-    .filter((item): item is { question: string; answer: string } => Boolean(item))
+  const faqs = toFaqs(value)
     .slice(0, 8);
   if (!faqs.length) return undefined;
   return {
@@ -1068,6 +1277,65 @@ function buildFaqSchema(value: unknown): JsonLd | undefined {
       acceptedAnswer: { "@type": "Answer", text: faq.answer },
     })),
   };
+}
+
+function toFaqs(value: unknown, fallback: SeoFaq[] = []): SeoFaq[] {
+  if (!Array.isArray(value)) return fallback;
+  const faqs = value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const record = item as Record<string, unknown>;
+      const question = String(record.question || record.title || record.name || "").trim();
+      const answer = String(record.answer || record.description || record.content || "").trim();
+      return question && answer ? { question, answer } : null;
+    })
+    .filter((item): item is { question: string; answer: string } => Boolean(item))
+    .slice(0, 8);
+  return faqs.length ? faqs : fallback;
+}
+
+function scoreScholarshipRelatedness(candidate: any, current: any) {
+  return scoreShared(candidate.category, current.category, 5) + scoreShared(candidate.country, current.country, 3) + scoreShared(candidate.institution, current.institution, 2);
+}
+
+function scoreJobRelatedness(candidate: any, current: any) {
+  return scoreShared(candidate.category || candidate.jobType, current.category || current.jobType, 5) + scoreShared(candidate.location, current.location, 3) + scoreShared(candidate.company, current.company, 2);
+}
+
+function scoreBlogRelatedness(candidate: any, current: any) {
+  const sharedTags = asStringArray(candidate.tags).filter((tag) => asStringArray(current.tags).map((item) => item.toLowerCase()).includes(tag.toLowerCase())).length;
+  return scoreShared(candidate.category, current.category, 5) + sharedTags;
+}
+
+function scoreEventRelatedness(candidate: any, current: any) {
+  return scoreShared(candidate.category, current.category, 5) + scoreShared(candidate.location, current.location, 2) + scoreShared(candidate.isVirtual ? "virtual" : "physical", current.isVirtual ? "virtual" : "physical", 1);
+}
+
+function scorePartnerRelatedness(candidate: any, current: any) {
+  return scoreShared(candidate.country, current.country, 4) + scoreShared(candidate.industryCategory, current.industryCategory, 3) + scoreShared(candidate.partnershipType, current.partnershipType, 2);
+}
+
+function scoreShared(a: unknown, b: unknown, score: number) {
+  const left = String(a ?? "").trim().toLowerCase();
+  const right = String(b ?? "").trim().toLowerCase();
+  return left && right && left === right ? score : 0;
+}
+
+function classifyFreshness(value: string | null | undefined) {
+  if (!value) return "evergreen";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "evergreen";
+  const daysOld = Math.floor((Date.now() - date.getTime()) / (24 * 60 * 60 * 1000));
+  if (daysOld <= 90) return "fresh";
+  if (daysOld <= 180) return "current";
+  if (daysOld <= 365) return "review-soon";
+  return "refresh-recommended";
+}
+
+function formatSeoDate(value: unknown) {
+  const date = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(date.getTime())) return "the listed date";
+  return date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 }
 
 async function findByIdentifier<T extends { id: number }>(

@@ -37,6 +37,13 @@ export type SeoFaq = {
   answer: string;
 };
 
+export type SeoRelatedItem = {
+  name: string;
+  url: string;
+  description?: string | null;
+  image?: string | null;
+};
+
 export type StaticSeoPage = {
   title: string;
   description: string;
@@ -227,6 +234,80 @@ export function buildCollectionPageSchema(page: StaticSeoPage, baseUrl = getPubl
     isPartOf: { "@id": `${baseUrl}/#website` },
     publisher: { "@id": `${baseUrl}/#organization` },
   };
+}
+
+export function buildRelatedItemListSchema(name: string, items: SeoRelatedItem[], baseUrl = getPublicOrigin()): JsonLd | undefined {
+  const related = items
+    .filter((item) => item.name && item.url)
+    .slice(0, 6)
+    .map((item, index) =>
+      compactJsonLd({
+        "@type": "ListItem",
+        position: index + 1,
+        url: absoluteUrl(item.url, baseUrl),
+        name: item.name,
+        item: {
+          "@type": "Thing",
+          name: item.name,
+          url: absoluteUrl(item.url, baseUrl),
+          description: item.description || undefined,
+          image: absoluteUrl(item.image, baseUrl),
+        },
+      }),
+    );
+  if (!related.length) return undefined;
+  return {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name,
+    itemListOrder: "https://schema.org/ItemListOrderDescending",
+    itemListElement: related,
+  };
+}
+
+export function buildWebPageSchema(input: {
+  title: string;
+  description: string;
+  canonical: string;
+  image?: string;
+  imageAlt?: string;
+  publishedTime?: string | null;
+  modifiedTime?: string | null;
+}, baseUrl = getPublicOrigin()): JsonLd {
+  return compactJsonLd({
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "@id": `${input.canonical}#webpage`,
+    name: input.title,
+    description: input.description,
+    url: input.canonical,
+    isPartOf: { "@id": `${baseUrl}/#website` },
+    publisher: { "@id": `${baseUrl}/#organization` },
+    primaryImageOfPage: input.image ? { "@id": `${input.canonical}#primaryimage` } : undefined,
+    datePublished: input.publishedTime || undefined,
+    dateModified: input.modifiedTime || input.publishedTime || undefined,
+    reviewedBy: { "@id": `${baseUrl}/#organization` },
+  });
+}
+
+export function buildPrimaryImageSchema(input: {
+  title: string;
+  canonical: string;
+  image?: string;
+  imageAlt?: string;
+}, baseUrl = getPublicOrigin()): JsonLd | undefined {
+  const image = absoluteUrl(input.image, baseUrl);
+  if (!image) return undefined;
+  return compactJsonLd({
+    "@context": "https://schema.org",
+    "@type": "ImageObject",
+    "@id": `${input.canonical}#primaryimage`,
+    url: image,
+    contentUrl: image,
+    caption: input.imageAlt || input.title,
+    name: input.imageAlt || input.title,
+    representativeOfPage: true,
+  });
 }
 
 export function buildJobPostingSchema(job: any, baseUrl = getPublicOrigin()): JsonLd {

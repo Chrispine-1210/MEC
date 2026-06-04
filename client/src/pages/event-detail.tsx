@@ -39,6 +39,7 @@ import {
   buildEventSchema,
   buildFaqSchema,
   buildOrganizationSchema,
+  buildRelatedItemListSchema,
   buildWebsiteSchema,
   canonicalUrl,
   generateKeywords,
@@ -185,6 +186,15 @@ export default function EventDetail() {
     ]),
     buildEventSchema(event),
     buildFaqSchema(eventFaqs),
+    buildRelatedItemListSchema(
+      "Related events",
+      relatedEvents.map((item) => ({
+        name: item.title,
+        url: `/events/${item.slug || item.id}`,
+        description: item.summary || item.description,
+        image: item.coverImage,
+      })),
+    ),
   ].filter(Boolean) as Record<string, unknown>[];
 
   return (

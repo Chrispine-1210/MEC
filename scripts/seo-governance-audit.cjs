@@ -89,13 +89,16 @@ async function main() {
   report.pages = pageResults;
 
   const imageSitemap = await fetchText(absoluteUrl("/images-sitemap.xml"));
-  const imageUrls = unique(extractImageLocs(imageSitemap.text));
+  const imageEntries = extractImageEntries(imageSitemap.text);
   const imageResults = [];
-  for (const url of imageUrls.slice(0, Math.min(maxPages, 120))) {
+  for (const entry of imageEntries.slice(0, Math.min(maxPages, 120))) {
+    const url = entry.loc;
     const result = await checkAsset(url);
-    imageResults.push(result);
+    imageResults.push({ ...result, title: entry.title, caption: entry.caption, page: entry.page });
     addIssueIf(report, result.status >= 400 || !result.ok, "warning", "Image sitemap asset is not reachable", result);
     addIssueIf(report, result.ok && !/^image\//i.test(result.contentType || ""), "warning", "Image sitemap asset did not return an image content type", result);
+    addIssueIf(report, !entry.title, "warning", "Image sitemap entry is missing image title", { url, page: entry.page });
+    addIssueIf(report, !entry.caption, "warning", "Image sitemap entry is missing image caption", { url, page: entry.page });
   }
   report.images = imageResults;
 
@@ -110,6 +113,9 @@ async function main() {
     warnings: report.issues.filter((issue) => issue.severity === "warning").length,
     duplicateTitles: report.issues.filter((issue) => issue.message === "Duplicate meta title").length,
     duplicateDescriptions: report.issues.filter((issue) => issue.message === "Duplicate meta description").length,
+    pagesWithFaqSchema: pageResults.filter((page) => page.jsonLdTypes.includes("FAQPage")).length,
+    pagesWithRelatedSchema: pageResults.filter((page) => page.jsonLdTypes.includes("ItemList")).length,
+    pagesWithImageObjectSchema: pageResults.filter((page) => page.jsonLdTypes.includes("ImageObject")).length,
   };
 
   const reportPath = path.resolve(process.cwd(), "docs", "seo-governance-report.json");
@@ -136,9 +142,16 @@ async function auditPage(url) {
   const ogDescription = metaContent(html, "property", "og:description");
   const ogImage = metaContent(html, "property", "og:image");
   const twitterCard = metaContent(html, "name", "twitter:card");
-  const jsonLdCount = (html.match(/type=["']application\/ld\+json["']/gi) || []).length;
+  const lastReviewed = metaContent(html, "name", "last-reviewed");
+  const contentFreshness = metaContent(html, "name", "content-freshness");
+  const thumbnail = metaContent(html, "name", "thumbnail");
+  const alternateLanguages = extractAlternateLanguages(html);
+  const jsonLdBlocks = extractJsonLd(html);
+  const jsonLdTypes = unique(jsonLdBlocks.flatMap(extractJsonLdTypes));
+  const jsonLdCount = jsonLdBlocks.length;
   const h1Count = (html.match(/<h1[\s>]/gi) || []).length;
   const localLinks = extractLocalLinks(html, url);
+  const routeExpectation = schemaExpectationForUrl(url);
   const issues = [];
 
   pushPageIssue(issues, response.status >= 400, "error", "Page is not reachable", url, { status: response.status });
@@ -149,6 +162,18 @@ async function auditPage(url) {
   pushPageIssue(issues, !ogTitle || !ogDescription || !ogImage, "warning", "Incomplete Open Graph metadata", url);
   pushPageIssue(issues, !twitterCard, "warning", "Missing Twitter card metadata", url);
   pushPageIssue(issues, jsonLdCount === 0, "warning", "Missing JSON-LD structured data", url);
+  pushPageIssue(issues, !jsonLdTypes.includes("Organization"), "warning", "Missing Organization schema", url, { jsonLdTypes });
+  pushPageIssue(issues, !jsonLdTypes.includes("WebSite"), "warning", "Missing WebSite schema", url, { jsonLdTypes });
+  pushPageIssue(issues, !jsonLdTypes.includes("BreadcrumbList"), "warning", "Missing BreadcrumbList schema", url, { jsonLdTypes });
+  pushPageIssue(issues, !jsonLdTypes.includes("WebPage"), "warning", "Missing WebPage schema", url, { jsonLdTypes });
+  pushPageIssue(issues, !jsonLdTypes.includes("ImageObject"), "warning", "Missing ImageObject schema", url, { jsonLdTypes });
+  pushPageIssue(issues, Boolean(routeExpectation.requiredSchema && !jsonLdTypes.includes(routeExpectation.requiredSchema)), "warning", `Missing ${routeExpectation.requiredSchema} rich-result schema`, url, { jsonLdTypes });
+  pushPageIssue(issues, routeExpectation.needsFaq && !jsonLdTypes.includes("FAQPage"), "warning", "Detail page is missing FAQPage schema", url, { jsonLdTypes });
+  pushPageIssue(issues, routeExpectation.needsRelated && !jsonLdTypes.includes("ItemList"), "warning", "Detail page is missing related content ItemList schema", url, { jsonLdTypes });
+  pushPageIssue(issues, !lastReviewed, "warning", "Missing last-reviewed freshness metadata", url);
+  pushPageIssue(issues, !contentFreshness, "warning", "Missing content-freshness metadata", url);
+  pushPageIssue(issues, !thumbnail, "warning", "Missing thumbnail image metadata", url);
+  pushPageIssue(issues, !alternateLanguages.includes("en") || !alternateLanguages.includes("x-default"), "warning", "Missing default hreflang alternates", url, { alternateLanguages });
   pushPageIssue(issues, /noindex/i.test(robots || "") && !/\/(login|register|reset-password|forgot-password|dashboard|referrals|admin|not-found)/i.test(url), "warning", "Indexable public page has noindex robots metadata", url, { robots });
 
   return {
@@ -162,7 +187,12 @@ async function auditPage(url) {
     ogDescription,
     ogImage,
     twitterCard,
+    lastReviewed,
+    contentFreshness,
+    thumbnail,
+    alternateLanguages,
     jsonLdCount,
+    jsonLdTypes,
     h1Count,
     localLinkCount: localLinks.length,
     issues,
@@ -206,6 +236,64 @@ function extractLocs(xml) {
 
 function extractImageLocs(xml) {
   return Array.from(xml.matchAll(/<image:loc>\s*([^<]+?)\s*<\/image:loc>/gi)).map((match) => decodeEntities(match[1].trim()));
+}
+
+function extractImageEntries(xml) {
+  const entries = [];
+  const urlBlocks = Array.from(xml.matchAll(/<url>([\s\S]*?)<\/url>/gi)).map((match) => match[1]);
+  for (const block of urlBlocks) {
+    const page = textMatch(block, /<loc>\s*([^<]+?)\s*<\/loc>/i);
+    const imageBlocks = Array.from(block.matchAll(/<image:image>([\s\S]*?)<\/image:image>/gi)).map((match) => match[1]);
+    for (const imageBlock of imageBlocks) {
+      const loc = textMatch(imageBlock, /<image:loc>\s*([^<]+?)\s*<\/image:loc>/i);
+      if (!loc) continue;
+      entries.push({
+        page: decodeEntities(page),
+        loc: decodeEntities(loc),
+        title: decodeEntities(textMatch(imageBlock, /<image:title>\s*([^<]*?)\s*<\/image:title>/i)),
+        caption: decodeEntities(textMatch(imageBlock, /<image:caption>\s*([^<]*?)\s*<\/image:caption>/i)),
+      });
+    }
+  }
+  return entries.length ? entries : extractImageLocs(xml).map((loc) => ({ loc, title: "", caption: "", page: "" }));
+}
+
+function extractJsonLd(html) {
+  const blocks = Array.from(html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)).map((match) => match[1].trim());
+  return blocks.flatMap((block) => {
+    try {
+      const parsed = JSON.parse(decodeEntities(block));
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch {
+      return [];
+    }
+  });
+}
+
+function extractJsonLdTypes(value) {
+  if (!value || typeof value !== "object") return [];
+  const type = value["@type"];
+  const ownTypes = Array.isArray(type) ? type : type ? [type] : [];
+  const nestedTypes = Object.values(value).flatMap((entry) => {
+    if (Array.isArray(entry)) return entry.flatMap(extractJsonLdTypes);
+    return extractJsonLdTypes(entry);
+  });
+  return [...ownTypes.map(String), ...nestedTypes];
+}
+
+function schemaExpectationForUrl(url) {
+  const pathname = new URL(url).pathname;
+  if (/^\/jobs\//.test(pathname)) return { requiredSchema: "JobPosting", needsFaq: true, needsRelated: true };
+  if (/^\/scholarships\//.test(pathname)) return { requiredSchema: "EducationalOccupationalProgram", needsFaq: true, needsRelated: true };
+  if (/^\/blog\//.test(pathname)) return { requiredSchema: "BlogPosting", needsFaq: true, needsRelated: true };
+  if (/^\/events\//.test(pathname)) return { requiredSchema: "Event", needsFaq: true, needsRelated: true };
+  if (/^\/partners\//.test(pathname)) return { requiredSchema: "EducationalOrganization", needsFaq: true, needsRelated: true };
+  if (/^\/team\//.test(pathname)) return { requiredSchema: "Person", needsFaq: false, needsRelated: false };
+  return { requiredSchema: "", needsFaq: false, needsRelated: false };
+}
+
+function extractAlternateLanguages(html) {
+  return Array.from(html.matchAll(/<link\b(?=[^>]*\brel=["']alternate["'])(?=[^>]*\bhreflang=["']([^"']+)["'])[^>]*>/gi)).map((match) => match[1]);
 }
 
 function extractLocalLinks(html, pageUrl) {

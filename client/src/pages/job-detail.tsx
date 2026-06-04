@@ -13,6 +13,7 @@ import {
   buildFaqSchema,
   buildJobPostingSchema,
   buildOrganizationSchema,
+  buildRelatedItemListSchema,
   buildWebsiteSchema,
   canonicalUrl,
   generateKeywords,
@@ -313,6 +314,15 @@ export default function JobDetail() {
         answer: skills.join(", ") || "The required skills are listed in the role requirements and quick facts on this page.",
       },
     ]),
+    buildRelatedItemListSchema(
+      "Related jobs",
+      related.map((item) => ({
+        name: `${item.title} at ${item.company}`,
+        url: `/jobs/${item.slug || item.id}`,
+        description: item.description,
+        image: item.imageUrl,
+      })),
+    ),
   ].filter(Boolean) as Record<string, unknown>[];
 
   return (

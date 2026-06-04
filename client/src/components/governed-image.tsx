@@ -88,11 +88,15 @@ export default function GovernedImage({
       alt={effectiveAlt}
       title={effectiveTitle}
       loading={priority ? "eager" : "lazy"}
+      fetchPriority={priority ? "high" : "auto"}
       decoding="async"
+      referrerPolicy="strict-origin-when-cross-origin"
       sizes={imageSizes}
       data-image-key={activeImage.key}
       data-image-module={activeImage.module}
       data-image-fallback={activeImage.fallbackLevel}
+      data-image-title={effectiveTitle}
+      data-image-caption={effectiveCaption}
       data-image-description={activeImage.description}
       className={cn(
         "h-full w-full transition duration-700 ease-out",
@@ -164,8 +168,14 @@ export default function GovernedImage({
                 src={activeImage.src}
                 alt={effectiveAlt}
                 title={effectiveTitle}
+                loading="eager"
+                fetchPriority="high"
+                decoding="async"
+                referrerPolicy="strict-origin-when-cross-origin"
                 data-image-key={activeImage.key}
                 data-image-module={activeImage.module}
+                data-image-title={effectiveTitle}
+                data-image-caption={effectiveCaption}
                 data-image-description={activeImage.description}
                 className="max-h-[82vh] w-full object-contain"
               />

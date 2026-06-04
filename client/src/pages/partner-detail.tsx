@@ -18,6 +18,7 @@ import {
   buildFaqSchema,
   buildOrganizationSchema,
   buildPartnerSchema,
+  buildRelatedItemListSchema,
   buildWebsiteSchema,
   canonicalUrl,
   generateKeywords,
@@ -251,6 +252,15 @@ export default function PartnerDetail() {
       partnerQuestions.map((question, index) => ({
         question,
         answer: getDecisionFocus(resolved)[index] || "Mtendere can help you compare this partner against your academic goals, budget, and timeline.",
+      })),
+    ),
+    buildRelatedItemListSchema(
+      "Related partners",
+      related.map((item) => ({
+        name: item.name,
+        url: `/partners/${item.id}`,
+        description: item.description,
+        image: item.coverImage || item.logoUrl,
       })),
     ),
   ].filter(Boolean) as Record<string, unknown>[];

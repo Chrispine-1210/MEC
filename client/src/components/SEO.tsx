@@ -1,6 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { APP_NAME, BRAND_LOGO_SRC, BRAND_THEME_COLOR } from "@/lib/brand";
-import { absoluteUrl, canonicalUrl, keywordsMeta, type SeoKeywordSet } from "@/lib/seo";
+import { absoluteUrl, buildPrimaryImageSchema, buildWebPageSchema, canonicalUrl, keywordsMeta, type SeoKeywordSet } from "@/lib/seo";
+
+const SITE_LAST_REVIEWED_AT = String(import.meta.env.VITE_SITE_LAST_REVIEWED_AT || "2026-06-04T00:00:00.000Z");
 
 interface SEOProps {
   title: string;
@@ -44,6 +46,29 @@ export function SEO({
   const resolvedCanonicalUrl = canonicalUrl(canonical || url);
   const resolvedImage = absoluteUrl(image) || image;
   const resolvedKeywords = keywordsMeta(keywords);
+  const lastReviewedTime = modifiedTime || publishedTime || SITE_LAST_REVIEWED_AT;
+  const enrichedStructuredData = useMemo(
+    () =>
+      [
+        ...(Array.isArray(structuredData) ? structuredData : structuredData ? [structuredData] : []),
+        buildWebPageSchema({
+          title,
+          description,
+          canonical: resolvedCanonicalUrl,
+          image: resolvedImage,
+          imageAlt: imageAlt || title,
+          publishedTime,
+          modifiedTime,
+        }),
+        buildPrimaryImageSchema({
+          title,
+          canonical: resolvedCanonicalUrl,
+          image: resolvedImage,
+          imageAlt: imageAlt || title,
+        }),
+      ].filter(Boolean) as Record<string, unknown>[],
+    [description, imageAlt, modifiedTime, publishedTime, resolvedCanonicalUrl, resolvedImage, structuredData, title],
+  );
 
   useEffect(() => {
     document.title = fullTitle;
@@ -51,10 +76,17 @@ export function SEO({
     // Meta tags
     updateMetaTag("name", "description", description);
     updateMetaTag("name", "keywords", resolvedKeywords);
+    updateMetaTag("name", "thumbnail", resolvedImage);
     updateMetaTag("name", "theme-color", BRAND_THEME_COLOR);
     updateMetaTag("name", "robots", noIndex ? "noindex,nofollow" : "index,follow");
     updateMetaTag("name", "author", author || "Mtendere Education Consult");
     updateMetaTag("name", "publisher", "Mtendere Education Consult");
+    updateMetaTag("name", "distribution", "global");
+    updateMetaTag("name", "rating", "general");
+    updateMetaTag("name", "geo.region", "MW");
+    updateMetaTag("name", "geo.placename", "Malawi");
+    updateMetaTag("name", "content-freshness", classifyFreshness(lastReviewedTime));
+    updateMetaTag("name", "last-reviewed", lastReviewedTime);
     if (resolvedCanonicalUrl) updateLinkTag("canonical", resolvedCanonicalUrl);
     updateAlternateLinks(alternateUrls);
     
@@ -67,6 +99,7 @@ export function SEO({
     updateMetaTag("property", "og:type", type);
     updateMetaTag("property", "og:site_name", APP_NAME);
     updateMetaTag("property", "og:locale", locale);
+    updateMetaTag("property", "og:updated_time", modifiedTime || "");
     updateMetaTag("property", "article:published_time", publishedTime || "");
     updateMetaTag("property", "article:modified_time", modifiedTime || "");
     updateMetaTag("property", "article:author", author || "");
@@ -78,7 +111,7 @@ export function SEO({
     updateMetaTag("name", "twitter:description", description);
     updateMetaTag("name", "twitter:image", resolvedImage);
     updateMetaTag("name", "twitter:image:alt", imageAlt || title);
-    updateStructuredData(structuredData);
+    updateStructuredData(enrichedStructuredData);
   }, [
     fullTitle,
     description,
@@ -94,12 +127,24 @@ export function SEO({
     section,
     publishedTime,
     modifiedTime,
+    lastReviewedTime,
     locale,
     alternateUrls,
-    structuredData,
+    enrichedStructuredData,
   ]);
 
   return null;
+}
+
+function classifyFreshness(value?: string | null) {
+  if (!value) return "evergreen";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "evergreen";
+  const daysOld = Math.floor((Date.now() - date.getTime()) / (24 * 60 * 60 * 1000));
+  if (daysOld <= 90) return "fresh";
+  if (daysOld <= 180) return "current";
+  if (daysOld <= 365) return "review-soon";
+  return "refresh-recommended";
 }
 
 function updateMetaTag(attr: string, key: string, content?: string) {

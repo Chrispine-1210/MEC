@@ -12,6 +12,7 @@ import {
   buildBreadcrumbSchema,
   buildFaqSchema,
   buildOrganizationSchema,
+  buildRelatedItemListSchema,
   buildScholarshipSchema,
   buildWebsiteSchema,
   canonicalUrl,
@@ -262,6 +263,15 @@ export default function ScholarshipDetail() {
     ]),
     buildScholarshipSchema(resolved),
     buildFaqSchema(scholarshipFaqs),
+    buildRelatedItemListSchema(
+      "Related scholarships",
+      related.map((item) => ({
+        name: item.title,
+        url: `/scholarships/${item.slug || item.id}`,
+        description: item.description,
+        image: item.bannerImage || item.imageUrl,
+      })),
+    ),
   ].filter(Boolean) as Record<string, unknown>[];
 
   return (

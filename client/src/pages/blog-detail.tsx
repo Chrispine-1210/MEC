@@ -22,6 +22,7 @@ import {
   buildBreadcrumbSchema,
   buildFaqSchema,
   buildOrganizationSchema,
+  buildRelatedItemListSchema,
   buildWebsiteSchema,
   canonicalUrl,
   generateKeywords,
@@ -382,6 +383,15 @@ export default function BlogDetail() {
       guide.keyQuestions.map((question, index) => ({
         question,
         answer: guide.actionNotes[index] || guide.purpose,
+      })),
+    ),
+    buildRelatedItemListSchema(
+      "Related articles",
+      relatedPosts.map((item) => ({
+        name: item.title,
+        url: `/blog/${item.slug || item.id}`,
+        description: item.excerpt || item.content,
+        image: item.imageUrl,
       })),
     ),
   ].filter(Boolean) as Record<string, unknown>[];

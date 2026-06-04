@@ -1,17 +1,20 @@
 {
-  "generatedAt": "2026-06-02T10:30:42.318Z",
+  "generatedAt": "2026-06-04T11:13:18.309Z",
   "baseUrl": "http://127.0.0.1:5123",
   "limits": {
-    "maxPages": 50
+    "maxPages": 60
   },
   "summary": {
     "checkedPages": 45,
-    "checkedImages": 30,
+    "checkedImages": 43,
     "issues": 0,
     "errors": 0,
     "warnings": 0,
     "duplicateTitles": 0,
-    "duplicateDescriptions": 0
+    "duplicateDescriptions": 0,
+    "pagesWithFaqSchema": 25,
+    "pagesWithRelatedSchema": 25,
+    "pagesWithImageObjectSchema": 45
   },
   "robots": {
     "url": "http://127.0.0.1:5123/robots.txt",
@@ -197,7 +200,26 @@
       "ogDescription": "Find international study pathways, scholarships, jobs, events, and expert education consulting from Mtendere Education Consult.",
       "ogImage": "http://127.0.0.1:5123/media-assets/programs/international-studies.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-06-04T00:00:00.000Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/programs/international-studies.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 6,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "CollectionPage",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -213,7 +235,26 @@
       "ogDescription": "Explore scholarship opportunities, eligibility, benefits, deadlines, and application guidance for local and international study.",
       "ogImage": "http://127.0.0.1:5123/media-assets/scholarships/application-guidance.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-06-04T00:00:00.000Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/scholarships/application-guidance.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 6,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "CollectionPage",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -229,7 +270,26 @@
       "ogDescription": "Browse jobs, internships, graduate programs, volunteer roles, and career opportunities with application support and CV guidance.",
       "ogImage": "http://127.0.0.1:5123/media-assets/jobs/corporate.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-06-04T00:00:00.000Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/jobs/corporate.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 6,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "CollectionPage",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -245,7 +305,26 @@
       "ogDescription": "Build, optimize, print, and share an ATS-ready CV for scholarships, jobs, internships, and graduate programs.",
       "ogImage": "http://127.0.0.1:5123/media-assets/jobs/corporate.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-06-04T00:00:00.000Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/jobs/corporate.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 6,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "CollectionPage",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -261,7 +340,26 @@
       "ogDescription": "Register for Mtendere education fairs, career workshops, study abroad seminars, partner sessions, and networking events.",
       "ogImage": "http://127.0.0.1:5123/media-assets/events/IMG-20250321-WA0250.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-06-04T00:00:00.000Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/events/IMG-20250321-WA0250.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 6,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "CollectionPage",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -277,7 +375,26 @@
       "ogDescription": "Meet Mtendere partner universities, institutions, and education organizations supporting international opportunities for students.",
       "ogImage": "http://127.0.0.1:5123/media-assets/partners/cu-logo-white.webp",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-06-04T00:00:00.000Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/partners/cu-logo-white.webp",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 6,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "CollectionPage",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -293,7 +410,26 @@
       "ogDescription": "Explore institutional, school, sponsor, and employer partnership opportunities with Mtendere Education Consult.",
       "ogImage": "http://127.0.0.1:5123/media-assets/partners/gbs-dubai.webp",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-06-04T00:00:00.000Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/partners/gbs-dubai.webp",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 6,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "CollectionPage",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -309,7 +445,26 @@
       "ogDescription": "Read practical guidance on scholarships, study abroad, careers, applications, events, and education opportunities.",
       "ogImage": "http://127.0.0.1:5123/media-assets/blogs/application-guidance.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-06-04T00:00:00.000Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/blogs/application-guidance.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 6,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "Blog",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -325,7 +480,26 @@
       "ogDescription": "Meet the education advisors, consultants, and leadership team guiding students, partners, and career seekers.",
       "ogImage": "http://127.0.0.1:5123/media-assets/teams/ms-brenda.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-06-04T00:00:00.000Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/teams/ms-brenda.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 6,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "CollectionPage",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -341,7 +515,26 @@
       "ogDescription": "Learn about Mtendere Education Consult, our mission, education services, student support, partnerships, and impact.",
       "ogImage": "http://127.0.0.1:5123/media-assets/misc/about-mtendere.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-06-04T00:00:00.000Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/misc/about-mtendere.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 6,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "CollectionPage",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -357,7 +550,26 @@
       "ogDescription": "Contact Mtendere for study abroad advice, scholarship guidance, career support, partnerships, and education consulting.",
       "ogImage": "http://127.0.0.1:5123/media-assets/logos/Mtendere_Logo.png",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-06-04T00:00:00.000Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/logos/Mtendere_Logo.png",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 6,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "CollectionPage",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -373,7 +585,26 @@
       "ogDescription": "Plan your study abroad journey with destination guidance, university shortlisting, document support, and advisor-led application planning.",
       "ogImage": "http://127.0.0.1:5123/media-assets/programs/abroad-students.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-06-04T00:00:00.000Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/programs/abroad-students.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 6,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "CollectionPage",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -389,7 +620,26 @@
       "ogDescription": "Get support with university applications, documents, statements, admissions timelines, and institution matching.",
       "ogImage": "http://127.0.0.1:5123/media-assets/programs/students-campus.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-06-04T00:00:00.000Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/programs/students-campus.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 6,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "CollectionPage",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -405,7 +655,26 @@
       "ogDescription": "Access career counseling, job readiness guidance, interview preparation, and professional development support.",
       "ogImage": "http://127.0.0.1:5123/media-assets/blogs/career-motivation.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-06-04T00:00:00.000Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/blogs/career-motivation.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 6,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "CollectionPage",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -421,7 +690,32 @@
       "ogDescription": "The Mastercard Foundation Scholars Program enables young people from Africa to access quality secondary and university education. The program provides.",
       "ogImage": "http://127.0.0.1:5123/media-assets/scholarships/graduates-default.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-26T06:43:50.973Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/scholarships/graduates-default.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "EducationalOccupationalProgram",
+        "Offer",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -437,7 +731,32 @@
       "ogDescription": "Fully-funded scholarship for African students to pursue postgraduate studies in the UK. Covers tuition, airfare, and monthly stipend for living expenses.",
       "ogImage": "http://127.0.0.1:5123/media-assets/scholarships/application-guidance.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-26T06:43:50.973Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/scholarships/application-guidance.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "EducationalOccupationalProgram",
+        "Offer",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -453,7 +772,32 @@
       "ogDescription": "Study in Germany with full financial support. The German Academic Exchange Service offers scholarships for African students in all academic disciplines.",
       "ogImage": "http://127.0.0.1:5123/media-assets/scholarships/students.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-26T06:43:50.973Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/scholarships/students.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "EducationalOccupationalProgram",
+        "Offer",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -469,7 +813,32 @@
       "ogDescription": "The UK government&#039;s global scholarship programme, funded by the Foreign, Commonwealth &amp; Development Office and partner organisations. Offers fully-funded.",
       "ogImage": "http://127.0.0.1:5123/media-assets/programs/abroad-students.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-26T06:43:50.973Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/programs/abroad-students.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "EducationalOccupationalProgram",
+        "Offer",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -485,7 +854,32 @@
       "ogDescription": "Scholarships for outstanding African students to pursue postgraduate studies in accredited universities in Africa. Focuses on disciplines critical to.",
       "ogImage": "http://127.0.0.1:5123/media-assets/projects/foundation.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-26T06:43:50.973Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/projects/foundation.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "EducationalOccupationalProgram",
+        "Offer",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -501,7 +895,35 @@
       "ogDescription": "Join our growing tech team as a Junior Software Engineer. You will work on building and maintaining web applications using modern technologies. Great.",
       "ogImage": "http://127.0.0.1:5123/media-assets/jobs/corporate.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-26T06:43:51.346Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/jobs/corporate.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "JobPosting",
+        "Place",
+        "PostalAddress",
+        "MonetaryAmount",
+        "QuantitativeValue",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -517,7 +939,35 @@
       "ogDescription": "Lead our marketing team in creating and implementing effective marketing strategies. Must have experience in digital marketing and brand management for.",
       "ogImage": "http://127.0.0.1:5123/media-assets/jobs/corporate.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-26T06:43:51.346Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/jobs/corporate.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "JobPosting",
+        "Place",
+        "PostalAddress",
+        "MonetaryAmount",
+        "QuantitativeValue",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -533,7 +983,36 @@
       "ogDescription": "Analyze complex datasets to derive actionable insights for our global clients. Work from anywhere in Africa while collaborating with international teams.",
       "ogImage": "http://127.0.0.1:5123/media-assets/jobs/corporate.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-26T06:43:51.346Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/jobs/corporate.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "JobPosting",
+        "Country",
+        "Place",
+        "PostalAddress",
+        "MonetaryAmount",
+        "QuantitativeValue",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -549,7 +1028,35 @@
       "ogDescription": "Manage education and community development projects across Malawi. Partner with international donors and local communities to deliver impactful programs.",
       "ogImage": "http://127.0.0.1:5123/media-assets/jobs/corporate.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-26T06:43:51.346Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/jobs/corporate.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "JobPosting",
+        "Place",
+        "PostalAddress",
+        "MonetaryAmount",
+        "QuantitativeValue",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -565,7 +1072,31 @@
       "ogDescription": "The India Education Expo 2024 connected Indian education officials, Malawian stakeholders, parents, and prospective students at Crossroads Hotel.",
       "ogImage": "http://127.0.0.1:5123/media-assets/events/IMG-20250321-WA0250.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-26T06:45:26.743Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/events/IMG-20250321-WA0250.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "BlogPosting",
+        "ImageObject",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -581,7 +1112,31 @@
       "ogDescription": "Mtendere Education Consult and GEDU hosted a European Education Expo at Crossroads Hotel for students, principals, and education-sector stakeholders.",
       "ogImage": "http://127.0.0.1:5123/media-assets/events/IMG-20230311-WA0110.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-26T06:45:28.902Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/events/IMG-20230311-WA0110.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "BlogPosting",
+        "ImageObject",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -597,7 +1152,31 @@
       "ogDescription": "Students departing from Kamuzu International Airport began a new chapter in their international education journey with support from families and mentors.",
       "ogImage": "http://127.0.0.1:5123/media-assets/events/IMG-20220907-WA0124.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-26T06:45:28.175Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/events/IMG-20220907-WA0124.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "BlogPosting",
+        "ImageObject",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -613,7 +1192,31 @@
       "ogDescription": "A mentorship and send-off ceremony celebrated more than 50 students who secured partial scholarships to pursue studies in India.",
       "ogImage": "http://127.0.0.1:5123/media-assets/events/IMG-20221029-WA0058.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-26T06:45:27.459Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/events/IMG-20221029-WA0058.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "BlogPosting",
+        "ImageObject",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -629,7 +1232,34 @@
       "ogDescription": "A live online briefing on choosing destinations, timelines, funding, and visa readiness.",
       "ogImage": "http://127.0.0.1:5123/media-assets/events/events-default.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-19T10:03:02.643Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/events/events-default.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "Event",
+        "VirtualLocation",
+        "Person",
+        "Offer",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -645,7 +1275,34 @@
       "ogDescription": "A practical workshop for students preparing competitive scholarship applications.",
       "ogImage": "http://127.0.0.1:5123/media-assets/events/events-default.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-19T10:03:02.643Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/events/events-default.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "Event",
+        "Place",
+        "Person",
+        "Offer",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -661,7 +1318,34 @@
       "ogDescription": "A practical review day for CVs, interviews, job search planning, and graduate readiness.",
       "ogImage": "http://127.0.0.1:5123/media-assets/events/events-default.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-19T10:03:02.643Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/events/events-default.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "Event",
+        "Place",
+        "Person",
+        "Offer",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -677,7 +1361,31 @@
       "ogDescription": "Leading South African research university with strong ties to Malawi, offering postgraduate opportunities across all faculties.",
       "ogImage": "http://127.0.0.1:5123/media-assets/scholarships/students.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-26T06:45:24.368Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/scholarships/students.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "EducationalOrganization",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -693,7 +1401,31 @@
       "ogDescription": "Canada&#039;s top ranked university offering diverse programs and a welcoming multicultural environment for international students from Africa.",
       "ogImage": "http://127.0.0.1:5123/media-assets/partners/our-partners.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-26T06:45:24.368Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/partners/our-partners.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "EducationalOrganization",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -709,7 +1441,31 @@
       "ogDescription": "Africa&#039;s top-ranked university, making quality education accessible to students across the continent.",
       "ogImage": "http://127.0.0.1:5123/media-assets/partners/partners-default.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-26T06:45:24.368Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/partners/partners-default.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "EducationalOrganization",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -725,7 +1481,31 @@
       "ogDescription": "World-renowned institute offering STEM education. Partners with Mtendere to identify and support exceptional African talent.",
       "ogImage": "http://127.0.0.1:5123/media-assets/partners/partners-default.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-26T06:45:24.368Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/partners/partners-default.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "EducationalOrganization",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -741,7 +1521,31 @@
       "ogDescription": "One of the world&#039;s leading research universities with over 900 years of history. Partners with Mtendere to offer scholarship pathways for exceptional.",
       "ogImage": "http://127.0.0.1:5123/media-assets/partners/partners-default.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-26T06:45:24.368Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/partners/partners-default.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "EducationalOrganization",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -757,7 +1561,31 @@
       "ogDescription": "Germany&#039;s top technical university, partnering with Mtendere for engineering and technology scholarships for African students.",
       "ogImage": "http://127.0.0.1:5123/media-assets/partners/partners-2.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-26T06:45:24.368Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/partners/partners-2.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "EducationalOrganization",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -773,7 +1601,31 @@
       "ogDescription": "GEDU Global Education connects students with international study destinations and institutions across a growing global education network.",
       "ogImage": "http://127.0.0.1:5123/media-assets/partners/partners-2.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-19T11:51:49.158Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/partners/partners-2.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "EducationalOrganization",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -789,7 +1641,31 @@
       "ogDescription": "Perul University partner pathway for students exploring Indian higher education, campus culture, and career-focused academic programs.",
       "ogImage": "http://127.0.0.1:5123/media-assets/partners/our-partners.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-19T11:51:48.485Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/partners/our-partners.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "EducationalOrganization",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -805,7 +1681,31 @@
       "ogDescription": "Chandigarh University partner pathway for students exploring globally connected programs, campus life, and scholarship-supported study routes.",
       "ogImage": "http://127.0.0.1:5123/media-assets/partners/partners-default.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-19T11:51:47.801Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/partners/partners-default.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 8,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "EducationalOrganization",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "ItemList",
+        "Thing",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -821,7 +1721,26 @@
       "ogDescription": "MSc. Environmental Health, University of Dundee, Scotland. Provides board leadership and governance oversight for Mtendere Education Consult.",
       "ogImage": "http://127.0.0.1:5123/media-assets/team/mr. rabson.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-19T10:03:01.171Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/team/mr. rabson.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 6,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "Person",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -837,7 +1756,26 @@
       "ogDescription": "MB ChB, University of Manchester, England. Contributes board-level guidance informed by medical training and professional judgment.",
       "ogImage": "http://127.0.0.1:5123/media-assets/team/dr. daniel.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-19T10:03:01.171Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/team/dr. daniel.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 6,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "Person",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -853,7 +1791,26 @@
       "ogDescription": "BA in Management and Public Relations. Leads consulting work across student guidance, public relations, and client support.",
       "ogImage": "http://127.0.0.1:5123/media-assets/team/Brend tawina.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-19T10:03:01.171Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/team/Brend tawina.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 6,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "Person",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -869,7 +1826,26 @@
       "ogDescription": "BA in International Management. Guides marketing and growth efforts for Mtendere.",
       "ogImage": "http://127.0.0.1:5123/media-assets/team/george.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-19T10:03:01.171Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/team/george.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 6,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "Person",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -885,7 +1861,26 @@
       "ogDescription": "BA in Development Studies. Coordinates admissions support and application workflows.",
       "ogImage": "http://127.0.0.1:5123/media-assets/team/christoper.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-19T10:03:01.171Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/team/christoper.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 6,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "Person",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -901,7 +1896,26 @@
       "ogDescription": "Accounting. Supports administration and finance functions for reliable student service delivery.",
       "ogImage": "http://127.0.0.1:5123/media-assets/team/timothy.jpg",
       "twitterCard": "summary_large_image",
-      "jsonLdCount": 1,
+      "lastReviewed": "2026-05-19T10:03:01.171Z",
+      "contentFreshness": "fresh",
+      "thumbnail": "http://127.0.0.1:5123/media-assets/team/timothy.jpg",
+      "alternateLanguages": [
+        "en",
+        "x-default"
+      ],
+      "jsonLdCount": 6,
+      "jsonLdTypes": [
+        "Organization",
+        "ContactPoint",
+        "WebSite",
+        "SearchAction",
+        "BreadcrumbList",
+        "ListItem",
+        "Person",
+        "WebPage",
+        "SpeakableSpecification",
+        "ImageObject"
+      ],
       "h1Count": 0,
       "localLinkCount": 0,
       "issues": []
@@ -913,210 +1927,430 @@
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Mtendere Education Consult",
+      "caption": "Mtendere Education Consult page from Mtendere Education Consult",
+      "page": "http://127.0.0.1:5123/"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/scholarships/application-guidance.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Scholarships",
+      "caption": "Scholarships page from Mtendere Education Consult",
+      "page": "http://127.0.0.1:5123/scholarships"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/jobs/corporate.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Jobs",
+      "caption": "Jobs page from Mtendere Education Consult",
+      "page": "http://127.0.0.1:5123/jobs"
+    },
+    {
+      "url": "http://127.0.0.1:5123/media-assets/jobs/corporate.jpg",
+      "status": 200,
+      "ok": true,
+      "contentType": "image/jpeg",
+      "robots": "index, follow, max-image-preview:large",
+      "title": "AI CV Builder",
+      "caption": "AI CV Builder page from Mtendere Education Consult",
+      "page": "http://127.0.0.1:5123/resume-building"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/events/IMG-20250321-WA0250.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Events",
+      "caption": "Events page from Mtendere Education Consult",
+      "page": "http://127.0.0.1:5123/events"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/partners/cu-logo-white.webp",
       "status": 200,
       "ok": true,
       "contentType": "image/webp",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Partners",
+      "caption": "Partners page from Mtendere Education Consult",
+      "page": "http://127.0.0.1:5123/partners"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/partners/gbs-dubai.webp",
       "status": 200,
       "ok": true,
       "contentType": "image/webp",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Partnership Opportunities",
+      "caption": "Partnership Opportunities page from Mtendere Education Consult",
+      "page": "http://127.0.0.1:5123/partnership-opportunities"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/blogs/application-guidance.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Blog",
+      "caption": "Blog page from Mtendere Education Consult",
+      "page": "http://127.0.0.1:5123/blog"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/teams/ms-brenda.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Team",
+      "caption": "Team page from Mtendere Education Consult",
+      "page": "http://127.0.0.1:5123/team"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/misc/about-mtendere.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "About",
+      "caption": "About page from Mtendere Education Consult",
+      "page": "http://127.0.0.1:5123/about"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/logos/Mtendere_Logo.png",
       "status": 200,
       "ok": true,
       "contentType": "image/png",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Contact",
+      "caption": "Contact page from Mtendere Education Consult",
+      "page": "http://127.0.0.1:5123/contact"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/programs/abroad-students.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Study Abroad",
+      "caption": "Study Abroad page from Mtendere Education Consult",
+      "page": "http://127.0.0.1:5123/study-abroad"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/programs/students-campus.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "University Applications",
+      "caption": "University Applications page from Mtendere Education Consult",
+      "page": "http://127.0.0.1:5123/university-applications"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/blogs/career-motivation.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Career Counseling",
+      "caption": "Career Counseling page from Mtendere Education Consult",
+      "page": "http://127.0.0.1:5123/career-counseling"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/scholarships/graduates-default.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Mastercard Foundation Scholars Program scholarship",
+      "caption": "Mastercard Foundation Scholars Program scholarship at University of Malawi",
+      "page": "http://127.0.0.1:5123/scholarships/mastercard-foundation-scholars-program"
+    },
+    {
+      "url": "http://127.0.0.1:5123/media-assets/scholarships/application-guidance.jpg",
+      "status": 200,
+      "ok": true,
+      "contentType": "image/jpeg",
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Commonwealth Scholarship for Africa scholarship",
+      "caption": "Commonwealth Scholarship for Africa scholarship at University of Oxford",
+      "page": "http://127.0.0.1:5123/scholarships/commonwealth-scholarship-for-africa"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/scholarships/students.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "DAAD Study Scholarship Germany scholarship",
+      "caption": "DAAD Study Scholarship Germany scholarship at Technical University of Munich",
+      "page": "http://127.0.0.1:5123/scholarships/daad-study-scholarship-germany"
+    },
+    {
+      "url": "http://127.0.0.1:5123/media-assets/programs/abroad-students.jpg",
+      "status": 200,
+      "ok": true,
+      "contentType": "image/jpeg",
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Chevening Scholarship scholarship",
+      "caption": "Chevening Scholarship scholarship at London School of Economics",
+      "page": "http://127.0.0.1:5123/scholarships/chevening-scholarship"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/projects/foundation.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "African Development Bank Scholarship scholarship",
+      "caption": "African Development Bank Scholarship scholarship at African Development Bank",
+      "page": "http://127.0.0.1:5123/scholarships/african-development-bank-scholarship"
+    },
+    {
+      "url": "http://127.0.0.1:5123/media-assets/events/IMG-20250321-WA0250.jpg",
+      "status": 200,
+      "ok": true,
+      "contentType": "image/jpeg",
+      "robots": "index, follow, max-image-preview:large",
+      "title": "India Education Expo 2024 at Crossroads Hotel article",
+      "caption": "India Education Expo 2024 at Crossroads Hotel article by Mtendere Education Consult",
+      "page": "http://127.0.0.1:5123/blog/india-education-expo-2024-at-crossroads-hotel"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/events/IMG-20230311-WA0110.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "European Education Expo with GEDU at Crossroads Hotel article",
+      "caption": "European Education Expo with GEDU at Crossroads Hotel article by Mtendere Education Consult",
+      "page": "http://127.0.0.1:5123/blog/european-education-expo-with-gedu-at-crossroads-hotel"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/events/IMG-20220907-WA0124.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Students Departure at Kamuzu International Airport article",
+      "caption": "Students Departure at Kamuzu International Airport article by Mtendere Education Consult",
+      "page": "http://127.0.0.1:5123/blog/students-departure-at-kamuzu-international-airport"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/events/IMG-20221029-WA0058.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Celebrating 50+ Students Awarded Partial Scholarships to India article",
+      "caption": "Celebrating 50+ Students Awarded Partial Scholarships to India article by Mtendere Education Consult",
+      "page": "http://127.0.0.1:5123/blog/celebrating-50-students-awarded-partial-scholarships-to-india"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/events/events-default.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Virtual Study Abroad Briefing event",
+      "caption": "Virtual Study Abroad Briefing event in Online",
+      "page": "http://127.0.0.1:5123/events/virtual-study-abroad-briefing"
+    },
+    {
+      "url": "http://127.0.0.1:5123/media-assets/events/events-default.jpg",
+      "status": 200,
+      "ok": true,
+      "contentType": "image/jpeg",
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Scholarship Application Masterclass event",
+      "caption": "Scholarship Application Masterclass event in Lilongwe, Malawi",
+      "page": "http://127.0.0.1:5123/events/scholarship-application-masterclass"
+    },
+    {
+      "url": "http://127.0.0.1:5123/media-assets/events/events-default.jpg",
+      "status": 200,
+      "ok": true,
+      "contentType": "image/jpeg",
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Career Readiness and CV Review Day event",
+      "caption": "Career Readiness and CV Review Day event in Lilongwe, Malawi",
+      "page": "http://127.0.0.1:5123/events/career-readiness-cv-review-day"
+    },
+    {
+      "url": "http://127.0.0.1:5123/media-assets/scholarships/students.jpg",
+      "status": 200,
+      "ok": true,
+      "contentType": "image/jpeg",
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Stellenbosch University logo",
+      "caption": "Stellenbosch University official partner logo",
+      "page": "http://127.0.0.1:5123/partners/10"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/partners/our-partners.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "University of Toronto logo",
+      "caption": "University of Toronto official partner logo",
+      "page": "http://127.0.0.1:5123/partners/7"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/partners/partners-default.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "University of Cape Town logo",
+      "caption": "University of Cape Town official partner logo",
+      "page": "http://127.0.0.1:5123/partners/8"
+    },
+    {
+      "url": "http://127.0.0.1:5123/media-assets/partners/partners-default.jpg",
+      "status": 200,
+      "ok": true,
+      "contentType": "image/jpeg",
+      "robots": "index, follow, max-image-preview:large",
+      "title": "MIT - Massachusetts Institute of Technology logo",
+      "caption": "MIT - Massachusetts Institute of Technology official partner logo",
+      "page": "http://127.0.0.1:5123/partners/9"
+    },
+    {
+      "url": "http://127.0.0.1:5123/media-assets/partners/partners-default.jpg",
+      "status": 200,
+      "ok": true,
+      "contentType": "image/jpeg",
+      "robots": "index, follow, max-image-preview:large",
+      "title": "University of Oxford logo",
+      "caption": "University of Oxford official partner logo",
+      "page": "http://127.0.0.1:5123/partners/5"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/partners/partners-2.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Technical University of Munich logo",
+      "caption": "Technical University of Munich official partner logo",
+      "page": "http://127.0.0.1:5123/partners/6"
+    },
+    {
+      "url": "http://127.0.0.1:5123/media-assets/partners/partners-2.jpg",
+      "status": 200,
+      "ok": true,
+      "contentType": "image/jpeg",
+      "robots": "index, follow, max-image-preview:large",
+      "title": "GEDU Global Education logo",
+      "caption": "GEDU Global Education official partner logo",
+      "page": "http://127.0.0.1:5123/partners/4"
+    },
+    {
+      "url": "http://127.0.0.1:5123/media-assets/partners/our-partners.jpg",
+      "status": 200,
+      "ok": true,
+      "contentType": "image/jpeg",
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Perul University logo",
+      "caption": "Perul University official partner logo",
+      "page": "http://127.0.0.1:5123/partners/3"
+    },
+    {
+      "url": "http://127.0.0.1:5123/media-assets/partners/partners-default.jpg",
+      "status": 200,
+      "ok": true,
+      "contentType": "image/jpeg",
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Chandigarh University logo",
+      "caption": "Chandigarh University official partner logo",
+      "page": "http://127.0.0.1:5123/partners/2"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/team/mr.%20rabson.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Mr. Rabson Kaluwile profile photo",
+      "caption": "Mr. Rabson Kaluwile, Board Chairperson",
+      "page": "http://127.0.0.1:5123/team/board-chairperson"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/team/dr.%20daniel.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Dr. Daniel S. Nyangulu profile photo",
+      "caption": "Dr. Daniel S. Nyangulu, Board Member",
+      "page": "http://127.0.0.1:5123/team/board-member"
+    },
+    {
+      "url": "http://127.0.0.1:5123/media-assets/teams/ms-brenda.jpg",
+      "status": 200,
+      "ok": true,
+      "contentType": "image/jpeg",
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Dr. Gabriella Chiutsi Phiri profile photo",
+      "caption": "Dr. Gabriella Chiutsi Phiri, Board Member",
+      "page": "http://127.0.0.1:5123/team/board-member"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/team/ms%20brenda.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Brenda Gondwe profile photo",
+      "caption": "Brenda Gondwe, Board Member",
+      "page": "http://127.0.0.1:5123/team/board-member"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/team/Brend%20tawina.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Brenda Tawina Kumwembe profile photo",
+      "caption": "Brenda Tawina Kumwembe, Lead Consultant",
+      "page": "http://127.0.0.1:5123/team/lead-consultant"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/team/george.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "George Kaluwile profile photo",
+      "caption": "George Kaluwile, Chief Marketing Officer",
+      "page": "http://127.0.0.1:5123/team/chief-marketing-officer"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/team/christoper.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Christopher Nazonse Waluza profile photo",
+      "caption": "Christopher Nazonse Waluza, Admissions Coordinator",
+      "page": "http://127.0.0.1:5123/team/admissions-coordinator"
     },
     {
       "url": "http://127.0.0.1:5123/media-assets/team/timothy.jpg",
       "status": 200,
       "ok": true,
       "contentType": "image/jpeg",
-      "robots": "index, follow, max-image-preview:large"
+      "robots": "index, follow, max-image-preview:large",
+      "title": "Timothy Mahwayo profile photo",
+      "caption": "Timothy Mahwayo, Admin and Finance Officer",
+      "page": "http://127.0.0.1:5123/team/admin-and-finance-officer"
     }
   ],
   "issues": []

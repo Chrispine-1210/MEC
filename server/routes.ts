@@ -9122,6 +9122,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const text = normalizeText(value) || normalizeText(fallback);
         return text.length <= 158 ? text : `${text.slice(0, 157).replace(/\s+\S*$/, "")}.`;
       };
+      const freshnessAgeDays = (value: unknown) => {
+        if (!value) return null;
+        const date = value instanceof Date ? value : new Date(String(value));
+        if (Number.isNaN(date.getTime())) return null;
+        return Math.floor((Date.now() - date.getTime()) / (24 * 60 * 60 * 1000));
+      };
+      const freshnessStatus = (value: unknown) => {
+        const days = freshnessAgeDays(value);
+        if (days === null) return "evergreen";
+        if (days <= 90) return "fresh";
+        if (days <= 180) return "current";
+        if (days <= 365) return "review-soon";
+        return "refresh-recommended";
+      };
       const pageRecords = [
         ...staticSitemapPages.map((page) => ({
           module: "page",
@@ -9130,7 +9144,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           description: `${page.title} from Mtendere Education Consult`,
           canonical: absoluteSitemapUrl(page.path, baseUrl),
           image: page.image,
-          structuredData: ["Organization", "WebSite", "BreadcrumbList", "CollectionPage"],
+          structuredData: ["Organization", "WebSite", "BreadcrumbList", "CollectionPage", "WebPage", "ImageObject"],
+          lastModified: null,
           status: "public",
         })),
         ...scholarshipsList.map((item) => {
@@ -9142,7 +9157,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             description: trimDescription(publicItem.seoMeta?.description, publicItem.shortDescription || publicItem.description),
             canonical: absoluteSitemapUrl(`/scholarships/${publicItem.slug || publicItem.id}`, baseUrl),
             image: publicItem.bannerImage || publicItem.imageUrl,
-            structuredData: ["EducationalOccupationalProgram", "Offer", "FAQPage", "BreadcrumbList"],
+            structuredData: ["EducationalOccupationalProgram", "Offer", "FAQPage", "BreadcrumbList", "ItemList", "WebPage", "ImageObject"],
+            lastModified: item.updatedAt || item.createdAt,
             status: item.isActive === false ? "inactive" : "public",
           };
         }),
@@ -9155,7 +9171,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             description: trimDescription(publicItem.seoMeta?.description, publicItem.description),
             canonical: absoluteSitemapUrl(`/jobs/${publicItem.slug || publicItem.id}`, baseUrl),
             image: publicItem.imageUrl || publicItem.companyLogo,
-            structuredData: ["JobPosting", "FAQPage", "BreadcrumbList"],
+            structuredData: ["JobPosting", "FAQPage", "BreadcrumbList", "ItemList", "WebPage", "ImageObject"],
+            lastModified: item.updatedAt || item.createdAt,
             status: item.isActive === false ? "inactive" : "public",
           };
         }),
@@ -9168,7 +9185,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             description: trimDescription(publicItem.description, `${publicItem.name} partner institution profile.`),
             canonical: absoluteSitemapUrl(`/partners/${publicItem.id}`, baseUrl),
             image: publicItem.logoUrl || publicItem.coverImage,
-            structuredData: ["EducationalOrganization", "BreadcrumbList"],
+            structuredData: ["EducationalOrganization", "FAQPage", "BreadcrumbList", "ItemList", "WebPage", "ImageObject"],
+            lastModified: item.updatedAt || item.createdAt,
             status: item.isActive === false ? "inactive" : "public",
           };
         }),
@@ -9181,7 +9199,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             description: trimDescription(publicItem.seoMeta?.description, publicItem.excerpt || publicItem.content),
             canonical: absoluteSitemapUrl(`/blog/${publicItem.slug || publicItem.id}`, baseUrl),
             image: publicItem.imageUrl,
-            structuredData: ["BlogPosting", "FAQPage", "BreadcrumbList"],
+            structuredData: ["BlogPosting", "FAQPage", "BreadcrumbList", "ItemList", "WebPage", "ImageObject"],
+            lastModified: item.updatedAt || item.createdAt,
             status: item.isPublished === false ? "draft" : "public",
           };
         }),
@@ -9192,7 +9211,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           description: trimDescription(item.seoMeta?.description, item.summary || item.description),
           canonical: absoluteSitemapUrl(`/events/${item.slug || item.id}`, baseUrl),
           image: item.coverImage,
-          structuredData: ["Event", "FAQPage", "BreadcrumbList"],
+          structuredData: ["Event", "FAQPage", "BreadcrumbList", "ItemList", "WebPage", "ImageObject"],
+          lastModified: item.updatedAt || item.createdAt,
           status: item.status,
         })),
         ...teamList.map((item) => {
@@ -9204,11 +9224,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             description: trimDescription(publicItem.biography || publicItem.bio, `${publicItem.name} profile at Mtendere Education Consult.`),
             canonical: absoluteSitemapUrl(`/team/${publicItem.slug || item.id}`, baseUrl),
             image: publicItem.imageUrl || publicItem.profileImage,
-            structuredData: ["Person", "BreadcrumbList"],
+            structuredData: ["Person", "BreadcrumbList", "WebPage", "ImageObject"],
+            lastModified: item.updatedAt || item.createdAt,
             status: item.isActive === false ? "inactive" : "public",
           };
         }),
       ];
+      const governedPageRecords = pageRecords.map((page) => ({
+        ...page,
+        freshness: freshnessStatus(page.lastModified),
+        freshnessAgeDays: freshnessAgeDays(page.lastModified),
+      }));
 
       const issues: Array<Record<string, unknown>> = [];
       const duplicateBuckets = (field: "title" | "description") =>
@@ -9233,6 +9259,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           issues.push({ severity: "warning", module: page.module, id: page.id, issue: "Missing share/image-search image", autoRemediation: "Governed image fallbacks will assign category-specific imagery in the UI." });
         } else if (!/^https?:\/\//i.test(String(page.image)) && !isValidMediaReference(String(page.image)) && !String(page.image).startsWith("/src/assets/")) {
           issues.push({ severity: "info", module: page.module, id: page.id, issue: "Image is not in the approved media library", image: page.image, autoRemediation: "Use the media audit to replace this with a governed local asset or verified official logo." });
+        }
+        const age = freshnessAgeDays(page.lastModified);
+        if (page.status === "public" && age !== null && age > 365) {
+          issues.push({ severity: "warning", module: page.module, id: page.id, issue: "Content should be reviewed for freshness", ageDays: age, autoRemediation: "Update the content or mark it reviewed so search engines receive a fresh modified date." });
+        }
+        if (!page.structuredData.includes("WebPage") || !page.structuredData.includes("ImageObject")) {
+          issues.push({ severity: "warning", module: page.module, id: page.id, issue: "Missing enterprise WebPage/ImageObject schema coverage", autoRemediation: "Server SEO renderer will enrich public HTML with WebPage and primary image objects." });
         }
       });
 
@@ -9297,14 +9330,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           duplicateTitles: duplicateBuckets("title").length,
           duplicateDescriptions: duplicateBuckets("description").length,
           repeatedImages: repeatedImages.length,
+          freshness: {
+            fresh: governedPageRecords.filter((page) => page.freshness === "fresh").length,
+            current: governedPageRecords.filter((page) => page.freshness === "current").length,
+            reviewSoon: governedPageRecords.filter((page) => page.freshness === "review-soon").length,
+            refreshRecommended: governedPageRecords.filter((page) => page.freshness === "refresh-recommended").length,
+          },
         },
         sitemaps: ["/sitemap.xml", ...sitemapPaths].map((path) => absoluteSitemapUrl(path, baseUrl)),
-        pages: pageRecords,
+        pages: governedPageRecords,
         issues,
         governance: {
           canonicalPolicy: "All public pages receive query-free canonical URLs. Admin, dashboard, auth, and tokenized routes are excluded through robots and client noindex metadata.",
           imagePolicy: ["approved local media", "verified official external source", "governed category fallback", "global branded fallback"],
-          structuredDataPolicy: ["Organization", "WebSite", "BreadcrumbList", "JobPosting", "Event", "BlogPosting", "EducationalOrganization", "EducationalOccupationalProgram", "Person", "FAQPage"],
+          structuredDataPolicy: ["Organization", "WebSite", "WebPage", "ImageObject", "BreadcrumbList", "JobPosting", "Event", "BlogPosting", "EducationalOrganization", "EducationalOccupationalProgram", "Person", "FAQPage", "ItemList"],
+          freshnessPolicy: "Public dynamic content is classified as fresh, current, review-soon, or refresh-recommended based on modified dates.",
         },
       });
     } catch (error) {
