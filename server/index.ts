@@ -6,6 +6,7 @@ import { env } from "./env";
 import helmet from "helmet";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { startEmailQueueWorker } from "./email";
+import { ensureRuntimeDatabaseSchema } from "./runtime-migrations";
 import { registerRoutes } from "./routes";
 import { renderSeoHtml, shouldNoindexPath } from "./seo-render";
 
@@ -331,6 +332,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 export const ready = (async () => {
+  await ensureRuntimeDatabaseSchema();
   const server = await registerRoutes(app);
   if (!isVercelRuntime) {
     startEmailQueueWorker();
