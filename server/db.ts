@@ -20,6 +20,7 @@ if (nodeMajor >= 24) {
 
 neonConfig.webSocketConstructor = ws;
 const isDevelopment = process.env.NODE_ENV !== "production";
+const isVercelRuntime = process.env.VERCEL === "1" || process.env.VERCEL === "true";
 const isUsableConnectionString = (value: string | undefined) =>
   Boolean(
     value?.trim() &&
@@ -50,13 +51,21 @@ if (!connectionString) {
 }
 
 export const databaseConnectionSource = connectionStringSource;
+const poolMaxConnections = isDevelopment ? 5 : isVercelRuntime ? 1 : 10;
 
 export const pool = new Pool({
   connectionString,
   connectionTimeoutMillis: 10_000,
   idleTimeoutMillis: 30_000,
-  max: isDevelopment ? 5 : 10,
+  max: poolMaxConnections,
 });
+
+pool.on("error", (error: unknown) => {
+  const code = String(getNestedErrorValue(error, "code") || "unknown");
+  const message = error instanceof Error ? error.message : String(error);
+  console.warn(`[db] Recovered idle database connection error (${code}): ${message}`);
+});
+
 export const db = drizzle({ client: pool, schema });
 
 const getNestedErrorValue = (error: unknown, key: string) => {
