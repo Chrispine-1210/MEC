@@ -73,6 +73,10 @@ export default function GovernedImage({
   const isHardFailed = loadState === "failed" && fallbackDepth > 0;
   const effectiveFit = fit || (variant === "logo" ? "contain" : "cover");
   const imageSizes = sizes || getDefaultSizes(variant);
+  const priorityAttribute = priority
+    ? ({ fetchpriority: "high" } as Record<string, string>)
+    : ({ fetchpriority: "auto" } as Record<string, string>);
+  const highPriorityAttribute = { fetchpriority: "high" } as Record<string, string>;
 
   const image = isHardFailed ? (
     <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-mtendere-blue/12 via-card to-mtendere-green/12 text-center text-mtendere-blue">
@@ -88,7 +92,7 @@ export default function GovernedImage({
       alt={effectiveAlt}
       title={effectiveTitle}
       loading={priority ? "eager" : "lazy"}
-      fetchPriority={priority ? "high" : "auto"}
+      {...priorityAttribute}
       decoding="async"
       referrerPolicy="strict-origin-when-cross-origin"
       sizes={imageSizes}
@@ -169,7 +173,7 @@ export default function GovernedImage({
                 alt={effectiveAlt}
                 title={effectiveTitle}
                 loading="eager"
-                fetchPriority="high"
+                {...highPriorityAttribute}
                 decoding="async"
                 referrerPolicy="strict-origin-when-cross-origin"
                 data-image-key={activeImage.key}
