@@ -3,6 +3,7 @@ import path from "path";
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
 import { resolveCname, resolveTxt } from "dns/promises";
 import jwt from "jsonwebtoken";
+import nodemailer from "nodemailer";
 import { env } from "./env";
 import { resolveWritableRuntimePath } from "./runtime-paths";
 import { storage } from "./storage";
@@ -109,6 +110,8 @@ const sendGridApiKey = isSendGridApiKey(env.SENDGRID_API_KEY)
       isSendGridApiKey(env.SMTP_PASSWORD)
     ? env.SMTP_PASSWORD
     : undefined;
+const smtpPort = Number.parseInt(env.SMTP_PORT || "", 10);
+const smtpConfigured = Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASSWORD);
 const sendGridTrackingEnabled = env.SENDGRID_TRACKING_ENABLED ?? true;
 const retryDelaysMs = [0, 60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000];
 const defaultMaxAttempts = retryDelaysMs.length;
@@ -522,6 +525,33 @@ const sendWithSes: Provider["send"] = async (message) => {
   return { provider: "ses", messageId: data.MessageId || null };
 };
 
+const sendWithSmtp: Provider["send"] = async (message) => {
+  const transporter = nodemailer.createTransport({
+    host: env.SMTP_HOST,
+    port: Number.isFinite(smtpPort) ? smtpPort : 587,
+    secure: Number.isFinite(smtpPort) ? smtpPort === 465 : false,
+    auth: {
+      user: env.SMTP_USER,
+      pass: env.SMTP_PASSWORD,
+    },
+  });
+
+  const info = await transporter.sendMail({
+    from: message.from,
+    to: message.to,
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+    headers: {
+      ...message.headers,
+      "X-MEC-Email-Job": message.id,
+      "X-MEC-Email-Category": message.category,
+    },
+  });
+
+  return { provider: "smtp", messageId: info.messageId || null };
+};
+
 const sendWithCustomApi: Provider["send"] = async (message) => {
   const response = await fetch(String(env.EMAIL_API_URL), {
     method: "POST",
@@ -563,6 +593,11 @@ const providers: Record<string, Provider> = {
       ),
     send: sendWithSes,
   },
+  smtp: {
+    name: "smtp",
+    isConfigured: () => smtpConfigured,
+    send: sendWithSmtp,
+  },
   custom: {
     name: "custom",
     isConfigured: () => Boolean(env.EMAIL_API_URL),
@@ -579,11 +614,11 @@ const providers: Record<string, Provider> = {
 };
 
 const getProviderOrder = () => {
-  const configuredOrder = (env.EMAIL_PROVIDER_ORDER || "resend,sendgrid,postmark,ses,custom")
+  const configuredOrder = (env.EMAIL_PROVIDER_ORDER || "resend,sendgrid,postmark,ses,smtp,custom")
     .split(",")
     .map((provider) => provider.trim().toLowerCase())
     .filter(Boolean);
-  const uniqueOrder = Array.from(new Set([...configuredOrder, "custom"]));
+  const uniqueOrder = Array.from(new Set([...configuredOrder, "smtp", "custom"]));
   const activeProviders = uniqueOrder
     .map((providerName) => providers[providerName])
     .filter((provider): provider is Provider => Boolean(provider?.isConfigured()));
@@ -613,6 +648,7 @@ export const getEmailDeliveryDiagnostics = () => {
           isUsableSecret(env.AWS_SES_SECRET_ACCESS_KEY) &&
           env.AWS_SES_REGION,
       ),
+      smtp: smtpConfigured,
       custom: Boolean(env.EMAIL_API_URL),
     },
   };
@@ -750,7 +786,7 @@ export const getEmailDeliverabilityDiagnostics = async (options: { timeoutMs?: n
     checks,
     recommendedVercelEnv: {
       EMAIL_FROM: "Mtendere Education Consult <no-reply@mail.mtendereeducationconsult.com>",
-      EMAIL_PROVIDER_ORDER: "sendgrid,resend,postmark,ses,custom",
+      EMAIL_PROVIDER_ORDER: "sendgrid,resend,postmark,ses,smtp,custom",
       EMAIL_DRY_RUN: "false",
       SENDGRID_TRACKING_ENABLED: "true",
       EMAIL_LINK_BASE_URL: "https://links.mtendereeducationconsult.com",

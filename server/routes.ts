@@ -653,6 +653,11 @@ const isBearerSecretMatch = (headerValue: string | undefined, expectedSecret: st
   return suppliedBuffer.length === expectedBuffer.length && timingSafeEqual(suppliedBuffer, expectedBuffer);
 };
 
+const isVercelCronRequest = (req: Request) =>
+  (process.env.VERCEL === "1" || process.env.VERCEL === "true") &&
+  req.method === "GET" &&
+  (req.get("user-agent") || "").toLowerCase().includes("vercel-cron/1.0");
+
 const flowRateLimits = new Map<string, { count: number; resetAt: number }>();
 
 const guardPublicFlowRateLimit = (req: Request, res: Response, flow: string, max = 8, windowMs = 10 * 60 * 1000) => {
@@ -3651,13 +3656,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const emailQueueDrainHandler = async (req: Request, res: Response) => {
-    if (!env.CRON_SECRET) {
+    if (!env.CRON_SECRET && !isVercelCronRequest(req)) {
       return res.status(503).json({
         message: "Email queue drain is not configured. Set CRON_SECRET before enabling scheduled drains.",
       });
     }
 
-    if (!isBearerSecretMatch(req.get("authorization"), env.CRON_SECRET)) {
+    if (env.CRON_SECRET && !isBearerSecretMatch(req.get("authorization"), env.CRON_SECRET)) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
