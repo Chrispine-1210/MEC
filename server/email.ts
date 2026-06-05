@@ -352,8 +352,23 @@ const responseError = async (response: Response) => {
   return `${response.status} ${response.statusText}${text ? `: ${text.slice(0, 500)}` : ""}`;
 };
 
+const fetchWithTimeout = async (url: string, init: RequestInit, timeoutMs = 15_000) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`Email provider request timed out after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 const sendWithResend: Provider["send"] = async (message) => {
-  const response = await fetch("https://api.resend.com/emails", {
+  const response = await fetchWithTimeout("https://api.resend.com/emails", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${env.RESEND_API_KEY}`,
@@ -384,7 +399,7 @@ const sendWithResend: Provider["send"] = async (message) => {
 
 const sendWithSendGrid: Provider["send"] = async (message) => {
   const from = parseAddress(message.from);
-  const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+  const response = await fetchWithTimeout("https://api.sendgrid.com/v3/mail/send", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${sendGridApiKey}`,
@@ -423,7 +438,7 @@ const sendWithSendGrid: Provider["send"] = async (message) => {
 };
 
 const sendWithPostmark: Provider["send"] = async (message) => {
-  const response = await fetch("https://api.postmarkapp.com/email", {
+  const response = await fetchWithTimeout("https://api.postmarkapp.com/email", {
     method: "POST",
     headers: {
       "X-Postmark-Server-Token": String(env.POSTMARK_SERVER_TOKEN),
@@ -514,7 +529,7 @@ const sendWithSes: Provider["send"] = async (message) => {
     `Signature=${signature}`,
   ].join(", ");
 
-  const response = await fetch(endpoint, {
+  const response = await fetchWithTimeout(endpoint, {
     method: "POST",
     headers: {
       Authorization: authorization,
@@ -561,7 +576,7 @@ const sendWithSmtp: Provider["send"] = async (message) => {
 };
 
 const sendWithCustomApi: Provider["send"] = async (message) => {
-  const response = await fetch(String(env.EMAIL_API_URL), {
+  const response = await fetchWithTimeout(String(env.EMAIL_API_URL), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
