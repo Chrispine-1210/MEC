@@ -2,6 +2,7 @@ import express, { type CookieOptions, type Express, NextFunction, Request, Respo
 import { createServer, type IncomingMessage, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
+import { getDatabaseDiagnostics } from "./db";
 import {
   insertUserSchema,
   insertScholarshipSchema,
@@ -3007,9 +3008,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/media-assets/*", serveMediaAsset);
   app.get("/api/media-assets/*", serveMediaAsset);
 
-  app.get("/api/health", (_req, res) => {
+  app.get("/api/health", async (_req, res) => {
     const emailDiagnostics = getEmailDeliveryDiagnostics();
     const emailQueueWorker = getEmailQueueWorkerStatus();
+    const databaseDiagnostics = await getDatabaseDiagnostics();
     res.json({
       status: "ok",
       deployment: {
@@ -3017,6 +3019,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         environment: process.env.VERCEL_ENV || env.NODE_ENV,
         vercel: process.env.VERCEL === "1" || process.env.VERCEL === "true",
       },
+      database: databaseDiagnostics,
       email: {
         ready: emailDiagnostics.ready,
         activeProviders: emailDiagnostics.activeProviders,
