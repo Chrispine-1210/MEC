@@ -31,6 +31,9 @@ if (!fs.existsSync(viteBin)) {
   throw new Error("Vite is not installed. Run npm install --include=dev first.");
 }
 
+env.NODE_ENV = "production";
+env.BABEL_ENV = "production";
+
 if (!env.NODE_OPTIONS?.includes("--max-old-space-size")) {
   env.NODE_OPTIONS = [env.NODE_OPTIONS, "--max-old-space-size=4096"].filter(Boolean).join(" ");
 }
