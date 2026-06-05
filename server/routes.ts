@@ -9745,7 +9745,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         name: subscriber.name,
         verificationUrl,
         unsubscribeUrl,
-      });
+      }, { awaitDelivery: true });
 
       const confirmationEmailFailed = confirmationEmail.status === "failed";
       if (confirmationEmailFailed) {

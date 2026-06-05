@@ -13,7 +13,7 @@ import {
   type EventComment, type InsertEventComment, type EventReaction, type InsertEventReaction
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, asc, and, or, ilike, count, sql, gte, lte, inArray } from "drizzle-orm";
+import { eq, desc, asc, and, or, ilike, count, sql, gte, lte, inArray, isNull } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -154,6 +154,8 @@ export interface IStorage {
   getEmailJob(id: string): Promise<EmailJob | undefined>;
   getEmailJobByProviderMessageId(providerMessageId: string): Promise<EmailJob | undefined>;
   getDueEmailJobs(limit?: number): Promise<EmailJob[]>;
+  recoverStaleProcessingEmailJobs(staleBefore: Date): Promise<number>;
+  cancelPendingEmailJobs(recipient: string, category: string, reason: string): Promise<number>;
   markEmailJobProcessing(id: string): Promise<EmailJob | undefined>;
   markEmailJobSent(id: string, provider: string, providerMessageId?: string | null): Promise<EmailJob>;
   markEmailJobFailed(id: string, error: string, scheduledFor?: Date | null, finalFailure?: boolean): Promise<EmailJob>;
@@ -961,6 +963,52 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(asc(emailJobs.priority), asc(emailJobs.scheduledFor), asc(emailJobs.createdAt))
       .limit(limit);
+  }
+
+  async recoverStaleProcessingEmailJobs(staleBefore: Date): Promise<number> {
+    const recovered = await db
+      .update(emailJobs)
+      .set({
+        status: "retry_scheduled",
+        scheduledFor: new Date(),
+        processingAt: null,
+        lastError: sql`coalesce(${emailJobs.lastError}, 'Email processing timed out before provider response')`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(emailJobs.status, "processing"),
+          lte(emailJobs.processingAt, staleBefore),
+          isNull(emailJobs.sentAt),
+          isNull(emailJobs.failedAt),
+        ),
+      )
+      .returning({ id: emailJobs.id });
+
+    return recovered.length;
+  }
+
+  async cancelPendingEmailJobs(recipient: string, category: string, reason: string): Promise<number> {
+    const cancelled = await db
+      .update(emailJobs)
+      .set({
+        status: "failed",
+        processingAt: null,
+        failedAt: new Date(),
+        lastError: reason,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(emailJobs.recipient, recipient),
+          eq(emailJobs.category, category),
+          inArray(emailJobs.status, ["queued", "retry_scheduled", "processing"]),
+          isNull(emailJobs.sentAt),
+        ),
+      )
+      .returning({ id: emailJobs.id });
+
+    return cancelled.length;
   }
 
   async markEmailJobProcessing(id: string): Promise<EmailJob | undefined> {

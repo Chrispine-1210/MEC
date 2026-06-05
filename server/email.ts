@@ -103,15 +103,20 @@ const isUsableSecret = (value?: string) =>
       !/^(your_|replace-|changeme|change-me|example|test|dummy|placeholder)/i.test(value.trim()),
   );
 const isSendGridApiKey = (value?: string) => isUsableSecret(value) && /^SG\./.test(String(value).trim());
+const isUsableSmtpHost = (value?: string) => {
+  const host = value?.trim().toLowerCase();
+  if (!host) return false;
+  return !/(^|\.)example\.(com|net|org|test)$/.test(host) && !/(placeholder|changeme|dummy)/.test(host);
+};
 const sendGridApiKey = isSendGridApiKey(env.SENDGRID_API_KEY)
   ? env.SENDGRID_API_KEY
-  : /sendgrid\.net$/i.test(env.SMTP_HOST || "") &&
-      (env.SMTP_USER || "").toLowerCase() === "apikey" &&
-      isSendGridApiKey(env.SMTP_PASSWORD)
+  : (env.SMTP_USER || "").toLowerCase() === "apikey" && isSendGridApiKey(env.SMTP_PASSWORD)
     ? env.SMTP_PASSWORD
     : undefined;
 const smtpPort = Number.parseInt(env.SMTP_PORT || "", 10);
-const smtpConfigured = Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASSWORD);
+const smtpConfigured = Boolean(
+  isUsableSmtpHost(env.SMTP_HOST) && isUsableSecret(env.SMTP_USER) && isUsableSecret(env.SMTP_PASSWORD),
+);
 const sendGridTrackingEnabled = env.SENDGRID_TRACKING_ENABLED ?? true;
 const retryDelaysMs = [0, 60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000];
 const defaultMaxAttempts = retryDelaysMs.length;
@@ -530,6 +535,9 @@ const sendWithSmtp: Provider["send"] = async (message) => {
     host: env.SMTP_HOST,
     port: Number.isFinite(smtpPort) ? smtpPort : 587,
     secure: Number.isFinite(smtpPort) ? smtpPort === 465 : false,
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
     auth: {
       user: env.SMTP_USER,
       pass: env.SMTP_PASSWORD,
@@ -640,7 +648,7 @@ export const getEmailDeliveryDiagnostics = () => {
     sendGridTrackingEnabled,
     providerConfigured: {
       resend: isUsableSecret(env.RESEND_API_KEY),
-      sendgrid: isSendGridApiKey(env.SENDGRID_API_KEY),
+      sendgrid: Boolean(sendGridApiKey),
       sendgridSmtpFallback: Boolean(sendGridApiKey && !env.SENDGRID_API_KEY),
       postmark: isUsableSecret(env.POSTMARK_SERVER_TOKEN),
       ses: Boolean(
@@ -1069,6 +1077,16 @@ export const processEmailQueue = async (): Promise<EmailQueueProcessResult> => {
   let processed = 0;
 
   try {
+    const recoveredStaleJobs = await storage.recoverStaleProcessingEmailJobs(
+      new Date(Date.now() - 10 * 60 * 1000),
+    );
+    if (recoveredStaleJobs > 0) {
+      await recordEmailEvent({
+        eventType: "stale_processing_recovered",
+        metadata: { count: recoveredStaleJobs },
+      });
+    }
+
     const jobs = await storage.getDueEmailJobs(10);
     for (const dueJob of jobs) {
       const job = await storage.markEmailJobProcessing(dueJob.id);
@@ -1166,6 +1184,22 @@ export const enqueueEmail = async (payload: EmailPayload, options: EmailEnqueueO
     }
 
     await ensureEmailPreference(normalizedRecipient, payload.category, payload.metadata);
+    if (payload.category === "subscription_confirmation") {
+      const cancelled = await storage.cancelPendingEmailJobs(
+        normalizedRecipient,
+        payload.category,
+        "Superseded by a newer subscription confirmation request",
+      );
+      if (cancelled > 0) {
+        await recordEmailEvent({
+          eventType: "superseded",
+          recipient: normalizedRecipient,
+          category: payload.category,
+          metadata: { count: cancelled },
+        });
+      }
+    }
+
     const job = await storage.createEmailJob({
       id,
       category: payload.category,

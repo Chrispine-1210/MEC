@@ -96,6 +96,7 @@ const installQueueStorage = async (initialJob: any) => {
   const failedUpdates: any[] = [];
 
   await patchStorage({
+    recoverStaleProcessingEmailJobs: async () => 0,
     getDueEmailJobs: async () =>
       ["queued", "retry_scheduled"].includes(state.job.status) ? [state.job] : [],
     markEmailJobProcessing: async () => {
@@ -196,6 +197,7 @@ test("email queue skips jobs that cannot be claimed for processing", { concurren
   const deliveryEvents: any[] = [];
 
   await patchStorage({
+    recoverStaleProcessingEmailJobs: async () => 0,
     getDueEmailJobs: async () => [makeEmailJob({ id: "already-claimed-job" })],
     markEmailJobProcessing: async () => undefined,
     createEmailDeliveryEvent: async (event: any) => {
@@ -303,6 +305,7 @@ const installVerificationStorage = async (input: {
       state.welcomeJobs.push(job);
       return { createdAt: new Date(), updatedAt: new Date(), ...job };
     },
+    recoverStaleProcessingEmailJobs: async () => 0,
     getDueEmailJobs: async () => [],
     createEmailDeliveryEvent: async () => undefined,
   });
@@ -358,7 +361,66 @@ const installSubscriberStorage = async () => {
       state.emailJobs.push(saved);
       return saved;
     },
-    getDueEmailJobs: async () => [],
+    recoverStaleProcessingEmailJobs: async () => 0,
+    cancelPendingEmailJobs: async (recipient: string, category: string, reason: string) => {
+      let cancelled = 0;
+      for (const job of state.emailJobs) {
+        if (
+          job.recipient === recipient &&
+          job.category === category &&
+          ["queued", "retry_scheduled", "processing"].includes(job.status) &&
+          !job.sentAt
+        ) {
+          Object.assign(job, {
+            status: "failed",
+            processingAt: null,
+            failedAt: new Date(),
+            lastError: reason,
+            updatedAt: new Date(),
+          });
+          cancelled += 1;
+        }
+      }
+      return cancelled;
+    },
+    getDueEmailJobs: async () =>
+      state.emailJobs.filter((job) => ["queued", "retry_scheduled"].includes(job.status)),
+    markEmailJobProcessing: async (id: string) => {
+      const job = state.emailJobs.find((candidate) => candidate.id === id);
+      if (!job || !["queued", "retry_scheduled"].includes(job.status)) return undefined;
+      Object.assign(job, {
+        attempts: job.attempts + 1,
+        status: "processing",
+        processingAt: new Date(),
+        updatedAt: new Date(),
+      });
+      return job;
+    },
+    markEmailJobSent: async (id: string, provider: string, providerMessageId?: string | null) => {
+      const job = state.emailJobs.find((candidate) => candidate.id === id);
+      if (!job) throw new Error("Email job not found");
+      Object.assign(job, {
+        status: "sent",
+        provider,
+        providerMessageId: providerMessageId ?? null,
+        sentAt: new Date(),
+        updatedAt: new Date(),
+      });
+      return job;
+    },
+    markEmailJobFailed: async (id: string, error: string, scheduledFor?: Date | null, finalFailure?: boolean) => {
+      const job = state.emailJobs.find((candidate) => candidate.id === id);
+      if (!job) throw new Error("Email job not found");
+      Object.assign(job, {
+        status: finalFailure ? "failed" : "retry_scheduled",
+        lastError: error,
+        scheduledFor: scheduledFor ?? new Date(),
+        failedAt: finalFailure ? new Date() : null,
+        updatedAt: new Date(),
+      });
+      return job;
+    },
+    getEmailJob: async (id: string) => state.emailJobs.find((job) => job.id === id),
     createEmailDeliveryEvent: async (event: any) => {
       state.deliveryEvents.push(event);
     },
@@ -372,9 +434,20 @@ const installSubscriberStorage = async () => {
   return state;
 };
 
-test("newsletter signup succeeds once the subscriber is saved and confirmation email is queued", { concurrency: false }, async () => {
+test("newsletter signup succeeds once the subscriber is saved and confirmation email is sent", { concurrency: false }, async () => {
   const state = await installSubscriberStorage();
   const { server, baseUrl } = await startTestServer();
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).startsWith(baseUrl)) {
+      return originalFetch(input, init);
+    }
+
+    return new Response(JSON.stringify({ id: "subscription-message-1" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
 
   try {
     const response = await fetch(`${baseUrl}/api/subscribers`, {
@@ -393,12 +466,15 @@ test("newsletter signup succeeds once the subscriber is saved and confirmation e
     assert.equal(body.message, "Please check your inbox shortly to confirm your subscription.");
     assert.equal(body.subscriber.email, "newsletter-student@example.test");
     assert.equal(body.subscriber.status, "pending");
-    assert.equal(body.delivery.status, "queued");
-    assert.equal(body.delivery.queued, true);
+    assert.equal(body.delivery.status, "sent");
+    assert.equal(body.delivery.provider, "resend");
+    assert.equal(body.delivery.queued, false);
     assert.equal(state.subscribers.get("newsletter-student@example.test")?.status, "pending");
     assert.equal(state.emailJobs.length, 1);
     assert.equal(state.emailJobs[0].category, "subscription_confirmation");
+    assert.equal(state.emailJobs[0].status, "sent");
     assert.equal(state.deliveryEvents.some((event) => event.eventType === "queued"), true);
+    assert.equal(state.deliveryEvents.some((event) => event.eventType === "sent"), true);
   } finally {
     await stopTestServer(server);
   }
