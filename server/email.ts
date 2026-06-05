@@ -790,6 +790,9 @@ export const getEmailDeliverabilityDiagnostics = async (options: { timeoutMs?: n
       EMAIL_DRY_RUN: "false",
       SENDGRID_TRACKING_ENABLED: "true",
       EMAIL_LINK_BASE_URL: "https://links.mtendereeducationconsult.com",
+      SMTP_HOST: "smtp.sendgrid.net",
+      SMTP_PORT: "587",
+      SMTP_USER: "apikey",
     },
   };
 };

@@ -6,7 +6,7 @@ Mtendere Education Consult now routes outbound email through the centralized `se
 
 The service provides:
 
-- Provider failover across SendGrid, Resend, Postmark, Amazon SES, custom HTTP providers, and controlled dry-run mode.
+- Provider failover across SendGrid, Resend, Postmark, Amazon SES, SMTP, custom HTTP providers, and controlled dry-run mode.
 - Queue-backed processing with retry scheduling at 1 minute, 5 minutes, 15 minutes, and 1 hour.
 - Dead-letter visibility through failed `email_jobs`.
 - Branded responsive templates with Mtendere identity, preference links, unsubscribe links, tracking links, and open tracking pixels.
@@ -19,13 +19,14 @@ The service provides:
 Production Vercel must contain real server-side values. These values must not be committed:
 
 - `SENDGRID_API_KEY`
-- `EMAIL_PROVIDER_ORDER=sendgrid,resend,postmark,ses,custom`
+- `EMAIL_PROVIDER_ORDER=sendgrid,resend,postmark,ses,smtp,custom`
 - `EMAIL_DRY_RUN=false`
 - `EMAIL_FROM=Mtendere Education Consult <no-reply@mail.mtendereeducationconsult.com>`
 - `SENDGRID_TRACKING_ENABLED=true`
 - `EMAIL_LINK_BASE_URL=https://links.mtendereeducationconsult.com`
 - `PUBLIC_APP_URL=https://mtendereeducationconsult.com`
 - `API_APP_URL=https://mtendereeducationconsult.com`
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, and `SMTP_PASSWORD` when using SMTP fallback instead of a direct provider API key
 
 If `/api/health` reports `email.ready=false`, account creation and confirmation-email workflows must remain blocked instead of pretending the message was sent.
 
@@ -73,9 +74,8 @@ Alert codes include:
 
 ## Remaining Operational Work
 
-- Add the SendGrid API key to Vercel production, preview, and development environments.
+- Add the SendGrid API key or SMTP credentials to Vercel production, preview, and development environments.
 - Correct the Cloudflare `mail` CNAME target.
 - Configure SendGrid Event Webhook to post delivery events into `/api/email/webhooks/sendgrid` if that route is enabled in the deployment.
 - Move DMARC from `p=none` to `p=quarantine`, then `p=reject` after bounce and complaint rates are stable.
 - Add a scheduled queue drain if Vercel cold starts are not enough for high-volume marketing campaigns.
-

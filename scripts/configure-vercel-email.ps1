@@ -54,11 +54,16 @@ if (-not $sendGridApiKey -and -not $SkipSendGridSecret) {
 
 $values = [ordered]@{
   EMAIL_FROM = 'Mtendere Education Consult <no-reply@mail.mtendereeducationconsult.com>'
-  EMAIL_PROVIDER_ORDER = 'sendgrid,resend,postmark,ses,custom'
+  EMAIL_PROVIDER_ORDER = 'sendgrid,resend,postmark,ses,smtp,custom'
   EMAIL_DRY_RUN = 'false'
   EMAIL_LINK_BASE_URL = 'https://links.mtendereeducationconsult.com'
   SENDGRID_TRACKING_ENABLED = 'true'
   SENDGRID_API_KEY = $sendGridApiKey
+  SMTP_HOST = $env:SMTP_HOST
+  SMTP_PORT = if ($env:SMTP_PORT) { $env:SMTP_PORT } else { '587' }
+  SMTP_USER = $env:SMTP_USER
+  SMTP_PASSWORD = $env:SMTP_PASSWORD
+  CRON_SECRET = if ($env:CRON_SECRET) { $env:CRON_SECRET } else { "$([guid]::NewGuid().ToString('N'))$([guid]::NewGuid().ToString('N'))" }
 }
 
 foreach ($environment in $Environments) {
@@ -68,4 +73,4 @@ foreach ($environment in $Environments) {
 }
 
 Write-Host "Vercel email environment configuration completed."
-Write-Host "Redeploy after this script finishes, then verify /api/health shows email.ready=true and activeProviders includes sendgrid."
+Write-Host "Redeploy after this script finishes, then verify /api/health shows email.ready=true and activeProviders includes sendgrid or smtp."

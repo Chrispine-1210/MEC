@@ -6,7 +6,7 @@ Date: 2026-06-01
 
 - Email dispatch uses `server/email.ts`.
 - Emails are queued in memory per function invocation, retried up to three times, and logged to `data/email-events.jsonl` using Vercel-safe writable paths.
-- `EMAIL_API_URL` and `EMAIL_API_KEY` allow integration with an external email provider.
+- Provider delivery supports SendGrid, Resend, Postmark, Amazon SES, SMTP, and a custom HTTP fallback through `EMAIL_API_URL` and `EMAIL_API_KEY`.
 
 ## Transactional Emails
 
