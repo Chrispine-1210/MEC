@@ -33,13 +33,18 @@ Outputs:
 
 - Email: queued through `server/email.ts` with branded responsive HTML and standard footer.
 - SMS/WhatsApp: delivered through `server/notifications.ts` when Twilio, WhatsApp Cloud API, or generic HTTP webhook settings are configured; otherwise returns explicit `unsupported_channel`.
-- In-app: recorded as formatted admin notification analytics.
+- In-app: recorded as structured notification records and mirrored into communication audit.
 - Documents: generated as expiring signed PDF letterhead files with Mtendere branding, reference number, date, recipient, subject, body, and administration signature.
+- Automation: workflow tasks are scheduled from qualifying events for lead nurture, application follow-up, payment recovery, and security escalation.
+- Governance: template versions, campaign drafts, and deterministic template-assist checks support controlled change management.
 
 Durable audit:
 
 - `communication_events`: original event payload, source, priority, user, status, processing timestamps, error.
 - `communication_messages`: every delivery/document/in-app/SMS attempt with channel, recipient, template, subject, status, provider IDs, metadata, and diagnostics.
+- `communication_documents`: generated letterhead metadata, reference IDs, signed links, expiry, and linked message records.
+- `communication_workflow_tasks`: scheduled automation tasks, attempts, status, and execution diagnostics.
+- `communication_template_versions`: versioned template snapshots with author and change notes.
 - JSONL fallback: `data/communication-events.jsonl`, `data/communication-messages.jsonl`.
 
 Admin operations:
@@ -55,8 +60,15 @@ Admin operations:
 - `/api/admin/communications/events`
 - `/api/admin/communications/events/:eventId/replay`
 - `/api/admin/communications/messages/:messageId/resend`
+- `/api/admin/communications/documents`
+- `/api/admin/communications/workflows`
+- `/api/admin/communications/workflows/process-due`
+- `/api/admin/communications/campaigns`
+- `/api/admin/communications/template-versions`
+- `/api/admin/communications/template-versions/sync`
+- `/api/admin/communications/templates/:templateId/ai-assist`
 
-Diagnostics report route/template consistency, missing route templates, undeclared template variables, orphan templates, template quality signals, provider readiness, sending subdomain health, BIMI readiness, and generated-document link TTL. Timeline APIs provide per-student/per-email communication history for admissions, finance, support, and compliance review.
+Diagnostics report route/template consistency, missing route templates, undeclared template variables, orphan templates, template quality signals, provider readiness, sending subdomain health, BIMI readiness, generated-document link TTL, workflow readiness, channel coverage, and governance controls. Timeline APIs provide per-student/per-email communication history for admissions, finance, support, and compliance review.
 
 ## Vercel Environment Requirements
 
@@ -124,7 +136,7 @@ Alert codes include:
 
 ## Notification Center Readiness
 
-`server/notifications.ts` adds a unified notification contract. Email is active and routes to the queue. SMS and WhatsApp use configured provider adapters and otherwise return explicit unsupported-channel responses, which prevents silent failures. Push remains provider-ready but unimplemented. Communication-layer in-app alerts are formatted into the admin notification feed instead of appearing as raw analytics JSON.
+`server/notifications.ts` adds a unified notification contract. Email is active and routes to the queue. SMS and WhatsApp use configured provider adapters and otherwise return explicit unsupported-channel responses, which prevents silent failures. Push remains provider-ready but unimplemented. Communication-layer in-app alerts are persisted into the admin notification feed and communication audit instead of appearing as raw analytics JSON.
 
 ## Remaining Operational Work
 

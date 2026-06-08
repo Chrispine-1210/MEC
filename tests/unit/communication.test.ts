@@ -19,9 +19,22 @@ test("communication event dispatch generates documents and audit records", async
   const originalGetCommunicationEvent = storage.getCommunicationEvent.bind(storage);
   const originalCreateCommunicationMessage = storage.createCommunicationMessage.bind(storage);
   const originalGetCommunicationMessages = storage.getCommunicationMessages.bind(storage);
+  const originalCreateNotification = storage.createNotification.bind(storage);
+  const originalCreateCommunicationDocument = storage.createCommunicationDocument.bind(storage);
+  const originalGetCommunicationDocuments = storage.getCommunicationDocuments.bind(storage);
+  const originalCreateCommunicationWorkflowTask = storage.createCommunicationWorkflowTask.bind(storage);
+  const originalGetCommunicationWorkflowTasks = storage.getCommunicationWorkflowTasks.bind(storage);
+  const originalUpdateCommunicationWorkflowTaskStatus = storage.updateCommunicationWorkflowTaskStatus.bind(storage);
+  const originalCreateCommunicationTemplateVersion = storage.createCommunicationTemplateVersion.bind(storage);
+  const originalGetCommunicationTemplateVersions = storage.getCommunicationTemplateVersions.bind(storage);
+  const originalGetCommunicationTemplateVersionsByTemplateId = storage.getCommunicationTemplateVersionsByTemplateId.bind(storage);
   const analyticsEvents: any[] = [];
   const communicationEvents: any[] = [];
   const communicationMessages: any[] = [];
+  const notifications: any[] = [];
+  const communicationDocuments: any[] = [];
+  const workflowTasks: any[] = [];
+  const templateVersions: any[] = [];
   storage.logAnalytics = async (event: any) => {
     analyticsEvents.push(event);
     return {
@@ -56,16 +69,78 @@ test("communication event dispatch generates documents and audit records", async
     return saved;
   };
   storage.getCommunicationMessages = async (limit = 100) => communicationMessages.slice(-limit).reverse();
+  storage.createNotification = async (notification: any) => {
+    const saved = {
+      id: notifications.length + 1,
+      ...notification,
+      createdAt: new Date(),
+      readAt: null,
+    };
+    notifications.push(saved);
+    return saved;
+  };
+  storage.createCommunicationDocument = async (document: any) => {
+    const saved = {
+      ...document,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    communicationDocuments.push(saved);
+    return saved;
+  };
+  storage.getCommunicationDocuments = async (limit = 100) => communicationDocuments.slice(-limit).reverse();
+  storage.createCommunicationWorkflowTask = async (task: any) => {
+    const saved = {
+      ...task,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    workflowTasks.push(saved);
+    return saved;
+  };
+  storage.getCommunicationWorkflowTasks = async (limit = 100) => workflowTasks.slice(-limit).reverse();
+  storage.updateCommunicationWorkflowTaskStatus = async (id: string, status: string, details: any = {}) => {
+    const task = workflowTasks.find((item) => item.id === id);
+    if (task) {
+      task.status = status;
+      task.executedAt = details.executedAt ?? task.executedAt;
+      task.lastError = details.lastError ?? null;
+      task.attempts = details.attempts ?? task.attempts + 1;
+      task.updatedAt = new Date();
+    }
+    return task;
+  };
+  storage.createCommunicationTemplateVersion = async (version: any) => {
+    const existing = templateVersions.find(
+      (item) => item.templateId === version.templateId && item.version === version.version,
+    );
+    if (existing) throw new Error("duplicate key value violates unique constraint");
+    const saved = {
+      id: templateVersions.length + 1,
+      ...version,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    templateVersions.push(saved);
+    return saved;
+  };
+  storage.getCommunicationTemplateVersions = async (limit = 100) => templateVersions.slice(-limit).reverse();
+  storage.getCommunicationTemplateVersionsByTemplateId = async (templateId: string) =>
+    templateVersions.filter((item) => item.templateId === templateId).sort((a, b) => b.version - a.version);
 
   try {
     const {
       emitCommunicationEvent,
+      getCommunicationAiAssistance,
       getCommunicationAnalytics,
       getCommunicationDiagnostics,
+      getCommunicationDocuments,
       getCommunicationTimeline,
       getCommunicationTemplates,
+      getCommunicationWorkflows,
       getGeneratedDocumentPath,
       renderCommunicationTemplatePreview,
+      seedCommunicationTemplateVersions,
       verifyGeneratedDocumentToken,
     } = await import("../../server/communication");
 
@@ -114,6 +189,24 @@ test("communication event dispatch generates documents and audit records", async
       communicationMessages.some((message) => message.channel === "document" && message.eventId === result.eventId),
       true,
     );
+    assert.equal(communicationDocuments.some((item) => item.id === document!.documentId), true);
+    assert.equal(notifications.some((item) => item.metadata?.eventId === result.eventId), true);
+
+    const applicationResult = await emitCommunicationEvent({
+      event_type: "student.application_submitted",
+      source: "admin",
+      user_id: 101,
+      payload: {
+        student_name: "Workflow Student",
+        program_name: "Business Administration",
+        reference_id: "APP-101",
+        event_title: "Application submitted",
+        message: "Application was submitted.",
+      },
+    });
+    assert.equal(applicationResult.workflowTasks?.length, 2);
+    const workflows = await getCommunicationWorkflows(20);
+    assert.equal(workflows.tasks.some((task) => task.workflowId === "application_review_followup"), true);
 
     const preview = renderCommunicationTemplatePreview("student_enrollment_email", {
       payload: {
@@ -129,6 +222,8 @@ test("communication event dispatch generates documents and audit records", async
     const diagnostics = getCommunicationDiagnostics();
     assert.equal(diagnostics.routes.missingTemplates.length, 0);
     assert.equal(diagnostics.providers.sms.providers.some((provider) => provider.name === "twilio_sms"), true);
+    assert.equal(diagnostics.workflows.active >= 1, true);
+    assert.equal(diagnostics.governance.brandFooterStandardized, true);
 
     const overduePreview = renderCommunicationTemplatePreview("payment_failed_email", {
       payload: {
@@ -148,6 +243,20 @@ test("communication event dispatch generates documents and audit records", async
     const timeline = await getCommunicationTimeline({ userId: 100, limit: 20 });
     assert.equal(timeline.items.some((item) => item.event_type === "student.enrolled"), true);
 
+    const documents = await getCommunicationDocuments(20);
+    assert.equal(documents.some((item) => item.documentType === "enrollment_confirmation"), true);
+
+    const seedResult = await seedCommunicationTemplateVersions(1);
+    assert.equal(seedResult.created >= templates.length, true);
+    const assistance = getCommunicationAiAssistance("payment_failed_email", {
+      recipient_name: "Payment Student",
+      amount: "250.00",
+      currency: "USD",
+      payment_status: "failed",
+      reference_id: "PAY-100",
+    });
+    assert.equal(assistance.governanceNotes.length > 0, true);
+
     fs.rmSync(document!.filePath, { force: true });
     const generatedDir = path.dirname(document!.filePath);
     if (fs.existsSync(generatedDir) && fs.readdirSync(generatedDir).length === 0) {
@@ -160,5 +269,14 @@ test("communication event dispatch generates documents and audit records", async
     storage.getCommunicationEvent = originalGetCommunicationEvent;
     storage.createCommunicationMessage = originalCreateCommunicationMessage;
     storage.getCommunicationMessages = originalGetCommunicationMessages;
+    storage.createNotification = originalCreateNotification;
+    storage.createCommunicationDocument = originalCreateCommunicationDocument;
+    storage.getCommunicationDocuments = originalGetCommunicationDocuments;
+    storage.createCommunicationWorkflowTask = originalCreateCommunicationWorkflowTask;
+    storage.getCommunicationWorkflowTasks = originalGetCommunicationWorkflowTasks;
+    storage.updateCommunicationWorkflowTaskStatus = originalUpdateCommunicationWorkflowTaskStatus;
+    storage.createCommunicationTemplateVersion = originalCreateCommunicationTemplateVersion;
+    storage.getCommunicationTemplateVersions = originalGetCommunicationTemplateVersions;
+    storage.getCommunicationTemplateVersionsByTemplateId = originalGetCommunicationTemplateVersionsByTemplateId;
   }
 });

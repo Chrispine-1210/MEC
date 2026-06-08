@@ -19,6 +19,7 @@ const ADMIN_ONLY_ROUTES = [
   "/admin/messages",
   "/admin/analytics",
   "/admin/activity",
+  "/admin/communications",
   "/admin/ai-chat",
 ];
 const SUPER_ADMIN_ROUTES = ["/admin/roles", "/admin/settings"];

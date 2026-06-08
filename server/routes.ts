@@ -62,17 +62,25 @@ import {
 } from "./email";
 import {
   emitCommunicationEvent,
+  createCommunicationCampaign,
   getCommunicationAudit,
   getCommunicationAnalytics,
+  getCommunicationAiAssistance,
+  getCommunicationCampaigns,
   getCommunicationDiagnostics,
+  getCommunicationDocuments,
   getCommunicationMessage,
   getCommunicationRoutes,
   getCommunicationTemplate,
   getCommunicationTemplates,
+  getCommunicationTemplateVersions,
   getCommunicationTimeline,
+  getCommunicationWorkflows,
   getGeneratedDocumentPath,
+  processDueCommunicationWorkflowTasks,
   replayCommunicationEvent,
   renderCommunicationTemplatePreview,
+  seedCommunicationTemplateVersions,
   verifyGeneratedDocumentToken,
 } from "./communication";
 import {
@@ -515,6 +523,19 @@ const communicationTemplatePreviewSchema = z.object({
   eventType: z.string().trim().min(3).max(120).optional(),
   userId: z.coerce.number().int().positive().optional().nullable(),
   source: z.enum(["admin", "client", "system"]).default("admin"),
+  payload: z.record(z.unknown()).default({}),
+});
+
+const communicationCampaignRequestSchema = z.object({
+  name: z.string().trim().min(2).max(180),
+  category: z.string().trim().min(2).max(100),
+  subject: z.string().trim().min(2).max(220),
+  audienceSegment: z.record(z.unknown()).optional().nullable(),
+  templateKey: z.string().trim().min(2).max(120).optional().nullable(),
+  scheduledFor: z.coerce.date().optional().nullable(),
+});
+
+const communicationAiAssistRequestSchema = z.object({
   payload: z.record(z.unknown()).default({}),
 });
 
@@ -4349,6 +4370,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ templates: getCommunicationTemplates() });
   });
 
+  app.get('/api/admin/communications/template-versions', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const limit = Number(req.query.limit ?? 100);
+      const templateId = typeof req.query.templateId === "string" ? req.query.templateId : undefined;
+      res.json({
+        versions: await getCommunicationTemplateVersions(Number.isFinite(limit) ? limit : 100, templateId),
+      });
+    } catch (error) {
+      console.error("Communication template versions error:", getErrorLogMessage(error));
+      res.status(500).json({ message: "Failed to fetch communication template versions" });
+    }
+  });
+
+  app.post('/api/admin/communications/template-versions/sync', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const actor = getAuthenticatedUser(req);
+      res.status(202).json(await seedCommunicationTemplateVersions(Number(actor.id)));
+    } catch (error) {
+      res.status(400).json({ message: "Failed to sync communication template versions", error: getErrorMessage(error) });
+    }
+  });
+
   app.get('/api/admin/communications/templates/:templateId', authenticateToken, requireAdmin, (req, res) => {
     const template = getCommunicationTemplate(req.params.templateId);
     if (!template) {
@@ -4373,12 +4416,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/admin/communications/templates/:templateId/ai-assist', authenticateToken, requireAdmin, (req, res) => {
+    try {
+      const payload = communicationAiAssistRequestSchema.parse(req.body);
+      res.json({ assistance: getCommunicationAiAssistance(req.params.templateId, payload.payload) });
+    } catch (error) {
+      res.status(400).json({ message: "Failed to analyze communication template", error: getErrorMessage(error) });
+    }
+  });
+
   app.get('/api/admin/communications/routes', authenticateToken, requireAdmin, (_req, res) => {
     res.json({ routes: getCommunicationRoutes() });
   });
 
   app.get('/api/admin/communications/diagnostics', authenticateToken, requireAdmin, (_req, res) => {
     res.json(getCommunicationDiagnostics());
+  });
+
+  app.get('/api/admin/communications/documents', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const limit = Number(req.query.limit ?? 100);
+      res.json({ documents: await getCommunicationDocuments(Number.isFinite(limit) ? limit : 100) });
+    } catch (error) {
+      console.error("Communication documents error:", getErrorLogMessage(error));
+      res.status(500).json({ message: "Failed to fetch communication documents" });
+    }
+  });
+
+  app.get('/api/admin/communications/workflows', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const limit = Number(req.query.limit ?? 100);
+      res.json(await getCommunicationWorkflows(Number.isFinite(limit) ? limit : 100));
+    } catch (error) {
+      console.error("Communication workflows error:", getErrorLogMessage(error));
+      res.status(500).json({ message: "Failed to fetch communication workflows" });
+    }
+  });
+
+  app.post('/api/admin/communications/workflows/process-due', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const limit = Number(req.query.limit ?? 25);
+      res.status(202).json(await processDueCommunicationWorkflowTasks(Number.isFinite(limit) ? limit : 25));
+    } catch (error) {
+      res.status(400).json({ message: "Failed to process communication workflow tasks", error: getErrorMessage(error) });
+    }
+  });
+
+  app.get('/api/admin/communications/campaigns', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const limit = Number(req.query.limit ?? 100);
+      res.json(await getCommunicationCampaigns(Number.isFinite(limit) ? limit : 100));
+    } catch (error) {
+      console.error("Communication campaigns error:", getErrorLogMessage(error));
+      res.status(500).json({ message: "Failed to fetch communication campaigns" });
+    }
+  });
+
+  app.post('/api/admin/communications/campaigns', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const payload = communicationCampaignRequestSchema.parse(req.body);
+      const actor = getAuthenticatedUser(req);
+      const campaign = await createCommunicationCampaign({
+        ...payload,
+        createdBy: Number(actor.id),
+      });
+      res.status(201).json({ campaign });
+    } catch (error) {
+      res.status(400).json({ message: "Failed to create communication campaign", error: getErrorMessage(error) });
+    }
   });
 
   app.get('/api/admin/communications/analytics', authenticateToken, requireAdmin, async (req, res) => {

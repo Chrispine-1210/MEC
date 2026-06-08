@@ -1109,6 +1109,86 @@ export const communicationMessages = pgTable(
   }),
 );
 
+export const communicationTemplateVersions = pgTable(
+  "communication_template_versions",
+  {
+    id: serial("id").primaryKey(),
+    templateId: varchar("template_id", { length: 120 }).notNull(),
+    type: varchar("type", { length: 30 }).notNull(),
+    eventTrigger: varchar("event_trigger", { length: 120 }).notNull(),
+    category: varchar("category", { length: 80 }).notNull().default("system"),
+    language: varchar("language", { length: 12 }).notNull().default("en"),
+    version: integer("version").notNull().default(1),
+    status: varchar("status", { length: 40 }).notNull().default("draft"),
+    subject: text("subject"),
+    title: text("title"),
+    preheader: text("preheader"),
+    body: text("body").notNull(),
+    variables: jsonb("variables").$type<string[] | null>(),
+    defaults: jsonb("defaults").$type<Record<string, string> | null>(),
+    quality: jsonb("quality").$type<Record<string, unknown> | null>(),
+    createdBy: integer("created_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    templateVersionIdx: uniqueIndex("communication_template_versions_template_version_idx").on(table.templateId, table.version),
+    templateStatusIdx: index("communication_template_versions_template_status_idx").on(table.templateId, table.status),
+    typeEventIdx: index("communication_template_versions_type_event_idx").on(table.type, table.eventTrigger),
+  }),
+);
+
+export const communicationDocuments = pgTable(
+  "communication_documents",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    eventId: varchar("event_id", { length: 36 }),
+    eventType: varchar("event_type", { length: 120 }).notNull(),
+    templateId: varchar("template_id", { length: 120 }),
+    documentType: varchar("document_type", { length: 80 }).notNull(),
+    referenceId: varchar("reference_id", { length: 120 }),
+    recipient: varchar("recipient", { length: 255 }),
+    fileName: text("file_name").notNull(),
+    downloadUrl: text("download_url").notNull(),
+    mimeType: varchar("mime_type", { length: 120 }).notNull().default("application/pdf"),
+    status: varchar("status", { length: 40 }).notNull().default("generated"),
+    expiresAt: timestamp("expires_at"),
+    metadata: jsonb("metadata").$type<Record<string, unknown> | null>(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    eventIdx: index("communication_documents_event_idx").on(table.eventId),
+    typeCreatedIdx: index("communication_documents_type_created_idx").on(table.documentType, table.createdAt),
+    referenceIdx: index("communication_documents_reference_idx").on(table.referenceId),
+    statusIdx: index("communication_documents_status_idx").on(table.status),
+  }),
+);
+
+export const communicationWorkflowTasks = pgTable(
+  "communication_workflow_tasks",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workflowId: varchar("workflow_id", { length: 120 }).notNull(),
+    stepId: varchar("step_id", { length: 120 }).notNull(),
+    eventId: varchar("event_id", { length: 36 }),
+    eventType: varchar("event_type", { length: 120 }).notNull(),
+    status: varchar("status", { length: 40 }).notNull().default("pending"),
+    scheduledFor: timestamp("scheduled_for").notNull(),
+    executedAt: timestamp("executed_at"),
+    attempts: integer("attempts").notNull().default(0),
+    payload: jsonb("payload").$type<Record<string, unknown> | null>(),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    workflowIdx: index("communication_workflow_tasks_workflow_idx").on(table.workflowId),
+    statusScheduleIdx: index("communication_workflow_tasks_status_schedule_idx").on(table.status, table.scheduledFor),
+    eventIdx: index("communication_workflow_tasks_event_idx").on(table.eventId),
+  }),
+);
+
 export const emailPreferences = pgTable(
   "email_preferences",
   {
@@ -1965,6 +2045,22 @@ export const insertCommunicationMessageSchema = createInsertSchema(communication
   updatedAt: true,
 });
 
+export const insertCommunicationTemplateVersionSchema = createInsertSchema(communicationTemplateVersions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCommunicationDocumentSchema = createInsertSchema(communicationDocuments).omit({
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCommunicationWorkflowTaskSchema = createInsertSchema(communicationWorkflowTasks).omit({
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertEmailPreferenceSchema = createInsertSchema(emailPreferences).omit({
   id: true,
   createdAt: true,
@@ -2096,6 +2192,12 @@ export type CommunicationEventRecord = typeof communicationEvents.$inferSelect;
 export type InsertCommunicationEvent = z.infer<typeof insertCommunicationEventSchema>;
 export type CommunicationMessage = typeof communicationMessages.$inferSelect;
 export type InsertCommunicationMessage = z.infer<typeof insertCommunicationMessageSchema>;
+export type CommunicationTemplateVersion = typeof communicationTemplateVersions.$inferSelect;
+export type InsertCommunicationTemplateVersion = z.infer<typeof insertCommunicationTemplateVersionSchema>;
+export type CommunicationDocument = typeof communicationDocuments.$inferSelect;
+export type InsertCommunicationDocument = z.infer<typeof insertCommunicationDocumentSchema>;
+export type CommunicationWorkflowTask = typeof communicationWorkflowTasks.$inferSelect;
+export type InsertCommunicationWorkflowTask = z.infer<typeof insertCommunicationWorkflowTaskSchema>;
 export type EmailPreference = typeof emailPreferences.$inferSelect;
 export type InsertEmailPreference = z.infer<typeof insertEmailPreferenceSchema>;
 export type EmailTemplateVersion = typeof emailTemplateVersions.$inferSelect;

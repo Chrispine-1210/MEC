@@ -1,16 +1,21 @@
 import {
-  users, scholarships, jobs, applications, partners, testimonials, blogPosts, teamMembers, events, eventRegistrations, eventComments, eventReactions, referrals, analytics, blogComments, savedItems, messages, subscribers, emailVerificationTokens, emailJobs, emailDeliveryEvents, communicationEvents, communicationMessages, emailPreferences,
+  users, scholarships, jobs, applications, partners, testimonials, blogPosts, teamMembers, events, eventRegistrations, eventComments, eventReactions, referrals, analytics, blogComments, savedItems, messages, subscribers, notifications, emailVerificationTokens, emailJobs, emailDeliveryEvents, communicationEvents, communicationMessages, communicationTemplateVersions, communicationDocuments, communicationWorkflowTasks, emailPreferences, emailCampaigns,
   type User, type InsertUser, type Scholarship, type InsertScholarship, type Job, type InsertJob,
   type Application, type InsertApplication, type Partner, type InsertPartner, type Testimonial, type InsertTestimonial,
   type BlogPost, type InsertBlogPost, type TeamMember, type InsertTeamMember, type Referral, type InsertReferral,
   type Analytics, type InsertAnalytics, type BlogComment, type InsertBlogComment,
   type SavedItem, type InsertSavedItem, type Message, type InsertMessage,
+  type Notification, type InsertNotification,
   type Subscriber, type InsertSubscriber,
   type EmailVerificationToken, type InsertEmailVerificationToken,
   type EmailJob, type InsertEmailJob, type InsertEmailDeliveryEvent,
   type CommunicationEventRecord, type InsertCommunicationEvent,
   type CommunicationMessage, type InsertCommunicationMessage,
+  type CommunicationTemplateVersion, type InsertCommunicationTemplateVersion,
+  type CommunicationDocument, type InsertCommunicationDocument,
+  type CommunicationWorkflowTask, type InsertCommunicationWorkflowTask,
   type EmailPreference, type InsertEmailPreference,
+  type EmailCampaign, type InsertEmailCampaign,
   type Event, type InsertEvent, type EventRegistration, type InsertEventRegistration,
   type EventComment, type InsertEventComment, type EventReaction, type InsertEventReaction
 } from "@shared/schema";
@@ -137,6 +142,9 @@ export interface IStorage {
   createMessage(message: InsertMessage): Promise<Message>;
   getAllMessages(): Promise<Message[]>;
   markMessageRead(id: number): Promise<Message>;
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  getNotifications(limit?: number, userId?: number | null): Promise<Notification[]>;
+  markNotificationRead(id: number): Promise<Notification | undefined>;
 
   // Subscribers
   getSubscriberByEmail(email: string): Promise<Subscriber | undefined>;
@@ -172,6 +180,21 @@ export interface IStorage {
   createCommunicationMessage(message: InsertCommunicationMessage): Promise<CommunicationMessage>;
   getCommunicationMessage(id: string): Promise<CommunicationMessage | undefined>;
   getCommunicationMessages(limit?: number): Promise<CommunicationMessage[]>;
+  createCommunicationTemplateVersion(version: InsertCommunicationTemplateVersion): Promise<CommunicationTemplateVersion>;
+  getCommunicationTemplateVersions(limit?: number): Promise<CommunicationTemplateVersion[]>;
+  getCommunicationTemplateVersionsByTemplateId(templateId: string): Promise<CommunicationTemplateVersion[]>;
+  createCommunicationDocument(document: InsertCommunicationDocument): Promise<CommunicationDocument>;
+  getCommunicationDocuments(limit?: number): Promise<CommunicationDocument[]>;
+  createCommunicationWorkflowTask(task: InsertCommunicationWorkflowTask): Promise<CommunicationWorkflowTask>;
+  getCommunicationWorkflowTasks(limit?: number): Promise<CommunicationWorkflowTask[]>;
+  updateCommunicationWorkflowTaskStatus(
+    id: string,
+    status: string,
+    details?: { executedAt?: Date | null; lastError?: string | null; attempts?: number },
+  ): Promise<CommunicationWorkflowTask | undefined>;
+  createEmailCampaign(campaign: InsertEmailCampaign): Promise<EmailCampaign>;
+  getEmailCampaigns(limit?: number): Promise<EmailCampaign[]>;
+  updateEmailCampaign(id: number, campaign: Partial<InsertEmailCampaign>): Promise<EmailCampaign | undefined>;
   getEmailDeliveryStats(days?: number): Promise<{
     totals: Record<string, number>;
     byCategory: Record<string, Record<string, number>>;
@@ -860,6 +883,41 @@ export class DatabaseStorage implements IStorage {
     return message;
   }
 
+  async createNotification(insertNotification: InsertNotification): Promise<Notification> {
+    const [notification] = await db
+      .insert(notifications)
+      .values(insertNotification as typeof notifications.$inferInsert)
+      .returning();
+    return notification;
+  }
+
+  async getNotifications(limit = 100, userId?: number | null): Promise<Notification[]> {
+    const safeLimit = Math.max(1, Math.min(limit, 500));
+    if (typeof userId === "number") {
+      return await db
+        .select()
+        .from(notifications)
+        .where(eq(notifications.userId, userId))
+        .orderBy(desc(notifications.createdAt))
+        .limit(safeLimit);
+    }
+
+    return await db
+      .select()
+      .from(notifications)
+      .orderBy(desc(notifications.createdAt))
+      .limit(safeLimit);
+  }
+
+  async markNotificationRead(id: number): Promise<Notification | undefined> {
+    const [notification] = await db
+      .update(notifications)
+      .set({ status: "read", readAt: new Date() })
+      .where(eq(notifications.id, id))
+      .returning();
+    return notification || undefined;
+  }
+
   async getSubscriberByEmail(email: string): Promise<Subscriber | undefined> {
     const [subscriber] = await db
       .select()
@@ -1135,6 +1193,108 @@ export class DatabaseStorage implements IStorage {
       .from(communicationMessages)
       .orderBy(desc(communicationMessages.createdAt))
       .limit(Math.max(1, Math.min(limit, 500)));
+  }
+
+  async createCommunicationTemplateVersion(
+    insertVersion: InsertCommunicationTemplateVersion,
+  ): Promise<CommunicationTemplateVersion> {
+    const [version] = await db
+      .insert(communicationTemplateVersions)
+      .values(insertVersion as typeof communicationTemplateVersions.$inferInsert)
+      .returning();
+    return version;
+  }
+
+  async getCommunicationTemplateVersions(limit = 100): Promise<CommunicationTemplateVersion[]> {
+    return await db
+      .select()
+      .from(communicationTemplateVersions)
+      .orderBy(desc(communicationTemplateVersions.createdAt))
+      .limit(Math.max(1, Math.min(limit, 500)));
+  }
+
+  async getCommunicationTemplateVersionsByTemplateId(templateId: string): Promise<CommunicationTemplateVersion[]> {
+    return await db
+      .select()
+      .from(communicationTemplateVersions)
+      .where(eq(communicationTemplateVersions.templateId, templateId))
+      .orderBy(desc(communicationTemplateVersions.version));
+  }
+
+  async createCommunicationDocument(insertDocument: InsertCommunicationDocument): Promise<CommunicationDocument> {
+    const [document] = await db
+      .insert(communicationDocuments)
+      .values(insertDocument as typeof communicationDocuments.$inferInsert)
+      .returning();
+    return document;
+  }
+
+  async getCommunicationDocuments(limit = 100): Promise<CommunicationDocument[]> {
+    return await db
+      .select()
+      .from(communicationDocuments)
+      .orderBy(desc(communicationDocuments.createdAt))
+      .limit(Math.max(1, Math.min(limit, 500)));
+  }
+
+  async createCommunicationWorkflowTask(insertTask: InsertCommunicationWorkflowTask): Promise<CommunicationWorkflowTask> {
+    const [task] = await db
+      .insert(communicationWorkflowTasks)
+      .values(insertTask as typeof communicationWorkflowTasks.$inferInsert)
+      .returning();
+    return task;
+  }
+
+  async getCommunicationWorkflowTasks(limit = 100): Promise<CommunicationWorkflowTask[]> {
+    return await db
+      .select()
+      .from(communicationWorkflowTasks)
+      .orderBy(desc(communicationWorkflowTasks.createdAt))
+      .limit(Math.max(1, Math.min(limit, 500)));
+  }
+
+  async updateCommunicationWorkflowTaskStatus(
+    id: string,
+    status: string,
+    details: { executedAt?: Date | null; lastError?: string | null; attempts?: number } = {},
+  ): Promise<CommunicationWorkflowTask | undefined> {
+    const [task] = await db
+      .update(communicationWorkflowTasks)
+      .set({
+        status,
+        executedAt: details.executedAt ?? null,
+        lastError: details.lastError ?? null,
+        attempts: details.attempts ?? sql`${communicationWorkflowTasks.attempts} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(communicationWorkflowTasks.id, id))
+      .returning();
+    return task || undefined;
+  }
+
+  async createEmailCampaign(insertCampaign: InsertEmailCampaign): Promise<EmailCampaign> {
+    const [campaign] = await db
+      .insert(emailCampaigns)
+      .values(insertCampaign as typeof emailCampaigns.$inferInsert)
+      .returning();
+    return campaign;
+  }
+
+  async getEmailCampaigns(limit = 100): Promise<EmailCampaign[]> {
+    return await db
+      .select()
+      .from(emailCampaigns)
+      .orderBy(desc(emailCampaigns.createdAt))
+      .limit(Math.max(1, Math.min(limit, 500)));
+  }
+
+  async updateEmailCampaign(id: number, updateCampaign: Partial<InsertEmailCampaign>): Promise<EmailCampaign | undefined> {
+    const [campaign] = await db
+      .update(emailCampaigns)
+      .set({ ...(updateCampaign as Partial<typeof emailCampaigns.$inferInsert>), updatedAt: new Date() })
+      .where(eq(emailCampaigns.id, id))
+      .returning();
+    return campaign || undefined;
   }
 
   async getEmailDeliveryStats(days = 30): Promise<{
