@@ -23,7 +23,7 @@ import {
   insertSubscriberSchema,
 } from "@shared/schema";
 import bcrypt from "bcryptjs";
-import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "crypto";
 import fs from "fs";
 import jwt from "jsonwebtoken";
 import multer from "multer";
@@ -60,6 +60,21 @@ import {
   verifyEmailPreferenceToken,
   verifyEmailTrackingSignature,
 } from "./email";
+import {
+  emitCommunicationEvent,
+  getCommunicationAudit,
+  getCommunicationAnalytics,
+  getCommunicationDiagnostics,
+  getCommunicationMessage,
+  getCommunicationRoutes,
+  getCommunicationTemplate,
+  getCommunicationTemplates,
+  getCommunicationTimeline,
+  getGeneratedDocumentPath,
+  replayCommunicationEvent,
+  renderCommunicationTemplatePreview,
+  verifyGeneratedDocumentToken,
+} from "./communication";
 import {
   deleteBlogMeta,
   deleteApplicationMeta,
@@ -314,6 +329,15 @@ const forgotPasswordSchema = z.object({
   email: z.string().trim().email().transform((value) => value.toLowerCase()),
 });
 
+const loginRequestSchema = z
+  .object({
+    email: z.string().trim().optional(),
+    username: z.string().trim().optional(),
+    identifier: z.string().trim().optional(),
+    password: z.string().min(1),
+  })
+  .strict();
+
 const resendVerificationSchema = z.object({
   email: z.string().trim().email().transform((value) => value.toLowerCase()),
 });
@@ -328,6 +352,19 @@ const resetPasswordSchema = z.object({
   token: z.string().trim().min(20),
   password: strongPasswordSchema,
 });
+
+const mfaVerifySchema = z
+  .object({
+    challengeToken: z.string().trim().min(20),
+    code: z.string().trim().min(6).max(12),
+  })
+  .strict();
+
+const mfaConfirmSchema = z
+  .object({
+    code: z.string().trim().min(6).max(12),
+  })
+  .strict();
 
 const emailPreferenceUpdateSchema = z.object({
   categories: z.record(z.boolean()).optional(),
@@ -466,6 +503,29 @@ const adminRoleInputSchema = z.object({
   isActive: z.boolean().optional().default(true),
 });
 
+const communicationEventRequestSchema = z.object({
+  eventType: z.string().trim().min(3).max(120),
+  userId: z.coerce.number().int().positive().optional().nullable(),
+  source: z.enum(["admin", "client", "system"]).default("admin"),
+  priority: z.enum(["high", "medium", "low"]).optional(),
+  payload: z.record(z.unknown()).default({}),
+});
+
+const communicationTemplatePreviewSchema = z.object({
+  eventType: z.string().trim().min(3).max(120).optional(),
+  userId: z.coerce.number().int().positive().optional().nullable(),
+  source: z.enum(["admin", "client", "system"]).default("admin"),
+  payload: z.record(z.unknown()).default({}),
+});
+
+const communicationTimelineQuerySchema = z.object({
+  userId: z.coerce.number().int().positive().optional(),
+  email: z.string().trim().email().optional(),
+  limit: z.coerce.number().int().positive().max(500).optional(),
+}).refine((value) => value.userId || value.email, {
+  message: "Provide userId or email",
+});
+
 const partnerActivityInputSchema = z.object({
   type: z.string().trim().min(2).max(80).default("note"),
   subject: z.string().trim().min(2).max(180),
@@ -545,10 +605,12 @@ type JwtUser = {
   id: number;
   email: string;
   role: string;
-  type?: "access" | "refresh" | "email_verification" | "password_reset";
+  type?: "access" | "refresh" | "email_verification" | "password_reset" | "mfa_challenge";
   pwd?: string;
   jti?: string;
+  mfaVerified?: boolean;
   iat?: number;
+  exp?: number;
 };
 
 type AuthenticatedRequest = Request & {
@@ -644,6 +706,237 @@ const passwordFingerprint = (passwordHash: string) =>
   createHmac("sha256", JWT_SECRET).update(passwordHash).digest("hex").slice(0, 40);
 
 const getClientIp = (req: Request) => req.ip || req.socket.remoteAddress || "unknown";
+
+const securityAuditLogPath = path.join(resolveWritableRuntimePath("data"), "security-audit.jsonl");
+let lastSecurityAuditHash: string | null | undefined;
+
+const redactedAuditKeys = new Set([
+  "password",
+  "token",
+  "accesstoken",
+  "idtoken",
+  "refreshtoken",
+  "challengetoken",
+  "secret",
+  "totpsecret",
+  "authorization",
+  "cookie",
+]);
+
+const redactAuditValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map(redactAuditValue).slice(0, 50);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        redactedAuditKeys.has(key.toLowerCase()) ? "[redacted]" : redactAuditValue(item),
+      ]),
+    );
+  }
+
+  if (typeof value === "string" && value.length > 500) {
+    return `${value.slice(0, 497)}...`;
+  }
+
+  return value;
+};
+
+const readLastSecurityAuditHash = () => {
+  if (lastSecurityAuditHash !== undefined) return lastSecurityAuditHash;
+
+  try {
+    if (!fs.existsSync(securityAuditLogPath)) {
+      lastSecurityAuditHash = null;
+      return lastSecurityAuditHash;
+    }
+
+    const content = fs.readFileSync(securityAuditLogPath, "utf-8").trim();
+    if (!content) {
+      lastSecurityAuditHash = null;
+      return lastSecurityAuditHash;
+    }
+
+    const lastLine = content.split(/\r?\n/).pop();
+    lastSecurityAuditHash = lastLine ? JSON.parse(lastLine).hash ?? null : null;
+    return lastSecurityAuditHash;
+  } catch (error) {
+    console.warn("Security audit hash recovery skipped:", getErrorLogMessage(error));
+    lastSecurityAuditHash = null;
+    return lastSecurityAuditHash;
+  }
+};
+
+const appendSecurityAuditEvent = (input: {
+  event: string;
+  actorId?: number | null;
+  actorRole?: string | null;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  requestId?: string | null;
+  method?: string | null;
+  path?: string | null;
+  statusCode?: number | null;
+  details?: Record<string, unknown>;
+}) => {
+  const previousHash = readLastSecurityAuditHash();
+  const recordWithoutHash = {
+    id: randomUUID(),
+    at: new Date().toISOString(),
+    previousHash,
+    ...input,
+    details: redactAuditValue(input.details ?? {}),
+  };
+  const hash = createHash("sha256").update(JSON.stringify(recordWithoutHash)).digest("hex");
+  const record = { ...recordWithoutHash, hash };
+
+  fs.mkdirSync(path.dirname(securityAuditLogPath), { recursive: true });
+  fs.appendFileSync(securityAuditLogPath, `${JSON.stringify(record)}\n`, "utf-8");
+  lastSecurityAuditHash = hash;
+  return record;
+};
+
+const recordSecurityAuditEvent = async (
+  req: Request,
+  event: string,
+  details: Record<string, unknown> = {},
+  statusCode?: number,
+) => {
+  const actor = (req as Partial<AuthenticatedRequest>).user;
+  let auditId: string | null = null;
+  try {
+    const auditRecord = appendSecurityAuditEvent({
+      event,
+      actorId: actor?.id ?? null,
+      actorRole: actor?.role ?? null,
+      ipAddress: getClientIp(req),
+      userAgent: req.get("user-agent") ?? null,
+      requestId: String(req.get("x-request-id") ?? ""),
+      method: req.method,
+      path: req.originalUrl || req.path,
+      statusCode: statusCode ?? null,
+      details,
+    });
+    auditId = auditRecord.id;
+  } catch (error) {
+    console.warn("Security audit append failed:", getErrorLogMessage(error));
+  }
+
+  await logAnalyticsBestEffort({
+    event,
+    userId: actor?.id,
+    metadata: {
+      path: req.originalUrl || req.path,
+      method: req.method,
+      statusCode,
+      ...(redactAuditValue(details) as Record<string, unknown>),
+    },
+    ipAddress: getClientIp(req),
+    userAgent: req.get("user-agent"),
+  });
+
+  if ([
+    "admin_hmac_configuration_error",
+    "admin_hmac_rejected",
+    "refresh_token_reuse_detected",
+    "mfa_setup_blocked",
+  ].includes(event)) {
+    void emitCommunicationEvent({
+      event_type: "system.security_event",
+      source: "system",
+      user_id: actor?.id ?? null,
+      priority: "high",
+      payload: {
+        event_title: event.replace(/_/g, " "),
+        message: `Security event recorded for ${req.method} ${req.originalUrl || req.path}.`,
+        source: "server",
+        reference_id: auditId || `SEC-${Date.now()}`,
+        admin_notification_email: env.ADMIN_NOTIFICATION_EMAIL || env.EMAIL_FROM,
+        admin_phone: env.ADMIN_NOTIFICATION_PHONE,
+        status_code: statusCode ?? null,
+        details: redactAuditValue(details),
+      },
+    }).catch((error) => {
+      console.warn("Security notification dispatch failed:", getErrorLogMessage(error));
+    });
+  }
+};
+
+const stableJson = (value: unknown): string => {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableJson).join(",")}]`;
+  }
+
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
+      .join(",")}}`;
+  }
+
+  return JSON.stringify(value);
+};
+
+const adminHmacNonces = new Map<string, number>();
+
+const pruneAdminHmacNonces = () => {
+  const now = Date.now();
+  for (const [nonce, expiresAt] of adminHmacNonces.entries()) {
+    if (expiresAt <= now) adminHmacNonces.delete(nonce);
+  }
+};
+
+const isHighRiskAdminRequest = (req: Request) =>
+  !["GET", "HEAD", "OPTIONS"].includes(req.method) || /(?:^|\/)export(?:\/|$)/.test(req.path);
+
+const verifyAdminHmacSignature = (req: Request, res: Response, next: NextFunction) => {
+  if (!isHighRiskAdminRequest(req) || !env.ADMIN_HMAC_REQUIRED) {
+    return next();
+  }
+
+  if (!env.ADMIN_HMAC_SECRET) {
+    void recordSecurityAuditEvent(req, "admin_hmac_configuration_error", {}, 500);
+    return res.status(500).json({ message: "Admin HMAC enforcement is enabled but no secret is configured" });
+  }
+
+  const timestamp = req.get("x-mec-timestamp");
+  const nonce = req.get("x-mec-nonce");
+  const providedSignature = (req.get("x-mec-signature") || "").replace(/^sha256=/, "");
+  const timestampMs = Number(timestamp);
+  const now = Date.now();
+
+  if (!timestamp || !Number.isFinite(timestampMs) || Math.abs(now - timestampMs) > env.ADMIN_HMAC_MAX_SKEW_MS) {
+    void recordSecurityAuditEvent(req, "admin_hmac_rejected", { reason: "timestamp" }, 401);
+    return res.status(401).json({ message: "Invalid admin request timestamp" });
+  }
+
+  if (!nonce || nonce.length < 16 || nonce.length > 120) {
+    void recordSecurityAuditEvent(req, "admin_hmac_rejected", { reason: "nonce" }, 401);
+    return res.status(401).json({ message: "Invalid admin request nonce" });
+  }
+
+  pruneAdminHmacNonces();
+  if (adminHmacNonces.has(nonce)) {
+    void recordSecurityAuditEvent(req, "admin_hmac_rejected", { reason: "replay" }, 401);
+    return res.status(401).json({ message: "Admin request replay detected" });
+  }
+
+  const bodyHash = createHash("sha256").update(stableJson(req.body ?? null)).digest("hex");
+  const payload = [req.method.toUpperCase(), req.originalUrl || req.url, timestamp, nonce, bodyHash].join("\n");
+  const expectedSignature = createHmac("sha256", env.ADMIN_HMAC_SECRET).update(payload).digest("hex");
+  const provided = Buffer.from(providedSignature, "hex");
+  const expected = Buffer.from(expectedSignature, "hex");
+
+  if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+    void recordSecurityAuditEvent(req, "admin_hmac_rejected", { reason: "signature" }, 401);
+    return res.status(401).json({ message: "Invalid admin request signature" });
+  }
+
+  adminHmacNonces.set(nonce, now + env.ADMIN_HMAC_MAX_SKEW_MS);
+  return next();
+};
 
 const isBearerSecretMatch = (headerValue: string | undefined, expectedSecret: string | undefined) => {
   if (!expectedSecret || !headerValue?.startsWith("Bearer ")) return false;
@@ -1573,8 +1866,188 @@ const toAdminEvent = async (event: any) => {
 const createTicketCode = (eventId: number) =>
   `MEC-${eventId}-${randomBytes(4).toString("hex").toUpperCase()}`;
 
-const signToken = (user: { id: number; email: string; role: string; password: string }) => {
-  const timeoutMinutes = Math.max(5, Math.min(480, getAdminSettings().sessionTimeout || 30));
+type AuthUserRecord = {
+  id: number;
+  email: string;
+  role: string;
+  password: string;
+  mfaEnabled?: boolean | null;
+  totpSecret?: string | null;
+  mfaConfirmedAt?: Date | string | null;
+};
+
+const MFA_REQUIRED_DEFAULT_ROLES = new Set(["writer", "editor", "admin", "super_admin"]);
+const TOTP_PERIOD_SECONDS = 30;
+const TOTP_DIGITS = 6;
+const TOTP_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+const isMfaRequiredForRole = (role: string | null | undefined) => {
+  if (!role) return false;
+  if (getAdminSettings().twoFactorRequired && ADMIN_PORTAL_ROLES.has(role)) return true;
+  return MFA_REQUIRED_DEFAULT_ROLES.has(role);
+};
+
+const hasConfirmedMfa = (user: AuthUserRecord) =>
+  Boolean(user.mfaEnabled && user.totpSecret && user.mfaConfirmedAt);
+
+const base32Encode = (buffer: Buffer) => {
+  let output = "";
+  let value = 0;
+  let bits = 0;
+
+  for (const byte of buffer) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      output += TOTP_ALPHABET[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+
+  if (bits > 0) {
+    output += TOTP_ALPHABET[(value << (5 - bits)) & 31];
+  }
+
+  return output;
+};
+
+const base32Decode = (secret: string) => {
+  const normalized = secret.toUpperCase().replace(/[^A-Z2-7]/g, "");
+  let value = 0;
+  let bits = 0;
+  const bytes: number[] = [];
+
+  for (const char of normalized) {
+    const index = TOTP_ALPHABET.indexOf(char);
+    if (index === -1) continue;
+    value = (value << 5) | index;
+    bits += 5;
+    if (bits >= 8) {
+      bytes.push((value >>> (bits - 8)) & 255);
+      bits -= 8;
+    }
+  }
+
+  return Buffer.from(bytes);
+};
+
+export const generateTotpSecret = () => base32Encode(randomBytes(20));
+
+export const generateTotpCode = (secret: string, now = Date.now()) => {
+  const key = base32Decode(secret);
+  if (!key.length) {
+    throw new Error("Invalid TOTP secret");
+  }
+
+  const counter = Math.floor(now / 1000 / TOTP_PERIOD_SECONDS);
+  const counterBuffer = Buffer.alloc(8);
+  counterBuffer.writeUInt32BE(Math.floor(counter / 0x100000000), 0);
+  counterBuffer.writeUInt32BE(counter >>> 0, 4);
+
+  const digest = createHmac("sha1", key).update(counterBuffer).digest();
+  const offset = digest[digest.length - 1] & 0x0f;
+  const binary = digest.readUInt32BE(offset) & 0x7fffffff;
+  const code = binary % 10 ** TOTP_DIGITS;
+
+  return String(code).padStart(TOTP_DIGITS, "0");
+};
+
+const verifyTotpCode = (secret: string, code: string, window = 1) => {
+  const normalizedCode = String(code ?? "").replace(/\s+/g, "");
+  if (!/^\d{6}$/.test(normalizedCode)) return false;
+
+  const provided = Buffer.from(normalizedCode);
+  const now = Date.now();
+  for (let offset = -window; offset <= window; offset += 1) {
+    const expected = Buffer.from(generateTotpCode(secret, now + offset * TOTP_PERIOD_SECONDS * 1000));
+    if (provided.length === expected.length && timingSafeEqual(provided, expected)) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const encryptedTotpPrefix = "enc:v1:";
+
+const getMfaEncryptionKey = () => {
+  if (!env.MFA_ENCRYPTION_KEY) return null;
+  return createHash("sha256").update(env.MFA_ENCRYPTION_KEY).digest();
+};
+
+const encryptTotpSecret = (secret: string) => {
+  const key = getMfaEncryptionKey();
+  if (!key) {
+    if (env.NODE_ENV === "production") {
+      throw new Error("MFA_ENCRYPTION_KEY is required before enabling MFA setup in production");
+    }
+    return secret;
+  }
+
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const encrypted = Buffer.concat([cipher.update(secret, "utf8"), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return `${encryptedTotpPrefix}${Buffer.concat([iv, authTag, encrypted]).toString("base64url")}`;
+};
+
+const decryptTotpSecret = (storedSecret: string | null | undefined) => {
+  if (!storedSecret) return null;
+  if (!storedSecret.startsWith(encryptedTotpPrefix)) return storedSecret;
+
+  const key = getMfaEncryptionKey();
+  if (!key) {
+    throw new Error("MFA_ENCRYPTION_KEY is required to decrypt MFA secrets");
+  }
+
+  const payload = Buffer.from(storedSecret.slice(encryptedTotpPrefix.length), "base64url");
+  if (payload.length <= 28) {
+    throw new Error("Encrypted MFA secret is invalid");
+  }
+
+  const iv = payload.subarray(0, 12);
+  const authTag = payload.subarray(12, 28);
+  const encrypted = payload.subarray(28);
+  const decipher = createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAuthTag(authTag);
+  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
+};
+
+const verifyStoredTotpCode = (storedSecret: string | null | undefined, code: string) => {
+  try {
+    const secret = decryptTotpSecret(storedSecret);
+    return Boolean(secret && verifyTotpCode(secret, code));
+  } catch (error) {
+    console.warn("MFA secret verification failed:", getErrorLogMessage(error));
+    return false;
+  }
+};
+
+const buildTotpUri = (user: Pick<AuthUserRecord, "email">, secret: string) => {
+  const label = encodeURIComponent(`Mtendere Education:${user.email}`);
+  const issuer = encodeURIComponent("Mtendere Education");
+  return `otpauth://totp/${label}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=${TOTP_DIGITS}&period=${TOTP_PERIOD_SECONDS}`;
+};
+
+const signMfaChallengeToken = (user: AuthUserRecord) =>
+  jwt.sign(
+    {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      type: "mfa_challenge",
+      pwd: passwordFingerprint(user.password),
+    },
+    JWT_SECRET,
+    { expiresIn: "5m", jwtid: randomUUID() },
+  );
+
+const signToken = (
+  user: AuthUserRecord,
+  options: { mfaVerified?: boolean } = {},
+) => {
+  const configuredTimeout = getAdminSettings().sessionTimeout || 15;
+  const timeoutMinutes = Math.max(5, Math.min(15, configuredTimeout));
   return jwt.sign(
     {
       id: user.id,
@@ -1582,16 +2055,18 @@ const signToken = (user: { id: number; email: string; role: string; password: st
       role: user.role,
       type: "access",
       pwd: passwordFingerprint(user.password),
+      mfaVerified: options.mfaVerified ?? !isMfaRequiredForRole(user.role),
     },
     JWT_SECRET,
     {
-    expiresIn: `${timeoutMinutes}m`,
+      expiresIn: `${timeoutMinutes}m`,
     },
   );
 };
 
 const refreshTokenCookieName = "mec_refresh_token";
 const refreshTokenMaxAgeMs = 7 * 24 * 60 * 60 * 1000;
+const usedRefreshTokenIds = new Map<string, number>();
 
 const refreshCookieOptions: CookieOptions = {
   httpOnly: true,
@@ -1601,10 +2076,33 @@ const refreshCookieOptions: CookieOptions = {
   path: "/",
 };
 
-const signRefreshToken = (user: { id: number; email: string; role: string; password: string }) =>
-  jwt.sign({ id: user.id, email: user.email, role: user.role, type: "refresh", pwd: passwordFingerprint(user.password) }, JWT_SECRET, {
+const signRefreshToken = (
+  user: { id: number; email: string; role: string; password: string },
+  options: { mfaVerified?: boolean } = {},
+) =>
+  jwt.sign({ id: user.id, email: user.email, role: user.role, type: "refresh", pwd: passwordFingerprint(user.password), mfaVerified: Boolean(options.mfaVerified), jti: randomUUID() }, JWT_SECRET, {
     expiresIn: "7d",
   });
+
+const pruneUsedRefreshTokenIds = () => {
+  const now = Date.now();
+  for (const [tokenId, expiresAt] of usedRefreshTokenIds.entries()) {
+    if (expiresAt <= now) usedRefreshTokenIds.delete(tokenId);
+  }
+};
+
+const markRefreshTokenUsed = (jwtUser: JwtUser) => {
+  if (!jwtUser.jti) return;
+  const expiresAt = typeof jwtUser.exp === "number"
+    ? jwtUser.exp * 1000
+    : Date.now() + refreshTokenMaxAgeMs;
+  usedRefreshTokenIds.set(jwtUser.jti, expiresAt);
+};
+
+const wasRefreshTokenReused = (jwtUser: JwtUser) => {
+  pruneUsedRefreshTokenIds();
+  return Boolean(jwtUser.jti && usedRefreshTokenIds.has(jwtUser.jti));
+};
 
 const signEmailVerificationToken = (
   user: { id: number; email: string; role: string; password: string },
@@ -1717,8 +2215,12 @@ const getCookieValue = (req: Request, name: string) => {
   }
 };
 
-const setRefreshCookie = (res: Response, user: { id: number; email: string; role: string; password: string }) => {
-  res.cookie(refreshTokenCookieName, signRefreshToken(user), refreshCookieOptions);
+const setRefreshCookie = (
+  res: Response,
+  user: { id: number; email: string; role: string; password: string },
+  options: { mfaVerified?: boolean } = {},
+) => {
+  res.cookie(refreshTokenCookieName, signRefreshToken(user, options), refreshCookieOptions);
 };
 
 const clearRefreshCookie = (res: Response) => {
@@ -1760,10 +2262,26 @@ const getOptionalAuthenticatedUser = (req: Request): JwtUser | null => {
   }
 };
 
-const isAdmin = (user: JwtUser | null) => user?.role === "super_admin";
+const isAdmin = (user: JwtUser | null) => user?.role === "admin" || user?.role === "super_admin";
 
 const isAdminPortalUser = (user: JwtUser | null) =>
   Boolean(user?.role && ADMIN_PORTAL_ROLES.has(user.role));
+
+const getRolePermissions = (role: string | null | undefined) => {
+  if (!role) return new Set<string>();
+  if (role === "super_admin") return new Set(["*"]);
+
+  const adminRole = getAdminRoles().find((item) => item.id === role && item.isActive !== false);
+  return new Set(adminRole?.permissions ?? []);
+};
+
+const hasAnyPermission = (user: JwtUser | null, requiredPermissions: string[]) => {
+  if (!user?.role) return false;
+  if (user.role === "super_admin") return true;
+
+  const permissions = getRolePermissions(user.role);
+  return requiredPermissions.some((permission) => permissions.has(permission));
+};
 
 const authenticateToken = async (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
@@ -1800,6 +2318,7 @@ const authenticateToken = async (req: Request, res: Response, next: NextFunction
       role: user.role,
       type: "access",
       pwd: jwtUser.pwd,
+      mfaVerified: Boolean(jwtUser.mfaVerified),
       iat: jwtUser.iat,
     };
     next();
@@ -1808,12 +2327,45 @@ const authenticateToken = async (req: Request, res: Response, next: NextFunction
   }
 };
 
+const enforceVerifiedMfa = async (req: Request, res: Response, next: NextFunction) => {
+  const jwtUser = getAuthenticatedUser(req);
+  if (!isMfaRequiredForRole(jwtUser.role)) {
+    return next();
+  }
+
+  try {
+    const user = await storage.getUser(Number(jwtUser.id));
+    if (!user || user.isActive === false) {
+      return res.status(401).json({ message: "Account is inactive or no longer exists" });
+    }
+
+    if (!hasConfirmedMfa(user as AuthUserRecord)) {
+      return res.status(403).json({
+        message: "Multi-factor authentication setup is required for this role",
+        code: "MFA_SETUP_REQUIRED",
+      });
+    }
+
+    if (!jwtUser.mfaVerified) {
+      return res.status(403).json({
+        message: "Multi-factor authentication verification is required",
+        code: "MFA_VERIFICATION_REQUIRED",
+      });
+    }
+
+    return next();
+  } catch (error) {
+    console.error("MFA enforcement error:", getErrorLogMessage(error));
+    return res.status(500).json({ message: "Unable to verify multi-factor authentication state" });
+  }
+};
+
 const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
   if (!isAdmin(getAuthenticatedUser(req))) {
     return res.status(403).json({ message: "Admin access required" });
   }
 
-  next();
+  return enforceVerifiedMfa(req, res, next);
 };
 
 const requireAdminPortal = (req: Request, res: Response, next: NextFunction) => {
@@ -1821,7 +2373,7 @@ const requireAdminPortal = (req: Request, res: Response, next: NextFunction) => 
     return res.status(403).json({ message: "Admin portal access required" });
   }
 
-  next();
+  return enforceVerifiedMfa(req, res, next);
 };
 
 const requireSuperAdmin = (req: Request, res: Response, next: NextFunction) => {
@@ -1829,7 +2381,7 @@ const requireSuperAdmin = (req: Request, res: Response, next: NextFunction) => {
     return res.status(403).json({ message: "Super administrator access required" });
   }
 
-  next();
+  return enforceVerifiedMfa(req, res, next);
 };
 
 const isEditor = (user: JwtUser | null) =>
@@ -1840,8 +2392,22 @@ const requireEditor = (req: Request, res: Response, next: NextFunction) => {
     return res.status(403).json({ message: "Writer access required" });
   }
 
-  next();
+  return enforceVerifiedMfa(req, res, next);
 };
+
+const requireAnyPermission = (...requiredPermissions: string[]) =>
+  (req: Request, res: Response, next: NextFunction) => {
+    const user = getAuthenticatedUser(req);
+    if (!hasAnyPermission(user, requiredPermissions)) {
+      return res.status(403).json({
+        message: "Insufficient permission",
+        code: "INSUFFICIENT_PERMISSION",
+        requiredAnyOf: requiredPermissions,
+      });
+    }
+
+    return enforceVerifiedMfa(req, res, next);
+  };
 
 const loginFailures = new Map<string, { count: number; lockedUntil?: number }>();
 const loginLockoutMs = 15 * 60 * 1000;
@@ -1926,6 +2492,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // WebSocket setup for real-time updates
   const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+
+  app.use("/api/admin", verifyAdminHmacSignature, (req, res, next) => {
+    const shouldAudit = isHighRiskAdminRequest(req) || res.statusCode >= 400;
+    const startedAt = Date.now();
+
+    res.on("finish", () => {
+      const finalShouldAudit = shouldAudit || res.statusCode >= 400;
+      if (!finalShouldAudit) return;
+
+      void recordSecurityAuditEvent(
+        req,
+        "admin_api_access",
+        {
+          durationMs: Date.now() - startedAt,
+          route: req.originalUrl || req.url,
+          query: req.query,
+        },
+        res.statusCode,
+      );
+    });
+
+    return next();
+  });
+
+  app.get("/api/documents/generated/:fileName", (req, res) => {
+    const fileName = req.params.fileName;
+    const token = typeof req.query.t === "string" ? req.query.t : null;
+    const expiresAt = typeof req.query.exp === "string" ? req.query.exp : null;
+    if (!verifyGeneratedDocumentToken(fileName, token, expiresAt)) {
+      return res.status(403).json({ message: "Invalid document link" });
+    }
+
+    const filePath = getGeneratedDocumentPath(fileName);
+    if (!filePath) {
+      return res.status(404).json({ message: "Document not found" });
+    }
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${fileName}"`);
+    return res.sendFile(filePath);
+  });
 
   wss.on("connection", (ws: SocketWithSubscriptions, req) => {
     ws.subscriptions = [];
@@ -3124,6 +3731,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      void emitCommunicationEvent({
+        event_type: "student.registered",
+        user_id: user.id,
+        source: "client",
+        priority: "medium",
+        payload: {
+          email: user.email,
+          student_name: `${user.firstName} ${user.lastName}`.trim() || user.email,
+          reference_id: `USER-${user.id}`,
+          event_title: "Student registered",
+          message: `${user.email} registered a Mtendere account.`,
+        },
+      });
+
       res.status(201).json({
         message: 'Account created. Please verify your email before signing in.',
         requiresEmailVerification: true,
@@ -3138,8 +3759,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const loginHandler = async (req: Request, res: Response) => {
     try {
-      const identifier = req.body.email ?? req.body.username ?? req.body.identifier;
-      const { password } = req.body;
+      const loginPayload = loginRequestSchema.parse(req.body);
+      const identifier = loginPayload.email ?? loginPayload.username ?? loginPayload.identifier;
+      const { password } = loginPayload;
       
       if (!identifier || !password) {
         return res.status(400).json({ message: 'Email or username and password are required' });
@@ -3179,23 +3801,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       clearLoginFailure(normalizedIdentifier);
 
-      // Generate JWT token
       // Log analytics
       await storage.logAnalytics({
         event: 'user_logged_in',
         userId: user.id,
-        metadata: { email: user.email },
+        metadata: {
+          email: user.email,
+          mfaRequired: isMfaRequiredForRole(user.role),
+          mfaConfigured: hasConfirmedMfa(user as AuthUserRecord),
+        },
         ipAddress: req.ip,
         userAgent: req.get("user-agent"),
       });
 
       broadcast('user_activity', { type: 'user_logged_in', user: buildPublicUser(user) });
 
-      setRefreshCookie(res, user);
+      if (isMfaRequiredForRole(user.role) && hasConfirmedMfa(user as AuthUserRecord)) {
+        return res.status(202).json({
+          message: "Multi-factor authentication required",
+          mfaRequired: true,
+          challengeToken: signMfaChallengeToken(user as AuthUserRecord),
+          user: buildPublicUser(user),
+        });
+      }
 
+      const mfaVerified = !isMfaRequiredForRole(user.role);
+      setRefreshCookie(res, user, { mfaVerified });
       res.json({
         message: 'Login successful',
-        token: signToken(user),
+        token: signToken(user, { mfaVerified }),
+        mfaRequired: isMfaRequiredForRole(user.role),
+        mfaVerified,
         user: buildPublicUser(user),
       });
     } catch (error) {
@@ -3709,6 +4345,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/admin/communications/templates', authenticateToken, requireAdmin, (_req, res) => {
+    res.json({ templates: getCommunicationTemplates() });
+  });
+
+  app.get('/api/admin/communications/templates/:templateId', authenticateToken, requireAdmin, (req, res) => {
+    const template = getCommunicationTemplate(req.params.templateId);
+    if (!template) {
+      return res.status(404).json({ message: "Communication template not found" });
+    }
+    return res.json({ template });
+  });
+
+  app.post('/api/admin/communications/templates/:templateId/preview', authenticateToken, requireAdmin, (req, res) => {
+    try {
+      const payload = communicationTemplatePreviewSchema.parse(req.body);
+      res.json({
+        preview: renderCommunicationTemplatePreview(req.params.templateId, {
+          eventType: payload.eventType,
+          userId: payload.userId,
+          source: payload.source,
+          payload: payload.payload,
+        }),
+      });
+    } catch (error) {
+      res.status(400).json({ message: "Failed to preview communication template", error: getErrorMessage(error) });
+    }
+  });
+
+  app.get('/api/admin/communications/routes', authenticateToken, requireAdmin, (_req, res) => {
+    res.json({ routes: getCommunicationRoutes() });
+  });
+
+  app.get('/api/admin/communications/diagnostics', authenticateToken, requireAdmin, (_req, res) => {
+    res.json(getCommunicationDiagnostics());
+  });
+
+  app.get('/api/admin/communications/analytics', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const limit = Number(req.query.limit ?? 500);
+      res.json(await getCommunicationAnalytics(Number.isFinite(limit) ? limit : 500));
+    } catch (error) {
+      console.error("Communication analytics error:", getErrorLogMessage(error));
+      res.status(500).json({ message: "Failed to fetch communication analytics" });
+    }
+  });
+
+  app.get('/api/admin/communications/timeline', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const query = communicationTimelineQuerySchema.parse(req.query);
+      res.json(await getCommunicationTimeline(query));
+    } catch (error) {
+      res.status(400).json({ message: "Failed to fetch communication timeline", error: getErrorMessage(error) });
+    }
+  });
+
+  app.get('/api/admin/communications/audit', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const limit = Number(req.query.limit ?? 100);
+      res.json({ messages: await getCommunicationAudit(Number.isFinite(limit) ? limit : 100) });
+    } catch (error) {
+      console.error("Communication audit error:", getErrorLogMessage(error));
+      res.status(500).json({ message: "Failed to fetch communication audit" });
+    }
+  });
+
+  app.post('/api/admin/communications/events', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const payload = communicationEventRequestSchema.parse(req.body);
+      const result = await emitCommunicationEvent({
+        event_type: payload.eventType,
+        user_id: payload.userId,
+        source: payload.source,
+        priority: payload.priority,
+        payload: {
+          ...payload.payload,
+          created_by: getAuthenticatedUser(req).email,
+          admin_notification_email: env.ADMIN_NOTIFICATION_EMAIL || env.EMAIL_FROM,
+        },
+      });
+      res.status(202).json(result);
+    } catch (error) {
+      res.status(400).json({ message: "Failed to emit communication event", error: getErrorMessage(error) });
+    }
+  });
+
+  app.post('/api/admin/communications/events/:eventId/replay', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const actor = getAuthenticatedUser(req);
+      const result = await replayCommunicationEvent(req.params.eventId, {
+        replay_requested_by: actor.email,
+        replay_requested_at: new Date().toISOString(),
+      });
+      res.status(202).json({ replayedFromEventId: req.params.eventId, ...result });
+    } catch (error) {
+      res.status(404).json({ message: "Failed to replay communication event", error: getErrorMessage(error) });
+    }
+  });
+
+  app.post('/api/admin/communications/messages/:messageId/resend', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const message = await getCommunicationMessage(req.params.messageId);
+      const eventId = typeof message?.event_id === "string" ? message.event_id : null;
+      if (!eventId) {
+        return res.status(404).json({ message: "Communication message or source event was not found" });
+      }
+
+      const actor = getAuthenticatedUser(req);
+      const result = await replayCommunicationEvent(eventId, {
+        resend_requested_by: actor.email,
+        resend_requested_from_message_id: req.params.messageId,
+        resend_requested_at: new Date().toISOString(),
+      });
+      res.status(202).json({ resentFromMessageId: req.params.messageId, replayedFromEventId: eventId, ...result });
+    } catch (error) {
+      res.status(400).json({ message: "Failed to resend communication message", error: getErrorMessage(error) });
+    }
+  });
+
   const logoutHandler = (_req: Request, res: Response) => {
     clearRefreshCookie(res);
     res.json({ message: 'Logged out successfully' });
@@ -3722,9 +4476,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const decoded = jwt.verify(refreshToken, JWT_SECRET) as JwtUser & { type?: string };
-      if (decoded.type !== "refresh" || !decoded.id || !decoded.pwd) {
+      if (decoded.type !== "refresh" || !decoded.id || !decoded.pwd || !decoded.jti) {
         clearRefreshCookie(res);
         return res.status(401).json({ message: "Invalid refresh token" });
+      }
+
+      if (wasRefreshTokenReused(decoded)) {
+        clearRefreshCookie(res);
+        await recordSecurityAuditEvent(req, "refresh_token_reuse_detected", {
+          userId: decoded.id,
+          tokenId: decoded.jti,
+        }, 401);
+        return res.status(401).json({
+          message: "Refresh token reuse detected. Please sign in again.",
+          code: "REFRESH_TOKEN_REUSE_DETECTED",
+        });
       }
 
       const user = await storage.getUser(Number(decoded.id));
@@ -3738,9 +4504,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Refresh token expired. Please sign in again." });
       }
 
-      setRefreshCookie(res, user);
+      const mfaVerified = Boolean(decoded.mfaVerified) && (
+        !isMfaRequiredForRole(user.role) || hasConfirmedMfa(user as AuthUserRecord)
+      );
+      markRefreshTokenUsed(decoded);
+      setRefreshCookie(res, user, { mfaVerified });
       res.json({
-        token: signToken(user),
+        token: signToken(user, { mfaVerified }),
+        mfaVerified,
         user: buildPublicUser(user),
       });
     } catch (error) {
@@ -3754,19 +4525,216 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/auth/refresh', refreshHandler);
   app.post('/auth/refresh', refreshHandler);
 
-  const mfaStatusHandler = (req: Request, res: Response) => {
-    const user = getAuthenticatedUser(req);
+  const mfaStatusHandler = async (req: Request, res: Response) => {
+    const jwtUser = getAuthenticatedUser(req);
+    const user = await storage.getUser(Number(jwtUser.id));
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const mfaEnabled = hasConfirmedMfa(user as AuthUserRecord);
     res.json({
-      mfaSupported: false,
-      mfaEnabled: false,
-      mfaRequiredForRole: false,
+      mfaSupported: true,
+      mfaEnabled,
+      mfaRequiredForRole: isMfaRequiredForRole(user.role),
+      mfaVerified: Boolean(jwtUser.mfaVerified),
       role: user.role,
-      message: "MFA enforcement is not enabled for this backend.",
+      confirmedAt: user.mfaConfirmedAt ?? null,
+    });
+  };
+
+  const mfaSetupHandler = async (req: Request, res: Response) => {
+    const jwtUser = getAuthenticatedUser(req);
+    const user = await storage.getUser(Number(jwtUser.id));
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const secret = generateTotpSecret();
+    let storedSecret: string;
+    try {
+      storedSecret = encryptTotpSecret(secret);
+    } catch (error) {
+      await recordSecurityAuditEvent(req, "mfa_setup_blocked", {
+        reason: "encryption_not_configured",
+      }, 500);
+      return res.status(500).json({
+        message: "MFA secret encryption is not configured",
+      });
+    }
+
+    const updatedUser = await storage.updateUser(user.id, {
+      mfaEnabled: false,
+      totpSecret: storedSecret,
+      mfaConfirmedAt: null,
+    } as Partial<typeof user>);
+    const otpauthUrl = buildTotpUri(updatedUser as AuthUserRecord, secret);
+    const qrCodeDataUrl = await QRCode.toDataURL(otpauthUrl, { margin: 1, scale: 6 });
+
+    await logAnalyticsBestEffort({
+      event: "mfa_setup_started",
+      userId: user.id,
+      metadata: { role: user.role },
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent"),
+    });
+
+    res.json({
+      secret,
+      otpauthUrl,
+      qrCodeDataUrl,
+      period: TOTP_PERIOD_SECONDS,
+      digits: TOTP_DIGITS,
+    });
+  };
+
+  const mfaConfirmHandler = async (req: Request, res: Response) => {
+    const payload = mfaConfirmSchema.parse(req.body);
+    const jwtUser = getAuthenticatedUser(req);
+    const user = await storage.getUser(Number(jwtUser.id));
+    if (!user?.totpSecret) {
+      return res.status(400).json({ message: "MFA setup has not been started" });
+    }
+
+    if (!verifyStoredTotpCode(user.totpSecret, payload.code)) {
+      await logAnalyticsBestEffort({
+        event: "mfa_confirm_failed",
+        userId: user.id,
+        metadata: { role: user.role },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+      return res.status(401).json({ message: "Invalid MFA code" });
+    }
+
+    const confirmedAt = new Date();
+    const updatedUser = await storage.updateUser(user.id, {
+      mfaEnabled: true,
+      mfaConfirmedAt: confirmedAt,
+    } as Partial<typeof user>);
+
+    await logAnalyticsBestEffort({
+      event: "mfa_enabled",
+      userId: user.id,
+      metadata: { role: user.role, confirmedAt: confirmedAt.toISOString() },
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent"),
+    });
+
+    setRefreshCookie(res, updatedUser, { mfaVerified: true });
+    res.json({
+      message: "MFA enabled",
+      mfaEnabled: true,
+      mfaVerified: true,
+      token: signToken(updatedUser as AuthUserRecord, { mfaVerified: true }),
+      user: buildPublicUser(updatedUser),
+    });
+  };
+
+  const mfaVerifyHandler = async (req: Request, res: Response) => {
+    const payload = mfaVerifySchema.parse(req.body);
+    let decoded: JwtUser;
+    try {
+      decoded = jwt.verify(payload.challengeToken, JWT_SECRET) as JwtUser;
+    } catch {
+      return res.status(401).json({ message: "Invalid or expired MFA challenge" });
+    }
+
+    if (decoded.type !== "mfa_challenge" || !decoded.id || !decoded.pwd) {
+      return res.status(401).json({ message: "Invalid MFA challenge" });
+    }
+
+    if (isJwtUserInvalidated(decoded)) {
+      return res.status(401).json({ message: "Session was invalidated by an administrator" });
+    }
+
+    const user = await storage.getUser(Number(decoded.id));
+    if (!user || user.isActive === false || decoded.pwd !== passwordFingerprint(user.password)) {
+      return res.status(401).json({ message: "Invalid MFA challenge" });
+    }
+
+    if (!hasConfirmedMfa(user as AuthUserRecord)) {
+      return res.status(403).json({
+        message: "Multi-factor authentication setup is required for this role",
+        code: "MFA_SETUP_REQUIRED",
+      });
+    }
+
+    if (!verifyStoredTotpCode(user.totpSecret, payload.code)) {
+      await logAnalyticsBestEffort({
+        event: "mfa_verify_failed",
+        userId: user.id,
+        metadata: { role: user.role },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+      return res.status(401).json({ message: "Invalid MFA code" });
+    }
+
+    await logAnalyticsBestEffort({
+      event: "mfa_verified",
+      userId: user.id,
+      metadata: { role: user.role },
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent"),
+    });
+
+    setRefreshCookie(res, user, { mfaVerified: true });
+    res.json({
+      message: "MFA verified",
+      token: signToken(user as AuthUserRecord, { mfaVerified: true }),
+      mfaVerified: true,
+      user: buildPublicUser(user),
+    });
+  };
+
+  const mfaDisableHandler = async (req: Request, res: Response) => {
+    const payload = mfaConfirmSchema.parse(req.body);
+    const jwtUser = getAuthenticatedUser(req);
+    const user = await storage.getUser(Number(jwtUser.id));
+    if (!user || !hasConfirmedMfa(user as AuthUserRecord)) {
+      return res.status(400).json({ message: "MFA is not enabled" });
+    }
+
+    if (!verifyStoredTotpCode(user.totpSecret, payload.code)) {
+      return res.status(401).json({ message: "Invalid MFA code" });
+    }
+
+    const updatedUser = await storage.updateUser(user.id, {
+      mfaEnabled: false,
+      totpSecret: null,
+      mfaConfirmedAt: null,
+    } as Partial<typeof user>);
+
+    await logAnalyticsBestEffort({
+      event: "mfa_disabled",
+      userId: user.id,
+      metadata: { role: user.role },
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent"),
+    });
+
+    const mfaVerified = !isMfaRequiredForRole(updatedUser.role);
+    setRefreshCookie(res, updatedUser, { mfaVerified });
+    res.json({
+      message: "MFA disabled",
+      mfaEnabled: false,
+      mfaVerified,
+      token: signToken(updatedUser as AuthUserRecord, { mfaVerified }),
+      user: buildPublicUser(updatedUser),
     });
   };
 
   app.get('/api/auth/mfa/status', authenticateToken, mfaStatusHandler);
   app.get('/auth/mfa/status', authenticateToken, mfaStatusHandler);
+  app.post('/api/auth/mfa/setup', authenticateToken, mfaSetupHandler);
+  app.post('/auth/mfa/setup', authenticateToken, mfaSetupHandler);
+  app.post('/api/auth/mfa/confirm', authenticateToken, mfaConfirmHandler);
+  app.post('/auth/mfa/confirm', authenticateToken, mfaConfirmHandler);
+  app.post('/api/auth/mfa/verify', mfaVerifyHandler);
+  app.post('/auth/mfa/verify', mfaVerifyHandler);
+  app.post('/api/auth/mfa/disable', authenticateToken, enforceVerifiedMfa, mfaDisableHandler);
+  app.post('/auth/mfa/disable', authenticateToken, enforceVerifiedMfa, mfaDisableHandler);
 
   // User profile route
   const sendUserProfile = async (req: Request, res: Response) => {
@@ -5366,6 +6334,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ received: true, duplicate: !saved });
 
       if (saved) {
+        const stripeEvent = event as unknown as { type?: string; data?: { object?: Record<string, unknown> } };
+        const stripeObject = stripeEvent.data?.object ?? {};
+        const stripeBillingDetails =
+          stripeObject.billing_details && typeof stripeObject.billing_details === "object"
+            ? stripeObject.billing_details as Record<string, unknown>
+            : {};
+        const stripeCustomerDetails =
+          stripeObject.customer_details && typeof stripeObject.customer_details === "object"
+            ? stripeObject.customer_details as Record<string, unknown>
+            : {};
+        const amountRaw =
+          typeof stripeObject.amount_total === "number"
+            ? stripeObject.amount_total
+            : typeof stripeObject.amount_received === "number"
+              ? stripeObject.amount_received
+              : typeof stripeObject.amount === "number"
+                ? stripeObject.amount
+                : null;
+        const currency = typeof stripeObject.currency === "string" ? stripeObject.currency.toUpperCase() : env.STRIPE_DEFAULT_CURRENCY;
+        const email =
+          typeof stripeObject.customer_email === "string"
+            ? stripeObject.customer_email
+            : typeof stripeObject.receipt_email === "string"
+              ? stripeObject.receipt_email
+              : typeof stripeCustomerDetails.email === "string"
+                ? stripeCustomerDetails.email
+                : typeof stripeBillingDetails.email === "string"
+                  ? stripeBillingDetails.email
+                  : undefined;
+        const phone =
+          typeof stripeCustomerDetails.phone === "string"
+            ? stripeCustomerDetails.phone
+            : typeof stripeBillingDetails.phone === "string"
+              ? stripeBillingDetails.phone
+              : undefined;
+        const recipientName =
+          typeof stripeObject.customer_name === "string"
+            ? stripeObject.customer_name
+            : typeof stripeCustomerDetails.name === "string"
+              ? stripeCustomerDetails.name
+              : typeof stripeBillingDetails.name === "string"
+                ? stripeBillingDetails.name
+                : "Mtendere client";
+        const referenceId = String(stripeObject.id || stripeEvent.type || `PAY-${Date.now()}`);
+        if (stripeEvent.type === "checkout.session.completed" || stripeEvent.type === "payment_intent.succeeded") {
+          void emitCommunicationEvent({
+            event_type: "payment.received",
+            source: "system",
+            priority: "high",
+            payload: {
+              email,
+              phone,
+              recipient_name: recipientName,
+              amount: amountRaw === null ? "Not provided" : (amountRaw / 100).toFixed(2),
+              currency,
+              payment_status: "confirmed",
+              reference_id: referenceId,
+              event_title: "Payment received",
+              message: "A payment was confirmed by Stripe.",
+              admin_notification_email: env.ADMIN_NOTIFICATION_EMAIL || env.EMAIL_FROM,
+            },
+          });
+        } else if (stripeEvent.type === "payment_intent.payment_failed" || stripeEvent.type === "checkout.session.async_payment_failed") {
+          void emitCommunicationEvent({
+            event_type: "payment.failed",
+            source: "system",
+            priority: "high",
+            payload: {
+              email,
+              phone,
+              recipient_name: recipientName,
+              amount: amountRaw === null ? "Not provided" : (amountRaw / 100).toFixed(2),
+              currency,
+              payment_status: "failed",
+              reference_id: referenceId,
+              event_title: "Payment failed",
+              message: "Stripe reported that a payment attempt could not be completed.",
+              admin_notification_email: env.ADMIN_NOTIFICATION_EMAIL || env.EMAIL_FROM,
+              admin_phone: env.ADMIN_NOTIFICATION_PHONE,
+            },
+          });
+        }
         setImmediate(() => {
           processStripeEvent(event).catch((error) => {
             console.error('Stripe event processing error:', error);
@@ -6116,6 +7166,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         referenceId: user.id,
         payload: { user: toAdminUser(user) },
       });
+      void emitCommunicationEvent({
+        event_type: "admin.user_created",
+        user_id: getAuthenticatedUser(req).id,
+        source: "admin",
+        priority: "high",
+        payload: {
+          admin_email: user.email,
+          role: user.role,
+          created_by: getAuthenticatedUser(req).email,
+          admin_notification_email: env.ADMIN_NOTIFICATION_EMAIL || env.EMAIL_FROM,
+          event_title: "Admin user created",
+          message: `${user.email} was created with the ${user.role} role.`,
+          reference_id: `USER-${user.id}`,
+        },
+      });
       res.status(201).json(toAdminUser(user));
     } catch (error) {
       console.error("Admin user create error:", getErrorLogMessage(error));
@@ -6269,7 +7334,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/users/export', authenticateToken, requireSuperAdmin, async (_req, res) => {
+  app.get('/api/admin/users/export', authenticateToken, requireSuperAdmin, async (req, res) => {
     try {
       const users = (await storage.getAllUsers()).map(toAdminUser);
       const headers = ["ID", "Username", "Email", "Name", "Role", "Region", "Active", "Suspended At"];
@@ -6284,6 +7349,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user.suspendedAt,
       ]);
       const csv = [headers, ...rows].map((row) => row.map(escapeCsvValue).join(",")).join("\n");
+      void emitCommunicationEvent({
+        event_type: "admin.data_exported",
+        user_id: getAuthenticatedUser(req).id,
+        source: "admin",
+        priority: "high",
+        payload: {
+          event_title: "User data exported",
+          message: `${users.length} user records were exported.`,
+          export_type: "users",
+          record_count: users.length,
+          admin_notification_email: env.ADMIN_NOTIFICATION_EMAIL || env.EMAIL_FROM,
+          reference_id: `EXPORT-USERS-${Date.now()}`,
+        },
+      });
       res.setHeader("Content-Type", "text/csv; charset=utf-8");
       res.setHeader("Content-Disposition", `attachment; filename="mtendere-users-${new Date().toISOString().slice(0, 10)}.csv"`);
       res.send(csv);
@@ -8275,6 +9354,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ipAddress: req.ip,
         userAgent: req.get("user-agent"),
       });
+      void emitCommunicationEvent({
+        event_type: "admin.data_exported",
+        user_id: getAuthenticatedUser(req).id,
+        source: "admin",
+        priority: "high",
+        payload: {
+          event_title: "Application data exported",
+          message: `${searched.length} application records were exported.`,
+          export_type: "applications",
+          record_count: searched.length,
+          status: statusFilter || "all",
+          admin_notification_email: env.ADMIN_NOTIFICATION_EMAIL || env.EMAIL_FROM,
+          reference_id: `EXPORT-APPLICATIONS-${Date.now()}`,
+        },
+      });
 
       res.setHeader("Content-Type", "text/csv; charset=utf-8");
       res.setHeader("Content-Disposition", `attachment; filename="mtendere-applications-${new Date().toISOString().slice(0, 10)}.csv"`);
@@ -8550,6 +9644,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           reviewNotes: payload.reviewNotes,
           dashboardUrl,
         });
+        if (["approved", "offer", "hired"].includes(payload.status)) {
+          void emitCommunicationEvent({
+            event_type: "student.application_approved",
+            user_id: user.id,
+            source: "admin",
+            priority: "medium",
+            payload: {
+              email: user.email,
+              student_name: applicantName,
+              recipient_name: applicantName,
+              program_name: opportunityTitle,
+              reference_id: `APP-${application.id}`,
+              event_title: "Application approved",
+              message: `${applicantName} was approved for ${opportunityTitle}.`,
+              admin_notification_email: env.ADMIN_NOTIFICATION_EMAIL || env.EMAIL_FROM,
+            },
+          });
+        }
       }
 
       res.json(enrichedApplication);
@@ -8662,7 +9774,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/permissions/catalog', authenticateToken, requireAdmin, (_req, res) => {
+  app.get('/api/admin/permissions/catalog', authenticateToken, requireAnyPermission("manage_roles", "manage_settings"), (_req, res) => {
     const modules = [
       "dashboard",
       "scholarships",
@@ -8695,7 +9807,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.get('/api/admin/roles', authenticateToken, requireSuperAdmin, (req, res) => {
+  app.get('/api/admin/roles', authenticateToken, requireAnyPermission("manage_roles"), (req, res) => {
     const search = normalizeSearchQuery(req.query.search);
     const roles = searchAndRank(getAdminRoles(), search, (role) => [
       role.id,
@@ -8709,7 +9821,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ roles, total: roles.length });
   });
 
-  app.post('/api/admin/roles', authenticateToken, requireSuperAdmin, async (req, res) => {
+  app.post('/api/admin/roles', authenticateToken, requireAnyPermission("manage_roles"), async (req, res) => {
     const payload = adminRoleInputSchema.parse(req.body);
     const id = normalizeRoleId(payload.name) || String(Date.now());
     if (isCoreAdminRole(id) || getAdminRoles().some((role) => role.id === id)) {
@@ -8730,10 +9842,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       referenceId: role.id,
       payload: { role },
     });
+    void emitCommunicationEvent({
+      event_type: "admin.role_updated",
+      user_id: getAuthenticatedUser(req).id,
+      source: "admin",
+      priority: "high",
+      payload: {
+        event_title: "Admin role created",
+        message: `Role ${role.name} was created with ${role.permissions.length} permission(s).`,
+        role_id: role.id,
+        role_name: role.name,
+        action: "created",
+        admin_notification_email: env.ADMIN_NOTIFICATION_EMAIL || env.EMAIL_FROM,
+        reference_id: `ROLE-${role.id}`,
+      },
+    });
     res.status(201).json(role);
   });
 
-  app.put('/api/admin/roles/:id', authenticateToken, requireSuperAdmin, async (req, res) => {
+  app.put('/api/admin/roles/:id', authenticateToken, requireAnyPermission("manage_roles"), async (req, res) => {
     const existing = getAdminRoles().find((role) => role.id === req.params.id);
     if (!existing) return res.status(404).json({ message: "Role not found" });
     const payload = adminRoleInputSchema.parse(req.body);
@@ -8751,10 +9878,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       referenceId: role.id,
       payload: { role },
     });
+    void emitCommunicationEvent({
+      event_type: "admin.role_updated",
+      user_id: getAuthenticatedUser(req).id,
+      source: "admin",
+      priority: "high",
+      payload: {
+        event_title: "Admin role updated",
+        message: `Role ${role.name} was updated with ${role.permissions.length} permission(s).`,
+        role_id: role.id,
+        role_name: role.name,
+        action: "updated",
+        admin_notification_email: env.ADMIN_NOTIFICATION_EMAIL || env.EMAIL_FROM,
+        reference_id: `ROLE-${role.id}`,
+      },
+    });
     res.json(role);
   });
 
-  app.delete('/api/admin/roles/:id', authenticateToken, requireSuperAdmin, async (req, res) => {
+  app.delete('/api/admin/roles/:id', authenticateToken, requireAnyPermission("manage_roles"), async (req, res) => {
     const deleted = deleteAdminRole(req.params.id);
     if (!deleted) {
       return res.status(isCoreAdminRole(req.params.id) ? 409 : 404).json({
@@ -8774,11 +9916,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(204).send();
   });
 
-  app.get('/api/admin/settings', authenticateToken, requireSuperAdmin, (_req, res) => {
+  app.get('/api/admin/settings', authenticateToken, requireAnyPermission("manage_settings"), (_req, res) => {
     res.json(getAdminSettings());
   });
 
-  app.put('/api/admin/settings', authenticateToken, requireSuperAdmin, async (req, res) => {
+  app.put('/api/admin/settings', authenticateToken, requireAnyPermission("manage_settings"), async (req, res) => {
     const payload = adminSettingsUpdateSchema.parse(req.body);
     const settings = updateAdminSettings(payload);
     await emitAdminRealtimeEvent(req, {
@@ -8790,7 +9932,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(settings);
   });
 
-  app.post('/api/admin/settings/invalidate-sessions', authenticateToken, requireSuperAdmin, async (req, res) => {
+  app.post('/api/admin/settings/invalidate-sessions', authenticateToken, requireAnyPermission("manage_settings", "manage_security"), async (req, res) => {
     const invalidatedAt = new Date().toISOString();
     const settings = updateAdminSettings({ authTokenInvalidBefore: invalidatedAt });
     await storage.logAnalytics({
@@ -8809,7 +9951,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ invalidatedAt, settings });
   });
 
-  app.post('/api/admin/settings/cache/clear', authenticateToken, requireSuperAdmin, async (req, res) => {
+  app.post('/api/admin/settings/cache/clear', authenticateToken, requireAnyPermission("manage_settings", "manage_security"), async (req, res) => {
     const clearedAt = new Date().toISOString();
     const currentSettings = getAdminSettings();
     const settings = updateAdminSettings({
@@ -8835,14 +9977,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 20);
-      const items = (await storage.getAnalytics()).map((item) => ({
-        id: `analytics-${item.id}`,
-        title: item.event,
-        message: item.metadata ? JSON.stringify(item.metadata) : "",
-        type: "info",
-        isRead: isNotificationRead(`analytics-${item.id}`),
-        createdAt: item.timestamp,
-      }));
+      const items = (await storage.getAnalytics()).map((item) => {
+        const id = `analytics-${item.id}`;
+        const metadata =
+          item.metadata && typeof item.metadata === "object"
+            ? item.metadata as Record<string, unknown>
+            : {};
+        const status = typeof metadata.status === "string" ? metadata.status : "";
+        const priority = typeof metadata.priority === "string" ? metadata.priority : "medium";
+        const isProblemStatus = /(failed|missing|unsupported|rate_limited|rejected|blocked)/i.test(status);
+
+        if (item.event === "inapp_notification_created") {
+          return {
+            id,
+            title: typeof metadata.title === "string" ? metadata.title : "Platform notification",
+            message: typeof metadata.message === "string" ? metadata.message : "A platform event was recorded.",
+            type: priority === "high" ? "warning" : "info",
+            priority,
+            isRead: isNotificationRead(id),
+            createdAt: item.timestamp,
+          };
+        }
+
+        if (item.event === "communication_message") {
+          const channel = typeof metadata.channel === "string" ? metadata.channel : "communication";
+          const eventType = typeof metadata.event_type === "string" ? metadata.event_type : "platform event";
+          const recipient = typeof metadata.recipient === "string" ? metadata.recipient : "not configured";
+          return {
+            id,
+            title: `Communication ${status || "recorded"}: ${channel}`,
+            message: `${eventType} to ${recipient}`,
+            type: isProblemStatus ? "error" : priority === "high" ? "warning" : "info",
+            priority,
+            isRead: isNotificationRead(id),
+            createdAt: item.timestamp,
+          };
+        }
+
+        return {
+          id,
+          title: item.event,
+          message: item.metadata ? JSON.stringify(item.metadata) : "",
+          type: "info",
+          isRead: isNotificationRead(id),
+          createdAt: item.timestamp,
+        };
+      });
       const { items: paged, total } = paginate(items, page, limit);
       res.json({ notifications: paged, total });
     } catch (error) {

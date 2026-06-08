@@ -10,6 +10,10 @@ logs/*
 !logs/pm2/
 !logs/pm2/.gitkeep
 .logs/
+data/security-audit.jsonl
+data/communication-events.jsonl
+data/communication-messages.jsonl
+data/generated-documents/
 dist/index.js
 dist/client/admin/
 server-build/

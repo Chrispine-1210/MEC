@@ -23,6 +23,9 @@ export type EmailCategory =
   | "account_suspended"
   | "account_reactivated"
   | "subscription_confirmation"
+  | "payment_confirmation"
+  | "payment_failed"
+  | "invoice_generated"
   | "application_confirmation"
   | "application_status_update"
   | "application_submitted"
@@ -208,6 +211,9 @@ export const emailTemplateCatalog = [
   { key: "user.profile-updated", category: "User Management", name: "Profile Updated" },
   { key: "user.role-assigned", category: "User Management", name: "New Role Assigned" },
   { key: "user.permission-changed", category: "User Management", name: "Permission Changed" },
+  { key: "payments.confirmation", category: "Payments", name: "Payment Confirmation" },
+  { key: "payments.failed", category: "Payments", name: "Payment Failed" },
+  { key: "payments.invoice-generated", category: "Payments", name: "Invoice Generated" },
   { key: "user.suspended", category: "User Management", name: "Account Suspended" },
   { key: "user.reactivated", category: "User Management", name: "Account Reactivated" },
   { key: "applications.submitted", category: "Applications", name: "Application Submitted" },
@@ -467,6 +473,35 @@ const sendWithPostmark: Provider["send"] = async (message) => {
   return { provider: "postmark", messageId: data.MessageID || null };
 };
 
+const sendWithMailgun: Provider["send"] = async (message) => {
+  const baseUrl = (env.MAILGUN_BASE_URL || "https://api.mailgun.net").replace(/\/+$/, "");
+  const domain = String(env.MAILGUN_DOMAIN);
+  const body = new FormData();
+  body.set("from", message.from);
+  body.set("to", message.to);
+  body.set("subject", message.subject);
+  body.set("text", message.text);
+  body.set("html", message.html);
+  body.set("o:tag", message.category);
+  body.set("v:mec_email_job_id", message.id);
+  body.set("v:mec_email_category", message.category);
+  for (const [key, value] of Object.entries(message.headers)) {
+    body.set(`h:${key}`, value);
+  }
+
+  const response = await fetchWithTimeout(`${baseUrl}/v3/${domain}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`api:${env.MAILGUN_API_KEY}`).toString("base64")}`,
+    },
+    body,
+  });
+
+  if (!response.ok) throw new Error(await responseError(response));
+  const data = (await response.json().catch(() => ({}))) as { id?: string };
+  return { provider: "mailgun", messageId: data.id || response.headers.get("x-message-id") };
+};
+
 const getAwsSigningKey = (secret: string, dateStamp: string, region: string, service: string) => {
   const kDate = createHmac("sha256", `AWS4${secret}`).update(dateStamp).digest();
   const kRegion = createHmac("sha256", kDate).update(region).digest();
@@ -606,6 +641,11 @@ const providers: Record<string, Provider> = {
     isConfigured: () => isUsableSecret(env.POSTMARK_SERVER_TOKEN),
     send: sendWithPostmark,
   },
+  mailgun: {
+    name: "mailgun",
+    isConfigured: () => Boolean(isUsableSecret(env.MAILGUN_API_KEY) && env.MAILGUN_DOMAIN),
+    send: sendWithMailgun,
+  },
   ses: {
     name: "ses",
     isConfigured: () =>
@@ -637,7 +677,7 @@ const providers: Record<string, Provider> = {
 };
 
 const getProviderOrder = () => {
-  const configuredOrder = (env.EMAIL_PROVIDER_ORDER || "resend,sendgrid,postmark,ses,smtp,custom")
+  const configuredOrder = (env.EMAIL_PROVIDER_ORDER || "sendgrid,ses,mailgun,resend,postmark,smtp,custom")
     .split(",")
     .map((provider) => provider.trim().toLowerCase())
     .filter(Boolean);
@@ -666,6 +706,7 @@ export const getEmailDeliveryDiagnostics = () => {
       sendgrid: Boolean(sendGridApiKey),
       sendgridSmtpFallback: Boolean(sendGridApiKey && !env.SENDGRID_API_KEY),
       postmark: isUsableSecret(env.POSTMARK_SERVER_TOKEN),
+      mailgun: Boolean(isUsableSecret(env.MAILGUN_API_KEY) && env.MAILGUN_DOMAIN),
       ses: Boolean(
         isUsableSecret(env.AWS_SES_ACCESS_KEY_ID) &&
           isUsableSecret(env.AWS_SES_SECRET_ACCESS_KEY) &&
@@ -678,6 +719,13 @@ export const getEmailDeliveryDiagnostics = () => {
 };
 
 const mtendereEmailDomain = "mtendereeducationconsult.com";
+const sendingSubdomains = [
+  "notifications",
+  "support",
+  "admissions",
+  "billing",
+  "marketing",
+].map((subdomain) => `${subdomain}.${mtendereEmailDomain}`);
 
 const normalizeDnsValue = (value: string) =>
   value
@@ -773,25 +821,56 @@ const txtCheck = async (
 
 export const getEmailDeliverabilityDiagnostics = async (options: { timeoutMs?: number } = {}) => {
   const timeoutMs = Math.max(500, options.timeoutMs ?? 2_000);
-  const checks = await Promise.all([
+  const sendgridChecks = [
     cnameCheck(`links.${mtendereEmailDomain}`, "sendgrid.net", timeoutMs),
     cnameCheck(`54085667.${mtendereEmailDomain}`, "sendgrid.net", timeoutMs),
     cnameCheck(`mail.${mtendereEmailDomain}`, "u54085667.wl168.sendgrid.net", timeoutMs),
     cnameCheck(`mtd1._domainkey.${mtendereEmailDomain}`, "mtd1.domainkey.u54085667.wl168.sendgrid.net", timeoutMs),
     cnameCheck(`mtd12._domainkey.${mtendereEmailDomain}`, "mtd12.domainkey.u54085667.wl168.sendgrid.net", timeoutMs),
+  ];
+  const policyChecks = [
     txtCheck(
       `_dmarc.${mtendereEmailDomain}`,
-      "v=DMARC1; p=none",
+      "v=DMARC1; p=quarantine or p=reject",
       timeoutMs,
-      (records) => records.some((record) => /^v=DMARC1;.*\bp=(none|quarantine|reject)\b/i.test(record)),
+      (records) => records.some((record) => /^v=DMARC1;.*\bp=(quarantine|reject)\b/i.test(record)),
+      true,
     ),
     txtCheck(
       mtendereEmailDomain,
-      "v=spf1 ... include:sendgrid.net",
+      "v=spf1 with configured provider includes",
       timeoutMs,
-      (records) => records.some((record) => /^v=spf1\b/i.test(record) && /include:sendgrid\.net/i.test(record)),
+      (records) => records.some((record) => /^v=spf1\b/i.test(record) && /(sendgrid|amazonses|mailgun|spf\.protection)/i.test(record)),
       true,
     ),
+    txtCheck(
+      `default._bimi.${mtendereEmailDomain}`,
+      "v=BIMI1; l=...; a=...",
+      timeoutMs,
+      (records) => records.some((record) => /^v=BIMI1\b/i.test(record)),
+      true,
+    ),
+  ];
+  const subdomainChecks = sendingSubdomains.flatMap((domain) => [
+    txtCheck(
+      domain,
+      "v=spf1 with provider include",
+      timeoutMs,
+      (records) => records.some((record) => /^v=spf1\b/i.test(record)),
+      true,
+    ),
+    txtCheck(
+      `_dmarc.${domain}`,
+      "v=DMARC1; p=none/quarantine/reject",
+      timeoutMs,
+      (records) => records.some((record) => /^v=DMARC1;.*\bp=(none|quarantine|reject)\b/i.test(record)),
+      true,
+    ),
+  ]);
+  const checks = await Promise.all([
+    ...sendgridChecks,
+    ...policyChecks,
+    ...subdomainChecks,
   ]);
   const summary = checks.reduce(
     (acc, check) => {
@@ -803,13 +882,23 @@ export const getEmailDeliverabilityDiagnostics = async (options: { timeoutMs?: n
 
   return {
     domain: mtendereEmailDomain,
+    sendingSubdomains,
     checkedAt: new Date().toISOString(),
     ready: summary.fail === 0,
     summary,
     checks,
+    reputationSegmentation: {
+      transactional: ["notifications", "support", "admissions", "billing"],
+      commercial: ["marketing"],
+      policy: "Keep marketing traffic on a separate subdomain so transactional admissions, billing, and security messages do not inherit campaign reputation risk.",
+    },
+    reverseDns: {
+      status: "manual_review",
+      message: "Reverse DNS is controlled by the sending provider or dedicated IP. Verify it in SendGrid, SES, Mailgun, or SMTP provider dashboards when dedicated IPs are enabled.",
+    },
     recommendedVercelEnv: {
       EMAIL_FROM: "Mtendere Education Consult <no-reply@mail.mtendereeducationconsult.com>",
-      EMAIL_PROVIDER_ORDER: "sendgrid,resend,postmark,ses,smtp,custom",
+      EMAIL_PROVIDER_ORDER: "sendgrid,ses,mailgun,resend,postmark,smtp,custom",
       EMAIL_DRY_RUN: "false",
       SENDGRID_TRACKING_ENABLED: "true",
       EMAIL_LINK_BASE_URL: "https://links.mtendereeducationconsult.com",

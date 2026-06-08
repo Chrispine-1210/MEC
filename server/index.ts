@@ -253,7 +253,11 @@ app.use(
 app.use(express.urlencoded({ extended: false }));
 
 const rateLimitWindowMs = env.RATE_LIMIT_WINDOW_MS;
-const rateLimitMax = env.RATE_LIMIT_MAX;
+const rateLimitMaxByScope = {
+  auth: env.AUTH_RATE_LIMIT_MAX,
+  admin: env.ADMIN_RATE_LIMIT_MAX,
+  api: env.RATE_LIMIT_MAX,
+};
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 
 const pruneRateLimitStore = () => {
@@ -275,17 +279,27 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
   const now = Date.now();
   const ip = req.ip || req.socket.remoteAddress || "unknown";
-  const scope = req.path.startsWith("/auth") ? "auth" : "api";
-  const key = `${ip}:${scope}`;
+  const scope = req.path.startsWith("/auth") || req.path.startsWith("/api/auth")
+    ? "auth"
+    : req.path.startsWith("/api/admin")
+      ? "admin"
+      : "api";
+  const endpoint = req.path.replace(/\/\d+(?=\/|$)/g, "/:id").replace(/\/[0-9a-f]{8,}(?=\/|$)/gi, "/:token");
+  const key = `${ip}:${scope}:${req.method}:${endpoint}`;
+  const maxRequests = rateLimitMaxByScope[scope];
   const entry = rateLimitStore.get(key);
 
   if (!entry || entry.resetAt <= now) {
     rateLimitStore.set(key, { count: 1, resetAt: now + rateLimitWindowMs });
+    res.setHeader("X-RateLimit-Limit", String(maxRequests));
+    res.setHeader("X-RateLimit-Remaining", String(Math.max(0, maxRequests - 1)));
     return next();
   }
 
   entry.count += 1;
-  if (entry.count > rateLimitMax) {
+  res.setHeader("X-RateLimit-Limit", String(maxRequests));
+  res.setHeader("X-RateLimit-Remaining", String(Math.max(0, maxRequests - entry.count)));
+  if (entry.count > maxRequests) {
     const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
     res.setHeader("Retry-After", retryAfter.toString());
     return res.status(429).json({ message: "Too many requests. Please try again shortly." });

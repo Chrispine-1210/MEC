@@ -1,16 +1,18 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
+import { createHmac, randomBytes } from "node:crypto";
 import type { Server } from "http";
 import bcrypt from "bcryptjs";
 import express from "express";
 import jwt from "jsonwebtoken";
-import { generate, generateSecret } from "otplib";
 
+process.env.NODE_ENV = "test";
 process.env.DATABASE_URL =
   process.env.DATABASE_URL || "postgresql://test:test@localhost:5432/test_db";
 process.env.DATABASE_URL_UNPOOLED =
   process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
-process.env.JWT_SECRET = process.env.JWT_SECRET || "integration-test-secret";
+process.env.JWT_SECRET =
+  process.env.JWT_SECRET || "integration-test-secret-with-enough-length";
 
 type MockUser = {
   id: number;
@@ -148,11 +150,65 @@ const requestJson = async (
   baseUrl: string,
   path: string,
   options?: RequestInit,
-): Promise<{ status: number; body: any }> => {
+): Promise<{ status: number; body: any; headers: Headers }> => {
   const response = await fetch(`${baseUrl}${path}`, options);
   const text = await response.text();
   const body = text ? JSON.parse(text) : null;
-  return { status: response.status, body };
+  return { status: response.status, body, headers: response.headers };
+};
+
+const totpAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+const createTotpSecret = () => {
+  let output = "";
+  let value = 0;
+  let bits = 0;
+
+  for (const byte of randomBytes(20)) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      output += totpAlphabet[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+
+  if (bits > 0) {
+    output += totpAlphabet[(value << (5 - bits)) & 31];
+  }
+
+  return output;
+};
+
+const decodeTotpSecret = (secret: string) => {
+  let value = 0;
+  let bits = 0;
+  const bytes: number[] = [];
+
+  for (const char of secret.toUpperCase().replace(/[^A-Z2-7]/g, "")) {
+    const index = totpAlphabet.indexOf(char);
+    if (index === -1) continue;
+    value = (value << 5) | index;
+    bits += 5;
+    if (bits >= 8) {
+      bytes.push((value >>> (bits - 8)) & 255);
+      bits -= 8;
+    }
+  }
+
+  return Buffer.from(bytes);
+};
+
+const createTotpCode = (secret: string) => {
+  const counter = Math.floor(Date.now() / 1000 / 30);
+  const counterBuffer = Buffer.alloc(8);
+  counterBuffer.writeUInt32BE(Math.floor(counter / 0x100000000), 0);
+  counterBuffer.writeUInt32BE(counter >>> 0, 4);
+
+  const digest = createHmac("sha1", decodeTotpSecret(secret)).update(counterBuffer).digest();
+  const offset = digest[digest.length - 1] & 0x0f;
+  const binary = digest.readUInt32BE(offset) & 0x7fffffff;
+  return String(binary % 1_000_000).padStart(6, "0");
 };
 
 const loginAndVerifyMfa = async (
@@ -171,7 +227,7 @@ const loginAndVerifyMfa = async (
   assert.equal(loginResponse.body.mfaRequired, true);
   assert.equal(typeof loginResponse.body.challengeToken, "string");
 
-  const code = await generate({ secret: totpSecret });
+  const code = createTotpCode(totpSecret);
   const verifyResponse = await requestJson(baseUrl, "/api/auth/mfa/verify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -189,7 +245,7 @@ const loginAndVerifyMfa = async (
 };
 
 test("MFA challenge flow verifies login and allows privileged route", async () => {
-  const totpSecret = generateSecret();
+  const totpSecret = createTotpSecret();
   await withMockStorage([
     {
       id: 1,
@@ -325,7 +381,7 @@ test("Viewer role is denied admin routes by RBAC guard", async () => {
 });
 
 test("Admin with verified MFA is denied settings endpoint without manage_settings permission", async () => {
-  const totpSecret = generateSecret();
+  const totpSecret = createTotpSecret();
   await withMockStorage([
     {
       id: 4,
@@ -372,13 +428,14 @@ test("Admin with verified MFA is denied settings endpoint without manage_setting
 });
 
 test("Privileged route rejects tokens that are not MFA-verified", async () => {
-  const totpSecret = generateSecret();
+  const totpSecret = createTotpSecret();
+  const passwordHash = await bcrypt.hash("secret123", 10);
   await withMockStorage([
     {
       id: 5,
       username: "adminmfa",
       email: "admin-mfa@example.com",
-      password: await bcrypt.hash("secret123", 10),
+      password: passwordHash,
       firstName: "Admin",
       lastName: "Mfa",
       role: "admin",
@@ -399,6 +456,11 @@ test("Privileged route rejects tokens that are not MFA-verified", async () => {
       id: 5,
       email: "admin-mfa@example.com",
       role: "admin",
+      type: "access",
+      pwd: createHmac("sha256", process.env.JWT_SECRET as string)
+        .update(passwordHash)
+        .digest("hex")
+        .slice(0, 40),
       mfaVerified: false,
     },
     process.env.JWT_SECRET as string,
@@ -416,6 +478,57 @@ test("Privileged route rejects tokens that are not MFA-verified", async () => {
 
     assert.equal(response.status, 403);
     assert.equal(response.body.code, "MFA_VERIFICATION_REQUIRED");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("Refresh token reuse is rejected after rotation", async () => {
+  await withMockStorage([
+    {
+      id: 6,
+      username: "studentuser",
+      email: "student@example.com",
+      password: await bcrypt.hash("secret123", 10),
+      firstName: "Student",
+      lastName: "User",
+      role: "user",
+      mfaEnabled: false,
+      totpSecret: null,
+      mfaConfirmedAt: null,
+      profilePicture: null,
+      phone: null,
+      dateOfBirth: null,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  ]);
+
+  const { server, baseUrl } = await startTestServer();
+  try {
+    const loginResponse = await requestJson(baseUrl, "/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "student@example.com", password: "secret123" }),
+    });
+
+    assert.equal(loginResponse.status, 200);
+    const cookie = loginResponse.headers.get("set-cookie")?.split(";")[0];
+    assert.ok(cookie);
+
+    const firstRefresh = await requestJson(baseUrl, "/api/auth/refresh", {
+      method: "POST",
+      headers: { Cookie: cookie },
+    });
+    assert.equal(firstRefresh.status, 200);
+
+    const replayRefresh = await requestJson(baseUrl, "/api/auth/refresh", {
+      method: "POST",
+      headers: { Cookie: cookie },
+    });
+    assert.equal(replayRefresh.status, 401);
+    assert.equal(replayRefresh.body.code, "REFRESH_TOKEN_REUSE_DETECTED");
   } finally {
     await stopTestServer(server);
   }

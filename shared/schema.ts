@@ -29,6 +29,9 @@ export const users = pgTable("users", {
   stripeCustomerId: text("stripe_customer_id").unique(),
   defaultCurrency: varchar("default_currency", { length: 3 }).default("USD"),
   isActive: boolean("is_active").default(true),
+  mfaEnabled: boolean("mfa_enabled").default(false).notNull(),
+  totpSecret: text("totp_secret"),
+  mfaConfirmedAt: timestamp("mfa_confirmed_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1054,6 +1057,58 @@ export const emailDeliveryEvents = pgTable(
   }),
 );
 
+export const communicationEvents = pgTable(
+  "communication_events",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    eventType: varchar("event_type", { length: 120 }).notNull(),
+    source: varchar("source", { length: 40 }).notNull(),
+    userId: integer("user_id"),
+    priority: varchar("priority", { length: 20 }).notNull().default("medium"),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    status: varchar("status", { length: 40 }).notNull().default("received"),
+    occurredAt: timestamp("occurred_at").notNull().defaultNow(),
+    processedAt: timestamp("processed_at"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    typeCreatedIdx: index("communication_events_type_created_idx").on(table.eventType, table.createdAt),
+    sourceCreatedIdx: index("communication_events_source_created_idx").on(table.source, table.createdAt),
+    statusCreatedIdx: index("communication_events_status_created_idx").on(table.status, table.createdAt),
+    userCreatedIdx: index("communication_events_user_created_idx").on(table.userId, table.createdAt),
+  }),
+);
+
+export const communicationMessages = pgTable(
+  "communication_messages",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    eventId: varchar("event_id", { length: 36 }),
+    eventType: varchar("event_type", { length: 120 }).notNull(),
+    channel: varchar("channel", { length: 30 }).notNull(),
+    templateId: varchar("template_id", { length: 120 }),
+    recipient: varchar("recipient", { length: 255 }),
+    subject: text("subject"),
+    status: varchar("status", { length: 60 }).notNull(),
+    priority: varchar("priority", { length: 20 }).notNull().default("medium"),
+    provider: varchar("provider", { length: 40 }),
+    providerMessageId: text("provider_message_id"),
+    metadata: jsonb("metadata").$type<Record<string, unknown> | null>(),
+    diagnostics: jsonb("diagnostics").$type<Record<string, unknown> | null>(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    eventIdx: index("communication_messages_event_idx").on(table.eventId),
+    eventTypeCreatedIdx: index("communication_messages_type_created_idx").on(table.eventType, table.createdAt),
+    statusChannelIdx: index("communication_messages_status_channel_idx").on(table.status, table.channel),
+    recipientIdx: index("communication_messages_recipient_idx").on(table.recipient),
+    providerMessageIdx: index("communication_messages_provider_message_idx").on(table.providerMessageId),
+  }),
+);
+
 export const emailPreferences = pgTable(
   "email_preferences",
   {
@@ -1582,6 +1637,9 @@ export const moduleAnalyticsSnapshotsRelations = relations(moduleAnalyticsSnapsh
 
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
+  mfaEnabled: true,
+  totpSecret: true,
+  mfaConfirmedAt: true,
   createdAt: true,
   updatedAt: true,
 });
@@ -1897,6 +1955,16 @@ export const insertEmailDeliveryEventSchema = createInsertSchema(emailDeliveryEv
   createdAt: true,
 });
 
+export const insertCommunicationEventSchema = createInsertSchema(communicationEvents).omit({
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCommunicationMessageSchema = createInsertSchema(communicationMessages).omit({
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertEmailPreferenceSchema = createInsertSchema(emailPreferences).omit({
   id: true,
   createdAt: true,
@@ -2024,6 +2092,10 @@ export type EmailJob = typeof emailJobs.$inferSelect;
 export type InsertEmailJob = z.infer<typeof insertEmailJobSchema>;
 export type EmailDeliveryEvent = typeof emailDeliveryEvents.$inferSelect;
 export type InsertEmailDeliveryEvent = z.infer<typeof insertEmailDeliveryEventSchema>;
+export type CommunicationEventRecord = typeof communicationEvents.$inferSelect;
+export type InsertCommunicationEvent = z.infer<typeof insertCommunicationEventSchema>;
+export type CommunicationMessage = typeof communicationMessages.$inferSelect;
+export type InsertCommunicationMessage = z.infer<typeof insertCommunicationMessageSchema>;
 export type EmailPreference = typeof emailPreferences.$inferSelect;
 export type InsertEmailPreference = z.infer<typeof insertEmailPreferenceSchema>;
 export type EmailTemplateVersion = typeof emailTemplateVersions.$inferSelect;

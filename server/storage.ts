@@ -1,5 +1,5 @@
 import {
-  users, scholarships, jobs, applications, partners, testimonials, blogPosts, teamMembers, events, eventRegistrations, eventComments, eventReactions, referrals, analytics, blogComments, savedItems, messages, subscribers, emailVerificationTokens, emailJobs, emailDeliveryEvents, emailPreferences,
+  users, scholarships, jobs, applications, partners, testimonials, blogPosts, teamMembers, events, eventRegistrations, eventComments, eventReactions, referrals, analytics, blogComments, savedItems, messages, subscribers, emailVerificationTokens, emailJobs, emailDeliveryEvents, communicationEvents, communicationMessages, emailPreferences,
   type User, type InsertUser, type Scholarship, type InsertScholarship, type Job, type InsertJob,
   type Application, type InsertApplication, type Partner, type InsertPartner, type Testimonial, type InsertTestimonial,
   type BlogPost, type InsertBlogPost, type TeamMember, type InsertTeamMember, type Referral, type InsertReferral,
@@ -8,6 +8,8 @@ import {
   type Subscriber, type InsertSubscriber,
   type EmailVerificationToken, type InsertEmailVerificationToken,
   type EmailJob, type InsertEmailJob, type InsertEmailDeliveryEvent,
+  type CommunicationEventRecord, type InsertCommunicationEvent,
+  type CommunicationMessage, type InsertCommunicationMessage,
   type EmailPreference, type InsertEmailPreference,
   type Event, type InsertEvent, type EventRegistration, type InsertEventRegistration,
   type EventComment, type InsertEventComment, type EventReaction, type InsertEventReaction
@@ -160,6 +162,16 @@ export interface IStorage {
   markEmailJobSent(id: string, provider: string, providerMessageId?: string | null): Promise<EmailJob>;
   markEmailJobFailed(id: string, error: string, scheduledFor?: Date | null, finalFailure?: boolean): Promise<EmailJob>;
   createEmailDeliveryEvent(event: InsertEmailDeliveryEvent): Promise<void>;
+  createCommunicationEvent(event: InsertCommunicationEvent): Promise<CommunicationEventRecord>;
+  updateCommunicationEventStatus(
+    id: string,
+    status: string,
+    details?: { processedAt?: Date | null; lastError?: string | null },
+  ): Promise<CommunicationEventRecord | undefined>;
+  getCommunicationEvent(id: string): Promise<CommunicationEventRecord | undefined>;
+  createCommunicationMessage(message: InsertCommunicationMessage): Promise<CommunicationMessage>;
+  getCommunicationMessage(id: string): Promise<CommunicationMessage | undefined>;
+  getCommunicationMessages(limit?: number): Promise<CommunicationMessage[]>;
   getEmailDeliveryStats(days?: number): Promise<{
     totals: Record<string, number>;
     byCategory: Record<string, Record<string, number>>;
@@ -1065,6 +1077,64 @@ export class DatabaseStorage implements IStorage {
     await db
       .insert(emailDeliveryEvents)
       .values(insertEvent as typeof emailDeliveryEvents.$inferInsert);
+  }
+
+  async createCommunicationEvent(insertEvent: InsertCommunicationEvent): Promise<CommunicationEventRecord> {
+    const [event] = await db
+      .insert(communicationEvents)
+      .values(insertEvent as typeof communicationEvents.$inferInsert)
+      .returning();
+    return event;
+  }
+
+  async updateCommunicationEventStatus(
+    id: string,
+    status: string,
+    details: { processedAt?: Date | null; lastError?: string | null } = {},
+  ): Promise<CommunicationEventRecord | undefined> {
+    const [event] = await db
+      .update(communicationEvents)
+      .set({
+        status,
+        processedAt: details.processedAt ?? null,
+        lastError: details.lastError ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(communicationEvents.id, id))
+      .returning();
+    return event || undefined;
+  }
+
+  async getCommunicationEvent(id: string): Promise<CommunicationEventRecord | undefined> {
+    const [event] = await db
+      .select()
+      .from(communicationEvents)
+      .where(eq(communicationEvents.id, id));
+    return event || undefined;
+  }
+
+  async createCommunicationMessage(insertMessage: InsertCommunicationMessage): Promise<CommunicationMessage> {
+    const [message] = await db
+      .insert(communicationMessages)
+      .values(insertMessage as typeof communicationMessages.$inferInsert)
+      .returning();
+    return message;
+  }
+
+  async getCommunicationMessage(id: string): Promise<CommunicationMessage | undefined> {
+    const [message] = await db
+      .select()
+      .from(communicationMessages)
+      .where(eq(communicationMessages.id, id));
+    return message || undefined;
+  }
+
+  async getCommunicationMessages(limit = 100): Promise<CommunicationMessage[]> {
+    return await db
+      .select()
+      .from(communicationMessages)
+      .orderBy(desc(communicationMessages.createdAt))
+      .limit(Math.max(1, Math.min(limit, 500)));
   }
 
   async getEmailDeliveryStats(days = 30): Promise<{

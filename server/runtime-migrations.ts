@@ -125,6 +125,59 @@ CREATE INDEX IF NOT EXISTS "email_delivery_events_category_created_idx"
 CREATE INDEX IF NOT EXISTS "email_delivery_events_provider_message_idx"
   ON "email_delivery_events" ("provider_message_id");
 
+CREATE TABLE IF NOT EXISTS "communication_events" (
+  "id" varchar(36) PRIMARY KEY NOT NULL,
+  "event_type" varchar(120) NOT NULL,
+  "source" varchar(40) NOT NULL,
+  "user_id" integer,
+  "priority" varchar(20) DEFAULT 'medium' NOT NULL,
+  "payload" jsonb NOT NULL,
+  "status" varchar(40) DEFAULT 'received' NOT NULL,
+  "occurred_at" timestamp DEFAULT now() NOT NULL,
+  "processed_at" timestamp,
+  "last_error" text,
+  "created_at" timestamp DEFAULT now(),
+  "updated_at" timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS "communication_events_type_created_idx"
+  ON "communication_events" ("event_type", "created_at");
+CREATE INDEX IF NOT EXISTS "communication_events_source_created_idx"
+  ON "communication_events" ("source", "created_at");
+CREATE INDEX IF NOT EXISTS "communication_events_status_created_idx"
+  ON "communication_events" ("status", "created_at");
+CREATE INDEX IF NOT EXISTS "communication_events_user_created_idx"
+  ON "communication_events" ("user_id", "created_at");
+
+CREATE TABLE IF NOT EXISTS "communication_messages" (
+  "id" varchar(36) PRIMARY KEY NOT NULL,
+  "event_id" varchar(36),
+  "event_type" varchar(120) NOT NULL,
+  "channel" varchar(30) NOT NULL,
+  "template_id" varchar(120),
+  "recipient" varchar(255),
+  "subject" text,
+  "status" varchar(60) NOT NULL,
+  "priority" varchar(20) DEFAULT 'medium' NOT NULL,
+  "provider" varchar(40),
+  "provider_message_id" text,
+  "metadata" jsonb,
+  "diagnostics" jsonb,
+  "created_at" timestamp DEFAULT now(),
+  "updated_at" timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS "communication_messages_event_idx"
+  ON "communication_messages" ("event_id");
+CREATE INDEX IF NOT EXISTS "communication_messages_type_created_idx"
+  ON "communication_messages" ("event_type", "created_at");
+CREATE INDEX IF NOT EXISTS "communication_messages_status_channel_idx"
+  ON "communication_messages" ("status", "channel");
+CREATE INDEX IF NOT EXISTS "communication_messages_recipient_idx"
+  ON "communication_messages" ("recipient");
+CREATE INDEX IF NOT EXISTS "communication_messages_provider_message_idx"
+  ON "communication_messages" ("provider_message_id");
+
 CREATE TABLE IF NOT EXISTS "email_preferences" (
   "id" serial PRIMARY KEY NOT NULL,
   "user_id" integer,
@@ -148,6 +201,47 @@ CREATE INDEX IF NOT EXISTS "email_preferences_user_idx"
   ON "email_preferences" ("user_id");
 CREATE INDEX IF NOT EXISTS "email_preferences_status_idx"
   ON "email_preferences" ("consent_status");
+
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "mfa_enabled" boolean DEFAULT false NOT NULL;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "totp_secret" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "mfa_confirmed_at" timestamp;
+
+CREATE TABLE IF NOT EXISTS "user_sessions" (
+  "id" serial PRIMARY KEY NOT NULL,
+  "user_id" integer NOT NULL,
+  "session_hash" varchar(128) NOT NULL,
+  "device" text,
+  "ip_address" varchar(45),
+  "user_agent" text,
+  "status" varchar(40) DEFAULT 'active' NOT NULL,
+  "last_seen_at" timestamp DEFAULT now(),
+  "expires_at" timestamp,
+  "created_at" timestamp DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "user_sessions_hash_idx"
+  ON "user_sessions" ("session_hash");
+CREATE INDEX IF NOT EXISTS "user_sessions_user_idx"
+  ON "user_sessions" ("user_id");
+
+CREATE TABLE IF NOT EXISTS "permission_audit_logs" (
+  "id" serial PRIMARY KEY NOT NULL,
+  "actor_id" integer,
+  "target_user_id" integer,
+  "role_id" varchar(120),
+  "permission" varchar(120),
+  "action" varchar(80) NOT NULL,
+  "before" jsonb,
+  "after" jsonb,
+  "ip_address" varchar(45),
+  "user_agent" text,
+  "created_at" timestamp DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS "permission_audit_actor_idx"
+  ON "permission_audit_logs" ("actor_id");
+CREATE INDEX IF NOT EXISTS "permission_audit_target_idx"
+  ON "permission_audit_logs" ("target_user_id");
 `;
 
 let schemaReady: Promise<void> | null = null;
