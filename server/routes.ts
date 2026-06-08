@@ -10006,7 +10006,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         name: message.name,
         subject: `${message.subject} (${ticketCode})`,
       });
-      if (!isRealEmailDelivery(contactAcknowledgement)) {
+      if (contactAcknowledgement.status === "failed") {
         console.error(
           "Contact acknowledgement email failed:",
           getErrorLogMessage({
@@ -10019,10 +10019,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               "Email provider did not accept the message",
           }),
         );
-        return res.status(503).json({
-          ...emailDeliveryFailureResponse(contactAcknowledgement),
-          ticketCode,
-        });
       }
       void sendAdminNotification({
         subject: `New Mtendere contact message ${ticketCode}`,
@@ -10052,7 +10048,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ipAddress: req.ip,
         userAgent: req.get("user-agent"),
       });
-      res.status(201).json({ message: 'Message sent successfully', ticketCode, data: message });
+      res.status(201).json({
+        message: "Message sent successfully",
+        ticketCode,
+        data: message,
+        acknowledgement: {
+          status: contactAcknowledgement.status,
+          provider: contactAcknowledgement.provider || null,
+        },
+      });
     } catch (error) {
       console.error('Message creation error:', error);
       res.status(400).json({ message: 'Failed to send message', error: getErrorMessage(error) });
