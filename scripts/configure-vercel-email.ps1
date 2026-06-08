@@ -1,5 +1,8 @@
 param(
   [string[]]$Environments = @("production", "preview", "development"),
+  [string]$EmailFrom = "Mtendere Education Consult <onboarding@resend.dev>",
+  [string]$ProviderOrder = "resend,sendgrid,smtp,postmark,ses,custom",
+  [switch]$SkipResendSecret,
   [switch]$SkipSendGridSecret
 )
 
@@ -37,6 +40,17 @@ if (-not (Get-Command vercel -ErrorAction SilentlyContinue)) {
   throw "Vercel CLI was not found. Install it with: npm i -g vercel"
 }
 
+$resendApiKey = $env:RESEND_API_KEY
+if ($resendApiKey -and $resendApiKey -notmatch "^re_") {
+  Write-Host "Ignoring existing Resend value because it does not look like a Resend API key."
+  $resendApiKey = $null
+}
+
+if (-not $resendApiKey -and -not $SkipResendSecret) {
+  $secureKey = Read-Host "Enter Resend API key (input hidden)" -AsSecureString
+  $resendApiKey = Convert-SecureStringToPlainText $secureKey
+}
+
 $sendGridApiKey = $env:SENDGRID_API_KEY
 if (-not $sendGridApiKey -and $env:SMTP_HOST -match "sendgrid\.net$" -and $env:SMTP_USER -eq "apikey") {
   $sendGridApiKey = $env:SMTP_PASSWORD
@@ -47,16 +61,17 @@ if ($sendGridApiKey -and $sendGridApiKey -notmatch "^SG\.") {
   $sendGridApiKey = $null
 }
 
-if (-not $sendGridApiKey -and -not $SkipSendGridSecret) {
+if (-not $sendGridApiKey -and -not $resendApiKey -and -not $SkipSendGridSecret) {
   $secureKey = Read-Host "Enter SendGrid API key (input hidden)" -AsSecureString
   $sendGridApiKey = Convert-SecureStringToPlainText $secureKey
 }
 
 $values = [ordered]@{
-  EMAIL_FROM = 'Mtendere Education Consult <no-reply@mail.mtendereeducationconsult.com>'
-  EMAIL_PROVIDER_ORDER = 'sendgrid,resend,postmark,ses,smtp,custom'
+  EMAIL_FROM = $EmailFrom
+  EMAIL_PROVIDER_ORDER = $ProviderOrder
   EMAIL_DRY_RUN = 'false'
   EMAIL_LINK_BASE_URL = 'https://links.mtendereeducationconsult.com'
+  RESEND_API_KEY = $resendApiKey
   SENDGRID_TRACKING_ENABLED = 'true'
   SENDGRID_API_KEY = $sendGridApiKey
   SMTP_HOST = $env:SMTP_HOST
@@ -73,4 +88,4 @@ foreach ($environment in $Environments) {
 }
 
 Write-Host "Vercel email environment configuration completed."
-Write-Host "Redeploy after this script finishes, then verify /api/health shows email.ready=true and activeProviders includes sendgrid or smtp."
+Write-Host "Redeploy after this script finishes, then verify /api/health shows email.ready=true and activeProviders includes resend, sendgrid, or smtp."

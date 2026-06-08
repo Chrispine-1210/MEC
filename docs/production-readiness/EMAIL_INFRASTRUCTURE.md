@@ -30,5 +30,5 @@ Before final launch, verify:
 - SPF includes the selected email provider.
 - DKIM keys are active.
 - DMARC has at least monitoring policy, then enforcement after deliverability is stable.
-- `EMAIL_FROM` uses a verified sender domain.
+- `EMAIL_FROM` uses `Mtendere Education Consult <onboarding@resend.dev>` only for initial Resend testing, then switches to a verified Mtendere sender domain.
 - `ADMIN_NOTIFICATION_EMAIL` is set to the operations inbox.
