@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 
 export default function Contact() {
-  const [formData, setFormData] = useState({
+  const emptyFormData = {
     name: "",
     email: "",
     phone: "",
@@ -38,6 +38,9 @@ export default function Contact() {
     inquiryType: "",
     website: "",
     consentAccepted: false,
+  };
+  const [formData, setFormData] = useState({
+    ...emptyFormData,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [hasTrackedStart, setHasTrackedStart] = useState(false);
@@ -112,17 +115,29 @@ export default function Contact() {
       });
 
       // Reset form
-      setFormData({
-        name: "",
-        email: "",
-        phone: "",
-        subject: "",
-        message: "",
-        inquiryType: "",
-        website: "",
-        consentAccepted: false,
-      });
+      setFormData({ ...emptyFormData });
     } catch (error) {
+      const payload =
+        error && typeof error === "object" && "payload" in error
+          ? (error as { payload?: { ticketCode?: unknown; message?: unknown } }).payload
+          : undefined;
+      const ticketCode = typeof payload?.ticketCode === "string" ? payload.ticketCode : null;
+
+      if (ticketCode) {
+        trackConversionEvent("contact_form_completed", {
+          form: "contact",
+          ticketCode,
+          category: formData.inquiryType,
+          emailAcknowledgement: "degraded",
+        });
+        toast({
+          title: "Message Received",
+          description: `Thank you for contacting us. Your ticket is ${ticketCode}. If the confirmation email is delayed, our team can still see your message.`,
+        });
+        setFormData({ ...emptyFormData });
+        return;
+      }
+
       toast({
         title: "Failed to Send Message",
         description: "Please try again or contact us directly via phone or email.",

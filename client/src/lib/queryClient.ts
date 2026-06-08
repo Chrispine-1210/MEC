@@ -55,9 +55,10 @@ async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = await res.text();
     let message = text || res.statusText;
+    let payload: unknown;
 
     try {
-      const payload = JSON.parse(text) as {
+      payload = JSON.parse(text) as {
         message?: string;
         error?: string;
         detail?: string;
@@ -70,7 +71,9 @@ async function throwIfResNotOk(res: Response) {
       }
     }
 
-    throw new Error(message);
+    const error = new Error(message);
+    Object.assign(error, { status: res.status, payload });
+    throw error;
   }
 }
 
