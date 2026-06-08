@@ -19,9 +19,10 @@ The service provides:
 Production Vercel must contain real server-side values. These values must not be committed:
 
 - `RESEND_API_KEY`
+- `RESEND_DOMAIN=mtendereeducationconsult.com`
 - `EMAIL_PROVIDER_ORDER=resend,sendgrid,smtp,postmark,ses,custom`
 - `EMAIL_DRY_RUN=false`
-- `EMAIL_FROM=Mtendere Education Consult <onboarding@resend.dev>` for immediate Resend testing, then `EMAIL_FROM=Mtendere Education Consult <no-reply@mail.mtendereeducationconsult.com>` after the sender domain is verified
+- `EMAIL_FROM=Mtendere Education Consult <onboarding@resend.dev>` for immediate Resend testing, then `EMAIL_FROM=Mtendere Education Consult <no-reply@mtendereeducationconsult.com>` after the sender domain is verified
 - `SENDGRID_TRACKING_ENABLED=true`
 - `EMAIL_LINK_BASE_URL=https://links.mtendereeducationconsult.com`
 - `PUBLIC_APP_URL=https://mtendereeducationconsult.com`
@@ -75,6 +76,7 @@ Alert codes include:
 ## Remaining Operational Work
 
 - Add the Resend API key to Vercel production, preview, and development environments. Use SendGrid or SMTP only as fallback providers.
+- Configure `mtendereeducationconsult.com` in Resend, add the returned DNS records to Cloudflare, and run Resend verification.
 - Correct the Cloudflare `mail` CNAME target.
 - Configure SendGrid Event Webhook to post delivery events into `/api/email/webhooks/sendgrid` if that route is enabled in the deployment.
 - Move DMARC from `p=none` to `p=quarantine`, then `p=reject` after bounce and complaint rates are stable.

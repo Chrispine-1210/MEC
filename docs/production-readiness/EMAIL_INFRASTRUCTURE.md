@@ -27,8 +27,22 @@ Implemented templates cover:
 
 Before final launch, verify:
 
+- Resend has `mtendereeducationconsult.com` added under Domains.
+- The Resend DNS records returned for `mtendereeducationconsult.com` are present in Cloudflare.
 - SPF includes the selected email provider.
 - DKIM keys are active.
 - DMARC has at least monitoring policy, then enforcement after deliverability is stable.
 - `EMAIL_FROM` uses `Mtendere Education Consult <onboarding@resend.dev>` only for initial Resend testing, then switches to a verified Mtendere sender domain.
 - `ADMIN_NOTIFICATION_EMAIL` is set to the operations inbox.
+
+Use this helper with a full-access Resend API key:
+
+```powershell
+npm run resend:domain:configure
+```
+
+To also apply the returned DNS records to Cloudflare and trigger Resend verification:
+
+```powershell
+npm run resend:domain:configure:cloudflare
+```

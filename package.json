@@ -31,6 +31,8 @@
     "pm2:save": "pm2 save",
     "vercel:domains:configure": "powershell -ExecutionPolicy Bypass -File scripts/configure-vercel-domains.ps1",
     "vercel:email:configure": "powershell -ExecutionPolicy Bypass -File scripts/configure-vercel-email.ps1",
+    "resend:domain:configure": "node scripts/configure-resend-domain.mjs",
+    "resend:domain:configure:cloudflare": "node scripts/configure-resend-domain.mjs --apply-cloudflare --verify",
     "email:resend:smoke": "node scripts/test-resend-email.mjs",
     "sendgrid:dns:fix-mail": "powershell -ExecutionPolicy Bypass -File scripts/fix-cloudflare-sendgrid-mail.ps1",
     "sendgrid:dns:verify": "powershell -ExecutionPolicy Bypass -File scripts/verify-sendgrid-dns.ps1",
