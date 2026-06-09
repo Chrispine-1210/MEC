@@ -156,6 +156,8 @@
     "vite": "^8.0.16"
   },
   "optionalDependencies": {
+    "@emnapi/core": "1.11.0",
+    "@emnapi/runtime": "1.11.0",
     "bufferutil": "4.1.0"
   },
   "overrides": {
