@@ -72,6 +72,9 @@ jobs:
       - name: Unit tests
         run: npm run test:unit
 
+      - name: Smoke tests
+        run: npm run test:smoke
+
       - name: Integration tests
         run: npm run test:integration
 

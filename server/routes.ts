@@ -5814,7 +5814,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         opportunityType: payload.type,
         dashboardUrl,
       });
-      if (!isRealEmailDelivery(applicationConfirmation)) {
+      const confirmationEmailFailed = applicationConfirmation.status === "failed";
+      if (confirmationEmailFailed) {
         console.error(
           "Application confirmation email failed:",
           getErrorLogMessage({
@@ -5827,9 +5828,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
               "Email provider did not accept the message",
           }),
         );
-        return res.status(503).json({
-          ...emailDeliveryFailureResponse(applicationConfirmation),
-          application: { ...application, meta: getApplicationMeta(application.id) },
+        void logAnalyticsBestEffort({
+          event: "application_confirmation_email_deferred",
+          userId: authUser.id,
+          metadata: {
+            applicationId: application.id,
+            emailJobId: applicationConfirmation.id,
+            status: applicationConfirmation.status,
+            provider: applicationConfirmation.provider,
+          },
+          ipAddress: req.ip,
+          userAgent: req.get("user-agent"),
         });
       }
 
@@ -5857,7 +5866,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userAgent: req.get("user-agent"),
       });
       
-      res.status(201).json({ ...application, meta: getApplicationMeta(application.id) });
+      res.status(confirmationEmailFailed ? 202 : 201).json({
+        ...application,
+        meta: getApplicationMeta(application.id),
+        delivery: {
+          status: applicationConfirmation.status,
+          provider: applicationConfirmation.provider,
+          queued: !confirmationEmailFailed && !isRealEmailDelivery(applicationConfirmation),
+        },
+      });
     } catch (error) {
       console.error('Application creation error:', error);
       res.status(400).json({ message: 'Failed to create application', error: getErrorMessage(error) });

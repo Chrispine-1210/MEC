@@ -24,6 +24,7 @@
     "start": "node scripts/start-production.cjs",
     "test": "npm run test:unit",
     "test:unit": "node --import tsx --test tests/unit/*.test.ts",
+    "test:smoke": "node --import tsx --test tests/smoke/*.test.ts",
     "test:integration": "node --import tsx --test tests/integration/*.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install chromium",
