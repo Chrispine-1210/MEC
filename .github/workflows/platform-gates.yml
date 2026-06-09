@@ -1,0 +1,149 @@
+name: Platform Gates
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: platform-gates-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Build, Test, E2E Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mec
+          POSTGRES_PASSWORD: mec
+          POSTGRES_DB: mec_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      CI: true
+      DATABASE_URL: postgresql://mec:mec@127.0.0.1:5432/mec_test
+      DATABASE_URL_UNPOOLED: postgresql://mec:mec@127.0.0.1:5432/mec_test
+      DATABASE_DRIVER: pg
+      JWT_SECRET: github-actions-platform-gate-secret-32
+      E2E_TEST_SECRET: github-actions-e2e-secret-32-chars
+      EMAIL_DRY_RUN: "true"
+      EMAIL_ALLOW_LIVE_TEST_SENDS: "false"
+      EMAIL_PROVIDER_ORDER: sendgrid,ses
+      EMAIL_PROVIDER_INLINE_RETRIES: "2"
+      EMAIL_ACTIVATION_REQUIRES_DNS_READY: "false"
+      EMAIL_QUEUE_WORKER_ENABLED: "false"
+      EMAIL_WEBHOOK_SIGNING_SECRET: github-actions-webhook-secret
+      PREDEPLOY_ALLOW_DRY_RUN: "true"
+      PREDEPLOY_REQUIRE_HYBRID_EMAIL: "false"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Type check
+        run: npm run check
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Integration tests
+        run: npm run test:integration
+
+      - name: Build client, admin, and server
+        run: npm run build
+
+      - name: Predeploy validation
+        run: npm run predeploy:validate
+
+      - name: Playwright E2E gate
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
+
+  production-readiness:
+    name: Production Email/DNS Readiness
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.ref == 'refs/heads/main'
+    timeout-minutes: 10
+    env:
+      NODE_ENV: production
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      EMAIL_DRY_RUN: "false"
+      EMAIL_ALLOW_LIVE_TEST_SENDS: "true"
+      EMAIL_ACTIVATION_REQUIRES_DNS_READY: "true"
+      EMAIL_PROVIDER_ORDER: sendgrid,ses
+      SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+      AWS_SES_REGION: ${{ secrets.AWS_SES_REGION }}
+      AWS_SES_ACCESS_KEY_ID: ${{ secrets.AWS_SES_ACCESS_KEY_ID }}
+      AWS_SES_SECRET_ACCESS_KEY: ${{ secrets.AWS_SES_SECRET_ACCESS_KEY }}
+      PREDEPLOY_STRICT: "true"
+      PREDEPLOY_REQUIRE_HYBRID_EMAIL: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Strict predeploy validation
+        run: npm run predeploy:validate
+
+  deployment-gate:
+    name: Deployment Gate
+    runs-on: ubuntu-latest
+    needs: [validate, production-readiness]
+    if: always()
+    steps:
+      - name: Enforce test and readiness gates
+        run: |
+          if [ "${{ needs.validate.result }}" != "success" ]; then
+            echo "Validation gate failed; deployment is blocked."
+            exit 1
+          fi
+
+          if [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ needs.production-readiness.result }}" != "success" ]; then
+            echo "Production readiness gate failed; deployment is blocked."
+            exit 1
+          fi
+
+          echo "All platform gates passed. Deployment may proceed."

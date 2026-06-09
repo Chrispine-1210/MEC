@@ -123,10 +123,12 @@ const smtpConfigured = Boolean(
 const sendGridTrackingEnabled = env.SENDGRID_TRACKING_ENABLED ?? true;
 const retryDelaysMs = [0, 60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000];
 const defaultMaxAttempts = retryDelaysMs.length;
+const inlineProviderAttempts = env.EMAIL_PROVIDER_INLINE_RETRIES;
 const queuePollMs = env.EMAIL_QUEUE_WORKER_INTERVAL_MS;
 const liveProviderDeliveryAllowed = env.NODE_ENV === "production" || env.EMAIL_ALLOW_LIVE_TEST_SENDS === true;
 const configuredDryRunEnabled = env.EMAIL_DRY_RUN ?? env.NODE_ENV !== "production";
 const dryRunEnabled = configuredDryRunEnabled || !liveProviderDeliveryAllowed;
+const activationRequiresDnsReady = env.EMAIL_ACTIVATION_REQUIRES_DNS_READY ?? env.NODE_ENV === "production";
 const trackingSecret = env.EMAIL_TRACKING_SECRET || env.JWT_SECRET;
 let isProcessing = false;
 let workerTimer: NodeJS.Timeout | null = null;
@@ -134,6 +136,9 @@ let workerStartedAt: Date | null = null;
 let queueLastRunStartedAt: Date | null = null;
 let queueLastRunFinishedAt: Date | null = null;
 let queueLastRunError: string | null = null;
+let activationReadinessCache:
+  | { checkedAt: number; value: TransactionalEmailActivationReadiness }
+  | null = null;
 
 type EmailEnqueueOptions = {
   awaitDelivery?: boolean;
@@ -156,6 +161,16 @@ type EmailEnqueueResult = {
   provider?: string | null;
   providerMessageId?: string | null;
   lastError?: string | null;
+};
+
+type TransactionalEmailActivationReadiness = {
+  ready: boolean;
+  providerReady: boolean;
+  dnsReady: boolean | null;
+  checkedAt: string;
+  diagnostics: ReturnType<typeof getEmailDeliveryDiagnostics>;
+  deliverability?: Awaited<ReturnType<typeof getEmailDeliverabilityDiagnostics>>;
+  blockingReasons: Array<{ code: string; message: string }>;
 };
 
 const emailPreferenceCategories = [
@@ -706,6 +721,8 @@ export const getEmailDeliveryDiagnostics = () => {
     dryRunEnabled,
     liveProviderDeliveryAllowed,
     configuredDryRunEnabled,
+    activationRequiresDnsReady,
+    inlineProviderAttempts,
     fromConfigured: Boolean(env.EMAIL_FROM),
     linkBaseUrlConfigured: Boolean(emailLinkBaseUrl),
     sendGridTrackingEnabled,
@@ -917,6 +934,55 @@ export const getEmailDeliverabilityDiagnostics = async (options: { timeoutMs?: n
   };
 };
 
+export const getTransactionalEmailActivationReadiness = async (
+  options: { timeoutMs?: number; cacheTtlMs?: number } = {},
+): Promise<TransactionalEmailActivationReadiness> => {
+  const cacheTtlMs = Math.max(0, options.cacheTtlMs ?? 120_000);
+  if (
+    activationReadinessCache &&
+    cacheTtlMs > 0 &&
+    Date.now() - activationReadinessCache.checkedAt < cacheTtlMs
+  ) {
+    return activationReadinessCache.value;
+  }
+
+  const diagnostics = getEmailDeliveryDiagnostics();
+  const providerReady = isTransactionalEmailDeliveryReady();
+  const blockingReasons: TransactionalEmailActivationReadiness["blockingReasons"] = [];
+  let deliverability: Awaited<ReturnType<typeof getEmailDeliverabilityDiagnostics>> | undefined;
+  let dnsReady: boolean | null = null;
+
+  if (!providerReady) {
+    blockingReasons.push({
+      code: "email_provider_unavailable",
+      message: "No transactional email provider is configured for account activation.",
+    });
+  }
+
+  if (activationRequiresDnsReady) {
+    deliverability = await getEmailDeliverabilityDiagnostics({ timeoutMs: options.timeoutMs ?? 1_500 });
+    dnsReady = deliverability.ready;
+    if (!deliverability.ready) {
+      blockingReasons.push({
+        code: "email_dns_not_ready",
+        message: "Sending-domain DNS is not aligned for transactional email activation.",
+      });
+    }
+  }
+
+  const value = {
+    ready: providerReady && (dnsReady !== false),
+    providerReady,
+    dnsReady,
+    checkedAt: new Date().toISOString(),
+    diagnostics,
+    deliverability,
+    blockingReasons,
+  };
+  activationReadinessCache = { checkedAt: Date.now(), value };
+  return value;
+};
+
 const ctaButton = (href: string, label: string) => `
   <table role="presentation" cellspacing="0" cellpadding="0" style="margin: 28px 0;">
     <tr>
@@ -1112,29 +1178,66 @@ const deliverWithFailover = async (job: EmailJob) => {
 
   const failures: string[] = [];
   for (const provider of activeProviders) {
-    try {
-      const result = await provider.send(message);
-      await recordEmailEvent({
-        jobId: job.id,
-        provider: result.provider,
-        eventType: "sent",
-        recipient: job.recipient,
-        category: job.category,
-        providerMessageId: result.messageId,
-        metadata: { attempt: job.attempts, failoverFailures: failures },
-      });
-      return result;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown provider error";
-      failures.push(`${provider.name}: ${message}`);
-      await recordEmailEvent({
-        jobId: job.id,
-        provider: provider.name,
-        eventType: "provider_failed",
-        recipient: job.recipient,
-        category: job.category,
-        metadata: { error: message, attempt: job.attempts },
-      });
+    for (let providerAttempt = 1; providerAttempt <= inlineProviderAttempts; providerAttempt += 1) {
+      try {
+        const result = await provider.send(message);
+        if (failures.length > 0) {
+          await recordEmailEvent({
+            jobId: job.id,
+            provider: result.provider,
+            eventType: "provider_failover_triggered",
+            recipient: job.recipient,
+            category: job.category,
+            providerMessageId: result.messageId,
+            metadata: {
+              attempt: job.attempts,
+              successfulProvider: result.provider,
+              failures,
+            },
+          });
+        }
+        await recordEmailEvent({
+          jobId: job.id,
+          provider: result.provider,
+          eventType: "sent",
+          recipient: job.recipient,
+          category: job.category,
+          providerMessageId: result.messageId,
+          metadata: { attempt: job.attempts, providerAttempt, failoverFailures: failures },
+        });
+        return result;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown provider error";
+        failures.push(`${provider.name}#${providerAttempt}: ${errorMessage}`);
+        await recordEmailEvent({
+          jobId: job.id,
+          provider: provider.name,
+          eventType: "provider_failed",
+          recipient: job.recipient,
+          category: job.category,
+          metadata: {
+            error: errorMessage,
+            attempt: job.attempts,
+            providerAttempt,
+            maxProviderAttempts: inlineProviderAttempts,
+          },
+        });
+
+        if (providerAttempt < inlineProviderAttempts) {
+          await recordEmailEvent({
+            jobId: job.id,
+            provider: provider.name,
+            eventType: "provider_retry_scheduled",
+            recipient: job.recipient,
+            category: job.category,
+            metadata: {
+              attempt: job.attempts,
+              nextProviderAttempt: providerAttempt + 1,
+              maxProviderAttempts: inlineProviderAttempts,
+            },
+          });
+        }
+      }
     }
   }
 
@@ -1550,7 +1653,29 @@ export const getEmailPlatformHealth = async (days = 30) => {
       deliveryRate: sent > 0 ? delivered / sent : null,
       bounceRate: sent > 0 ? bounced / sent : null,
       spamComplaintRate: sent > 0 ? spamComplaints / sent : null,
+      failoverRate: stats.failover.rate,
+      failoverTriggered: stats.failover.triggered,
     },
+    providerReliability: Object.fromEntries(
+      Object.entries(stats.byProvider).map(([provider, events]) => {
+        const providerSent = events.sent || 0;
+        const providerDelivered = events.delivered || 0;
+        const providerBounced = events.bounced || 0;
+        const providerFailed = events.failed || events.provider_failed || 0;
+        return [
+          provider,
+          {
+            sent: providerSent,
+            delivered: providerDelivered,
+            failed: providerFailed,
+            bounced: providerBounced,
+            successRate: providerSent > 0 ? providerDelivered / providerSent : null,
+            bounceRate: providerSent > 0 ? providerBounced / providerSent : null,
+            latencyMs: stats.providerLatencyMs[provider] || null,
+          },
+        ];
+      }),
+    ),
     queueOperations: {
       queued,
       retryScheduled,
@@ -1654,7 +1779,7 @@ export const sendAccountVerification = (input: {
       preheader: "Confirm your email address to activate your Mtendere account.",
       body: `
         <p>Hello ${escapeHtml(input.name || "there")},</p>
-        <p>Your Mtendere account has been created. Please verify this email address before signing in.</p>
+        <p>Your Mtendere account has been created. You can use your account now, and this verification confirms that this email address belongs to you.</p>
         <p>This secure link expires in 24 hours and can only be used once.</p>
         <p>If you did not create an account, you can ignore this message.</p>
       `,

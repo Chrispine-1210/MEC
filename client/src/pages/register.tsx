@@ -116,7 +116,7 @@ export default function Register() {
       });
 
       if (success) {
-        setLocation("/login?registered=1");
+        setLocation("/dashboard?registered=1");
       }
     } catch (error) {
       console.error("Registration error:", error);

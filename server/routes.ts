@@ -40,7 +40,7 @@ import {
   getEmailDeliveryDiagnostics,
   getEmailQueueWorkerStatus,
   getEmailPlatformHealth,
-  isTransactionalEmailDeliveryReady,
+  getTransactionalEmailActivationReadiness,
   processEmailQueue,
   recordEmailClick,
   recordEmailOpen,
@@ -151,6 +151,7 @@ import {
   verifyStripeWebhookEvent,
 } from "./referral-payments";
 import { normalizeSearchQuery, parsePagination, searchAndRank } from "./search";
+import { renderPrometheusMetrics } from "./observability";
 import { isVercelRuntime, resolveWritableRuntimePath } from "./runtime-paths";
 
 const JWT_SECRET = env.JWT_SECRET;
@@ -346,6 +347,24 @@ const loginRequestSchema = z
     rememberMe: z.boolean().optional().default(true),
   })
   .strict();
+
+const e2eSeedUserSchema = z
+  .object({
+    email: z.string().trim().email().transform((value) => value.toLowerCase()),
+    username: z.string().trim().min(3).max(80),
+    password: strongPasswordSchema,
+    firstName: z.string().trim().min(1).max(80).default("E2E"),
+    lastName: z.string().trim().min(1).max(80).default("User"),
+    role: z.enum(["user", "viewer", "writer", "admin", "super_admin"]).default("user"),
+    isActive: z.boolean().default(true),
+    mfaConfirmed: z.boolean().default(false),
+    totpSecret: z.string().trim().min(16).max(128).optional(),
+  })
+  .strict()
+  .refine((value) => !value.mfaConfirmed || Boolean(value.totpSecret), {
+    message: "totpSecret is required when mfaConfirmed is true",
+    path: ["totpSecret"],
+  });
 
 const resendVerificationSchema = z.object({
   email: z.string().trim().email().transform((value) => value.toLowerCase()),
@@ -968,6 +987,19 @@ const isBearerSecretMatch = (headerValue: string | undefined, expectedSecret: st
   const suppliedBuffer = Buffer.from(supplied);
   const expectedBuffer = Buffer.from(expectedSecret);
   return suppliedBuffer.length === expectedBuffer.length && timingSafeEqual(suppliedBuffer, expectedBuffer);
+};
+
+const isWebhookSignatureMatch = (req: Request, expectedSecret: string | undefined) => {
+  if (!expectedSecret) return true;
+
+  const providedHeader = req.get("x-mec-webhook-signature") || "";
+  const providedSignature = providedHeader.replace(/^sha256=/i, "").trim();
+  const rawBody = (req as Request & { rawBody?: Buffer }).rawBody || Buffer.from(JSON.stringify(req.body ?? {}));
+  const expectedSignature = createHmac("sha256", expectedSecret).update(rawBody).digest("hex");
+  const provided = Buffer.from(providedSignature, "hex");
+  const expected = Buffer.from(expectedSignature, "hex");
+
+  return provided.length === expected.length && timingSafeEqual(provided, expected);
 };
 
 const isVercelCronRequest = (req: Request) =>
@@ -2351,7 +2383,7 @@ const authenticateToken = async (req: Request, res: Response, next: NextFunction
 
     const user = await storage.getUser(Number(jwtUser.id));
     if (!user || user.isActive === false) {
-      return res.status(401).json({ message: "Account is inactive or email verification is still pending" });
+      return res.status(401).json({ message: "Account is inactive" });
     }
 
     if (!jwtUser.pwd || jwtUser.pwd !== passwordFingerprint(user.password)) {
@@ -3792,6 +3824,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/health", async (_req, res) => {
     const emailDiagnostics = getEmailDeliveryDiagnostics();
     const emailQueueWorker = getEmailQueueWorkerStatus();
+    const emailActivation = await getTransactionalEmailActivationReadiness({
+      cacheTtlMs: env.NODE_ENV === "production" ? 120_000 : 30_000,
+    }).catch((error) => ({
+      ready: false,
+      providerReady: emailDiagnostics.ready,
+      dnsReady: null,
+      checkedAt: new Date().toISOString(),
+      diagnostics: emailDiagnostics,
+      blockingReasons: [
+        {
+          code: "email_activation_check_failed",
+          message: error instanceof Error ? error.message : "Email activation readiness check failed.",
+        },
+      ],
+    }));
     const databaseDiagnostics = await getDatabaseDiagnostics();
     res.json({
       status: "ok",
@@ -3810,8 +3857,138 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sendGridTrackingEnabled: emailDiagnostics.sendGridTrackingEnabled,
         providerConfigured: emailDiagnostics.providerConfigured,
         queueWorker: emailQueueWorker,
+        activation: {
+          ready: emailActivation.ready,
+          providerReady: emailActivation.providerReady,
+          dnsReady: emailActivation.dnsReady,
+          checkedAt: emailActivation.checkedAt,
+          blockingReasons: emailActivation.blockingReasons,
+        },
       },
     });
+  });
+
+  app.get("/api/metrics", (req, res) => {
+    if (env.METRICS_SECRET && !isBearerSecretMatch(req.get("authorization"), env.METRICS_SECRET)) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.send(renderPrometheusMetrics());
+  });
+
+  const requireE2eSupport = (req: Request, res: Response, next: NextFunction) => {
+    if (env.NODE_ENV === "production") {
+      return res.status(404).json({ message: "Not found" });
+    }
+
+    if (!env.E2E_TEST_SECRET) {
+      return res.status(503).json({ message: "E2E support is disabled. Set E2E_TEST_SECRET to enable it." });
+    }
+
+    if (!isBearerSecretMatch(req.get("authorization"), env.E2E_TEST_SECRET)) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    return next();
+  };
+
+  const extractVerificationUrl = (job: { payload: Record<string, unknown> }) => {
+    const body = [
+      typeof job.payload.html === "string" ? job.payload.html : "",
+      typeof job.payload.text === "string" ? job.payload.text : "",
+    ].join("\n");
+    const match = body.match(/https?:\/\/[^\s"'<>]+\/api\/auth\/verify-email\/[^\s"'<>]+/);
+    return match ? match[0].replace(/&amp;/g, "&") : null;
+  };
+
+  app.post("/api/e2e/users", requireE2eSupport, async (req, res) => {
+    const payload = e2eSeedUserSchema.parse(req.body);
+    validateStrongPassword(payload.password);
+
+    const existing = await storage.getUserByEmail(payload.email);
+    const password = await bcrypt.hash(payload.password, PASSWORD_HASH_ROUNDS);
+    let user = existing
+      ? await storage.updateUser(existing.id, {
+          username: payload.username,
+          email: payload.email,
+          password,
+          firstName: payload.firstName,
+          lastName: payload.lastName,
+          role: payload.role,
+          isActive: payload.isActive,
+          mfaEnabled: payload.mfaConfirmed,
+          totpSecret: payload.mfaConfirmed ? payload.totpSecret || null : null,
+          mfaConfirmedAt: payload.mfaConfirmed ? new Date() : null,
+        } as Partial<Parameters<typeof storage.updateUser>[1]> & {
+          mfaEnabled: boolean;
+          totpSecret: string | null;
+          mfaConfirmedAt: Date | null;
+        })
+      : await storage.createUser({
+          username: payload.username,
+          email: payload.email,
+          password,
+          firstName: payload.firstName,
+          lastName: payload.lastName,
+          role: payload.role,
+          isActive: payload.isActive,
+        });
+
+    if (!existing && payload.mfaConfirmed) {
+      user = await storage.updateUser(user.id, {
+        mfaEnabled: true,
+        totpSecret: payload.totpSecret || null,
+        mfaConfirmedAt: new Date(),
+      } as Partial<Parameters<typeof storage.updateUser>[1]> & {
+        mfaEnabled: boolean;
+        totpSecret: string | null;
+        mfaConfirmedAt: Date;
+      });
+    }
+
+    await storage.logAnalytics({
+      event: "e2e_user_seeded",
+      userId: user.id,
+      metadata: { email: user.email, role: user.role },
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent"),
+    });
+
+    res.status(existing ? 200 : 201).json({ user: buildPublicUser(user) });
+  });
+
+  app.get("/api/e2e/email-verification-link", requireE2eSupport, async (req, res) => {
+    const email = z.string().email().parse(String(req.query.email || "")).toLowerCase();
+    const job = await storage.getLatestEmailJobByRecipientAndCategory(email, "account_verification");
+    if (!job) {
+      return res.status(404).json({ message: "No account verification email job found for that address." });
+    }
+
+    const verificationUrl = extractVerificationUrl(job as { payload: Record<string, unknown> });
+    if (!verificationUrl) {
+      return res.status(404).json({ message: "Verification URL was not found in the queued email payload." });
+    }
+
+    res.json({
+      email,
+      jobId: job.id,
+      jobStatus: job.status,
+      provider: job.provider,
+      providerMessageId: job.providerMessageId,
+      verificationUrl,
+    });
+  });
+
+  app.post("/api/e2e/admin-settings", requireE2eSupport, async (req, res) => {
+    const payload = z
+      .object({
+        twoFactorRequired: z.boolean().optional(),
+      })
+      .strict()
+      .parse(req.body);
+    const updated = updateAdminSettings(payload);
+    res.json({ settings: updated });
   });
 
   // Authentication routes
@@ -3858,34 +4035,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      if (!isTransactionalEmailDeliveryReady()) {
-        return res.status(503).json({
-          message: "Email delivery is not configured. Please contact support before creating an account.",
-        });
-      }
+      const emailActivation = await getTransactionalEmailActivationReadiness().catch((error) => ({
+        ready: false,
+        blockingReasons: [
+          {
+            code: "email_activation_check_failed",
+            message: error instanceof Error ? error.message : "Email activation readiness check failed.",
+          },
+        ],
+      }));
 
       // Hash password
       const hashedPassword = await bcrypt.hash(userData.password, PASSWORD_HASH_ROUNDS);
       
-      // Create user
+      // Create user immediately. Email verification remains a trust step, not an access blocker.
       const createdUser = await storage.createUser({
         ...userData,
         password: hashedPassword,
-        isActive: false,
+        isActive: true,
       });
-      const generatedReferralCode = await ensureUserGrowthRecords(
-        createdUser.id,
-        createdUser.defaultCurrency || env.STRIPE_DEFAULT_CURRENCY,
-      );
+      let generatedReferralCode = createdUser.referralCode ?? null;
+      try {
+        generatedReferralCode = await ensureUserGrowthRecords(
+          createdUser.id,
+          createdUser.defaultCurrency || env.STRIPE_DEFAULT_CURRENCY,
+        );
+      } catch (error) {
+        console.warn("User growth setup skipped:", getErrorLogMessage(error));
+        void logAnalyticsBestEffort({
+          event: "user_growth_setup_deferred",
+          userId: createdUser.id,
+          metadata: { error: getErrorLogMessage(error) },
+          ipAddress: req.ip,
+          userAgent: req.get("user-agent"),
+        });
+      }
+
       const user = { ...createdUser, referralCode: generatedReferralCode };
-      await attachReferralToNewUser(user, req, referralCode);
+      try {
+        await attachReferralToNewUser(user, req, referralCode);
+      } catch (error) {
+        console.warn("Referral attachment skipped:", getErrorLogMessage(error));
+        void logAnalyticsBestEffort({
+          event: "referral_attachment_deferred",
+          userId: user.id,
+          metadata: {
+            referralCode,
+            error: getErrorLogMessage(error),
+          },
+          ipAddress: req.ip,
+          userAgent: req.get("user-agent"),
+        });
+      }
 
       // Generate JWT token
       // Log analytics
       await storage.logAnalytics({
         event: 'user_registered',
         userId: user.id,
-        metadata: { email: user.email, role: user.role, requiresEmailVerification: true },
+        metadata: {
+          email: user.email,
+          role: user.role,
+          requiresEmailVerification: true,
+          emailVerificationBlocksLogin: false,
+          emailActivationReady: emailActivation.ready,
+          emailActivationBlockingReasons: emailActivation.blockingReasons,
+        },
         ipAddress: req.ip,
         userAgent: req.get("user-agent"),
       });
@@ -3894,9 +4109,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const verification = await issueAccountVerificationEmail(req, user);
       if (!verification.ok) {
-        return res.status(verification.statusCode).json({
-          message: verification.message,
-          retryAfterSeconds: verification.retryAfterSeconds,
+        await logAnalyticsBestEffort({
+          event: "email_verification_deferred",
+          userId: user.id,
+          metadata: {
+            email: user.email,
+            reason: verification.message,
+            retryAfterSeconds: verification.retryAfterSeconds,
+            emailActivationReady: emailActivation.ready,
+          },
+          ipAddress: req.ip,
+          userAgent: req.get("user-agent"),
         });
       }
 
@@ -3914,10 +4137,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
 
+      const mfaVerified = !isMfaRequiredForRole(user.role);
+      setRefreshCookie(res, user, { mfaVerified, rememberMe: true });
+
+      const verificationDeliveryReady = verification.ok && emailActivation.ready;
       res.status(201).json({
-        message: 'Account created. Please verify your email before signing in.',
+        message: verificationDeliveryReady
+          ? 'Account created. You can start using your account now; please verify your email when the message arrives.'
+          : 'Account created. You can start using your account now; email verification can be completed later.',
         requiresEmailVerification: true,
-        verificationEmailJobId: verification.queued?.id,
+        emailVerificationBlocksLogin: false,
+        verificationEmailJobId: verification.ok ? verification.queued?.id : null,
+        verificationEmailStatus: verification.ok ? verification.queued?.status : "deferred",
+        verificationDeliveryReady,
+        verificationRetryAfterSeconds: verification.ok ? undefined : verification.retryAfterSeconds,
+        token: signToken(user, { mfaVerified, rememberMe: true }),
+        mfaRequired: isMfaRequiredForRole(user.role),
+        mfaVerified,
         user: buildPublicUser(user),
       });
     } catch (error) {
@@ -3959,7 +4195,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (user.isActive === false) {
         registerLoginFailure(normalizedIdentifier);
-        return res.status(403).json({ message: 'This account is inactive or email verification is still pending.' });
+        return res.status(403).json({ message: 'This account is inactive.' });
       }
 
       // Check password
@@ -4302,8 +4538,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/email/webhooks/:provider', async (req, res) => {
     try {
       if (env.EMAIL_WEBHOOK_SIGNING_SECRET) {
-        const providedSecret = req.get("x-mec-webhook-secret");
-        if (providedSecret !== env.EMAIL_WEBHOOK_SIGNING_SECRET) {
+        const legacySecret = req.get("x-mec-webhook-secret");
+        const signatureValid = isWebhookSignatureMatch(req, env.EMAIL_WEBHOOK_SIGNING_SECRET);
+        const legacySecretValid = legacySecret === env.EMAIL_WEBHOOK_SIGNING_SECRET;
+        if (!signatureValid && !legacySecretValid) {
           return res.status(401).json({ message: "Invalid webhook secret" });
         }
       }

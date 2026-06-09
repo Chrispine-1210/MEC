@@ -163,6 +163,7 @@ export interface IStorage {
   createEmailJob(job: InsertEmailJob): Promise<EmailJob>;
   getEmailJob(id: string): Promise<EmailJob | undefined>;
   getEmailJobByProviderMessageId(providerMessageId: string): Promise<EmailJob | undefined>;
+  getLatestEmailJobByRecipientAndCategory(recipient: string, category: string): Promise<EmailJob | undefined>;
   getDueEmailJobs(limit?: number): Promise<EmailJob[]>;
   recoverStaleProcessingEmailJobs(staleBefore: Date): Promise<number>;
   cancelPendingEmailJobs(recipient: string, category: string, reason: string): Promise<number>;
@@ -197,8 +198,11 @@ export interface IStorage {
   updateEmailCampaign(id: number, campaign: Partial<InsertEmailCampaign>): Promise<EmailCampaign | undefined>;
   getEmailDeliveryStats(days?: number): Promise<{
     totals: Record<string, number>;
+    byProvider: Record<string, Record<string, number>>;
     byCategory: Record<string, Record<string, number>>;
     queue: Record<string, number>;
+    providerLatencyMs: Record<string, { count: number; average: number; max: number }>;
+    failover: { triggered: number; rate: number | null };
     recentFailures: EmailJob[];
   }>;
   getEmailPreferenceByEmail(email: string): Promise<EmailPreference | undefined>;
@@ -1021,6 +1025,16 @@ export class DatabaseStorage implements IStorage {
     return job || undefined;
   }
 
+  async getLatestEmailJobByRecipientAndCategory(recipient: string, category: string): Promise<EmailJob | undefined> {
+    const [job] = await db
+      .select()
+      .from(emailJobs)
+      .where(and(eq(emailJobs.recipient, recipient.toLowerCase()), eq(emailJobs.category, category)))
+      .orderBy(desc(emailJobs.createdAt))
+      .limit(1);
+    return job || undefined;
+  }
+
   async getDueEmailJobs(limit = 10): Promise<EmailJob[]> {
     return await db
       .select()
@@ -1299,8 +1313,11 @@ export class DatabaseStorage implements IStorage {
 
   async getEmailDeliveryStats(days = 30): Promise<{
     totals: Record<string, number>;
+    byProvider: Record<string, Record<string, number>>;
     byCategory: Record<string, Record<string, number>>;
     queue: Record<string, number>;
+    providerLatencyMs: Record<string, { count: number; average: number; max: number }>;
+    failover: { triggered: number; rate: number | null };
     recentFailures: EmailJob[];
   }> {
     const since = new Date(Date.now() - Math.max(1, days) * 24 * 60 * 60 * 1000);
@@ -1316,11 +1333,16 @@ export class DatabaseStorage implements IStorage {
     ]);
 
     const totals: Record<string, number> = {};
+    const byProvider: Record<string, Record<string, number>> = {};
     const byCategory: Record<string, Record<string, number>> = {};
     const queue: Record<string, number> = {};
+    const latencyBuckets: Record<string, { count: number; sum: number; max: number }> = {};
 
     for (const event of events) {
       totals[event.eventType] = (totals[event.eventType] || 0) + 1;
+      const provider = event.provider || "unknown";
+      byProvider[provider] = byProvider[provider] || {};
+      byProvider[provider][event.eventType] = (byProvider[provider][event.eventType] || 0) + 1;
       const category = event.category || "uncategorized";
       byCategory[category] = byCategory[category] || {};
       byCategory[category][event.eventType] = (byCategory[category][event.eventType] || 0) + 1;
@@ -1328,9 +1350,41 @@ export class DatabaseStorage implements IStorage {
 
     for (const job of jobs) {
       queue[job.status] = (queue[job.status] || 0) + 1;
+      if (job.provider && job.sentAt && job.createdAt) {
+        const latencyMs = Math.max(0, job.sentAt.getTime() - job.createdAt.getTime());
+        const bucket = latencyBuckets[job.provider] || { count: 0, sum: 0, max: 0 };
+        bucket.count += 1;
+        bucket.sum += latencyMs;
+        bucket.max = Math.max(bucket.max, latencyMs);
+        latencyBuckets[job.provider] = bucket;
+      }
     }
 
-    return { totals, byCategory, queue, recentFailures };
+    const providerLatencyMs = Object.fromEntries(
+      Object.entries(latencyBuckets).map(([provider, bucket]) => [
+        provider,
+        {
+          count: bucket.count,
+          average: bucket.count > 0 ? Math.round(bucket.sum / bucket.count) : 0,
+          max: bucket.max,
+        },
+      ]),
+    );
+    const triggered = totals.provider_failover_triggered || 0;
+    const sent = totals.sent || 0;
+
+    return {
+      totals,
+      byProvider,
+      byCategory,
+      queue,
+      providerLatencyMs,
+      failover: {
+        triggered,
+        rate: sent > 0 ? triggered / sent : null,
+      },
+      recentFailures,
+    };
   }
 
   async getEmailPreferenceByEmail(email: string): Promise<EmailPreference | undefined> {

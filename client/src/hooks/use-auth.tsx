@@ -103,11 +103,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       toast({
-        title: data.requiresEmailVerification ? "Verify your email" : "Welcome to Mtendere!",
+        title: data.requiresEmailVerification ? "Account created" : "Welcome to Mtendere!",
         description:
           data.message ||
           (data.requiresEmailVerification
-            ? "Check your inbox and verify your email before signing in."
+            ? "You can use your account now. Please verify your email when the message arrives."
             : "Your account has been created successfully."),
       });
       

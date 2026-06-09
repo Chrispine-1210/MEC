@@ -15,6 +15,9 @@ data/communication-events.jsonl
 data/communication-messages.jsonl
 data/generated-documents/
 data/admin-role-credentials*.json
+test-results/
+playwright-report/
+blob-report/
 dist/index.js
 dist/client/admin/
 server-build/

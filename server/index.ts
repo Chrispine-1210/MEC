@@ -6,6 +6,7 @@ import { env } from "./env";
 import helmet from "helmet";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { startEmailQueueWorker } from "./email";
+import { recordAppError, recordHttpRequest } from "./observability";
 import { ensureRuntimeDatabaseSchema } from "./runtime-migrations";
 import { registerRoutes } from "./routes";
 import { renderSeoHtml, shouldNoindexPath } from "./seo-render";
@@ -244,7 +245,8 @@ app.use(
   express.json({
     limit: "1mb",
     verify: (req, _res, buf) => {
-      if ((req as Request).originalUrl === "/api/stripe/webhook") {
+      const originalUrl = (req as Request).originalUrl || "";
+      if (originalUrl === "/api/stripe/webhook" || originalUrl.startsWith("/api/email/webhooks/")) {
         (req as Request & { rawBody?: Buffer }).rawBody = Buffer.from(buf);
       }
     },
@@ -329,6 +331,11 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     }
 
     const duration = Date.now() - startTime;
+    recordHttpRequest(req.method, requestPath, res.statusCode, duration);
+    if (res.statusCode >= 500) {
+      recordAppError(res.statusCode);
+    }
+
     let line = `[${requestId}] ${req.method} ${requestPath} ${res.statusCode} in ${duration}ms`;
 
     if (responseBody !== undefined) {

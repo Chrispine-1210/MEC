@@ -100,7 +100,7 @@ export default function Login() {
                   ? "Your password has been reset. Sign in with your new password."
                   : notice.get("verified")
                     ? "Your email has been verified. You can sign in now."
-                    : "Account created. Check your email to verify your account before signing in."}
+                    : "Account created. You can sign in now; please verify your email when the message arrives."}
               </p>
             )}
           </div>

@@ -14,13 +14,17 @@ process.env.JWT_SECRET = "email-platform-test-secret-32-chars";
 process.env.PUBLIC_APP_URL = "http://public.example.test";
 process.env.API_APP_URL = "http://api.example.test";
 process.env.EMAIL_FROM = "Mtendere Education Consult <no-reply@example.test>";
-process.env.EMAIL_PROVIDER_ORDER = "resend,sendgrid";
+process.env.EMAIL_PROVIDER_ORDER = "resend,sendgrid,ses";
 process.env.RESEND_API_KEY = "resend-test-key";
 process.env.SENDGRID_API_KEY = "SG.sendgrid-test-key";
+process.env.AWS_SES_REGION = "us-east-1";
+process.env.AWS_SES_ACCESS_KEY_ID = "AKIAEMAILTESTKEY";
+process.env.AWS_SES_SECRET_ACCESS_KEY = "ses-test-secret";
 process.env.SMTP_HOST = "";
 process.env.SMTP_USER = "";
 process.env.SMTP_PASSWORD = "";
 process.env.SMTP_PORT = "";
+process.env.EMAIL_PROVIDER_INLINE_RETRIES = "1";
 process.env.EMAIL_DRY_RUN = "false";
 process.env.EMAIL_ALLOW_LIVE_TEST_SENDS = "true";
 process.env.EMAIL_QUEUE_WORKER_ENABLED = "false";
@@ -175,6 +179,47 @@ test("email queue fails over from Resend to SendGrid when the first provider fai
   assert.equal(queue.deliveryEvents.some((event) => event.eventType === "sent" && event.provider === "sendgrid"), true);
 });
 
+test("email queue fails over to AWS SES after upstream provider failures", { concurrency: false }, async () => {
+  const { processEmailQueue } = await emailModulePromise;
+  const queue = await installQueueStorage(makeEmailJob({ id: "ses-failover-job" }));
+  const requestedProviders: string[] = [];
+
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("api.resend.com")) {
+      requestedProviders.push("resend");
+      return new Response("Resend unavailable", { status: 503, statusText: "Service Unavailable" });
+    }
+
+    if (url.includes("api.sendgrid.com")) {
+      requestedProviders.push("sendgrid");
+      return new Response(JSON.stringify({ errors: [{ message: "SendGrid unavailable" }] }), {
+        status: 503,
+        statusText: "Service Unavailable",
+      });
+    }
+
+    if (url.includes("email.us-east-1.amazonaws.com")) {
+      requestedProviders.push("ses");
+      return new Response(JSON.stringify({ MessageId: "ses-message-1" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+
+    throw new Error(`Unexpected provider URL ${url}`);
+  }) as typeof fetch;
+
+  await processEmailQueue();
+
+  assert.deepEqual(requestedProviders, ["resend", "sendgrid", "ses"]);
+  assert.equal(queue.state.job.status, "sent");
+  assert.equal(queue.state.job.provider, "ses");
+  assert.equal(queue.state.job.providerMessageId, "ses-message-1");
+  assert.equal(queue.deliveryEvents.some((event) => event.eventType === "provider_failover_triggered" && event.provider === "ses"), true);
+  assert.equal(queue.deliveryEvents.some((event) => event.eventType === "sent" && event.provider === "ses"), true);
+});
+
 test("email queue schedules the first retry one minute after an all-provider failure", { concurrency: false }, async () => {
   const { processEmailQueue } = await emailModulePromise;
   const queue = await installQueueStorage(makeEmailJob());
@@ -314,6 +359,114 @@ const installVerificationStorage = async (input: {
   return state;
 };
 
+const installPublicRegistrationStorage = async () => {
+  const state = {
+    nextUserId: 100,
+    users: new Map<number, any>(),
+    emailJobs: [] as any[],
+    emailVerificationTokens: [] as any[],
+    deliveryEvents: [] as any[],
+    analytics: [] as any[],
+    communicationEvents: [] as any[],
+    communicationMessages: [] as any[],
+    workflowTasks: [] as any[],
+    notifications: [] as any[],
+  };
+
+  const findUserByEmail = (email: string) =>
+    Array.from(state.users.values()).find((user) => user.email.toLowerCase() === email.toLowerCase());
+  const findUserByUsername = (username: string) =>
+    Array.from(state.users.values()).find((user) => user.username.toLowerCase() === username.toLowerCase());
+
+  await patchStorage({
+    getUser: async (id: number) => state.users.get(id),
+    getUserByEmail: async (email: string) => findUserByEmail(email),
+    getUserByUsername: async (username: string) => findUserByUsername(username),
+    createUser: async (insertUser: any) => {
+      const now = new Date();
+      const user = {
+        id: state.nextUserId++,
+        profilePicture: null,
+        phone: null,
+        dateOfBirth: null,
+        referralCode: null,
+        stripeCustomerId: null,
+        defaultCurrency: "USD",
+        mfaEnabled: false,
+        totpSecret: null,
+        mfaConfirmedAt: null,
+        createdAt: now,
+        updatedAt: now,
+        ...insertUser,
+      };
+      state.users.set(user.id, user);
+      return user;
+    },
+    updateUser: async (id: number, updateUser: Record<string, unknown>) => {
+      const existing = state.users.get(id);
+      if (!existing) throw new Error("User not found");
+      const updated = { ...existing, ...updateUser, updatedAt: new Date() };
+      state.users.set(id, updated);
+      return updated;
+    },
+    countEmailVerificationRequests: async () => 0,
+    revokePendingEmailVerificationTokens: async () => undefined,
+    createEmailVerificationToken: async (token: any) => {
+      const saved = { id: state.emailVerificationTokens.length + 1, createdAt: new Date(), ...token };
+      state.emailVerificationTokens.push(saved);
+      return saved;
+    },
+    getEmailPreferenceByEmail: async () => undefined,
+    upsertEmailPreference: async (preference: any) => ({
+      id: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ...preference,
+    }),
+    cancelPendingEmailJobs: async () => 0,
+    createEmailJob: async (job: any) => {
+      const saved = { createdAt: new Date(), updatedAt: new Date(), ...job };
+      state.emailJobs.push(saved);
+      return saved;
+    },
+    recoverStaleProcessingEmailJobs: async () => 0,
+    getDueEmailJobs: async () => [],
+    getEmailJob: async (id: string) => state.emailJobs.find((job) => job.id === id),
+    createEmailDeliveryEvent: async (event: any) => {
+      state.deliveryEvents.push(event);
+    },
+    logAnalytics: async (analytics: any) => {
+      const saved = { id: state.analytics.length + 1, timestamp: new Date(), ...analytics };
+      state.analytics.push(saved);
+      return saved;
+    },
+    createCommunicationEvent: async (event: any) => {
+      state.communicationEvents.push(event);
+      return { createdAt: new Date(), updatedAt: new Date(), ...event };
+    },
+    updateCommunicationEventStatus: async (id: string, status: string, details: Record<string, unknown> = {}) => {
+      const existing = state.communicationEvents.find((event) => event.id === id);
+      if (existing) Object.assign(existing, { status, ...details });
+      return existing;
+    },
+    createCommunicationMessage: async (message: any) => {
+      state.communicationMessages.push(message);
+      return { createdAt: new Date(), updatedAt: new Date(), ...message };
+    },
+    createCommunicationWorkflowTask: async (task: any) => {
+      state.workflowTasks.push(task);
+      return { createdAt: new Date(), updatedAt: new Date(), ...task };
+    },
+    createNotification: async (notification: any) => {
+      const saved = { id: state.notifications.length + 1, createdAt: new Date(), ...notification };
+      state.notifications.push(saved);
+      return saved;
+    },
+  });
+
+  return state;
+};
+
 const installSubscriberStorage = async () => {
   const state = {
     nextSubscriberId: 1,
@@ -434,6 +587,66 @@ const installSubscriberStorage = async () => {
 
   return state;
 };
+
+test("public registration creates an active account that can use profile and login before email verification", { concurrency: false }, async () => {
+  const state = await installPublicRegistrationStorage();
+  const { server, baseUrl } = await startTestServer();
+  const credentials = {
+    email: "dynamic-student@example.test",
+    username: "dynamicstudent",
+    password: "UsableAccess#2026",
+  };
+
+  try {
+    const registerResponse = await fetch(`${baseUrl}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...credentials,
+        firstName: "Dynamic",
+        lastName: "Student",
+      }),
+    });
+    const registerBody = await registerResponse.json();
+
+    assert.equal(registerResponse.status, 201);
+    assert.equal(registerBody.emailVerificationBlocksLogin, false);
+    assert.equal(registerBody.requiresEmailVerification, true);
+    assert.equal(typeof registerBody.token, "string");
+    assert.equal(registerBody.user.email, credentials.email);
+
+    const createdUser = Array.from(state.users.values()).find((user) => user.email === credentials.email);
+    assert.ok(createdUser);
+    assert.equal(createdUser.isActive, true);
+    assert.equal(state.emailVerificationTokens.length, 1);
+    assert.equal(state.emailJobs.some((job) => job.category === "account_verification"), true);
+
+    const profileResponse = await fetch(`${baseUrl}/api/user/profile`, {
+      headers: { Authorization: `Bearer ${registerBody.token}` },
+    });
+    const profileBody = await profileResponse.json();
+
+    assert.equal(profileResponse.status, 200);
+    assert.equal(profileBody.email, credentials.email);
+
+    const loginResponse = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: credentials.email,
+        password: credentials.password,
+      }),
+    });
+    const loginBody = await loginResponse.json();
+
+    assert.equal(loginResponse.status, 200);
+    assert.equal(loginBody.user.email, credentials.email);
+    assert.equal(typeof loginBody.token, "string");
+  } finally {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    await stopTestServer(server);
+  }
+});
 
 test("newsletter signup succeeds once the subscriber is saved and confirmation email is sent", { concurrency: false }, async () => {
   const state = await installSubscriberStorage();

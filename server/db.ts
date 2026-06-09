@@ -1,6 +1,8 @@
 import "dotenv/config"; // must be first
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-serverless';
+import { Pool as NeonPool, neonConfig } from '@neondatabase/serverless';
+import { drizzle as drizzleNeon } from 'drizzle-orm/neon-serverless';
+import { Pool as PgPool } from "pg";
+import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
 import ws from "ws";
 import * as schema from "@shared/schema";
 
@@ -52,13 +54,34 @@ if (!connectionString) {
 
 export const databaseConnectionSource = connectionStringSource;
 const poolMaxConnections = isDevelopment ? 5 : isVercelRuntime ? 1 : 10;
+const connectionHost = (() => {
+  try {
+    return new URL(connectionString).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+})();
+const useNodePostgresDriver =
+  process.env.DATABASE_DRIVER === "pg" ||
+  ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(connectionHost);
 
-export const pool = new Pool({
+type RuntimePool = {
+  query: (query: string) => Promise<unknown>;
+  on: (event: "error", listener: (error: unknown) => void) => unknown;
+};
+
+const rawPool = useNodePostgresDriver ? new PgPool({
+  connectionString,
+  connectionTimeoutMillis: 10_000,
+  idleTimeoutMillis: 30_000,
+  max: poolMaxConnections,
+}) : new NeonPool({
   connectionString,
   connectionTimeoutMillis: 10_000,
   idleTimeoutMillis: 30_000,
   max: poolMaxConnections,
 });
+export const pool = rawPool as RuntimePool;
 
 pool.on("error", (error: unknown) => {
   const code = String(getNestedErrorValue(error, "code") || "unknown");
@@ -66,7 +89,9 @@ pool.on("error", (error: unknown) => {
   console.warn(`[db] Recovered idle database connection error (${code}): ${message}`);
 });
 
-export const db = drizzle({ client: pool, schema });
+export const db = useNodePostgresDriver
+  ? drizzlePg(rawPool as PgPool, { schema })
+  : drizzleNeon({ client: rawPool as NeonPool, schema });
 
 const getNestedErrorValue = (error: unknown, key: string) => {
   const direct = error && typeof error === "object" && key in error ? (error as Record<string, unknown>)[key] : undefined;
@@ -100,12 +125,14 @@ export const getDatabaseDiagnostics = async () => {
     return {
       ready: true,
       source: databaseConnectionSource,
+      driver: useNodePostgresDriver ? "pg" : "neon",
       error: null,
     };
   } catch (error) {
     return {
       ready: false,
       source: databaseConnectionSource,
+      driver: useNodePostgresDriver ? "pg" : "neon",
       error: {
         code: String(getNestedErrorValue(error, "code") || ""),
         type: classifyDatabaseError(error),
