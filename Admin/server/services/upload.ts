@@ -16,7 +16,7 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    const uniqueName = `${nanoid()}-${Date.now()}${path.extname(file.originalname)}`;
+    const uniqueName = `${nanoid()}-${Date.now()}${path.extname(file.originalname).toLowerCase()}`;
     cb(null, uniqueName);
   }
 });
@@ -42,6 +42,48 @@ export const uploadMiddleware = multer({
     fileSize: 10 * 1024 * 1024, // 10MB limit
   }
 });
+
+export const isValidImageFile = (filePath: string): boolean => {
+  try {
+    const descriptor = fs.openSync(filePath, "r");
+    try {
+      const header = Buffer.alloc(12);
+      const bytesRead = fs.readSync(descriptor, header, 0, header.length, 0);
+      const ext = path.extname(filePath).toLowerCase();
+
+      if ((ext === ".jpg" || ext === ".jpeg") && bytesRead >= 3) {
+        return header[0] === 0xff && header[1] === 0xd8;
+      }
+
+      if (ext === ".png" && bytesRead >= 8) {
+        return header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4e && header[3] === 0x47;
+      }
+
+      if (ext === ".gif" && bytesRead >= 6) {
+        const signature = header.toString("ascii", 0, 6);
+        return signature === "GIF87a" || signature === "GIF89a";
+      }
+
+      if (ext === ".webp" && bytesRead >= 12) {
+        return header.toString("ascii", 0, 4) === "RIFF" && header.toString("ascii", 8, 12) === "WEBP";
+      }
+
+      return false;
+    } finally {
+      fs.closeSync(descriptor);
+    }
+  } catch {
+    return false;
+  }
+};
+
+export const removeUploadedFile = async (filePath: string): Promise<void> => {
+  try {
+    await fs.promises.unlink(filePath);
+  } catch {
+    // Best-effort cleanup after validation or processing failures.
+  }
+};
 
 // Image processing function
 export const processImage = async (inputPath: string): Promise<string> => {

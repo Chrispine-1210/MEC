@@ -37,7 +37,20 @@
       "paymentStatus": "unpaid"
     }
   },
-  "blogPosts": {},
+  "blogPosts": {
+    "123": {
+      "status": "published",
+      "revisionHistory": [
+        {
+          "id": "5949eebc-d7e3-49d7-9638-a106b8dd03f3",
+          "action": "status_changed",
+          "status": "published",
+          "actor": 8,
+          "createdAt": "2026-06-09T06:14:30.374Z"
+        }
+      ]
+    }
+  },
   "teamMembers": {},
   "applications": {},
   "aiConversations": {},
@@ -72,6 +85,51 @@
       "updatedAt": "2026-04-02T12:07:01.829Z"
     },
     {
+      "id": "editor",
+      "name": "Editor",
+      "description": "Can publish content and review operational workflows.",
+      "permissions": [
+        "view_dashboard",
+        "manage_events",
+        "manage_scholarships",
+        "manage_jobs",
+        "manage_partners",
+        "manage_blog",
+        "manage_team",
+        "manage_media",
+        "publish",
+        "review_applications",
+        "view_analytics"
+      ],
+      "isActive": true,
+      "createdAt": "2026-06-09T06:14:22.935Z",
+      "updatedAt": "2026-06-09T06:14:22.935Z"
+    },
+    {
+      "id": "admin",
+      "name": "Administrator",
+      "description": "Can manage operational content, users, applications, analytics, and security workflows.",
+      "permissions": [
+        "view_dashboard",
+        "manage_events",
+        "manage_scholarships",
+        "manage_jobs",
+        "manage_partners",
+        "manage_blog",
+        "manage_team",
+        "manage_media",
+        "manage_users",
+        "review_applications",
+        "view_analytics",
+        "publish",
+        "export",
+        "manage_security"
+      ],
+      "isActive": true,
+      "createdAt": "2026-06-09T06:14:22.935Z",
+      "updatedAt": "2026-06-09T06:14:22.935Z"
+    },
+    {
       "id": "super_admin",
       "name": "Super Administrator",
       "description": "Full system access including settings and roles.",
@@ -88,7 +146,11 @@
         "manage_roles",
         "manage_settings",
         "manage_events",
-        "manage_media"
+        "manage_media",
+        "publish",
+        "export",
+        "manage_security",
+        "manage_webhooks"
       ],
       "isActive": true,
       "createdAt": "2026-04-02T12:07:01.829Z",

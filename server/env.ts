@@ -60,6 +60,7 @@ const envSchema = z.object({
   EMAIL_QUEUE_WORKER_ENABLED: optionalEnvBoolean,
   EMAIL_QUEUE_WORKER_INTERVAL_MS: z.coerce.number().int().positive().default(15_000),
   EMAIL_DRY_RUN: optionalEnvBoolean,
+  EMAIL_ALLOW_LIVE_TEST_SENDS: optionalEnvBoolean,
   EMAIL_TRACKING_SECRET: optionalEnvString,
   EMAIL_LINK_BASE_URL: optionalEnvString,
   EMAIL_WEBHOOK_SIGNING_SECRET: optionalEnvString,

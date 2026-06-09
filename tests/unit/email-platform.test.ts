@@ -22,6 +22,7 @@ process.env.SMTP_USER = "";
 process.env.SMTP_PASSWORD = "";
 process.env.SMTP_PORT = "";
 process.env.EMAIL_DRY_RUN = "false";
+process.env.EMAIL_ALLOW_LIVE_TEST_SENDS = "true";
 process.env.EMAIL_QUEUE_WORKER_ENABLED = "false";
 process.env.RECAPTCHA_SECRET_KEY = "";
 process.env.CRON_SECRET = "cron-test-secret";

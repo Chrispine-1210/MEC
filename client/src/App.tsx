@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { Switch, Route } from "wouter";
+import { useEffect, useRef } from "react";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -38,6 +38,14 @@ import StudyAbroad from "@/pages/study-abroad";
 import UniversityApplications from "@/pages/university-applications";
 import CareerCounseling from "@/pages/career-counseling";
 import ResumeBuilding from "@/pages/resume-building";
+import {
+  CompliancePage,
+  PrivacyCenter,
+  PrivacyPolicy,
+  SecurityPage,
+  TermsOfService,
+  TransparencyCenter,
+} from "@/pages/trust-legal";
 
 function Router() {
   return (
@@ -69,9 +77,64 @@ function Router() {
       <Route path="/university-applications" component={UniversityApplications} />
       <Route path="/career-counseling" component={CareerCounseling} />
       <Route path="/resume-building" component={ResumeBuilding} />
+      <Route path="/privacy-policy" component={PrivacyPolicy} />
+      <Route path="/terms-of-service" component={TermsOfService} />
+      <Route path="/security" component={SecurityPage} />
+      <Route path="/privacy-center" component={PrivacyCenter} />
+      <Route path="/transparency" component={TransparencyCenter} />
+      <Route path="/compliance" component={CompliancePage} />
       <Route component={NotFound} />
     </Switch>
   );
+}
+
+function ScrollRestoration() {
+  const [location] = useLocation();
+  const previousLocationRef = useRef<string | null>(null);
+  const isPopNavigationRef = useRef(false);
+  const scrollPositionsRef = useRef(new Map<string, { x: number; y: number }>());
+
+  useEffect(() => {
+    if (!("scrollRestoration" in window.history)) return;
+    const previous = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+    return () => {
+      window.history.scrollRestoration = previous;
+    };
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      isPopNavigationRef.current = true;
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    const previousLocation = previousLocationRef.current;
+    if (previousLocation) {
+      scrollPositionsRef.current.set(previousLocation, {
+        x: window.scrollX,
+        y: window.scrollY,
+      });
+    }
+
+    const savedPosition = scrollPositionsRef.current.get(location);
+    window.requestAnimationFrame(() => {
+      if (isPopNavigationRef.current && savedPosition) {
+        window.scrollTo(savedPosition.x, savedPosition.y);
+      } else {
+        window.scrollTo({ left: 0, top: 0, behavior: "auto" });
+      }
+      isPopNavigationRef.current = false;
+    });
+
+    previousLocationRef.current = location;
+  }, [location]);
+
+  return null;
 }
 
 function App() {
@@ -125,6 +188,7 @@ function App() {
           <WebSocketProvider>
             <Toaster />
             <RouteSEO />
+            <ScrollRestoration />
             <Router />
             <AIChat />
             <BackToTop />

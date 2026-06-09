@@ -4,8 +4,8 @@ export type AdminRole = (typeof ADMIN_ROLES)[number];
 
 const DASHBOARD_ROUTES = ["/admin", "/admin/dashboard", "/admin/analytics", "/admin/activity"];
 const CONTENT_ROUTES = ["/admin/scholarships", "/admin/jobs", "/admin/partners", "/admin/blog", "/admin/team"];
-const ADMIN_ONLY_ROUTES = ["/admin/users", "/admin/applications", "/admin/roles", "/admin/ai-chat"];
-const SUPER_ADMIN_ROUTES = ["/admin/settings"];
+const ADMIN_OPERATION_ROUTES = ["/admin/applications", "/admin/ai-chat"];
+const SUPER_ADMIN_ROUTES = ["/admin/users", "/admin/roles", "/admin/settings"];
 
 const routeRoles = new Map<string, AdminRole[]>();
 
@@ -15,8 +15,8 @@ for (const route of DASHBOARD_ROUTES) {
 for (const route of CONTENT_ROUTES) {
   routeRoles.set(route, ["writer", "editor", "admin", "super_admin"]);
 }
-for (const route of ADMIN_ONLY_ROUTES) {
-  routeRoles.set(route, ["super_admin"]);
+for (const route of ADMIN_OPERATION_ROUTES) {
+  routeRoles.set(route, ["admin", "super_admin"]);
 }
 for (const route of SUPER_ADMIN_ROUTES) {
   routeRoles.set(route, ["super_admin"]);
@@ -49,4 +49,4 @@ export const canCreateContent = (role: string) =>
 
 export const canManageUsers = (role: string) => role === "super_admin";
 
-export const canUseAiAssistant = (role: string) => role === "super_admin";
+export const canUseAiAssistant = (role: string) => role === "admin" || role === "super_admin";

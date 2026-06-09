@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
@@ -251,6 +251,55 @@ function Router() {
   );
 }
 
+function ScrollRestoration() {
+  const [location] = useLocation();
+  const previousLocationRef = useRef<string | null>(null);
+  const isPopNavigationRef = useRef(false);
+  const scrollPositionsRef = useRef(new Map<string, { x: number; y: number }>());
+
+  useEffect(() => {
+    if (!("scrollRestoration" in window.history)) return;
+    const previous = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+    return () => {
+      window.history.scrollRestoration = previous;
+    };
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      isPopNavigationRef.current = true;
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    const previousLocation = previousLocationRef.current;
+    if (previousLocation) {
+      scrollPositionsRef.current.set(previousLocation, {
+        x: window.scrollX,
+        y: window.scrollY,
+      });
+    }
+
+    const savedPosition = scrollPositionsRef.current.get(location);
+    window.requestAnimationFrame(() => {
+      if (isPopNavigationRef.current && savedPosition) {
+        window.scrollTo(savedPosition.x, savedPosition.y);
+      } else {
+        window.scrollTo({ left: 0, top: 0, behavior: "auto" });
+      }
+      isPopNavigationRef.current = false;
+    });
+
+    previousLocationRef.current = location;
+  }, [location]);
+
+  return null;
+}
+
 function App() {
   useEffect(() => {
     document.documentElement.classList.remove("dark");
@@ -264,6 +313,7 @@ function App() {
       <TooltipProvider>
         <AdminRealtimeProvider>
           <Toaster />
+          <ScrollRestoration />
           <Router />
           {shouldEnableAnalytics && <VercelAnalytics />}
         </AdminRealtimeProvider>

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { storage } from "./storage";
 import { requireAuth, requireAdminRole, requireSuperAdmin, requireEditorRole } from "./middleware/auth";
-import { uploadMiddleware, processImage, generateImageSizes } from "./services/upload";
+import { uploadMiddleware, processImage, generateImageSizes, isValidImageFile, removeUploadedFile } from "./services/upload";
 import { moderateContent, generateContentSuggestions, analyzeChatConversation } from "./services/openai";
 import {
   insertUserSchema,
@@ -245,7 +245,7 @@ router.get("/api/admin/dashboard/recent-activity", requireAuth as any, requireAd
 });
 
 // Users Management
-router.get("/api/admin/users", requireAuth as any, requireAdminRole as any, async (req: any, res) => {
+router.get("/api/admin/users", requireAuth as any, requireSuperAdmin as any, async (req: any, res) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
@@ -261,7 +261,7 @@ router.get("/api/admin/users", requireAuth as any, requireAdminRole as any, asyn
   }
 });
 
-router.get("/api/admin/users/:id", requireAuth as any, requireAdminRole as any, async (req: any, res) => {
+router.get("/api/admin/users/:id", requireAuth as any, requireSuperAdmin as any, async (req: any, res) => {
   try {
     const user = await storage.getUser(req.params.id);
     if (!user) {
@@ -274,7 +274,7 @@ router.get("/api/admin/users/:id", requireAuth as any, requireAdminRole as any, 
   }
 });
 
-router.put("/api/admin/users/:id", requireAuth as any, requireAdminRole as any, validateBody(insertUserSchema.partial()), async (req: any, res) => {
+router.put("/api/admin/users/:id", requireAuth as any, requireSuperAdmin as any, validateBody(insertUserSchema.partial()), async (req: any, res) => {
   try {
     const user = await storage.updateUser(req.params.id, req.validatedBody);
     res.json(user);
@@ -809,7 +809,7 @@ router.get("/api/admin/ai-chat/conversations/:id", requireAuth as any, requireAd
 });
 
 // Roles Management
-router.get("/api/admin/roles", requireAuth as any, requireAdminRole as any, async (req: any, res) => {
+router.get("/api/admin/roles", requireAuth as any, requireSuperAdmin as any, async (req: any, res) => {
   try {
     const result = await storage.getRoles();
     res.json(result);
@@ -819,7 +819,7 @@ router.get("/api/admin/roles", requireAuth as any, requireAdminRole as any, asyn
   }
 });
 
-router.post("/api/admin/roles", requireAuth as any, requireAdminRole as any, async (req: any, res) => {
+router.post("/api/admin/roles", requireAuth as any, requireSuperAdmin as any, async (req: any, res) => {
   try {
     const { name, description, permissions } = req.body;
     if (!name) return res.status(400).json({ message: "Role name is required" });
@@ -831,7 +831,7 @@ router.post("/api/admin/roles", requireAuth as any, requireAdminRole as any, asy
   }
 });
 
-router.put("/api/admin/roles/:id", requireAuth as any, requireAdminRole as any, async (req: any, res) => {
+router.put("/api/admin/roles/:id", requireAuth as any, requireSuperAdmin as any, async (req: any, res) => {
   try {
     const { name, description, permissions } = req.body;
     const role = await storage.updateRole(req.params.id, { name, description, permissions });
@@ -842,7 +842,7 @@ router.put("/api/admin/roles/:id", requireAuth as any, requireAdminRole as any, 
   }
 });
 
-router.delete("/api/admin/roles/:id", requireAuth as any, requireAdminRole as any, async (req: any, res) => {
+router.delete("/api/admin/roles/:id", requireAuth as any, requireSuperAdmin as any, async (req: any, res) => {
   try {
     await storage.deleteRole(req.params.id);
     res.status(204).send();
@@ -853,10 +853,15 @@ router.delete("/api/admin/roles/:id", requireAuth as any, requireAdminRole as an
 });
 
 // File Upload
-router.post("/api/admin/upload", requireAuth as any, uploadMiddleware.single('file'), async (req: any, res) => {
+router.post("/api/admin/upload", requireAuth as any, requireEditorRole as any, uploadMiddleware.single('file'), async (req: any, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    if (!isValidImageFile(req.file.path)) {
+      await removeUploadedFile(req.file.path);
+      return res.status(400).json({ message: "Uploaded file content does not match the declared image type." });
     }
 
     const filePath = `/uploads/${req.file.filename}`;
@@ -920,7 +925,7 @@ router.post("/api/admin/upload", requireAuth as any, uploadMiddleware.single('fi
 });
 
 // Platform Settings Routes
-router.get("/api/admin/settings", requireAuth as any, requireAdminRole as any, async (req: any, res) => {
+router.get("/api/admin/settings", requireAuth as any, requireSuperAdmin as any, async (req: any, res) => {
   try {
     const settings = await storage.getSettings();
     res.json(settings);
@@ -930,7 +935,7 @@ router.get("/api/admin/settings", requireAuth as any, requireAdminRole as any, a
   }
 });
 
-router.put("/api/admin/settings", requireAuth as any, requireAdminRole as any, validateBody(insertSettingsSchema.partial()), async (req: any, res) => {
+router.put("/api/admin/settings", requireAuth as any, requireSuperAdmin as any, validateBody(insertSettingsSchema.partial()), async (req: any, res) => {
   try {
     const settings = await storage.updateSettings(req.validatedBody);
     res.json(settings);

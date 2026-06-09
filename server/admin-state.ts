@@ -286,7 +286,7 @@ const DEFAULT_ROLES: AdminRole[] = [
   {
     id: "writer",
     name: "Writer",
-    description: "Can create and update platform content.",
+    description: "Can create and update draft platform content, then submit it for publishing.",
     permissions: [
       "view_dashboard",
       "manage_events",
@@ -314,6 +314,7 @@ const DEFAULT_ROLES: AdminRole[] = [
       "manage_blog",
       "manage_team",
       "manage_media",
+      "publish",
       "review_applications",
       "view_analytics",
     ],
@@ -337,6 +338,7 @@ const DEFAULT_ROLES: AdminRole[] = [
       "manage_users",
       "review_applications",
       "view_analytics",
+      "publish",
       "export",
       "manage_security",
     ],
@@ -362,6 +364,7 @@ const DEFAULT_ROLES: AdminRole[] = [
       "view_analytics",
       "manage_roles",
       "manage_settings",
+      "publish",
       "export",
       "manage_security",
       "manage_webhooks",

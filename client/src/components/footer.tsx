@@ -19,6 +19,10 @@ import {
   ArrowRight,
   FileText,
   CalendarDays,
+  FileCheck2,
+  Lock,
+  Scale,
+  ShieldCheck,
 } from "lucide-react";
 import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
 
@@ -41,7 +45,7 @@ export default function Footer() {
 
       {/* Main Footer */}
       <div className="container mx-auto px-4 py-16">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-10 mb-12">
           {/* Brand Column */}
           <div className="lg:col-span-2">
             <div className="mb-5">
@@ -121,6 +125,28 @@ export default function Footer() {
                   <Link href={service.href} className="group flex items-center gap-2 transition-colors hover:text-mtendere-orange">
                     <service.icon className="w-3.5 h-3.5 text-mtendere-blue group-hover:text-mtendere-orange transition-colors" />
                     {service.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Trust */}
+          <div>
+            <h4 className="mb-5 text-sm font-bold uppercase tracking-wider text-mtendere-blue">Trust & Legal</h4>
+            <ul className="space-y-3 text-sm text-muted-foreground">
+              {[
+                { href: "/privacy-policy", label: "Privacy Policy", icon: FileText },
+                { href: "/terms-of-service", label: "Terms of Service", icon: Scale },
+                { href: "/security", label: "Security", icon: Lock },
+                { href: "/privacy-center", label: "Privacy Center", icon: ShieldCheck },
+                { href: "/transparency", label: "Transparency", icon: FileCheck2 },
+                { href: "/compliance", label: "Compliance", icon: Globe },
+              ].map((link) => (
+                <li key={link.href}>
+                  <Link href={link.href} className="group flex items-center gap-2 transition-colors hover:text-mtendere-orange">
+                    <link.icon className="w-3.5 h-3.5 text-mtendere-blue group-hover:text-mtendere-orange transition-colors" />
+                    {link.label}
                   </Link>
                 </li>
               ))}

@@ -124,7 +124,9 @@ const sendGridTrackingEnabled = env.SENDGRID_TRACKING_ENABLED ?? true;
 const retryDelaysMs = [0, 60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000];
 const defaultMaxAttempts = retryDelaysMs.length;
 const queuePollMs = env.EMAIL_QUEUE_WORKER_INTERVAL_MS;
-const dryRunEnabled = env.EMAIL_DRY_RUN ?? env.NODE_ENV !== "production";
+const liveProviderDeliveryAllowed = env.NODE_ENV === "production" || env.EMAIL_ALLOW_LIVE_TEST_SENDS === true;
+const configuredDryRunEnabled = env.EMAIL_DRY_RUN ?? env.NODE_ENV !== "production";
+const dryRunEnabled = configuredDryRunEnabled || !liveProviderDeliveryAllowed;
 const trackingSecret = env.EMAIL_TRACKING_SECRET || env.JWT_SECRET;
 let isProcessing = false;
 let workerTimer: NodeJS.Timeout | null = null;
@@ -677,6 +679,8 @@ const providers: Record<string, Provider> = {
 };
 
 const getProviderOrder = () => {
+  if (dryRunEnabled) return [providers.dry_run];
+
   const configuredOrder = (env.EMAIL_PROVIDER_ORDER || "sendgrid,ses,mailgun,resend,postmark,smtp,custom")
     .split(",")
     .map((provider) => provider.trim().toLowerCase())
@@ -686,11 +690,13 @@ const getProviderOrder = () => {
     .map((providerName) => providers[providerName])
     .filter((provider): provider is Provider => Boolean(provider?.isConfigured()));
 
-  if (activeProviders.length > 0) return activeProviders;
-  return dryRunEnabled ? [providers.dry_run] : [];
+  return activeProviders;
 };
 
-export const isTransactionalEmailDeliveryReady = () => getProviderOrder().length > 0;
+export const isTransactionalEmailDeliveryReady = () => {
+  const activeProviders = getProviderOrder().map((provider) => provider.name);
+  return activeProviders.some((provider) => provider !== "dry_run") || env.NODE_ENV !== "production";
+};
 
 export const getEmailDeliveryDiagnostics = () => {
   const activeProviders = getProviderOrder().map((provider) => provider.name);
@@ -698,6 +704,8 @@ export const getEmailDeliveryDiagnostics = () => {
     ready: activeProviders.some((provider) => provider !== "dry_run"),
     activeProviders,
     dryRunEnabled,
+    liveProviderDeliveryAllowed,
+    configuredDryRunEnabled,
     fromConfigured: Boolean(env.EMAIL_FROM),
     linkBaseUrlConfigured: Boolean(emailLinkBaseUrl),
     sendGridTrackingEnabled,
@@ -1288,11 +1296,16 @@ export const enqueueEmail = async (payload: EmailPayload, options: EmailEnqueueO
     }
 
     await ensureEmailPreference(normalizedRecipient, payload.category, payload.metadata);
-    if (payload.category === "subscription_confirmation") {
+    const supersededPendingCategories = new Set<EmailCategory>([
+      "subscription_confirmation",
+      "account_verification",
+      "password_reset",
+    ]);
+    if (supersededPendingCategories.has(payload.category)) {
       const cancelled = await storage.cancelPendingEmailJobs(
         normalizedRecipient,
         payload.category,
-        "Superseded by a newer subscription confirmation request",
+        `Superseded by a newer ${payload.category.replace(/_/g, " ")} request`,
       );
       if (cancelled > 0) {
         await recordEmailEvent({

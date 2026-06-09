@@ -157,7 +157,7 @@ const JWT_SECRET = env.JWT_SECRET;
 const PASSWORD_HASH_ROUNDS = 12;
 const ADMIN_PORTAL_ROLES = new Set(["viewer", "writer", "editor", "admin", "super_admin"]);
 const ADMIN_SELF_SERVICE_ROLES = new Set(["viewer", "writer"]);
-const ADMIN_ASSIGNABLE_ROLES = new Set(["viewer", "writer"]);
+const ADMIN_ASSIGNABLE_ROLES = new Set(["viewer", "writer", "admin"]);
 const ADMIN_CONTENT_ROLES = new Set(["writer", "editor", "admin", "super_admin"]);
 const PROTECTED_ADMIN_ROLES = new Set(["super_admin"]);
 const COMMON_WEAK_PASSWORDS = [
@@ -343,6 +343,7 @@ const loginRequestSchema = z
     username: z.string().trim().optional(),
     identifier: z.string().trim().optional(),
     password: z.string().min(1),
+    rememberMe: z.boolean().optional().default(true),
   })
   .strict();
 
@@ -630,6 +631,7 @@ type JwtUser = {
   pwd?: string;
   jti?: string;
   mfaVerified?: boolean;
+  rememberMe?: boolean;
   iat?: number;
   exp?: number;
 };
@@ -646,6 +648,7 @@ type MulterRequest = Request & {
 type SocketWithSubscriptions = WebSocket & {
   subscriptions?: string[];
   user?: JwtUser | null;
+  isAlive?: boolean;
 };
 
 const getErrorMessage = (error: unknown) => {
@@ -2050,7 +2053,10 @@ const buildTotpUri = (user: Pick<AuthUserRecord, "email">, secret: string) => {
   return `otpauth://totp/${label}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=${TOTP_DIGITS}&period=${TOTP_PERIOD_SECONDS}`;
 };
 
-const signMfaChallengeToken = (user: AuthUserRecord) =>
+const signMfaChallengeToken = (
+  user: AuthUserRecord,
+  options: { rememberMe?: boolean } = {},
+) =>
   jwt.sign(
     {
       id: user.id,
@@ -2058,6 +2064,7 @@ const signMfaChallengeToken = (user: AuthUserRecord) =>
       role: user.role,
       type: "mfa_challenge",
       pwd: passwordFingerprint(user.password),
+      rememberMe: options.rememberMe !== false,
     },
     JWT_SECRET,
     { expiresIn: "5m", jwtid: randomUUID() },
@@ -2065,7 +2072,7 @@ const signMfaChallengeToken = (user: AuthUserRecord) =>
 
 const signToken = (
   user: AuthUserRecord,
-  options: { mfaVerified?: boolean } = {},
+  options: { mfaVerified?: boolean; rememberMe?: boolean } = {},
 ) => {
   const configuredTimeout = getAdminSettings().sessionTimeout || 15;
   const timeoutMinutes = Math.max(5, Math.min(15, configuredTimeout));
@@ -2077,6 +2084,7 @@ const signToken = (
       type: "access",
       pwd: passwordFingerprint(user.password),
       mfaVerified: options.mfaVerified ?? !isMfaRequiredForRole(user.role),
+      rememberMe: options.rememberMe !== false,
     },
     JWT_SECRET,
     {
@@ -2087,6 +2095,7 @@ const signToken = (
 
 const refreshTokenCookieName = "mec_refresh_token";
 const refreshTokenMaxAgeMs = 7 * 24 * 60 * 60 * 1000;
+const sessionRefreshTokenMaxAgeMs = 12 * 60 * 60 * 1000;
 const usedRefreshTokenIds = new Map<string, number>();
 
 const refreshCookieOptions: CookieOptions = {
@@ -2099,11 +2108,24 @@ const refreshCookieOptions: CookieOptions = {
 
 const signRefreshToken = (
   user: { id: number; email: string; role: string; password: string },
-  options: { mfaVerified?: boolean } = {},
+  options: { mfaVerified?: boolean; rememberMe?: boolean } = {},
 ) =>
-  jwt.sign({ id: user.id, email: user.email, role: user.role, type: "refresh", pwd: passwordFingerprint(user.password), mfaVerified: Boolean(options.mfaVerified), jti: randomUUID() }, JWT_SECRET, {
-    expiresIn: "7d",
-  });
+  jwt.sign(
+    {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      type: "refresh",
+      pwd: passwordFingerprint(user.password),
+      mfaVerified: Boolean(options.mfaVerified),
+      rememberMe: options.rememberMe !== false,
+      jti: randomUUID(),
+    },
+    JWT_SECRET,
+    {
+      expiresIn: options.rememberMe === false ? `${sessionRefreshTokenMaxAgeMs / (60 * 60 * 1000)}h` : "7d",
+    },
+  );
 
 const pruneUsedRefreshTokenIds = () => {
   const now = Date.now();
@@ -2239,9 +2261,12 @@ const getCookieValue = (req: Request, name: string) => {
 const setRefreshCookie = (
   res: Response,
   user: { id: number; email: string; role: string; password: string },
-  options: { mfaVerified?: boolean } = {},
+  options: { mfaVerified?: boolean; rememberMe?: boolean } = {},
 ) => {
-  res.cookie(refreshTokenCookieName, signRefreshToken(user, options), refreshCookieOptions);
+  res.cookie(refreshTokenCookieName, signRefreshToken(user, options), {
+    ...refreshCookieOptions,
+    maxAge: options.rememberMe === false ? undefined : refreshTokenMaxAgeMs,
+  });
 };
 
 const clearRefreshCookie = (res: Response) => {
@@ -2430,6 +2455,18 @@ const requireAnyPermission = (...requiredPermissions: string[]) =>
     return enforceVerifiedMfa(req, res, next);
   };
 
+const rejectPublishWithoutPermission = (req: Request, res: Response, status: string) => {
+  if (status !== "published") return false;
+  if (hasAnyPermission(getAuthenticatedUser(req), ["publish"])) return false;
+
+  res.status(403).json({
+    message: "Publishing requires publish permission",
+    code: "INSUFFICIENT_PERMISSION",
+    requiredAnyOf: ["publish"],
+  });
+  return true;
+};
+
 const loginFailures = new Map<string, { count: number; lockedUntil?: number }>();
 const loginLockoutMs = 15 * 60 * 1000;
 
@@ -2487,6 +2524,7 @@ const adminRealtimeChannels = new Set([
   "ai-chat",
   "referrals",
 ]);
+const MAX_WS_CHANNELS = 20;
 
 const getWebSocketUser = (req: IncomingMessage): JwtUser | null => {
   try {
@@ -2513,6 +2551,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // WebSocket setup for real-time updates
   const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+  const heartbeat = setInterval(() => {
+    wss.clients.forEach((client) => {
+      const socket = client as SocketWithSubscriptions;
+      if (socket.isAlive === false) {
+        socket.terminate();
+        return;
+      }
+
+      socket.isAlive = false;
+      socket.ping();
+    });
+  }, 30_000);
+  heartbeat.unref?.();
+  wss.on("close", () => clearInterval(heartbeat));
 
   app.use("/api/admin", verifyAdminHmacSignature, (req, res, next) => {
     const shouldAudit = isHighRiskAdminRequest(req) || res.statusCode >= 400;
@@ -2558,9 +2610,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   wss.on("connection", (ws: SocketWithSubscriptions, req) => {
     ws.subscriptions = [];
     ws.user = getWebSocketUser(req);
+    ws.isAlive = true;
+
+    ws.on("pong", () => {
+      ws.isAlive = true;
+    });
 
     ws.on("message", (rawMessage: Buffer) => {
       try {
+        if (rawMessage.byteLength > 8192) {
+          ws.send(JSON.stringify({ type: "error", message: "WebSocket message is too large" }));
+          return;
+        }
+
         const payload = JSON.parse(rawMessage.toString()) as {
           type?: string;
           channels?: string[];
@@ -2571,12 +2633,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : Array.isArray(payload.data?.channels)
             ? payload.data.channels
             : [];
-        const allowedChannels = channels
-          .filter((channel): channel is string => typeof channel === "string")
+        const requestedChannels = Array.from(
+          new Set(channels.filter((channel): channel is string => typeof channel === "string")),
+        ).slice(0, MAX_WS_CHANNELS);
+        const allowedChannels = requestedChannels
           .filter((channel) => canSubscribeToRealtimeChannel(channel, ws.user));
+        const deniedChannels = requestedChannels.filter((channel) => !allowedChannels.includes(channel));
 
         if (payload.type === "subscribe") {
           ws.subscriptions = Array.from(new Set([...(ws.subscriptions ?? []), ...allowedChannels]));
+          if (deniedChannels.length > 0) {
+            ws.send(JSON.stringify({ type: "subscription_denied", channels: deniedChannels }));
+          }
         }
 
         if (payload.type === "unsubscribe") {
@@ -3260,6 +3328,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "image/png",
     "image/webp",
   ]);
+  const allowedUploadExtensionsByMimeType = new Map<string, Set<string>>([
+    ["application/pdf", new Set([".pdf"])],
+    ["application/msword", new Set([".doc"])],
+    ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", new Set([".docx"])],
+    ["image/jpeg", new Set([".jpg", ".jpeg"])],
+    ["image/png", new Set([".png"])],
+    ["image/webp", new Set([".webp"])],
+  ]);
 
   const upload = multer({
     storage: multer.diskStorage({
@@ -3271,7 +3347,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       },
     }),
     fileFilter: (_req, file, cb) => {
-      if (!allowedUploadMimeTypes.has(file.mimetype)) {
+      const ext = path.extname(file.originalname).toLowerCase();
+      const allowedExtensions = allowedUploadExtensionsByMimeType.get(file.mimetype);
+      if (!allowedUploadMimeTypes.has(file.mimetype) || !allowedExtensions?.has(ext)) {
         cb(new Error("Unsupported file type. Upload PDF, DOC, DOCX, JPG, PNG, or WEBP files."));
         return;
       }
@@ -3419,6 +3497,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch {
       return false;
     }
+  };
+
+  const hasMagicBytes = (filePath: string, predicate: (header: Buffer, bytesRead: number) => boolean) => {
+    try {
+      const descriptor = fs.openSync(filePath, "r");
+      try {
+        const header = Buffer.alloc(12);
+        const bytesRead = fs.readSync(descriptor, header, 0, header.length, 0);
+        return predicate(header, bytesRead);
+      } finally {
+        fs.closeSync(descriptor);
+      }
+    } catch {
+      return false;
+    }
+  };
+
+  const isValidOfficeOrPdfFile = (filePath: string, mimetype: string) =>
+    hasMagicBytes(filePath, (header, bytesRead) => {
+      if (mimetype === "application/pdf") {
+        return bytesRead >= 4 && header.toString("ascii", 0, 4) === "%PDF";
+      }
+
+      if (mimetype === "application/msword") {
+        return (
+          bytesRead >= 8 &&
+          header[0] === 0xd0 &&
+          header[1] === 0xcf &&
+          header[2] === 0x11 &&
+          header[3] === 0xe0 &&
+          header[4] === 0xa1 &&
+          header[5] === 0xb1 &&
+          header[6] === 0x1a &&
+          header[7] === 0xe1
+        );
+      }
+
+      if (mimetype === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+        return bytesRead >= 4 && header[0] === 0x50 && header[1] === 0x4b;
+      }
+
+      return false;
+    });
+
+  const isValidUploadedFile = (file: Express.Multer.File) => {
+    if (file.mimetype.startsWith("image/")) {
+      return isValidImageFile(file.path);
+    }
+
+    return isValidOfficeOrPdfFile(file.path, file.mimetype);
+  };
+
+  const removeUploadedFile = async (file: Express.Multer.File) => {
+    try {
+      await fs.promises.unlink(file.path);
+    } catch {
+      // Best-effort cleanup; the validation response should not fail because unlink failed.
+    }
+  };
+
+  const rejectInvalidUploadedFiles = async (files: Express.Multer.File[], res: Response) => {
+    const invalidFile = files.find((file) => !isValidUploadedFile(file));
+    if (!invalidFile) return false;
+
+    await Promise.all(files.map(removeUploadedFile));
+    res.status(400).json({
+      message: "Uploaded file content does not match the declared file type.",
+      file: invalidFile.originalname,
+    });
+    return true;
   };
 
   const getMediaAssetHash = (filePath: string) => {
@@ -3676,7 +3824,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (isAdminRegistration) {
         return res.status(403).json({
-          message: "Admin account creation is restricted to the super administrator. Use Admin > Users to create Viewer or Writer accounts.",
+          message: "Admin account creation is restricted to the super administrator. Use Admin > Users to create Admin, Writer, or Viewer accounts.",
         });
       }
 
@@ -3841,16 +3989,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(202).json({
           message: "Multi-factor authentication required",
           mfaRequired: true,
-          challengeToken: signMfaChallengeToken(user as AuthUserRecord),
+          challengeToken: signMfaChallengeToken(user as AuthUserRecord, { rememberMe: loginPayload.rememberMe }),
           user: buildPublicUser(user),
         });
       }
 
       const mfaVerified = !isMfaRequiredForRole(user.role);
-      setRefreshCookie(res, user, { mfaVerified });
+      setRefreshCookie(res, user, { mfaVerified, rememberMe: loginPayload.rememberMe });
       res.json({
         message: 'Login successful',
-        token: signToken(user, { mfaVerified }),
+        token: signToken(user, { mfaVerified, rememberMe: loginPayload.rememberMe }),
         mfaRequired: isMfaRequiredForRole(user.role),
         mfaVerified,
         user: buildPublicUser(user),
@@ -4613,9 +4761,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         !isMfaRequiredForRole(user.role) || hasConfirmedMfa(user as AuthUserRecord)
       );
       markRefreshTokenUsed(decoded);
-      setRefreshCookie(res, user, { mfaVerified });
+      setRefreshCookie(res, user, { mfaVerified, rememberMe: decoded.rememberMe !== false });
       res.json({
-        token: signToken(user, { mfaVerified }),
+        token: signToken(user, { mfaVerified, rememberMe: decoded.rememberMe !== false }),
         mfaVerified,
         user: buildPublicUser(user),
       });
@@ -4726,12 +4874,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       userAgent: req.get("user-agent"),
     });
 
-    setRefreshCookie(res, updatedUser, { mfaVerified: true });
+    setRefreshCookie(res, updatedUser, { mfaVerified: true, rememberMe: jwtUser.rememberMe !== false });
     res.json({
       message: "MFA enabled",
       mfaEnabled: true,
       mfaVerified: true,
-      token: signToken(updatedUser as AuthUserRecord, { mfaVerified: true }),
+      token: signToken(updatedUser as AuthUserRecord, { mfaVerified: true, rememberMe: jwtUser.rememberMe !== false }),
       user: buildPublicUser(updatedUser),
     });
   };
@@ -4784,10 +4932,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       userAgent: req.get("user-agent"),
     });
 
-    setRefreshCookie(res, user, { mfaVerified: true });
+    setRefreshCookie(res, user, { mfaVerified: true, rememberMe: decoded.rememberMe !== false });
     res.json({
       message: "MFA verified",
-      token: signToken(user as AuthUserRecord, { mfaVerified: true }),
+      token: signToken(user as AuthUserRecord, { mfaVerified: true, rememberMe: decoded.rememberMe !== false }),
       mfaVerified: true,
       user: buildPublicUser(user),
     });
@@ -4820,12 +4968,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     const mfaVerified = !isMfaRequiredForRole(updatedUser.role);
-    setRefreshCookie(res, updatedUser, { mfaVerified });
+    setRefreshCookie(res, updatedUser, { mfaVerified, rememberMe: jwtUser.rememberMe !== false });
     res.json({
       message: "MFA disabled",
       mfaEnabled: false,
       mfaVerified,
-      token: signToken(updatedUser as AuthUserRecord, { mfaVerified }),
+      token: signToken(updatedUser as AuthUserRecord, { mfaVerified, rememberMe: jwtUser.rememberMe !== false }),
       user: buildPublicUser(updatedUser),
     });
   };
@@ -5302,9 +5450,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       { name: "coverLetter", maxCount: 1 },
       { name: "portfolio", maxCount: 1 },
     ]),
-    (req, res) => {
+    async (req, res) => {
       const filesPayload = (req as MulterRequest).files;
       const fileGroups = !Array.isArray(filesPayload) && filesPayload ? filesPayload : {};
+      const uploadedFiles = Object.values(fileGroups).flat();
+      if (await rejectInvalidUploadedFiles(uploadedFiles, res)) return;
+
       const documents = Object.entries(fileGroups).reduce<Record<string, unknown>>((acc, [field, files]) => {
         const [file] = files;
         if (!file) return acc;
@@ -7665,6 +7816,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
       const status = normalizeAdminStatus(String(req.body.status ?? ""));
+      if (rejectPublishWithoutPermission(req, res, status)) return;
       const scholarship = await storage.updateScholarship(id, { isActive: status === "published" });
       if (!scholarship) return res.status(404).json({ message: "Scholarship not found" });
       setScholarshipMeta(id, { status });
@@ -7985,6 +8137,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
       const status = normalizeAdminStatus(String(req.body.status ?? ""));
+      if (rejectPublishWithoutPermission(req, res, status)) return;
       const job = await storage.updateJob(id, { isActive: status === "published" });
       if (!job) return res.status(404).json({ message: "Job not found" });
       setJobMeta(id, { status });
@@ -8663,6 +8816,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
       const status = normalizeAdminStatus(String(req.body.status ?? ""));
+      if (rejectPublishWithoutPermission(req, res, status)) return;
       const post = await storage.updateBlogPost(id, { isPublished: status === "published" });
       if (!post) return res.status(404).json({ message: "Blog post not found" });
       const meta = getBlogMeta(id);
@@ -9105,6 +9259,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
       const status = z.enum(["draft", "published", "archived", "cancelled"]).parse(req.body.status);
+      if (rejectPublishWithoutPermission(req, res, status)) return;
       const event = await storage.updateEvent(id, { status });
       if (!event) return res.status(404).json({ message: "Event not found" });
       await emitAdminRealtimeEvent(req, {
@@ -9906,7 +10061,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       })),
       inheritance: {
         viewer: ["read"],
-        writer: ["create", "read", "update", "publish"],
+        writer: ["create", "read", "update"],
+        admin: ["create", "read", "update", "approve", "publish", "export"],
         super_admin: ["*"],
       },
     });
@@ -10179,28 +10335,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/admin/upload', authenticateToken, requireEditor, upload.single("file"), (req, res) => {
+  app.post('/api/admin/upload', authenticateToken, requireEditor, upload.single("file"), async (req, res) => {
     const file = (req as MulterRequest).file;
     if (!file) return res.status(400).json({ message: "No file uploaded" });
-    res.json({
+    if (await rejectInvalidUploadedFiles([file], res)) return;
+
+    const responsePayload = {
       url: `/uploads/${file.filename}`,
       originalName: file.originalname,
       size: file.size,
       type: file.mimetype,
+      valid: true,
+      storage: "local",
+    };
+    await storage.logAnalytics({
+      event: "admin_file_uploaded",
+      userId: getAuthenticatedUser(req).id,
+      metadata: responsePayload,
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent"),
     });
+    res.json(responsePayload);
   });
 
-  app.post('/api/admin/upload/multiple', authenticateToken, requireEditor, upload.array("files", 10), (req, res) => {
+  app.post('/api/admin/upload/multiple', authenticateToken, requireEditor, upload.array("files", 10), async (req, res) => {
     const filesPayload = (req as MulterRequest).files;
     const files = Array.isArray(filesPayload) ? filesPayload : [];
-    res.json({
+    if (!files.length) return res.status(400).json({ message: "No files uploaded" });
+    if (await rejectInvalidUploadedFiles(files, res)) return;
+
+    const responsePayload = {
       files: files.map((file) => ({
         url: `/uploads/${file.filename}`,
         originalName: file.originalname,
         size: file.size,
         type: file.mimetype,
+        valid: true,
+        storage: "local",
       })),
+    };
+    await storage.logAnalytics({
+      event: "admin_files_uploaded",
+      userId: getAuthenticatedUser(req).id,
+      metadata: { count: responsePayload.files.length, files: responsePayload.files },
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent"),
     });
+    res.json(responsePayload);
   });
 
   app.get("/api/admin/media/assets", authenticateToken, requireEditor, (_req, res) => {

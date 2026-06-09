@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
+import jwt, { type JwtPayload } from "jsonwebtoken";
 import { storage } from "../storage";
 
 interface AuthenticatedRequest extends Request {
@@ -10,6 +10,27 @@ interface AuthenticatedRequest extends Request {
   };
 }
 
+type AuthTokenPayload = JwtPayload & {
+  id?: string | number;
+  userId?: string | number;
+};
+
+const getJwtSecret = () => {
+  const secret = process.env.JWT_SECRET?.trim();
+  if (!secret) {
+    throw new Error("JWT_SECRET is required for authentication");
+  }
+  return secret;
+};
+
+const getTokenUserId = (decoded: string | JwtPayload) => {
+  if (typeof decoded === "string") return null;
+  const payload = decoded as AuthTokenPayload;
+  const rawUserId = payload.userId ?? payload.id;
+  const userId = String(rawUserId ?? "").trim();
+  return userId ? userId : null;
+};
+
 export const requireAuth = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
@@ -18,13 +39,14 @@ export const requireAuth = async (req: AuthenticatedRequest, res: Response, next
     }
 
     const token = authHeader.substring(7);
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key') as any;
+    const decoded = jwt.verify(token, getJwtSecret());
+    const userId = getTokenUserId(decoded);
     
-    if (!decoded.userId) {
+    if (!userId) {
       return res.status(401).json({ message: 'Invalid token' });
     }
 
-    const user = await storage.getUser(decoded.userId);
+    const user = await storage.getUser(userId);
     if (!user || !user.isActive) {
       return res.status(401).json({ message: 'User not found or inactive' });
     }
@@ -47,8 +69,8 @@ export const requireAdminRole = (req: AuthenticatedRequest, res: Response, next:
     return res.status(401).json({ message: 'Authentication required' });
   }
 
-  if (req.user.role !== 'super_admin') {
-    return res.status(403).json({ message: 'Super admin access required' });
+  if (!['admin', 'super_admin'].includes(req.user.role)) {
+    return res.status(403).json({ message: 'Admin access required' });
   }
 
   next();

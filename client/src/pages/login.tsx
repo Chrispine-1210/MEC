@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Link, useLocation } from "wouter";
@@ -13,6 +14,7 @@ export default function Login() {
   const notice = new URLSearchParams(window.location.search);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
@@ -21,7 +23,7 @@ export default function Login() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const success = await login(email, password);
+      const success = await login(email, password, rememberMe);
       if (success) {
         setLocation("/dashboard");
       }
@@ -152,6 +154,16 @@ export default function Login() {
                 </button>
               </div>
             </div>
+
+            <label className="flex items-center gap-3 text-sm text-muted-foreground">
+              <Checkbox
+                checked={rememberMe}
+                onCheckedChange={(checked) => setRememberMe(checked === true)}
+                disabled={isLoading}
+                aria-label="Remember this device"
+              />
+              <span>Remember this device</span>
+            </label>
 
             <Button
               type="submit"

@@ -14,7 +14,6 @@ const CONTENT_ROUTES = [
 ];
 const ADMIN_ONLY_ROUTES = [
   "/admin/ecosystem",
-  "/admin/users",
   "/admin/applications",
   "/admin/messages",
   "/admin/analytics",
@@ -22,7 +21,7 @@ const ADMIN_ONLY_ROUTES = [
   "/admin/communications",
   "/admin/ai-chat",
 ];
-const SUPER_ADMIN_ROUTES = ["/admin/roles", "/admin/settings"];
+const SUPER_ADMIN_ROUTES = ["/admin/users", "/admin/roles", "/admin/settings"];
 
 const routeRoles = new Map<string, AdminRole[]>();
 
@@ -33,7 +32,7 @@ for (const route of CONTENT_ROUTES) {
   routeRoles.set(route, ["writer", "editor", "admin", "super_admin"]);
 }
 for (const route of ADMIN_ONLY_ROUTES) {
-  routeRoles.set(route, ["super_admin"]);
+  routeRoles.set(route, ["admin", "super_admin"]);
 }
 for (const route of SUPER_ADMIN_ROUTES) {
   routeRoles.set(route, ["super_admin"]);
@@ -66,4 +65,4 @@ export const canCreateContent = (role: string) =>
 
 export const canManageUsers = (role: string) => role === "super_admin";
 
-export const canUseAiAssistant = (role: string) => role === "super_admin";
+export const canUseAiAssistant = (role: string) => role === "admin" || role === "super_admin";

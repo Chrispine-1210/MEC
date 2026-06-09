@@ -17,7 +17,7 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<boolean>;
   register: (userData: any) => Promise<boolean>;
   logout: () => Promise<void>;
   isLoading: boolean;
@@ -67,9 +67,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string, rememberMe = true): Promise<boolean> => {
     try {
-      const response = await apiRequest("POST", "/api/auth/login", { email, password });
+      const response = await apiRequest("POST", "/api/auth/login", { email, password, rememberMe });
       const data = await response.json();
       
       localStorage.setItem("token", data.token);

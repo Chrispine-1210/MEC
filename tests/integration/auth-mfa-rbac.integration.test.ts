@@ -38,6 +38,7 @@ type StorageRef = {
   getUserByEmail: (email: string) => Promise<any>;
   getUserByUsername: (username: string) => Promise<any>;
   updateUser: (id: number, updateUser: Record<string, unknown>) => Promise<any>;
+  updateBlogPost: (id: number, updateBlogPost: Record<string, unknown>) => Promise<any>;
   logAnalytics: (analytics: any) => Promise<any>;
 };
 
@@ -48,6 +49,7 @@ let originalStorageMethods: {
   getUserByEmail: StorageRef["getUserByEmail"];
   getUserByUsername: StorageRef["getUserByUsername"];
   updateUser: StorageRef["updateUser"];
+  updateBlogPost: StorageRef["updateBlogPost"];
   logAnalytics: StorageRef["logAnalytics"];
 } | null = null;
 
@@ -66,6 +68,7 @@ const loadServerModules = async () => {
     getUserByEmail: storageRef.getUserByEmail.bind(storageRef),
     getUserByUsername: storageRef.getUserByUsername.bind(storageRef),
     updateUser: storageRef.updateUser.bind(storageRef),
+    updateBlogPost: storageRef.updateBlogPost.bind(storageRef),
     logAnalytics: storageRef.logAnalytics.bind(storageRef),
   };
 
@@ -78,6 +81,7 @@ const restoreStorage = async () => {
   modules.storageRef.getUserByEmail = modules.originalStorageMethods.getUserByEmail;
   modules.storageRef.getUserByUsername = modules.originalStorageMethods.getUserByUsername;
   modules.storageRef.updateUser = modules.originalStorageMethods.updateUser;
+  modules.storageRef.updateBlogPost = modules.originalStorageMethods.updateBlogPost;
   modules.storageRef.logAnalytics = modules.originalStorageMethods.logAnalytics;
 };
 
@@ -115,6 +119,21 @@ const withMockStorage = async (users: MockUser[]) => {
     id: Date.now(),
     ...analytics,
     timestamp: new Date(),
+  });
+  storageRef.updateBlogPost = async (id: number, updateBlogPost: Record<string, unknown>) => ({
+    id,
+    title: "RBAC Smoke Post",
+    content: "RBAC smoke test content",
+    excerpt: "RBAC smoke",
+    imageUrl: null,
+    category: "Testing",
+    tags: [],
+    isPublished: false,
+    authorId: users[0]?.id ?? 1,
+    likes: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...updateBlogPost,
   });
 };
 
@@ -375,6 +394,93 @@ test("Viewer role is denied admin routes by RBAC guard", async () => {
     });
     assert.equal(adminResponse.status, 403);
     assert.equal(adminResponse.body.message, "Admin access required");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("Writer with verified MFA cannot publish content", async () => {
+  const totpSecret = createTotpSecret();
+  await withMockStorage([
+    {
+      id: 7,
+      username: "writeruser",
+      email: "writer@example.com",
+      password: await bcrypt.hash("secret123", 10),
+      firstName: "Content",
+      lastName: "Writer",
+      role: "writer",
+      mfaEnabled: true,
+      totpSecret,
+      mfaConfirmedAt: new Date(),
+      profilePicture: null,
+      phone: null,
+      dateOfBirth: null,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  ]);
+
+  const { server, baseUrl } = await startTestServer();
+  try {
+    const token = await loginAndVerifyMfa(baseUrl, "writer@example.com", "secret123", totpSecret);
+
+    const response = await requestJson(baseUrl, "/api/admin/blog/123/status", {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ status: "published" }),
+    });
+
+    assert.equal(response.status, 403);
+    assert.equal(response.body.code, "INSUFFICIENT_PERMISSION");
+    assert.deepEqual(response.body.requiredAnyOf, ["publish"]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("Admin with verified MFA can publish content", async () => {
+  const totpSecret = createTotpSecret();
+  await withMockStorage([
+    {
+      id: 8,
+      username: "publisher",
+      email: "publisher@example.com",
+      password: await bcrypt.hash("secret123", 10),
+      firstName: "Publishing",
+      lastName: "Admin",
+      role: "admin",
+      mfaEnabled: true,
+      totpSecret,
+      mfaConfirmedAt: new Date(),
+      profilePicture: null,
+      phone: null,
+      dateOfBirth: null,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  ]);
+
+  const { server, baseUrl } = await startTestServer();
+  try {
+    const token = await loginAndVerifyMfa(baseUrl, "publisher@example.com", "secret123", totpSecret);
+
+    const response = await requestJson(baseUrl, "/api/admin/blog/123/status", {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ status: "published" }),
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.status, "published");
   } finally {
     await stopTestServer(server);
   }

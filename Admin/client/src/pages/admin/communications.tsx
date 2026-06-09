@@ -700,11 +700,11 @@ export default function CommunicationsPage() {
     routes.forEach((route) => values.add(route.eventType));
     templates.forEach((template) => template.event_trigger !== "*" && values.add(template.event_trigger));
     Object.keys(eventSamples).forEach((sample) => values.add(sample));
-    return [...values].sort();
+    return Array.from(values).sort();
   }, [routes, templates]);
 
-  const templateTypes = useMemo(() => [...new Set(templates.map((template) => template.type))].sort(), [templates]);
-  const templateCategories = useMemo(() => [...new Set(templates.map((template) => template.category || "system"))].sort(), [templates]);
+  const templateTypes = useMemo(() => Array.from(new Set(templates.map((template) => template.type))).sort(), [templates]);
+  const templateCategories = useMemo(() => Array.from(new Set(templates.map((template) => template.category || "system"))).sort(), [templates]);
 
   const selectedTemplate = useMemo(
     () => templates.find((template) => template.template_id === selectedTemplateId) ?? templates[0],
@@ -752,15 +752,15 @@ export default function CommunicationsPage() {
     });
   }, [auditChannel, auditMessages, auditSearch, auditStatus]);
 
-  const auditChannels = useMemo(() => [...new Set(auditMessages.map((message) => message.channel || "unknown"))].sort(), [auditMessages]);
-  const auditStatuses = useMemo(() => [...new Set(auditMessages.map((message) => message.status || "unknown"))].sort(), [auditMessages]);
+  const auditChannels = useMemo(() => Array.from(new Set(auditMessages.map((message) => message.channel || "unknown"))).sort(), [auditMessages]);
+  const auditStatuses = useMemo(() => Array.from(new Set(auditMessages.map((message) => message.status || "unknown"))).sort(), [auditMessages]);
 
-  const routesByEvent = useMemo(() => {
+  const routesByEvent = useMemo<Array<[string, RouteDefinition[]]>>(() => {
     const grouped = new Map<string, RouteDefinition[]>();
     routes.forEach((route) => {
       grouped.set(route.eventType, [...(grouped.get(route.eventType) ?? []), route]);
     });
-    return [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b));
+    return Array.from(grouped.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [routes]);
 
   useEffect(() => {
