@@ -1,1 +1,26 @@
-dist/index.js
+# Dependencies and Vercel local metadata
+node_modules/
+.git/
+.vercel/
+
+# Local environment files must never be uploaded.
+.env
+.env.*
+!.env.example
+!client/.env.production.example
+!Admin/.env.production.example
+
+# Generated build artifacts. Vercel rebuilds these from source.
+dist/
+server-build/
+vercel-media-assets/
+
+# Local runtime and test artifacts.
+logs/
+.logs/
+test-results/
+playwright-report/
+blob-report/
+tmp-cdp-profile/
+tmp-chrome-profile/
+data/generated-documents/
