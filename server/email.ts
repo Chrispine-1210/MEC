@@ -124,6 +124,7 @@ const sendGridTrackingEnabled = env.SENDGRID_TRACKING_ENABLED ?? true;
 const retryDelaysMs = [0, 60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000];
 const defaultMaxAttempts = retryDelaysMs.length;
 const inlineProviderAttempts = env.EMAIL_PROVIDER_INLINE_RETRIES;
+const providerRateLimitRetryDelayMs = 1_250;
 const queuePollMs = env.EMAIL_QUEUE_WORKER_INTERVAL_MS;
 const isVercelProductionRuntime = process.env.VERCEL === "1" && process.env.VERCEL_ENV === "production";
 const isLiveDeliveryRuntime = env.NODE_ENV === "production" || isVercelProductionRuntime;
@@ -141,6 +142,12 @@ let queueLastRunError: string | null = null;
 let activationReadinessCache:
   | { checkedAt: number; value: TransactionalEmailActivationReadiness }
   | null = null;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const isProviderRateLimitError = (message: string) =>
+  /\b429\b|rate[_ -]?limit|too many requests/i.test(message);
+const getInlineProviderRetryDelayMs = (message: string) =>
+  isProviderRateLimitError(message) ? providerRateLimitRetryDelayMs : 0;
 
 type EmailEnqueueOptions = {
   awaitDelivery?: boolean;
@@ -1210,6 +1217,7 @@ const deliverWithFailover = async (job: EmailJob) => {
         return result;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown provider error";
+        const retryDelayMs = getInlineProviderRetryDelayMs(errorMessage);
         failures.push(`${provider.name}#${providerAttempt}: ${errorMessage}`);
         await recordEmailEvent({
           jobId: job.id,
@@ -1222,6 +1230,7 @@ const deliverWithFailover = async (job: EmailJob) => {
             attempt: job.attempts,
             providerAttempt,
             maxProviderAttempts: inlineProviderAttempts,
+            retryDelayMs,
           },
         });
 
@@ -1236,8 +1245,12 @@ const deliverWithFailover = async (job: EmailJob) => {
               attempt: job.attempts,
               nextProviderAttempt: providerAttempt + 1,
               maxProviderAttempts: inlineProviderAttempts,
+              retryDelayMs,
             },
           });
+          if (retryDelayMs > 0) {
+            await sleep(retryDelayMs);
+          }
         }
       }
     }
