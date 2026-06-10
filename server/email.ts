@@ -125,10 +125,12 @@ const retryDelaysMs = [0, 60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000];
 const defaultMaxAttempts = retryDelaysMs.length;
 const inlineProviderAttempts = env.EMAIL_PROVIDER_INLINE_RETRIES;
 const queuePollMs = env.EMAIL_QUEUE_WORKER_INTERVAL_MS;
-const liveProviderDeliveryAllowed = env.NODE_ENV === "production" || env.EMAIL_ALLOW_LIVE_TEST_SENDS === true;
-const configuredDryRunEnabled = env.EMAIL_DRY_RUN ?? env.NODE_ENV !== "production";
+const isVercelProductionRuntime = process.env.VERCEL === "1" && process.env.VERCEL_ENV === "production";
+const isLiveDeliveryRuntime = env.NODE_ENV === "production" || isVercelProductionRuntime;
+const liveProviderDeliveryAllowed = isLiveDeliveryRuntime || env.EMAIL_ALLOW_LIVE_TEST_SENDS === true;
+const configuredDryRunEnabled = env.EMAIL_DRY_RUN ?? !isLiveDeliveryRuntime;
 const dryRunEnabled = configuredDryRunEnabled || !liveProviderDeliveryAllowed;
-const activationRequiresDnsReady = env.EMAIL_ACTIVATION_REQUIRES_DNS_READY ?? env.NODE_ENV === "production";
+const activationRequiresDnsReady = env.EMAIL_ACTIVATION_REQUIRES_DNS_READY ?? isLiveDeliveryRuntime;
 const trackingSecret = env.EMAIL_TRACKING_SECRET || env.JWT_SECRET;
 let isProcessing = false;
 let workerTimer: NodeJS.Timeout | null = null;
@@ -710,7 +712,7 @@ const getProviderOrder = () => {
 
 export const isTransactionalEmailDeliveryReady = () => {
   const activeProviders = getProviderOrder().map((provider) => provider.name);
-  return activeProviders.some((provider) => provider !== "dry_run") || env.NODE_ENV !== "production";
+  return activeProviders.some((provider) => provider !== "dry_run") || !isLiveDeliveryRuntime;
 };
 
 export const getEmailDeliveryDiagnostics = () => {

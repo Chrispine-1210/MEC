@@ -8,6 +8,7 @@ import type { Server } from "node:http";
 
 process.env.NODE_ENV = "test";
 process.env.VERCEL = "1";
+process.env.VERCEL_ENV = "production";
 process.env.DATABASE_URL = process.env.DATABASE_URL || "postgresql://test:test@localhost:5432/test_db";
 process.env.DATABASE_URL_UNPOOLED = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
 process.env.JWT_SECRET = "email-platform-test-secret-32-chars";
@@ -26,7 +27,7 @@ process.env.SMTP_PASSWORD = "";
 process.env.SMTP_PORT = "";
 process.env.EMAIL_PROVIDER_INLINE_RETRIES = "1";
 process.env.EMAIL_DRY_RUN = "false";
-process.env.EMAIL_ALLOW_LIVE_TEST_SENDS = "true";
+delete process.env.EMAIL_ALLOW_LIVE_TEST_SENDS;
 process.env.EMAIL_QUEUE_WORKER_ENABLED = "false";
 process.env.RECAPTCHA_SECRET_KEY = "";
 process.env.CRON_SECRET = "cron-test-secret";
@@ -94,6 +95,17 @@ const makeEmailJob = (overrides: Record<string, unknown> = {}) => {
     ...overrides,
   } as any;
 };
+
+test("Vercel production runtime uses configured live email providers", async () => {
+  const { getEmailDeliveryDiagnostics } = await emailModulePromise;
+
+  const diagnostics = getEmailDeliveryDiagnostics();
+
+  assert.equal(diagnostics.liveProviderDeliveryAllowed, true);
+  assert.equal(diagnostics.configuredDryRunEnabled, false);
+  assert.equal(diagnostics.dryRunEnabled, false);
+  assert.equal(diagnostics.activeProviders[0], "resend");
+});
 
 const installQueueStorage = async (initialJob: any) => {
   const state = { job: initialJob };
