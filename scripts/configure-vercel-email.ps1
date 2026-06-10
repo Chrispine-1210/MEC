@@ -45,11 +45,44 @@ function Convert-SecureStringToPlainText {
   }
 }
 
+function Invoke-VercelCli {
+  param(
+    [Parameter(Mandatory = $true)][string[]]$Arguments
+  )
+
+  $processInfo = [Diagnostics.ProcessStartInfo]::new()
+  $processInfo.FileName = $script:VercelCommand.Source
+  $processInfo.UseShellExecute = $false
+  $processInfo.RedirectStandardOutput = $true
+  $processInfo.RedirectStandardError = $true
+
+  foreach ($argument in $Arguments) {
+    [void]$processInfo.ArgumentList.Add($argument)
+  }
+
+  $process = [Diagnostics.Process]::Start($processInfo)
+  $stdout = $process.StandardOutput.ReadToEnd()
+  $stderr = $process.StandardError.ReadToEnd()
+  $process.WaitForExit()
+
+  if ($stdout) {
+    Write-Host $stdout.TrimEnd()
+  }
+  if ($stderr) {
+    Write-Host $stderr.TrimEnd()
+  }
+
+  if ($process.ExitCode -ne 0) {
+    throw "Vercel CLI failed with exit code $($process.ExitCode): $($Arguments -join ' ')"
+  }
+}
+
 function Set-VercelEnv {
   param(
     [Parameter(Mandatory = $true)][string]$Name,
     [Parameter(Mandatory = $true)][string]$Value,
-    [Parameter(Mandatory = $true)][string]$Environment
+    [Parameter(Mandatory = $true)][string]$Environment,
+    [switch]$Sensitive
   )
 
   if ([string]::IsNullOrWhiteSpace($Value)) {
@@ -58,11 +91,22 @@ function Set-VercelEnv {
   }
 
   Write-Host "Configuring $Name for $Environment..."
-  vercel env rm $Name $Environment --yes 2>$null | Out-Null
-  $Value | vercel env add $Name $Environment | Out-Null
+  $arguments = @("env", "add", $Name, $Environment, "--value", $Value, "--yes", "--force")
+  if ($Sensitive -and $Environment -ne "development") {
+    $arguments += "--sensitive"
+  } else {
+    $arguments += "--no-sensitive"
+  }
+
+  Invoke-VercelCli -Arguments $arguments
 }
 
-if (-not (Get-Command vercel -ErrorAction SilentlyContinue)) {
+$script:VercelCommand = Get-Command vercel.cmd -ErrorAction SilentlyContinue
+if (-not $script:VercelCommand) {
+  $script:VercelCommand = Get-Command vercel -ErrorAction SilentlyContinue
+}
+
+if (-not $script:VercelCommand) {
   throw "Vercel CLI was not found. Install it with: npm i -g vercel"
 }
 
@@ -106,12 +150,13 @@ $values = [ordered]@{
   SMTP_PORT = if ($env:SMTP_PORT) { $env:SMTP_PORT } else { '587' }
   SMTP_USER = $env:SMTP_USER
   SMTP_PASSWORD = $env:SMTP_PASSWORD
-  CRON_SECRET = if ($env:CRON_SECRET) { $env:CRON_SECRET } else { "$([guid]::NewGuid().ToString('N'))$([guid]::NewGuid().ToString('N'))" }
+  CRON_SECRET = $env:CRON_SECRET
 }
 
 foreach ($environment in $Environments) {
   foreach ($entry in $values.GetEnumerator()) {
-    Set-VercelEnv -Name $entry.Key -Value $entry.Value -Environment $environment
+    $isSecret = $entry.Key -in @("RESEND_API_KEY", "SENDGRID_API_KEY", "SMTP_PASSWORD", "CRON_SECRET")
+    Set-VercelEnv -Name $entry.Key -Value $entry.Value -Environment $environment -Sensitive:$isSecret
   }
 }
 
