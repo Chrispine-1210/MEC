@@ -1289,6 +1289,69 @@ export const getEmailQueueWorkerStatus = () => ({
   lastError: queueLastRunError,
 });
 
+const isDueEmailJob = (job: EmailJob) =>
+  ["queued", "retry_scheduled"].includes(job.status) && job.scheduledFor <= new Date();
+
+const processClaimedEmailJob = async (job: EmailJob) => {
+  await recordEmailEvent({
+    jobId: job.id,
+    eventType: "processing",
+    recipient: job.recipient,
+    category: job.category,
+    metadata: { attempt: job.attempts },
+  });
+
+  try {
+    const result = await deliverWithFailover(job);
+    await storage.markEmailJobSent(job.id, result.provider, result.messageId);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown email delivery error";
+    const finalFailure = job.attempts >= job.maxAttempts;
+    const retryDelay = retryDelaysMs[Math.min(job.attempts, retryDelaysMs.length - 1)];
+    const retryAt = new Date(Date.now() + retryDelay);
+    await storage.markEmailJobFailed(job.id, errorMessage, retryAt, finalFailure);
+    await recordEmailEvent({
+      jobId: job.id,
+      eventType: finalFailure ? "failed" : "retry_scheduled",
+      recipient: job.recipient,
+      category: job.category,
+      metadata: {
+        attempt: job.attempts,
+        maxAttempts: job.maxAttempts,
+        retryAt: finalFailure ? null : retryAt.toISOString(),
+        error: errorMessage,
+      },
+    });
+
+    if (finalFailure) {
+      scheduleAdminFailureNotification(job, errorMessage);
+    }
+  }
+};
+
+const claimAndProcessEmailJob = async (dueJob: EmailJob) => {
+  const job = await storage.markEmailJobProcessing(dueJob.id);
+  if (!job) {
+    await recordEmailEvent({
+      jobId: dueJob.id,
+      eventType: "processing_skipped",
+      recipient: dueJob.recipient,
+      category: dueJob.category,
+      metadata: { reason: "job_not_available" },
+    });
+    return false;
+  }
+
+  await processClaimedEmailJob(job);
+  return true;
+};
+
+const processEmailJobNow = async (jobId: string) => {
+  const dueJob = await storage.getEmailJob(jobId);
+  if (!dueJob || !isDueEmailJob(dueJob)) return false;
+  return claimAndProcessEmailJob(dueJob);
+};
+
 export const processEmailQueue = async (): Promise<EmailQueueProcessResult> => {
   const requestedAt = new Date();
   if (isProcessing) {
@@ -1319,53 +1382,7 @@ export const processEmailQueue = async (): Promise<EmailQueueProcessResult> => {
 
     const jobs = await storage.getDueEmailJobs(10);
     for (const dueJob of jobs) {
-      const job = await storage.markEmailJobProcessing(dueJob.id);
-      if (!job) {
-        await recordEmailEvent({
-          jobId: dueJob.id,
-          eventType: "processing_skipped",
-          recipient: dueJob.recipient,
-          category: dueJob.category,
-          metadata: { reason: "job_not_available" },
-        });
-        continue;
-      }
-
-      processed += 1;
-      await recordEmailEvent({
-        jobId: job.id,
-        eventType: "processing",
-        recipient: job.recipient,
-        category: job.category,
-        metadata: { attempt: job.attempts },
-      });
-
-      try {
-        const result = await deliverWithFailover(job);
-        await storage.markEmailJobSent(job.id, result.provider, result.messageId);
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Unknown email delivery error";
-        const finalFailure = job.attempts >= job.maxAttempts;
-        const retryDelay = retryDelaysMs[Math.min(job.attempts, retryDelaysMs.length - 1)];
-        const retryAt = new Date(Date.now() + retryDelay);
-        await storage.markEmailJobFailed(job.id, errorMessage, retryAt, finalFailure);
-        await recordEmailEvent({
-          jobId: job.id,
-          eventType: finalFailure ? "failed" : "retry_scheduled",
-          recipient: job.recipient,
-          category: job.category,
-          metadata: {
-            attempt: job.attempts,
-            maxAttempts: job.maxAttempts,
-            retryAt: finalFailure ? null : retryAt.toISOString(),
-            error: errorMessage,
-          },
-        });
-
-        if (finalFailure) {
-          scheduleAdminFailureNotification(job, errorMessage);
-        }
-      }
+      if (await claimAndProcessEmailJob(dueJob)) processed += 1;
     }
   } catch (error) {
     queueLastRunError = error instanceof Error ? error.message : "Unknown email queue error";
@@ -1467,7 +1484,7 @@ export const enqueueEmail = async (payload: EmailPayload, options: EmailEnqueueO
       metadata: payload.metadata,
     });
     if (options.awaitDelivery) {
-      await processEmailQueue();
+      await processEmailJobNow(job.id);
       const processedJob = await storage.getEmailJob(job.id).catch(() => null);
       if (processedJob) {
         return {
@@ -1783,7 +1800,7 @@ export const sendAccountVerification = (input: {
   name?: string | null;
   verificationUrl: string;
   tokenId?: number | null;
-}) =>
+}, options?: EmailEnqueueOptions) =>
   enqueueEmail({
     to: input.email,
     subject: "Verify your Mtendere account",
@@ -1801,13 +1818,13 @@ export const sendAccountVerification = (input: {
       cta: { href: input.verificationUrl, label: "Verify account" },
     }),
     metadata: { flow: "account_verification", tokenId: input.tokenId ?? undefined },
-  });
+  }, options);
 
 export const sendWelcomeEmail = (input: {
   email: string;
   name?: string | null;
   dashboardUrl: string;
-}) =>
+}, options?: EmailEnqueueOptions) =>
   enqueueEmail({
     to: input.email,
     subject: "Welcome to Mtendere Education Consult",
@@ -1824,13 +1841,13 @@ export const sendWelcomeEmail = (input: {
       cta: { href: input.dashboardUrl, label: "Open dashboard" },
     }),
     metadata: { flow: "welcome" },
-  });
+  }, options);
 
 export const sendPasswordResetEmail = (input: {
   email: string;
   name?: string | null;
   resetUrl: string;
-}) =>
+}, options?: EmailEnqueueOptions) =>
   enqueueEmail({
     to: input.email,
     subject: "Reset your Mtendere password",
@@ -1848,13 +1865,13 @@ export const sendPasswordResetEmail = (input: {
       cta: { href: input.resetUrl, label: "Reset password" },
     }),
     metadata: { flow: "password_reset" },
-  });
+  }, options);
 
 export const sendPasswordChangedEmail = (input: {
   email: string;
   name?: string | null;
   loginUrl: string;
-}) =>
+}, options?: EmailEnqueueOptions) =>
   enqueueEmail({
     to: input.email,
     subject: "Your Mtendere password was changed",
@@ -1871,7 +1888,7 @@ export const sendPasswordChangedEmail = (input: {
       cta: { href: input.loginUrl, label: "Sign in" },
     }),
     metadata: { flow: "password_changed" },
-  });
+  }, options);
 
 export const sendApplicationConfirmation = (input: {
   email: string;
@@ -1879,7 +1896,7 @@ export const sendApplicationConfirmation = (input: {
   opportunityTitle: string;
   opportunityType: string;
   dashboardUrl: string;
-}) =>
+}, options?: EmailEnqueueOptions) =>
   enqueueEmail({
     to: input.email,
     subject: `Application received: ${input.opportunityTitle}`,
@@ -1897,7 +1914,7 @@ export const sendApplicationConfirmation = (input: {
       cta: { href: input.dashboardUrl, label: "View application status" },
     }),
     metadata: { opportunityType: input.opportunityType, opportunityTitle: input.opportunityTitle },
-  });
+  }, options);
 
 export const sendApplicationStatusUpdate = (input: {
   email: string;
@@ -1907,7 +1924,7 @@ export const sendApplicationStatusUpdate = (input: {
   status: string;
   reviewNotes?: string | null;
   dashboardUrl: string;
-}) => {
+}, options?: EmailEnqueueOptions) => {
   const readableStatus = input.status.replace(/_/g, " ");
 
   return enqueueEmail({
@@ -1934,7 +1951,7 @@ export const sendApplicationStatusUpdate = (input: {
       opportunityTitle: input.opportunityTitle,
       status: input.status,
     },
-  });
+  }, options);
 };
 
 export const sendEventRegistrationConfirmation = (input: {
@@ -1944,7 +1961,7 @@ export const sendEventRegistrationConfirmation = (input: {
   eventDate: string;
   ticketUrl: string;
   status: string;
-}) =>
+}, options?: EmailEnqueueOptions) =>
   enqueueEmail({
     to: input.email,
     subject: `Event registration received: ${input.eventTitle}`,
@@ -1963,7 +1980,7 @@ export const sendEventRegistrationConfirmation = (input: {
       cta: { href: input.ticketUrl, label: "Open event ticket" },
     }),
     metadata: { eventTitle: input.eventTitle, status: input.status },
-  });
+  }, options);
 
 export const sendEventRegistrationStatusUpdate = (input: {
   email: string;
@@ -1972,7 +1989,7 @@ export const sendEventRegistrationStatusUpdate = (input: {
   status: string;
   ticketUrl?: string;
   notes?: string | null;
-}) =>
+}, options?: EmailEnqueueOptions) =>
   enqueueEmail({
     to: input.email,
     subject: `Event registration update: ${input.eventTitle}`,
@@ -1989,14 +2006,14 @@ export const sendEventRegistrationStatusUpdate = (input: {
       cta: input.ticketUrl ? { href: input.ticketUrl, label: "Open ticket" } : undefined,
     }),
     metadata: { eventTitle: input.eventTitle, status: input.status },
-  });
+  }, options);
 
 export const sendPartnerOnboardingEmail = (input: {
   email: string;
   organizationName: string;
   contactName?: string | null;
   adminUrl: string;
-}) =>
+}, options?: EmailEnqueueOptions) =>
   enqueueEmail({
     to: input.email,
     subject: `Welcome to Mtendere partnerships: ${input.organizationName}`,
@@ -2013,13 +2030,13 @@ export const sendPartnerOnboardingEmail = (input: {
       cta: { href: input.adminUrl, label: "Review partnership workspace" },
     }),
     metadata: { organizationName: input.organizationName },
-  });
+  }, options);
 
 export const sendContactAcknowledgement = (input: {
   email: string;
   name: string;
   subject?: string | null;
-}) =>
+}, options?: EmailEnqueueOptions) =>
   enqueueEmail({
     to: input.email,
     subject: "We received your Mtendere message",
@@ -2036,7 +2053,7 @@ export const sendContactAcknowledgement = (input: {
       cta: { href: `${publicAppUrl || ""}/contact`, label: "Visit contact page" },
     }),
     metadata: { subject: input.subject },
-  });
+  }, options);
 
 export const sendScholarshipRecommendationEmail = (input: {
   email: string;
@@ -2051,7 +2068,7 @@ export const sendScholarshipRecommendationEmail = (input: {
     score?: number;
   }>;
   preferences?: Record<string, unknown>;
-}) => {
+}, options?: EmailEnqueueOptions) => {
   const topRecommendation = input.recommendations[0];
   const list = input.recommendations
     .map((item) => {
@@ -2079,14 +2096,14 @@ export const sendScholarshipRecommendationEmail = (input: {
       cta: { href: `${publicAppUrl}/scholarships`, label: "Explore scholarships" },
     }),
     metadata: { preferences: input.preferences, recommendationCount: input.recommendations.length },
-  });
+  }, options);
 };
 
 export const sendAdminNotification = (input: {
   subject: string;
   message: string;
   metadata?: Record<string, unknown>;
-}) => {
+}, options?: EmailEnqueueOptions) => {
   const to = env.ADMIN_NOTIFICATION_EMAIL || env.EMAIL_FROM;
   if (!to) return Promise.resolve(null);
 
@@ -2102,5 +2119,5 @@ export const sendAdminNotification = (input: {
     }),
     metadata: input.metadata,
     priority: 10,
-  });
+  }, options);
 };

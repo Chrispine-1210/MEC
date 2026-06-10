@@ -1,12 +1,14 @@
 # Email Infrastructure Documentation
 
-Date: 2026-06-08
+Date: 2026-06-10
 
 ## Runtime
 
 - Email dispatch uses `server/email.ts`.
 - Transactional email dispatch is persisted in `email_jobs`, retried with scheduled backoff, and logged through `email_delivery_events`.
 - Provider delivery supports SendGrid, Amazon SES, Mailgun, Resend, Postmark, SMTP, and a custom HTTP fallback through `EMAIL_API_URL` and `EMAIL_API_KEY`.
+- On Vercel, do not rely on fire-and-forget background work after an HTTP response returns. User-facing transactional routes request inline delivery for the exact queued job they create, then leave retries/backlog to the durable queue drain.
+- `/api/email/queue/drain` accepts either Vercel Cron requests or a valid `CRON_SECRET` bearer token for manual operations.
 - Multi-event communications use `server/communication.ts`: `Event Bus -> Notification Router -> Template Engine -> Delivery Providers`.
 - Event and message audit records are persisted in `communication_events` and `communication_messages`, with JSONL runtime fallback at `data/communication-events.jsonl` and `data/communication-messages.jsonl`.
 - SMS and WhatsApp delivery use `server/notifications.ts` provider adapters. Twilio, WhatsApp Cloud API, and generic HTTP webhooks are supported when configured.
@@ -76,7 +78,8 @@ Dynamic variables use `{{variable_name}}` syntax. Values are HTML-escaped for em
 
 ## Reliability And Audit
 
-- High-priority email routes request immediate delivery from the queue.
+- High-priority email routes request immediate delivery for their own queued job. This covers account verification, welcome, password reset, password changed, application confirmations and status updates, event registration confirmations and status updates, partner onboarding, contact acknowledgments, and admin notifications triggered by public submissions.
+- The queue drain remains responsible for retrying provider failures, recovering stale processing jobs, and clearing backlog from durable storage.
 - Every channel output writes a `communication_messages` row with status, recipient, template, provider IDs, metadata, and diagnostics.
 - Every emitted event writes a `communication_events` row with original payload and status.
 - Failed or unsupported SMS/WhatsApp provider paths are recorded explicitly instead of failing silently.

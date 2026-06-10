@@ -442,7 +442,43 @@ const installPublicRegistrationStorage = async () => {
       return saved;
     },
     recoverStaleProcessingEmailJobs: async () => 0,
-    getDueEmailJobs: async () => [],
+    getDueEmailJobs: async () =>
+      state.emailJobs.filter((job) => ["queued", "retry_scheduled"].includes(job.status)),
+    markEmailJobProcessing: async (id: string) => {
+      const job = state.emailJobs.find((candidate) => candidate.id === id);
+      if (!job || !["queued", "retry_scheduled"].includes(job.status)) return undefined;
+      Object.assign(job, {
+        attempts: job.attempts + 1,
+        status: "processing",
+        processingAt: new Date(),
+        updatedAt: new Date(),
+      });
+      return job;
+    },
+    markEmailJobSent: async (id: string, provider: string, providerMessageId?: string | null) => {
+      const job = state.emailJobs.find((candidate) => candidate.id === id);
+      if (!job) throw new Error("Email job not found");
+      Object.assign(job, {
+        status: "sent",
+        provider,
+        providerMessageId: providerMessageId ?? null,
+        sentAt: new Date(),
+        updatedAt: new Date(),
+      });
+      return job;
+    },
+    markEmailJobFailed: async (id: string, error: string, scheduledFor?: Date | null, finalFailure?: boolean) => {
+      const job = state.emailJobs.find((candidate) => candidate.id === id);
+      if (!job) throw new Error("Email job not found");
+      Object.assign(job, {
+        status: finalFailure ? "failed" : "retry_scheduled",
+        lastError: error,
+        scheduledFor: scheduledFor ?? new Date(),
+        failedAt: finalFailure ? new Date() : null,
+        updatedAt: new Date(),
+      });
+      return job;
+    },
     getEmailJob: async (id: string) => state.emailJobs.find((job) => job.id === id),
     createEmailDeliveryEvent: async (event: any) => {
       state.deliveryEvents.push(event);
@@ -609,6 +645,17 @@ test("public registration creates an active account that can use profile and log
     password: "UsableAccess#2026",
   };
 
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).startsWith(baseUrl)) {
+      return originalFetch(input, init);
+    }
+
+    return new Response(JSON.stringify({ id: "registration-verification-message-1" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
   try {
     const registerResponse = await fetch(`${baseUrl}/api/auth/register`, {
       method: "POST",
@@ -632,6 +679,9 @@ test("public registration creates an active account that can use profile and log
     assert.equal(createdUser.isActive, true);
     assert.equal(state.emailVerificationTokens.length, 1);
     assert.equal(state.emailJobs.some((job) => job.category === "account_verification"), true);
+    const verificationEmailJob = state.emailJobs.find((job) => job.category === "account_verification");
+    assert.equal(verificationEmailJob?.status, "sent");
+    assert.equal(verificationEmailJob?.provider, "resend");
 
     const profileResponse = await fetch(`${baseUrl}/api/user/profile`, {
       headers: { Authorization: `Bearer ${registerBody.token}` },
@@ -732,7 +782,7 @@ test("email queue drain requires cron authorization and processes due jobs", { c
     assert.equal(queue.state.job.status, "queued");
 
     const accepted = await fetch(`${baseUrl}/api/email/queue/drain`, {
-      headers: { Authorization: "Bearer cron-test-secret" },
+      headers: { "user-agent": "vercel-cron/1.0" },
     });
     const body = await accepted.json();
 
@@ -742,6 +792,13 @@ test("email queue drain requires cron authorization and processes due jobs", { c
     assert.equal(body.worker.enabled, false);
     assert.equal(queue.state.job.status, "sent");
     assert.equal(queue.state.job.provider, "resend");
+
+    const manualAccepted = await fetch(`${baseUrl}/api/email/queue/drain`, {
+      headers: { Authorization: "Bearer cron-test-secret" },
+    });
+    const manualBody = await manualAccepted.json();
+    assert.equal(manualAccepted.status, 200);
+    assert.equal(manualBody.result.skipped, false);
   } finally {
     await stopTestServer(server);
   }

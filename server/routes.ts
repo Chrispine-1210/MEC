@@ -2278,7 +2278,7 @@ const issueAccountVerificationEmail = async (
     name: `${user.firstName} ${user.lastName}`.trim(),
     verificationUrl,
     tokenId: tokenRecord.id,
-  });
+  }, { awaitDelivery: true });
 
   if (queued?.status === "failed") {
     return {
@@ -4385,11 +4385,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userAgent: req.get("user-agent"),
       });
 
-      void sendWelcomeEmail({
+      await sendWelcomeEmail({
         email: verifiedUser.email,
         name: `${verifiedUser.firstName} ${verifiedUser.lastName}`.trim(),
         dashboardUrl: `${getRequestBaseUrl(req)}/dashboard`,
-      });
+      }, { awaitDelivery: true });
 
       res.redirect(302, `${getRequestBaseUrl(req)}/login?verified=1`);
     } catch (error) {
@@ -4488,11 +4488,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (user && user.isActive !== false) {
         const resetUrl = `${getRequestBaseUrl(req)}/reset-password?token=${encodeURIComponent(signPasswordResetToken(user))}`;
-        void sendPasswordResetEmail({
+        await sendPasswordResetEmail({
           email: user.email,
           name: `${user.firstName} ${user.lastName}`.trim(),
           resetUrl,
-        });
+        }, { awaitDelivery: true });
         await storage.logAnalytics({
           event: "password_reset_requested",
           userId: user.id,
@@ -4546,11 +4546,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userAgent: req.get("user-agent"),
       });
 
-      void sendPasswordChangedEmail({
+      await sendPasswordChangedEmail({
         email: updatedUser.email,
         name: `${updatedUser.firstName} ${updatedUser.lastName}`.trim(),
         loginUrl: `${getRequestBaseUrl(req)}/login`,
-      });
+      }, { awaitDelivery: true });
 
       clearRefreshCookie(res);
       res.json({ message: "Password reset successful. Please sign in with your new password." });
@@ -4781,7 +4781,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
 
-    if (env.CRON_SECRET && !isBearerSecretMatch(req.get("authorization"), env.CRON_SECRET)) {
+    const authorizedByVercelCron = isVercelCronRequest(req);
+    const authorizedBySecret = isBearerSecretMatch(req.get("authorization"), env.CRON_SECRET);
+    if (!authorizedByVercelCron && !authorizedBySecret) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
@@ -5978,7 +5980,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         opportunityTitle,
         opportunityType: payload.type,
         dashboardUrl,
-      });
+      }, { awaitDelivery: true });
       const confirmationEmailFailed = applicationConfirmation.status === "failed";
       if (confirmationEmailFailed) {
         console.error(
@@ -6008,7 +6010,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (getAdminSettings().emailNotifications) {
-        void sendAdminNotification({
+        await sendAdminNotification({
           subject: "New Mtendere application submitted",
           message: `${applicant ? `${applicant.firstName} ${applicant.lastName}`.trim() : authUser.email} submitted a ${payload.type} application for ${opportunityTitle}.`,
           metadata: {
@@ -6016,7 +6018,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             opportunityType: payload.type,
             referenceId: payload.referenceId,
           },
-        });
+        }, { awaitDelivery: true });
       }
       
       // Log analytics
@@ -6790,7 +6792,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         eventDate: new Date(event.startAt).toLocaleString(),
         ticketUrl,
         status: registration.status,
-      });
+      }, { awaitDelivery: true });
       if (!isRealEmailDelivery(registrationEmail)) {
         console.error(
           "Event registration confirmation email failed:",
@@ -8779,12 +8781,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       if (req.body.contactEmail) {
-        void sendPartnerOnboardingEmail({
+        await sendPartnerOnboardingEmail({
           email: String(req.body.contactEmail),
           organizationName: partner.name,
           contactName: req.body.contactName ?? partner.name,
           adminUrl: `${env.ADMIN_APP_URL || env.PUBLIC_APP_URL || ""}/admin/partners?search=${encodeURIComponent(partner.name)}`,
-        });
+        }, { awaitDelivery: true });
       }
 
       await emitAdminRealtimeEvent(req, {
@@ -9891,14 +9893,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const event = await storage.getEvent(registration.eventId);
       if (event && (payload.status || payload.approvalNotes)) {
-        void sendEventRegistrationStatusUpdate({
+        await sendEventRegistrationStatusUpdate({
           email: registration.email,
           name: registration.fullName,
           eventTitle: event.title,
           status: registration.status,
           notes: payload.approvalNotes,
           ticketUrl: `${env.PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`}/api/events/registrations/${registration.ticketCode}/ticket`,
-        });
+        }, { awaitDelivery: true });
       }
       await emitAdminRealtimeEvent(req, {
         event: "event_registration_updated",
@@ -10315,7 +10317,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (payload.status && payload.status !== existingApplication.status && user?.email) {
         const dashboardUrl = `${env.PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`}/dashboard`;
-        void sendApplicationStatusUpdate({
+        await sendApplicationStatusUpdate({
           email: user.email,
           name: applicantName,
           opportunityTitle,
@@ -10323,7 +10325,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: payload.status,
           reviewNotes: payload.reviewNotes,
           dashboardUrl,
-        });
+        }, { awaitDelivery: true });
         if (["approved", "offer", "hired"].includes(payload.status)) {
           void emitCommunicationEvent({
             event_type: "student.application_approved",
@@ -11891,7 +11893,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email: message.email,
         name: message.name,
         subject: `${message.subject} (${ticketCode})`,
-      });
+      }, { awaitDelivery: true });
       if (contactAcknowledgement.status === "failed") {
         console.error(
           "Contact acknowledgement email failed:",
@@ -11906,11 +11908,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }),
         );
       }
-      void sendAdminNotification({
+      await sendAdminNotification({
         subject: `New Mtendere contact message ${ticketCode}`,
         message: `${message.name} (${message.email}) submitted ${message.subject || "General inquiry"}. Phone: ${message.phone || "not provided"}.`,
         metadata: { messageId: message.id, ticketCode, category: payload.inquiryCategory },
-      });
+      }, { awaitDelivery: true });
       await storage.logAnalytics({
         event: "contact_message_submitted",
         metadata: {

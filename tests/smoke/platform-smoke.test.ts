@@ -557,8 +557,9 @@ test("core platform smoke: registration, login, application, admin review, email
     });
     assert.equal(applicationResponse.status, 201);
     assert.equal(applicationResponse.body.status, "pending");
-    assert.equal(applicationResponse.body.delivery.status, "queued");
-    assert.equal(applicationResponse.body.delivery.queued, true);
+    assert.equal(applicationResponse.body.delivery.status, "sent");
+    assert.equal(applicationResponse.body.delivery.provider, "resend");
+    assert.equal(applicationResponse.body.delivery.queued, false);
     const applicationId = Number(applicationResponse.body.id);
     assert.equal(state.emailJobs.some((job) => job.category === "application_confirmation"), true);
 
