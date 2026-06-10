@@ -37,6 +37,7 @@
     "pm2:save": "pm2 save",
     "vercel:domains:configure": "powershell -ExecutionPolicy Bypass -File scripts/configure-vercel-domains.ps1",
     "vercel:email:configure": "powershell -ExecutionPolicy Bypass -File scripts/configure-vercel-email.ps1",
+    "vercel:email:configure:production": "powershell -ExecutionPolicy Bypass -File scripts/configure-vercel-email.ps1 -Environments production",
     "resend:domain:configure": "node scripts/configure-resend-domain.mjs",
     "resend:domain:configure:cloudflare": "node scripts/configure-resend-domain.mjs --apply-cloudflare --verify",
     "email:resend:smoke": "node scripts/test-resend-email.mjs",

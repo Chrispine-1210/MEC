@@ -8,6 +8,32 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Import-LocalEnv {
+  $envPath = Join-Path (Get-Location) ".env"
+  if (-not (Test-Path -LiteralPath $envPath)) {
+    return
+  }
+
+  Get-Content -LiteralPath $envPath | ForEach-Object {
+    $line = $_.Trim()
+    if (-not $line -or $line.StartsWith("#") -or $line -notmatch "^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$") {
+      return
+    }
+
+    $name = $matches[1]
+    $value = $matches[2].Trim()
+    $commentIndex = $value.IndexOf(" #")
+    if ($commentIndex -ge 0) {
+      $value = $value.Substring(0, $commentIndex).Trim()
+    }
+    if (($value.StartsWith('"') -and $value.EndsWith('"')) -or ($value.StartsWith("'") -and $value.EndsWith("'"))) {
+      $value = $value.Substring(1, $value.Length - 2)
+    }
+
+    [Environment]::SetEnvironmentVariable($name, $value.Trim(), "Process")
+  }
+}
+
 function Convert-SecureStringToPlainText {
   param([Parameter(Mandatory = $true)][securestring]$SecureValue)
 
@@ -39,6 +65,8 @@ function Set-VercelEnv {
 if (-not (Get-Command vercel -ErrorAction SilentlyContinue)) {
   throw "Vercel CLI was not found. Install it with: npm i -g vercel"
 }
+
+Import-LocalEnv
 
 $resendApiKey = $env:RESEND_API_KEY
 if ($resendApiKey -and $resendApiKey -notmatch "^re_") {
