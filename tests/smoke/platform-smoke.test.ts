@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { createHmac, randomBytes } from "node:crypto";
+import fs from "node:fs/promises";
 import type { Server } from "node:http";
+import path from "node:path";
 import bcrypt from "bcryptjs";
 import express from "express";
 
@@ -480,6 +482,60 @@ test("core platform smoke: registration, login, application, admin review, email
     assert.equal(profileResponse.status, 200);
     assert.equal(profileResponse.body.email, "smoke-student@example.test");
     assert.ok(profileResponse.elapsedMs < 1000, `profile API latency ${profileResponse.elapsedMs.toFixed(1)}ms exceeded smoke threshold`);
+
+    const profileUpdateResponse = await requestJson(baseUrl, "/api/user/profile", {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${studentToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        firstName: "Smoke",
+        lastName: "Student",
+        username: "smokestudentprofile",
+        phone: "+265 999 000 111",
+        dateOfBirth: "2001-02-03",
+      }),
+    });
+    assert.equal(profileUpdateResponse.status, 200);
+    assert.equal(profileUpdateResponse.body.username, "smokestudentprofile");
+    assert.equal(profileUpdateResponse.body.phone, "+265 999 000 111");
+    assert.match(profileUpdateResponse.body.dateOfBirth, /^2001-02-03/);
+
+    const updatedProfileResponse = await requestJson(baseUrl, "/api/user/profile", {
+      headers: { Authorization: `Bearer ${studentToken}` },
+    });
+    assert.equal(updatedProfileResponse.status, 200);
+    assert.equal(updatedProfileResponse.body.username, "smokestudentprofile");
+    assert.equal(updatedProfileResponse.body.phone, "+265 999 000 111");
+
+    const avatarForm = new FormData();
+    avatarForm.append(
+      "profilePicture",
+      new Blob(
+        [
+          Buffer.from(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+            "base64",
+          ),
+        ],
+        { type: "image/png" },
+      ),
+      "avatar.png",
+    );
+    const avatarResponse = await fetch(`${baseUrl}/api/user/profile-picture`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${studentToken}` },
+      body: avatarForm,
+    });
+    const avatarBody = await avatarResponse.json();
+    assert.equal(avatarResponse.status, 201);
+    assert.match(avatarBody.profilePicture, /^\/uploads\/avatar-\d+-\d+\.png$/);
+    assert.equal(avatarBody.user.profilePicture, avatarBody.profilePicture);
+    const avatarFileName = String(avatarBody.profilePicture).split("/").pop();
+    if (avatarFileName) {
+      await fs.rm(path.join(process.cwd(), "uploads", avatarFileName), { force: true });
+    }
 
     const applicationResponse = await requestJson(baseUrl, "/api/applications", {
       method: "POST",

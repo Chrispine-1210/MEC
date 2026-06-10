@@ -14,9 +14,17 @@ Date: 2026-06-01
 1. Public users register through `/api/auth/register`.
 2. Duplicate email and username are checked before insert.
 3. Password is hashed with bcrypt.
-4. Account is created inactive until email verification completes.
-5. A signed email verification token is sent by email.
-6. `/api/auth/verify-email/:token` activates the account and sends a welcome email.
+4. Account is created active so the dashboard can be used immediately.
+5. A signed email verification token is sent by email as a trust and deliverability step.
+6. `/api/auth/verify-email/:token` marks the verification token used and sends a welcome email.
+
+## Client Profile Management
+
+- Authenticated users read account profile data from `/api/user/profile`.
+- Authenticated users update only self-service profile fields through `PUT` or `PATCH /api/user/profile`: first name, last name, username, phone, date of birth, and uploaded profile picture reference.
+- Username changes are checked against existing accounts before update.
+- Profile picture uploads use `POST /api/user/profile-picture` with authenticated multipart upload, image-only MIME and extension checks, a 5MB limit, file signature validation, and `/uploads/...` static serving.
+- Profile updates and profile picture updates write analytics events for auditability.
 
 ## Admin Account Governance
 

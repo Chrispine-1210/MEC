@@ -109,12 +109,22 @@ test("user lifecycle: browser registration, email trigger, verification link, an
   await expect(page).toHaveURL(/\/login\?verified=1/);
   await loginClient(page, email, strongPassword);
 
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: /complete profile/i }).click();
+  await expect(page.getByRole("dialog", { name: /account profile/i })).toBeVisible();
+  await page.getByLabel("Phone number").fill("+265 888 000 111");
+  await page.getByLabel("Date of birth").fill("2000-01-15");
+  await page.getByRole("button", { name: /save profile/i }).click();
+  await expect(page.getByText("Profile updated", { exact: true })).toBeVisible();
+
   const token = await page.evaluate(() => localStorage.getItem("token"));
   expect(token).toBeTruthy();
   const profile = await expectApiOk(request, "/api/user/profile", { Authorization: `Bearer ${token}` });
   const profileBody = await profile.json();
   expect(profileBody.email).toBe(email);
   expect(profileBody.role).toBe("user");
+  expect(profileBody.phone).toBe("+265 888 000 111");
+  expect(profileBody.dateOfBirth).toContain("2000-01-15");
 });
 
 test("admin lifecycle: super-admin MFA authentication and users dashboard access", async ({ page, request }) => {

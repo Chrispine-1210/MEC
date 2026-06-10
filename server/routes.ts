@@ -394,6 +394,50 @@ const mfaConfirmSchema = z
   })
   .strict();
 
+const userProfileUpdateSchema = z
+  .object({
+    firstName: z.string().trim().min(1, "First name is required").max(80).optional(),
+    lastName: z.string().trim().min(1, "Last name is required").max(80).optional(),
+    username: z
+      .string()
+      .trim()
+      .min(3, "Username must be at least 3 characters")
+      .max(80, "Username must be 80 characters or fewer")
+      .regex(/^[a-zA-Z0-9._-]+$/, "Username may only use letters, numbers, dots, underscores, and hyphens")
+      .optional(),
+    phone: z.preprocess(
+      (value) => (typeof value === "string" ? value.trim() || null : value),
+      z
+        .string()
+        .max(40, "Phone number must be 40 characters or fewer")
+        .regex(/^[+()0-9\s.-]+$/, "Phone number contains unsupported characters")
+        .nullable()
+        .optional(),
+    ),
+    dateOfBirth: z
+      .preprocess((value) => {
+        if (value === undefined) return undefined;
+        if (value === null || value === "") return null;
+        if (typeof value === "string" || value instanceof Date) return new Date(value);
+        return value;
+      }, z.union([z.date(), z.null()]).optional())
+      .refine((value) => value === undefined || value === null || value.getTime() <= Date.now(), {
+        message: "Date of birth cannot be in the future",
+      }),
+    profilePicture: z.preprocess(
+      (value) => (typeof value === "string" ? value.trim() || null : value),
+      z
+        .string()
+        .max(500, "Profile picture URL must be 500 characters or fewer")
+        .refine((value) => value.startsWith("/uploads/") || value.startsWith("/api/uploads/"), {
+          message: "Profile picture must be an uploaded MEC image",
+        })
+        .nullable()
+        .optional(),
+    ),
+  })
+  .strict();
+
 const emailPreferenceUpdateSchema = z.object({
   categories: z.record(z.boolean()).optional(),
   unsubscribeAll: z.boolean().optional(),
@@ -3368,14 +3412,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ["image/png", new Set([".png"])],
     ["image/webp", new Set([".webp"])],
   ]);
+  const buildUploadFilename = (file: Express.Multer.File) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, "") || "upload";
+    return `${base}-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`;
+  };
 
   const upload = multer({
     storage: multer.diskStorage({
       destination: uploadsDir,
       filename: (_req: Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
-        const ext = path.extname(file.originalname);
-        const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, "") || "upload";
-        cb(null, `${base}-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`);
+        cb(null, buildUploadFilename(file));
       },
     }),
     fileFilter: (_req, file, cb) => {
@@ -3389,6 +3436,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
     limits: { fileSize: 10 * 1024 * 1024, files: 10 },
   });
+  const profileImageUpload = multer({
+    storage: multer.diskStorage({
+      destination: uploadsDir,
+      filename: (_req: Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
+        cb(null, buildUploadFilename(file));
+      },
+    }),
+    fileFilter: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.mimetype) || ![".jpg", ".jpeg", ".png", ".webp"].includes(ext)) {
+        cb(new Error("Unsupported profile image type. Upload JPG, PNG, or WEBP files."));
+        return;
+      }
+      cb(null, true);
+    },
+    limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  });
+  const profileImageUploadSingle = (req: Request, res: Response, next: NextFunction) => {
+    profileImageUpload.single("profilePicture")(req, res, (error) => {
+      if (!error) return next();
+      if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+        return res.status(413).json({ message: "Profile image must be 5MB or smaller." });
+      }
+      return res.status(400).json({ message: error instanceof Error ? error.message : "Profile image upload failed" });
+    });
+  };
 
   const deployMediaAssetRoot = path.resolve(process.cwd(), "vercel-media-assets");
   const getSourceMediaAssetRoots = () => {
@@ -5245,8 +5318,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
+  const updateUserProfile = async (req: Request, res: Response) => {
+    try {
+      const authUser = getAuthenticatedUser(req);
+      const user = await storage.getUser(authUser.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const payload = userProfileUpdateSchema.parse(req.body);
+      if (Object.keys(payload).length === 0) {
+        return res.status(400).json({ message: "No profile fields were provided" });
+      }
+
+      if (payload.username && payload.username.toLowerCase() !== user.username.toLowerCase()) {
+        const existingUsername = await storage.getUserByUsername(payload.username);
+        if (existingUsername && existingUsername.id !== user.id) {
+          return res.status(409).json({
+            message: "This username is already taken",
+            fields: { username: "This username is already taken" },
+          });
+        }
+      }
+
+      const updateData: Partial<z.infer<typeof insertUserSchema>> = {};
+      if (payload.firstName !== undefined) updateData.firstName = payload.firstName;
+      if (payload.lastName !== undefined) updateData.lastName = payload.lastName;
+      if (payload.username !== undefined) updateData.username = payload.username;
+      if (payload.phone !== undefined) updateData.phone = payload.phone;
+      if (payload.dateOfBirth !== undefined) updateData.dateOfBirth = payload.dateOfBirth;
+      if (payload.profilePicture !== undefined) updateData.profilePicture = payload.profilePicture;
+
+      const updatedUser = await storage.updateUser(user.id, updateData);
+
+      await logAnalyticsBestEffort({
+        event: "user_profile_updated",
+        userId: user.id,
+        metadata: { fields: Object.keys(updateData) },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+
+      res.json(buildPublicUser(updatedUser));
+    } catch (error) {
+      console.error("Profile update error:", getErrorLogMessage(error));
+      res.status(400).json({ message: "Failed to update profile", error: getErrorMessage(error) });
+    }
+  };
+
+  const uploadUserProfilePicture = async (req: Request, res: Response) => {
+    try {
+      const authUser = getAuthenticatedUser(req);
+      const file = (req as MulterRequest).file;
+      if (!file) return res.status(400).json({ message: "No profile image uploaded" });
+
+      if (await rejectInvalidUploadedFiles([file], res)) return;
+
+      const profilePicture = `/uploads/${file.filename}`;
+      const updatedUser = await storage.updateUser(authUser.id, { profilePicture });
+
+      await logAnalyticsBestEffort({
+        event: "user_profile_picture_updated",
+        userId: authUser.id,
+        metadata: {
+          fileName: file.filename,
+          size: file.size,
+          type: file.mimetype,
+        },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+
+      res.status(201).json({
+        user: buildPublicUser(updatedUser),
+        profilePicture,
+        file: {
+          originalName: file.originalname,
+          size: file.size,
+          type: file.mimetype,
+        },
+      });
+    } catch (error) {
+      console.error("Profile image upload error:", getErrorLogMessage(error));
+      res.status(400).json({ message: "Failed to upload profile image", error: getErrorMessage(error) });
+    }
+  };
+
   app.get('/api/user', authenticateToken, sendUserProfile);
   app.get('/api/user/profile', authenticateToken, sendUserProfile);
+  app.put('/api/user/profile', authenticateToken, updateUserProfile);
+  app.patch('/api/user/profile', authenticateToken, updateUserProfile);
+  app.post('/api/user/profile-picture', authenticateToken, profileImageUploadSingle, uploadUserProfilePicture);
 
   app.get('/api/users', authenticateToken, requireSuperAdmin, async (_req, res) => {
     try {

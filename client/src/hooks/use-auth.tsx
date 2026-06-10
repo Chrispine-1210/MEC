@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { apiRequest, clearLocalAuthSession, refreshAuthSession } from "@/lib/queryClient";
+import { apiRequest, authFetch, clearLocalAuthSession, refreshAuthSession } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
-interface User {
+export interface User {
   id: number;
   username: string;
   email: string;
@@ -15,10 +15,15 @@ interface User {
   referralCode?: string | null;
 }
 
+export type ProfileUpdateInput = Partial<Pick<User, "firstName" | "lastName" | "username" | "phone" | "dateOfBirth" | "profilePicture">>;
+
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string, rememberMe?: boolean) => Promise<boolean>;
   register: (userData: any) => Promise<boolean>;
+  updateProfile: (updates: ProfileUpdateInput) => Promise<User>;
+  uploadProfilePicture: (file: File) => Promise<User>;
+  refreshProfile: () => Promise<User | null>;
   logout: () => Promise<void>;
   isLoading: boolean;
 }
@@ -27,6 +32,22 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const getAuthErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback;
+
+const readApiErrorMessage = async (response: Response, fallback: string) => {
+  const text = await response.text();
+  if (!text) return fallback;
+
+  try {
+    const payload = JSON.parse(text) as { message?: unknown; error?: unknown };
+    for (const value of [payload.error, payload.message]) {
+      if (typeof value === "string" && value.trim()) return value;
+    }
+  } catch {
+    // Fall through to the raw response text.
+  }
+
+  return text || fallback;
+};
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -47,6 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await apiRequest("GET", "/api/user/profile");
       const userData = await response.json();
       setUser(userData);
+      return userData as User;
     } catch (error) {
       const refreshed = await refreshAuthSession();
       if (refreshed) {
@@ -54,7 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const response = await apiRequest("GET", "/api/user/profile");
           const userData = await response.json();
           setUser(userData);
-          return;
+          return userData as User;
         } catch (retryError) {
           console.error("Failed to fetch user profile after refresh:", retryError);
         }
@@ -65,6 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoading(false);
     }
+    return null;
   };
 
   const login = async (email: string, password: string, rememberMe = true): Promise<boolean> => {
@@ -123,6 +146,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateProfile = async (updates: ProfileUpdateInput): Promise<User> => {
+    const response = await apiRequest("PUT", "/api/user/profile", updates);
+    const updatedUser = (await response.json()) as User;
+    setUser(updatedUser);
+    return updatedUser;
+  };
+
+  const uploadProfilePicture = async (file: File): Promise<User> => {
+    const formData = new FormData();
+    formData.append("profilePicture", file);
+
+    const response = await authFetch("/api/user/profile-picture", {
+      method: "POST",
+      body: formData,
+    });
+    if (!response.ok) {
+      throw new Error(await readApiErrorMessage(response, "Profile image upload failed"));
+    }
+
+    const payload = (await response.json()) as { user?: User; profilePicture?: string };
+    if (!payload.user) {
+      throw new Error("Profile image upload did not return an updated user");
+    }
+    setUser(payload.user);
+    return payload.user;
+  };
+
+  const refreshProfile = async () => fetchUserProfile();
+
   const logout = async () => {
     try {
       await apiRequest("POST", "/api/auth/logout");
@@ -138,7 +190,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, register, updateProfile, uploadProfilePicture, refreshProfile, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

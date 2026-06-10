@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,8 +10,10 @@ import { Link, useLocation } from "wouter";
 import ApplicationTracker from "@/components/user/application-tracker";
 import ReferralSystem from "@/components/user/referral-system";
 import CheckoutButton from "@/components/user/checkout-button";
+import ProfileSettingsDialog from "@/components/user/profile-settings-dialog";
 import ExpandingNav from "@/components/expanding-nav";
 import type { ApiApplication, ApiReferralDashboard } from "@/lib/api-types";
+import { getProfileCompletion } from "@/lib/profile-completion";
 import {
   User,
   FileText,
@@ -25,7 +27,6 @@ import {
 
 export default function Dashboard() {
   const { user, isLoading } = useAuth();
-  const { toast } = useToast();
   const [, setLocation] = useLocation();
 
   const { data: applications } = useQuery<ApiApplication[]>({
@@ -59,18 +60,10 @@ export default function Dashboard() {
   const pendingApplications = applications?.filter((app) => app.status === "pending").length || 0;
   const totalReferrals = referralDashboard?.stats.signups || 0;
 
-  // Calculate real profile completion from available user fields
-  const profileFields = [
-    user?.firstName,
-    user?.lastName,
-    user?.email,
-    user?.username,
-    user?.phone,
-    user?.dateOfBirth,
-    user?.profilePicture,
-  ];
-  const filledFields = profileFields.filter(Boolean).length;
-  const profileCompletion = Math.round((filledFields / profileFields.length) * 100);
+  const profileCompletionDetails = getProfileCompletion(user);
+  const profileCompletion = profileCompletionDetails.percent;
+  const missingProfileLabels = profileCompletionDetails.missingItems.map((item) => item.label);
+  const userInitials = `${user.firstName?.[0] ?? ""}${user.lastName?.[0] ?? ""}`.toUpperCase() || "ME";
 
   return (
     <div className="min-h-screen bg-mtendere-gray">
@@ -80,9 +73,12 @@ export default function Dashboard() {
       <section className="bg-gradient-to-r from-mtendere-blue to-mtendere-green py-16 text-white">
         <div className="container mx-auto px-4">
           <div className="hero-panel flex flex-col items-center gap-6 rounded-3xl p-6 md:flex-row md:p-8">
-            <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/20 shadow-lg shadow-black/10">
-              <User className="w-10 h-10" />
-            </div>
+            <Avatar className="h-20 w-20 flex-shrink-0 border border-white/20 bg-white/20 shadow-lg shadow-black/10">
+              <AvatarImage src={user.profilePicture || ""} alt={`${user.firstName} ${user.lastName}`} />
+              <AvatarFallback className="bg-white/20 text-xl font-bold text-white">
+                {user.profilePicture ? <User className="h-10 w-10" /> : userInitials}
+              </AvatarFallback>
+            </Avatar>
             <div className="text-center md:text-left">
               <h1 className="text-3xl font-bold">Welcome back, {user.firstName}!</h1>
               <p className="text-xl opacity-90 mt-1">{user.role === "user" ? "Student" : user.role}</p>
@@ -196,22 +192,16 @@ export default function Dashboard() {
                   </div>
 
                   <p className="text-sm text-muted-foreground">
-                    Complete your profile to increase your chances of success
+                    {missingProfileLabels.length > 0
+                      ? `Add ${missingProfileLabels.slice(0, 3).join(", ")}${missingProfileLabels.length > 3 ? ", and more" : ""} to finish your profile.`
+                      : "Your profile is complete and ready for applications."}
                   </p>
 
-                  <Button
-                    className="w-full"
-                    variant="outline"
-                    onClick={() =>
-                      toast({
-                        title: "Profile Settings",
-                        description:
-                          "Profile editing will be available in the next update. Fill in your phone, date of birth, and profile picture to reach 100%.",
-                      })
-                    }
-                  >
-                    Complete Profile
-                  </Button>
+                  <ProfileSettingsDialog user={user}>
+                    <Button className="w-full" variant="outline">
+                      {profileCompletion === 100 ? "Manage Profile" : "Complete Profile"}
+                    </Button>
+                  </ProfileSettingsDialog>
                 </div>
               </CardContent>
             </Card>
