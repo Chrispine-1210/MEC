@@ -13,6 +13,8 @@
     "dev:Admin": "npm run dev:admin",
     "dev:all": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"npm run dev:admin\"",
     "dev": "npm run dev:server",
+    "e2e:server": "cross-env NODE_ENV=development NODE_OPTIONS=--dns-result-order=ipv4first tsx server/index.ts",
+    "e2e:admin": "cross-env NODE_ENV=development ADMIN_PORT=5174 VITE_ADMIN_PORT=5174 npm run dev --prefix ./Admin",
     "prebuild": "node scripts/ensure-dev-deps.cjs",
     "build:client": "node scripts/run-vite-build.cjs",
     "build:admin": "node scripts/run-vite-build.cjs --cwd Admin",

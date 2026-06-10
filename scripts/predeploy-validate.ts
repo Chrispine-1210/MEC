@@ -7,8 +7,14 @@ const { env } = await import("../server/env");
 
 const strictMode = process.env.PREDEPLOY_STRICT === "true" || env.NODE_ENV === "production";
 const allowDryRun = process.env.PREDEPLOY_ALLOW_DRY_RUN === "true";
-const requireHybridEmail =
-  process.env.PREDEPLOY_REQUIRE_HYBRID_EMAIL === "true" || env.NODE_ENV === "production";
+const legacyHybridEmailRequired = process.env.PREDEPLOY_REQUIRE_HYBRID_EMAIL === "true";
+const requiredEmailProviders = (
+  process.env.PREDEPLOY_REQUIRED_EMAIL_PROVIDERS ??
+  (legacyHybridEmailRequired ? "sendgrid,ses" : env.NODE_ENV === "production" ? "resend" : "")
+)
+  .split(",")
+  .map((provider) => provider.trim().toLowerCase())
+  .filter(Boolean);
 
 const fail = (message: string, details?: unknown) => {
   console.error(`[predeploy] ${message}`);
@@ -30,11 +36,12 @@ if (strictMode && !activation.ready) {
   fail("Transactional email activation is not ready.", activation.blockingReasons);
 }
 
-if (requireHybridEmail) {
-  const missing = ["sendgrid", "ses"].filter((provider) => !activeProviders.includes(provider));
+if (requiredEmailProviders.length > 0) {
+  const missing = requiredEmailProviders.filter((provider) => !activeProviders.includes(provider));
   if (missing.length > 0) {
-    fail("Hybrid SendGrid + SES delivery is not fully active.", {
+    fail("Required email provider delivery is not fully active.", {
       missing,
+      requiredProviders: requiredEmailProviders,
       activeProviders,
       configuredProviders: diagnostics.providerConfigured,
     });
@@ -55,7 +62,7 @@ console.log(
     {
       strictMode,
       allowDryRun,
-      requireHybridEmail,
+      requiredEmailProviders,
       activeProviders: diagnostics.activeProviders,
       activation: {
         ready: activation.ready,

@@ -7,6 +7,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: platform-gates-${{ github.ref }}
   cancel-in-progress: true
@@ -99,21 +102,7 @@ jobs:
     name: Production Email/DNS Readiness
     runs-on: ubuntu-latest
     needs: validate
-    if: github.ref == 'refs/heads/main'
     timeout-minutes: 10
-    env:
-      NODE_ENV: production
-      JWT_SECRET: ${{ secrets.JWT_SECRET }}
-      EMAIL_DRY_RUN: "false"
-      EMAIL_ALLOW_LIVE_TEST_SENDS: "true"
-      EMAIL_ACTIVATION_REQUIRES_DNS_READY: "true"
-      EMAIL_PROVIDER_ORDER: sendgrid,ses
-      SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
-      AWS_SES_REGION: ${{ secrets.AWS_SES_REGION }}
-      AWS_SES_ACCESS_KEY_ID: ${{ secrets.AWS_SES_ACCESS_KEY_ID }}
-      AWS_SES_SECRET_ACCESS_KEY: ${{ secrets.AWS_SES_SECRET_ACCESS_KEY }}
-      PREDEPLOY_STRICT: "true"
-      PREDEPLOY_REQUIRE_HYBRID_EMAIL: "true"
 
     steps:
       - name: Checkout
@@ -128,7 +117,38 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Strict predeploy validation
+      - name: Pull request email readiness validation
+        if: github.event_name == 'pull_request'
+        env:
+          NODE_ENV: test
+          JWT_SECRET: github-actions-pr-email-readiness-secret-32
+          EMAIL_DRY_RUN: "true"
+          EMAIL_ALLOW_LIVE_TEST_SENDS: "false"
+          EMAIL_ACTIVATION_REQUIRES_DNS_READY: "false"
+          EMAIL_PROVIDER_ORDER: resend
+          EMAIL_PROVIDER_INLINE_RETRIES: "1"
+          EMAIL_QUEUE_WORKER_ENABLED: "false"
+          PREDEPLOY_ALLOW_DRY_RUN: "true"
+          PREDEPLOY_STRICT: "false"
+          PREDEPLOY_REQUIRED_EMAIL_PROVIDERS: ""
+        run: npm run predeploy:validate
+
+      - name: Strict production Resend readiness validation
+        if: github.event_name != 'pull_request'
+        env:
+          NODE_ENV: production
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          EMAIL_FROM: "Mtendere Education Consult <onboarding@resend.dev>"
+          EMAIL_DRY_RUN: "false"
+          EMAIL_ALLOW_LIVE_TEST_SENDS: "true"
+          EMAIL_ACTIVATION_REQUIRES_DNS_READY: "true"
+          EMAIL_PROVIDER_ORDER: resend,sendgrid,smtp,postmark,ses,custom
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_LINK_BASE_URL: https://links.mtendereeducationconsult.com
+          SENDGRID_TRACKING_ENABLED: "true"
+          PREDEPLOY_STRICT: "true"
+          PREDEPLOY_REQUIRED_EMAIL_PROVIDERS: resend
+          PREDEPLOY_REQUIRE_HYBRID_EMAIL: "false"
         run: npm run predeploy:validate
 
   deployment-gate:
@@ -144,8 +164,8 @@ jobs:
             exit 1
           fi
 
-          if [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ needs.production-readiness.result }}" != "success" ]; then
-            echo "Production readiness gate failed; deployment is blocked."
+          if [ "${{ needs.production-readiness.result }}" != "success" ]; then
+            echo "Email/DNS readiness gate failed; deployment is blocked."
             exit 1
           fi
 

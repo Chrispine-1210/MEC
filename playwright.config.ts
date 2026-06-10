@@ -22,6 +22,7 @@ const sharedServerEnv = {
   EMAIL_ACTIVATION_REQUIRES_DNS_READY: "false",
   EMAIL_QUEUE_WORKER_ENABLED: "false",
   EMAIL_WEBHOOK_SIGNING_SECRET: process.env.EMAIL_WEBHOOK_SIGNING_SECRET || "playwright-webhook-secret",
+  RECAPTCHA_SECRET_KEY: "",
   PUBLIC_APP_URL: clientBaseURL,
   API_APP_URL: apiBaseURL,
   ADMIN_APP_URL: adminBaseURL,
@@ -50,14 +51,14 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: "npm run dev:server",
+      command: "npm run e2e:server",
       url: `${apiBaseURL}/api/health`,
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
       env: sharedServerEnv,
     },
     {
-      command: "npm run dev:admin",
+      command: "npm run e2e:admin",
       url: `${adminBaseURL}/admin/auth`,
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,

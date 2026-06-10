@@ -100,7 +100,7 @@ test("user lifecycle: browser registration, email trigger, verification link, an
   await page.locator('input[name="acceptTerms"]').check();
   await page.getByRole("button", { name: /create account/i }).click();
 
-  await expect(page).toHaveURL(/\/dashboard\?registered=1/);
+  await expect(page.getByText("Account created", { exact: true })).toBeVisible({ timeout: 20_000 });
   const verification = await waitForVerificationLink(request, email);
   expect(verification.jobId).toBeTruthy();
   expect(verification.verificationUrl).toContain("/api/auth/verify-email/");
@@ -144,7 +144,7 @@ test("admin lifecycle: super-admin MFA authentication and users dashboard access
 
   await page.goto(`${adminBaseURL}/admin/auth`);
   await page.getByLabel("Username").fill(username);
-  await page.getByLabel("Password", { exact: true }).fill(strongPassword);
+  await page.getByPlaceholder("Enter your password").fill(strongPassword);
   await page.getByRole("button", { name: /^sign in$/i }).click();
 
   await page.getByPlaceholder("123456").fill(generateTotpCode(superAdminTotpSecret));
@@ -157,7 +157,8 @@ test("admin lifecycle: super-admin MFA authentication and users dashboard access
   const token = await page.evaluate(() => localStorage.getItem("token"));
   expect(token).toBeTruthy();
   const usersResponse = await expectApiOk(request, "/api/admin/users", { Authorization: `Bearer ${token}` });
-  const users = await usersResponse.json();
+  const usersBody = await usersResponse.json();
+  const users = usersBody.users;
   expect(Array.isArray(users)).toBe(true);
   expect(users.some((user: { email?: string; role?: string }) => user.email === email && user.role === "super_admin")).toBe(true);
 });
@@ -196,7 +197,7 @@ test("failure simulation surfaces non-silent API and DNS/email readiness failure
   await page.getByLabel("Email address").fill("offline@example.test");
   await page.getByLabel("Password", { exact: true }).fill(strongPassword);
   await page.getByRole("button", { name: /sign in/i }).click();
-  await expect(page.getByText(/login failed/i)).toBeVisible();
+  await expect(page.getByText("Login failed", { exact: true })).toBeVisible();
   await page.unroute("**/api/auth/login");
 
   const health = await expectApiOk(request, "/api/health");
