@@ -128,7 +128,7 @@ Use this helper with a full-access Resend API key:
 npm run resend:domain:configure
 ```
 
-The helper defaults to `notifications.mtendereeducationconsult.com`. Override with `--domain=<domain>` only when the target sender domain is intentionally different.
+The helper defaults to `notifications.mtendereeducationconsult.com` with DNS records normalized for the `mtendereeducationconsult.com` zone. Override with `--domain=<domain>` and `--dns-zone=<zone>` only when the target sender domain or DNS zone is intentionally different.
 
 To also apply the returned DNS records to Cloudflare and trigger Resend verification:
 

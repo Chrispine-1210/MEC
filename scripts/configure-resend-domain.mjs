@@ -11,6 +11,7 @@ const hasFlag = (name) => args.has(name) || process.env[name.replace(/^--/, "").
 const getOption = (name, envName, fallback) => args.get(name) || process.env[envName] || fallback;
 
 const domain = getOption("--domain", "RESEND_DOMAIN", "notifications.mtendereeducationconsult.com");
+const dnsZone = getOption("--dns-zone", "RESEND_DNS_ZONE", "mtendereeducationconsult.com");
 const region = getOption("--region", "RESEND_REGION", "us-east-1");
 const applyCloudflare = hasFlag("--apply-cloudflare");
 const verifyAfterDns = hasFlag("--verify");
@@ -89,7 +90,7 @@ const createOrGetDomain = async () => {
     }
 
     const message = String(error?.message || "");
-    if (error?.status === 409 || /already exists/i.test(message)) {
+    if (error?.status === 409 || /already exists|registered already/i.test(message)) {
       const existing = (await listDomains()).find((item) => item?.name === domain);
       if (existing) return existing;
     }
@@ -98,11 +99,22 @@ const createOrGetDomain = async () => {
   }
 };
 
+const getDomainDetails = async (domainRecord) => {
+  if (!domainRecord?.id) return domainRecord;
+  try {
+    return await resendRequest("GET", `/domains/${domainRecord.id}`);
+  } catch {
+    return domainRecord;
+  }
+};
+
 const resolveRecordName = (recordName) => {
   const trimmed = String(recordName || "").trim().replace(/\.$/, "");
   if (!trimmed || trimmed === "@") return domain;
-  if (trimmed === domain || trimmed.endsWith(`.${domain}`)) return trimmed;
-  return `${trimmed}.${domain}`;
+  if (trimmed === domain || trimmed.endsWith(`.${domain}`) || trimmed === dnsZone || trimmed.endsWith(`.${dnsZone}`)) {
+    return trimmed;
+  }
+  return `${trimmed}.${dnsZone}`;
 };
 
 const cleanDnsContent = (type, value) => {
@@ -178,7 +190,7 @@ const upsertCloudflareRecord = async (record) => {
 };
 
 const main = async () => {
-  const domainRecord = await createOrGetDomain();
+  const domainRecord = await getDomainDetails(await createOrGetDomain());
   const records = Array.isArray(domainRecord.records) ? domainRecord.records.map(normalizeDnsRecord) : [];
 
   console.log(
@@ -186,6 +198,7 @@ const main = async () => {
       {
         ok: true,
         domain: domainRecord.name || domain,
+        dnsZone,
         domainId: domainRecord.id,
         status: domainRecord.status,
         region: domainRecord.region || region,
