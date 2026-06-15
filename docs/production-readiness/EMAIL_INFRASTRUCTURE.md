@@ -99,8 +99,8 @@ Dynamic variables use `{{variable_name}}` syntax. Values are HTML-escaped for em
 
 Before final launch, verify:
 
-- Resend has `mtendereeducationconsult.com` added under Domains.
-- The Resend DNS records returned for `mtendereeducationconsult.com` are present in Cloudflare.
+- Resend has `notifications.mtendereeducationconsult.com` added under Domains for transactional email.
+- The Resend DNS records returned for `notifications.mtendereeducationconsult.com` are present in Cloudflare.
 - SPF includes the selected email provider.
 - DKIM keys are active.
 - DMARC has at least monitoring policy, then enforcement after deliverability is stable.
@@ -109,7 +109,8 @@ Before final launch, verify:
 - For Postmark, root-domain SPF is optional because SPF alignment is handled through Postmark's Return-Path; DKIM verification for the Mtendere sender domain is still required before relying on `no-reply@mtendereeducationconsult.com`.
 - Sending subdomains are segmented for `notifications`, `support`, `admissions`, `billing`, and `marketing`.
 - Reverse DNS is verified in the active provider dashboard when dedicated IPs are enabled.
-- `EMAIL_FROM` must use a verified Mtendere sender domain in production, for example `Mtendere Education Consult <no-reply@mail.mtendereeducationconsult.com>`.
+- `EMAIL_FROM` must use a verified Mtendere sender domain in production, for example `Mtendere Education Consult <no-reply@notifications.mtendereeducationconsult.com>`.
+- `mail.mtendereeducationconsult.com` is reserved for the existing SendGrid CNAME and must not be reused as the Resend sending domain unless the SendGrid DNS plan is intentionally migrated.
 - `onboarding@resend.dev` is only acceptable for local or one-off smoke tests to the Resend account owner. Health/readiness treats it as public-recipient restricted when Resend is active.
 - `ADMIN_NOTIFICATION_EMAIL` is set to the operations inbox.
 - `ADMIN_NOTIFICATION_PHONE` is set when SMS/WhatsApp provider integration is added.
@@ -126,6 +127,8 @@ Use this helper with a full-access Resend API key:
 ```powershell
 npm run resend:domain:configure
 ```
+
+The helper defaults to `notifications.mtendereeducationconsult.com`. Override with `--domain=<domain>` only when the target sender domain is intentionally different.
 
 To also apply the returned DNS records to Cloudflare and trigger Resend verification:
 

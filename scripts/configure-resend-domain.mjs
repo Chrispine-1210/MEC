@@ -10,7 +10,7 @@ const args = new Map(
 const hasFlag = (name) => args.has(name) || process.env[name.replace(/^--/, "").replaceAll("-", "_").toUpperCase()] === "true";
 const getOption = (name, envName, fallback) => args.get(name) || process.env[envName] || fallback;
 
-const domain = getOption("--domain", "RESEND_DOMAIN", "mtendereeducationconsult.com");
+const domain = getOption("--domain", "RESEND_DOMAIN", "notifications.mtendereeducationconsult.com");
 const region = getOption("--region", "RESEND_REGION", "us-east-1");
 const applyCloudflare = hasFlag("--apply-cloudflare");
 const verifyAfterDns = hasFlag("--verify");

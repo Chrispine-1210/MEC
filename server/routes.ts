@@ -4156,6 +4156,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       dnsReady: null,
       checkedAt: new Date().toISOString(),
       diagnostics: emailDiagnostics,
+      resendDomain: undefined,
       blockingReasons: [
         {
           code: "email_activation_check_failed",
@@ -4179,6 +4180,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         liveProviderDeliveryAllowed: emailDiagnostics.liveProviderDeliveryAllowed,
         configuredDryRunEnabled: emailDiagnostics.configuredDryRunEnabled,
         activationRequiresDnsReady: emailDiagnostics.activationRequiresDnsReady,
+        sender: emailDiagnostics.sender,
         fromConfigured: emailDiagnostics.fromConfigured,
         linkBaseUrlConfigured: emailDiagnostics.linkBaseUrlConfigured,
         sendGridTrackingEnabled: emailDiagnostics.sendGridTrackingEnabled,
@@ -4189,6 +4191,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           providerReady: emailActivation.providerReady,
           dnsReady: emailActivation.dnsReady,
           checkedAt: emailActivation.checkedAt,
+          resendDomain: emailActivation.resendDomain,
           blockingReasons: emailActivation.blockingReasons,
         },
       },

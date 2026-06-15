@@ -1,6 +1,6 @@
 param(
   [string[]]$Environments = @("production", "preview", "development"),
-  [string]$EmailFrom = "Mtendere Education Consult <onboarding@resend.dev>",
+  [string]$EmailFrom = "Mtendere Education Consult <no-reply@notifications.mtendereeducationconsult.com>",
   [string]$ProviderOrder = "resend,sendgrid,smtp,postmark,ses,custom",
   [switch]$SkipResendSecret,
   [switch]$SkipSendGridSecret
@@ -139,6 +139,7 @@ if (-not $sendGridApiKey -and -not $resendApiKey -and -not $SkipSendGridSecret) 
 }
 
 $values = [ordered]@{
+  RESEND_DOMAIN = if ($env:RESEND_DOMAIN) { $env:RESEND_DOMAIN } else { 'notifications.mtendereeducationconsult.com' }
   EMAIL_FROM = $EmailFrom
   EMAIL_PROVIDER_ORDER = $ProviderOrder
   EMAIL_DRY_RUN = 'false'

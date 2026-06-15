@@ -87,6 +87,7 @@ const envSchema = z.object({
   COMMUNICATION_DOCUMENT_LINK_TTL_DAYS: z.coerce.number().int().positive().default(30),
   SENDGRID_TRACKING_ENABLED: optionalEnvBoolean,
   RESEND_API_KEY: optionalEnvString,
+  RESEND_DOMAIN: optionalEnvString,
   SENDGRID_API_KEY: optionalEnvString,
   SMTP_HOST: optionalEnvString,
   SMTP_USER: optionalEnvString,

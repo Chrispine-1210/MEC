@@ -279,8 +279,21 @@ type TransactionalEmailActivationReadiness = {
   dnsReady: boolean | null;
   checkedAt: string;
   diagnostics: ReturnType<typeof getEmailDeliveryDiagnostics>;
+  resendDomain?: ResendSenderDomainReadiness;
   deliverability?: Awaited<ReturnType<typeof getEmailDeliverabilityDiagnostics>>;
   blockingReasons: Array<{ code: string; message: string }>;
+};
+
+type ResendSenderDomainReadiness = {
+  required: boolean;
+  checkedAt: string;
+  ready: boolean | null;
+  senderDomain: string | null;
+  expectedDomain: string | null;
+  matchedDomain: string | null;
+  status: string | null;
+  error: string | null;
+  message: string;
 };
 
 const emailPreferenceCategories = [
@@ -515,6 +528,10 @@ const parseAddress = (value: string) => {
   };
 };
 
+const recommendedResendFromAddress =
+  "Mtendere Education Consult <no-reply@notifications.mtendereeducationconsult.com>";
+const defaultResendDomain = "notifications.mtendereeducationconsult.com";
+
 const getEmailDomain = (value: string) => {
   const email = parseAddress(value).email.toLowerCase();
   const [, domain] = email.split("@");
@@ -536,7 +553,7 @@ export const getEmailSenderDiagnosticsForAddress = (
     domain,
     resendTestSender,
     publicRecipientRestricted: Boolean(liveRuntime && resendTestSender),
-    recommendedFrom: "Mtendere Education Consult <no-reply@mail.mtendereeducationconsult.com>",
+    recommendedFrom: recommendedResendFromAddress,
   };
 };
 
@@ -557,6 +574,117 @@ const fetchWithTimeout = async (url: string, init: RequestInit, timeoutMs = 15_0
     throw error;
   } finally {
     clearTimeout(timeout);
+  }
+};
+
+const parseResendDomainsResponse = (payload: unknown) => {
+  if (Array.isArray(payload)) return payload as Array<Record<string, unknown>>;
+  if (payload && typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+    if (Array.isArray(record.data)) return record.data as Array<Record<string, unknown>>;
+    if (Array.isArray(record.domains)) return record.domains as Array<Record<string, unknown>>;
+  }
+  return [];
+};
+
+export const getResendSenderDomainReadiness = async (
+  options: {
+    senderAddress?: string;
+    activeProviders?: string[];
+    timeoutMs?: number;
+  } = {},
+): Promise<ResendSenderDomainReadiness> => {
+  const checkedAt = new Date().toISOString();
+  const activeProviders = options.activeProviders || getProviderOrder().map((provider) => provider.name);
+  const senderAddress = options.senderAddress || fromAddress;
+  const sender = getEmailSenderDiagnosticsForAddress(senderAddress, activeProviders);
+  const senderDomain = sender.domain;
+  const expectedDomain = (env.RESEND_DOMAIN || senderDomain || defaultResendDomain).toLowerCase();
+  const base = {
+    required: activeProviders.includes("resend"),
+    checkedAt,
+    senderDomain,
+    expectedDomain,
+    matchedDomain: null,
+    status: null,
+  };
+
+  if (!activeProviders.includes("resend")) {
+    return {
+      ...base,
+      ready: true,
+      error: null,
+      message: "Resend is not in the active provider order.",
+    };
+  }
+
+  if (!senderDomain) {
+    return {
+      ...base,
+      ready: false,
+      error: "missing_sender_domain",
+      message: "EMAIL_FROM does not contain a usable sender domain.",
+    };
+  }
+
+  if (sender.resendTestSender) {
+    return {
+      ...base,
+      ready: false,
+      error: "resend_test_sender_restricted",
+      message:
+        "EMAIL_FROM is using Resend's testing sender. Public recipients require a verified Mtendere sender domain.",
+    };
+  }
+
+  if (!isUsableSecret(env.RESEND_API_KEY)) {
+    return {
+      ...base,
+      ready: false,
+      error: "missing_resend_api_key",
+      message: "RESEND_API_KEY is not configured.",
+    };
+  }
+
+  try {
+    const response = await fetchWithTimeout(
+      "https://api.resend.com/domains",
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${env.RESEND_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      },
+      options.timeoutMs ?? 5_000,
+    );
+    if (!response.ok) throw new Error(await responseError(response));
+
+    const domains = parseResendDomainsResponse(await response.json().catch(() => ({})));
+    const matched = domains.find((domain) => String(domain.name || "").toLowerCase() === expectedDomain);
+    const status = matched ? String(matched.status || "").toLowerCase() : null;
+    const ready = status === "verified";
+
+    return {
+      ...base,
+      ready,
+      matchedDomain: matched ? String(matched.name || expectedDomain) : null,
+      status,
+      error: ready ? null : matched ? "resend_domain_not_verified" : "resend_domain_missing",
+      message: ready
+        ? `Resend sender domain ${expectedDomain} is verified.`
+        : matched
+          ? `Resend sender domain ${expectedDomain} exists but is ${status || "not verified"}.`
+          : `Resend sender domain ${expectedDomain} was not found in the Resend account.`,
+    };
+  } catch (error) {
+    return {
+      ...base,
+      ready: null,
+      error: error instanceof Error ? error.message : "resend_domain_check_failed",
+      message:
+        "Resend domain verification could not be checked with the configured API key. Confirm the sender domain in the Resend dashboard.",
+    };
   }
 };
 
@@ -1207,8 +1335,9 @@ export const getEmailDeliverabilityDiagnostics = async (options: { timeoutMs?: n
       message: "Reverse DNS is controlled by the sending provider or dedicated IP. Verify it in SendGrid, SES, Mailgun, or SMTP provider dashboards when dedicated IPs are enabled.",
     },
     recommendedVercelEnv: {
-      EMAIL_FROM: "Mtendere Education Consult <no-reply@mail.mtendereeducationconsult.com>",
-      EMAIL_PROVIDER_ORDER: "sendgrid,ses,mailgun,resend,postmark,smtp,custom",
+      RESEND_DOMAIN: defaultResendDomain,
+      EMAIL_FROM: recommendedResendFromAddress,
+      EMAIL_PROVIDER_ORDER: "resend,sendgrid,smtp,postmark,ses,custom",
       EMAIL_DRY_RUN: "false",
       SENDGRID_TRACKING_ENABLED: "true",
       EMAIL_LINK_BASE_URL: "https://links.mtendereeducationconsult.com",
@@ -1235,6 +1364,7 @@ export const getTransactionalEmailActivationReadiness = async (
   const providerReady = isTransactionalEmailDeliveryReady();
   const blockingReasons: TransactionalEmailActivationReadiness["blockingReasons"] = [];
   let deliverability: Awaited<ReturnType<typeof getEmailDeliverabilityDiagnostics>> | undefined;
+  let resendDomain: ResendSenderDomainReadiness | undefined;
   let dnsReady: boolean | null = null;
 
   const hasLiveProvider = diagnostics.activeProviders.some((provider) => provider !== "dry_run");
@@ -1251,6 +1381,20 @@ export const getTransactionalEmailActivationReadiness = async (
       message:
         "EMAIL_FROM is using a Resend testing sender. Resend can reject non-owner recipients until a verified Mtendere sender domain is configured.",
     });
+  }
+
+  if (diagnostics.activeProviders.includes("resend")) {
+    resendDomain = await getResendSenderDomainReadiness({
+      activeProviders: diagnostics.activeProviders,
+      timeoutMs: options.timeoutMs ?? 1_500,
+    });
+
+    if (!diagnostics.sender.publicRecipientRestricted && resendDomain.ready === false) {
+      blockingReasons.push({
+        code: resendDomain.error || "resend_domain_not_ready",
+        message: resendDomain.message,
+      });
+    }
   }
 
   if (activationRequiresDnsReady) {
@@ -1270,6 +1414,7 @@ export const getTransactionalEmailActivationReadiness = async (
     dnsReady,
     checkedAt: new Date().toISOString(),
     diagnostics,
+    resendDomain,
     deliverability,
     blockingReasons,
   };

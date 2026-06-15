@@ -122,7 +122,37 @@ test("Resend testing sender is not production-ready for public recipients", asyn
 
   assert.equal(diagnostics.resendTestSender, true);
   assert.equal(diagnostics.publicRecipientRestricted, true);
-  assert.equal(diagnostics.recommendedFrom, "Mtendere Education Consult <no-reply@mail.mtendereeducationconsult.com>");
+  assert.equal(
+    diagnostics.recommendedFrom,
+    "Mtendere Education Consult <no-reply@notifications.mtendereeducationconsult.com>",
+  );
+});
+
+test("Resend sender domain readiness requires a verified Resend domain", { concurrency: false }, async () => {
+  const { getResendSenderDomainReadiness } = await emailModulePromise;
+
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        data: [
+          {
+            name: "notifications.mtendereeducationconsult.com",
+            status: "pending",
+          },
+        ],
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    )) as typeof fetch;
+
+  const readiness = await getResendSenderDomainReadiness({
+    senderAddress: "Mtendere Education Consult <no-reply@notifications.mtendereeducationconsult.com>",
+    activeProviders: ["resend"],
+  });
+
+  assert.equal(readiness.required, true);
+  assert.equal(readiness.expectedDomain, "notifications.mtendereeducationconsult.com");
+  assert.equal(readiness.ready, false);
+  assert.equal(readiness.error, "resend_domain_not_verified");
 });
 
 const installQueueStorage = async (initialJob: any) => {

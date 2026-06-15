@@ -84,13 +84,13 @@ Diagnostics report route/template consistency, missing route templates, undeclar
 Production Vercel must contain real server-side values. These values must not be committed:
 
 - `RESEND_API_KEY`
-- `RESEND_DOMAIN=mtendereeducationconsult.com`
-- `EMAIL_PROVIDER_ORDER=sendgrid,ses,mailgun,resend,postmark,smtp,custom`
+- `RESEND_DOMAIN=notifications.mtendereeducationconsult.com`
+- `EMAIL_PROVIDER_ORDER=resend,sendgrid,smtp,postmark,ses,custom`
 - `EMAIL_PROVIDER_CIRCUIT_FAILURE_THRESHOLD=3`
 - `EMAIL_PROVIDER_CIRCUIT_COOLDOWN_MS=120000`
 - `EMAIL_DRY_RUN=false`
 - `EMAIL_WEBHOOK_DEDUP_TTL_MS=86400000`
-- `EMAIL_FROM=Mtendere Education Consult <no-reply@mail.mtendereeducationconsult.com>` after the sender domain is verified. `Mtendere Education Consult <onboarding@resend.dev>` is only acceptable for one-off Resend smoke tests to the Resend account owner.
+- `EMAIL_FROM=Mtendere Education Consult <no-reply@notifications.mtendereeducationconsult.com>` after the sender domain is verified. `Mtendere Education Consult <onboarding@resend.dev>` is only acceptable for one-off Resend smoke tests to the Resend account owner.
 - `SENDGRID_TRACKING_ENABLED=true`
 - `EMAIL_LINK_BASE_URL=https://links.mtendereeducationconsult.com`
 - `PUBLIC_APP_URL=https://mtendereeducationconsult.com`
@@ -120,7 +120,7 @@ The deliverability endpoint checks the following records:
 - `default._bimi.mtendereeducationconsult.com` TXT `v=BIMI1; ...` as an optional warning check
 - SPF and DMARC records for `notifications`, `support`, `admissions`, `billing`, and `marketing` sending subdomains
 
-The last known local DNS audit showed `mail.mtendereeducationconsult.com` pointing to the wrong target. Fixing that record requires a Cloudflare token with DNS edit permission.
+The current Resend plan must not reuse `mail.mtendereeducationconsult.com`, because that host is reserved for SendGrid sender authentication. Use `notifications.mtendereeducationconsult.com` for Resend transactional sending unless the SendGrid DNS plan is intentionally migrated.
 
 ## Reliability Controls
 
@@ -156,8 +156,8 @@ Alert codes include:
 ## Remaining Operational Work
 
 - Add the Resend API key to Vercel production, preview, and development environments. Use SendGrid or SMTP only as fallback providers.
-- Configure `mtendereeducationconsult.com` in Resend, add the returned DNS records to Cloudflare, and run Resend verification.
-- Correct the Cloudflare `mail` CNAME target.
+- Configure `notifications.mtendereeducationconsult.com` in Resend, add the returned DNS records to Cloudflare, and run Resend verification.
+- Keep the Cloudflare `mail` CNAME dedicated to SendGrid unless SendGrid is intentionally removed from the provider plan.
 - Configure SendGrid Event Webhook to post delivery events into `/api/email/webhooks/sendgrid` if that route is enabled in the deployment.
 - For Postmark, add and verify the Mtendere sender/domain in Postmark so DKIM passes for `mtendereeducationconsult.com`; a root `include:spf.mtasv.net` TXT is optional under Postmark's Return-Path SPF model.
 - Move DMARC from `p=none` to `p=quarantine`, then `p=reject` after bounce and complaint rates are stable.
