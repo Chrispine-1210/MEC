@@ -9,6 +9,7 @@ Date: 2026-06-10
 - Provider delivery supports SendGrid, Amazon SES, Mailgun, Resend, Postmark, SMTP, and a custom HTTP fallback through `EMAIL_API_URL` and `EMAIL_API_KEY`.
 - On Vercel, do not rely on fire-and-forget background work after an HTTP response returns. User-facing transactional routes request inline delivery for the exact queued job they create, then leave retries/backlog to the durable queue drain.
 - `/api/email/queue/drain` accepts either Vercel Cron requests or a valid `CRON_SECRET` bearer token for manual operations.
+- Admin email operations expose stats, diagnostics, deliverability checks, templates, and production readiness through `/api/admin/email/stats`, `/api/admin/email/diagnostics`, `/api/admin/email/deliverability`, `/api/admin/email/templates`, and `/api/admin/email/readiness`.
 - Multi-event communications use `server/communication.ts`: `Event Bus -> Notification Router -> Template Engine -> Delivery Providers`.
 - Event and message audit records are persisted in `communication_events` and `communication_messages`, with JSONL runtime fallback at `data/communication-events.jsonl` and `data/communication-messages.jsonl`.
 - SMS and WhatsApp delivery use `server/notifications.ts` provider adapters. Twilio, WhatsApp Cloud API, and generic HTTP webhooks are supported when configured.
@@ -84,6 +85,9 @@ Dynamic variables use `{{variable_name}}` syntax. Values are HTML-escaped for em
 - Every emitted event writes a `communication_events` row with original payload and status.
 - Failed or unsupported SMS/WhatsApp provider paths are recorded explicitly instead of failing silently.
 - Admin notification feed formats communication and in-app notification analytics into readable operational alerts.
+- Provider circuit breakers stop repeatedly failing providers from being hammered during outages while preserving failover to the next configured provider.
+- Bounce, complaint, unsubscribe, and provider suppression webhooks update email preferences automatically so future sends honor suppression state.
+- Provider webhook ingestion normalizes SendGrid, Amazon SES/SNS, Mailgun, Resend, and Postmark payloads and deduplicates repeated deliveries for `EMAIL_WEBHOOK_DEDUP_TTL_MS`.
 - Communication diagnostics expose route/template consistency, undeclared variables, orphan templates, provider readiness, and document-link TTL.
 - Communication analytics expose message totals by channel, status, template, event type, and recent problem deliveries.
 - Communication timelines expose per-student/per-email history across emails, generated documents, in-app alerts, SMS/WhatsApp attempts, and source events.
@@ -98,6 +102,8 @@ Before final launch, verify:
 - DKIM keys are active.
 - DMARC has at least monitoring policy, then enforcement after deliverability is stable.
 - BIMI is present on `default._bimi.mtendereeducationconsult.com` when brand-authenticated display is required.
+- Authentication diagnostics report SPF provider include coverage, DMARC policy/alignment/report URIs, DKIM selector status, and BIMI status.
+- For Postmark, root-domain SPF is optional because SPF alignment is handled through Postmark's Return-Path; DKIM verification for the Mtendere sender domain is still required before relying on `no-reply@mtendereeducationconsult.com`.
 - Sending subdomains are segmented for `notifications`, `support`, `admissions`, `billing`, and `marketing`.
 - Reverse DNS is verified in the active provider dashboard when dedicated IPs are enabled.
 - `EMAIL_FROM` uses `Mtendere Education Consult <onboarding@resend.dev>` only for initial Resend testing, then switches to a verified Mtendere sender domain.
@@ -108,6 +114,8 @@ Before final launch, verify:
 - For WhatsApp Cloud API: `WHATSAPP_CLOUD_ACCESS_TOKEN` and `WHATSAPP_CLOUD_PHONE_NUMBER_ID`.
 - For generic SMS/WhatsApp webhooks: `SMS_API_URL`, `SMS_API_KEY`, `SMS_API_FROM`, `WHATSAPP_API_URL`, `WHATSAPP_API_KEY`, and `WHATSAPP_API_FROM`.
 - For Mailgun failover: `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, and optional `MAILGUN_BASE_URL`.
+- Provider circuit breaker tuning: `EMAIL_PROVIDER_CIRCUIT_FAILURE_THRESHOLD` and `EMAIL_PROVIDER_CIRCUIT_COOLDOWN_MS`.
+- Webhook deduplication tuning: `EMAIL_WEBHOOK_DEDUP_TTL_MS`.
 
 Use this helper with a full-access Resend API key:
 

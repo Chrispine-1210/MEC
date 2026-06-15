@@ -26,6 +26,8 @@ process.env.SMTP_USER = "";
 process.env.SMTP_PASSWORD = "";
 process.env.SMTP_PORT = "";
 process.env.EMAIL_PROVIDER_INLINE_RETRIES = "1";
+process.env.EMAIL_PROVIDER_CIRCUIT_FAILURE_THRESHOLD = "2";
+process.env.EMAIL_PROVIDER_CIRCUIT_COOLDOWN_MS = "60000";
 process.env.EMAIL_DRY_RUN = "false";
 delete process.env.EMAIL_ALLOW_LIVE_TEST_SENDS;
 process.env.EMAIL_QUEUE_WORKER_ENABLED = "false";
@@ -54,11 +56,13 @@ const patchStorage = async (patches: StoragePatch) => {
   }
 };
 
-afterEach(() => {
+afterEach(async () => {
   while (restoreCallbacks.length) {
     restoreCallbacks.pop()?.();
   }
   globalThis.fetch = originalFetch;
+  const { resetEmailProviderCircuitBreakers } = await emailModulePromise;
+  resetEmailProviderCircuitBreakers();
 });
 
 const makeEmailJob = (overrides: Record<string, unknown> = {}) => {
@@ -275,6 +279,238 @@ test("email queue skips jobs that cannot be claimed for processing", { concurren
     deliveryEvents.map((event) => event.eventType),
     ["processing_skipped"],
   );
+});
+
+test("email provider circuit breaker skips a repeatedly failing provider and keeps failover available", { concurrency: false }, async () => {
+  const { processEmailQueue } = await emailModulePromise;
+  const now = new Date();
+  const jobs = [
+    makeEmailJob({ id: "circuit-job-1", scheduledFor: new Date(now.getTime() - 1000) }),
+    makeEmailJob({ id: "circuit-job-2", scheduledFor: new Date(now.getTime() - 1000) }),
+    makeEmailJob({ id: "circuit-job-3", scheduledFor: new Date(now.getTime() - 1000) }),
+  ];
+  const deliveryEvents: any[] = [];
+  const requestedProviders: string[] = [];
+
+  await patchStorage({
+    recoverStaleProcessingEmailJobs: async () => 0,
+    getDueEmailJobs: async () => jobs.filter((job) => ["queued", "retry_scheduled"].includes(job.status)),
+    markEmailJobProcessing: async (id: string) => {
+      const job = jobs.find((candidate) => candidate.id === id);
+      if (!job || !["queued", "retry_scheduled"].includes(job.status)) return undefined;
+      Object.assign(job, {
+        attempts: job.attempts + 1,
+        status: "processing",
+        processingAt: new Date(),
+        updatedAt: new Date(),
+      });
+      return job;
+    },
+    markEmailJobSent: async (id: string, provider: string, providerMessageId?: string | null) => {
+      const job = jobs.find((candidate) => candidate.id === id);
+      if (!job) throw new Error("Email job not found");
+      Object.assign(job, {
+        status: "sent",
+        provider,
+        providerMessageId: providerMessageId ?? null,
+        sentAt: new Date(),
+        updatedAt: new Date(),
+      });
+      return job;
+    },
+    markEmailJobFailed: async (id: string, error: string, scheduledFor?: Date | null, finalFailure?: boolean) => {
+      const job = jobs.find((candidate) => candidate.id === id);
+      if (!job) throw new Error("Email job not found");
+      Object.assign(job, {
+        status: finalFailure ? "failed" : "retry_scheduled",
+        lastError: error,
+        scheduledFor: scheduledFor ?? new Date(),
+        failedAt: finalFailure ? new Date() : null,
+        updatedAt: new Date(),
+      });
+      return job;
+    },
+    createEmailDeliveryEvent: async (event: any) => {
+      deliveryEvents.push(event);
+    },
+    getEmailJob: async (id: string) => jobs.find((job) => job.id === id),
+    getEmailJobByProviderMessageId: async () => undefined,
+  });
+
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("api.resend.com")) {
+      requestedProviders.push("resend");
+      return new Response("Resend unavailable", { status: 503, statusText: "Service Unavailable" });
+    }
+
+    if (url.includes("api.sendgrid.com")) {
+      requestedProviders.push("sendgrid");
+      return new Response(null, {
+        status: 202,
+        headers: { "x-message-id": `sendgrid-${requestedProviders.length}` },
+      });
+    }
+
+    throw new Error(`Unexpected provider URL ${url}`);
+  }) as typeof fetch;
+
+  const result = await processEmailQueue();
+
+  assert.equal(result.processed, 3);
+  assert.deepEqual(requestedProviders, ["resend", "sendgrid", "resend", "sendgrid", "sendgrid"]);
+  assert.equal(jobs.every((job) => job.status === "sent" && job.provider === "sendgrid"), true);
+  assert.equal(deliveryEvents.some((event) => event.eventType === "provider_circuit_opened" && event.provider === "resend"), true);
+  assert.equal(deliveryEvents.some((event) => event.eventType === "provider_circuit_open_skipped" && event.provider === "resend"), true);
+});
+
+test("provider bounce webhooks apply recipient suppression before future sends", { concurrency: false }, async () => {
+  const { enqueueEmail, recordProviderWebhookEvent } = await emailModulePromise;
+  const preferences = new Map<string, any>();
+  const emailJobs: any[] = [];
+  const deliveryEvents: any[] = [];
+
+  await patchStorage({
+    getEmailJob: async () => undefined,
+    getEmailJobByProviderMessageId: async () => undefined,
+    getEmailPreferenceByEmail: async (email: string) => preferences.get(email.toLowerCase()),
+    getSubscriberByEmail: async () => undefined,
+    upsertEmailPreference: async (preference: any) => {
+      const existing = preferences.get(preference.email.toLowerCase());
+      const saved = {
+        id: existing?.id ?? preferences.size + 1,
+        createdAt: existing?.createdAt ?? new Date(),
+        updatedAt: new Date(),
+        ...preference,
+      };
+      preferences.set(saved.email.toLowerCase(), saved);
+      return saved;
+    },
+    updateEmailPreference: async (id: number, updatePreference: any) => {
+      const existing = Array.from(preferences.values()).find((preference) => preference.id === id);
+      if (!existing) throw new Error("Email preference not found");
+      const updated = { ...existing, ...updatePreference, updatedAt: new Date() };
+      preferences.set(updated.email.toLowerCase(), updated);
+      return updated;
+    },
+    createEmailJob: async (job: any) => {
+      emailJobs.push(job);
+      return { createdAt: new Date(), updatedAt: new Date(), ...job };
+    },
+    createEmailDeliveryEvent: async (event: any) => {
+      deliveryEvents.push(event);
+    },
+  });
+
+  await recordProviderWebhookEvent("sendgrid", {
+    event: "bounce",
+    email: "Suppressed.Student@Example.Test",
+    sg_message_id: "provider-message-1",
+  });
+  await recordProviderWebhookEvent("sendgrid", {
+    event: "bounce",
+    email: "Suppressed.Student@Example.Test",
+    sg_message_id: "provider-message-1",
+  });
+
+  const preference = preferences.get("suppressed.student@example.test");
+  assert.ok(preference);
+  assert.equal(preference.consentStatus, "bounced");
+  assert.ok(preference.unsubscribedAt instanceof Date);
+  assert.equal(Object.values(preference.categories).every((enabled) => enabled === false), true);
+  assert.equal(deliveryEvents.filter((event) => event.eventType === "suppression_applied").length, 1);
+  assert.equal(deliveryEvents.some((event) => event.eventType === "provider_webhook_duplicate_ignored"), true);
+
+  const result = await enqueueEmail({
+    to: "suppressed.student@example.test",
+    subject: "Mtendere newsletter",
+    html: "<!doctype html><html><body>News</body></html>",
+    text: "News",
+    category: "newsletter",
+  });
+
+  assert.equal(result.status, "suppressed");
+  assert.equal(emailJobs.length, 0);
+});
+
+test("provider webhooks normalize SES, Mailgun, Resend, and Postmark payloads", { concurrency: false }, async () => {
+  const { recordProviderWebhookEvent } = await emailModulePromise;
+  const deliveryEvents: any[] = [];
+  const jobs = new Map<string, any>([
+    ["ses-job", makeEmailJob({ id: "ses-job", providerMessageId: "ses-message-id", recipient: "ses@example.test" })],
+    ["mailgun-job", makeEmailJob({ id: "mailgun-job", providerMessageId: "mailgun-message-id", recipient: "mailgun@example.test" })],
+    ["resend-job", makeEmailJob({ id: "resend-job", providerMessageId: "resend-message-id", recipient: "resend@example.test" })],
+    ["postmark-job", makeEmailJob({ id: "postmark-job", providerMessageId: "postmark-message-id", recipient: "postmark@example.test" })],
+  ]);
+  const jobsByProviderMessageId = new Map(
+    Array.from(jobs.values()).map((job) => [job.providerMessageId, job]),
+  );
+
+  await patchStorage({
+    getEmailJob: async (id: string) => jobs.get(id),
+    getEmailJobByProviderMessageId: async (providerMessageId: string) =>
+      jobsByProviderMessageId.get(providerMessageId),
+    createEmailDeliveryEvent: async (event: any) => {
+      deliveryEvents.push(event);
+    },
+  });
+
+  await recordProviderWebhookEvent("ses", {
+    Type: "Notification",
+    MessageId: "sns-message-1",
+    Message: JSON.stringify({
+      eventType: "Delivery",
+      mail: {
+        messageId: "ses-message-id",
+        destination: ["ses@example.test"],
+        tags: {
+          mec_email_job_id: ["ses-job"],
+          mec_email_category: ["account_verification"],
+        },
+      },
+      delivery: {
+        recipients: ["ses@example.test"],
+      },
+    }),
+  });
+  await recordProviderWebhookEvent("mailgun", {
+    "event-data": {
+      event: "delivered",
+      recipient: "mailgun@example.test",
+      "user-variables": {
+        mec_email_job_id: "mailgun-job",
+        mec_email_category: "newsletter",
+      },
+      message: {
+        headers: {
+          "message-id": "mailgun-message-id",
+        },
+      },
+    },
+  });
+  await recordProviderWebhookEvent("resend", {
+    type: "email.delivered",
+    data: {
+      email_id: "resend-message-id",
+      to: ["resend@example.test"],
+    },
+  });
+  await recordProviderWebhookEvent("postmark", {
+    RecordType: "Delivery",
+    MessageID: "postmark-message-id",
+    Recipient: "postmark@example.test",
+    Metadata: {
+      mec_email_job_id: "postmark-job",
+    },
+  });
+
+  const sentByProvider = new Map(deliveryEvents.map((event) => [event.provider, event]));
+  assert.equal(sentByProvider.get("ses")?.eventType, "delivered");
+  assert.equal(sentByProvider.get("ses")?.jobId, "ses-job");
+  assert.equal(sentByProvider.get("mailgun")?.recipient, "mailgun@example.test");
+  assert.equal(sentByProvider.get("mailgun")?.providerMessageId, "mailgun-message-id");
+  assert.equal(sentByProvider.get("resend")?.jobId, "resend-job");
+  assert.equal(sentByProvider.get("postmark")?.recipient, "postmark@example.test");
 });
 
 const passwordFingerprint = (passwordHash: string) =>

@@ -31,27 +31,27 @@ async function seed() {
   const [existingSuperAdmin] = await db.select().from(users).where(eq(users.role, "super_admin")).limit(1);
   let adminId = existingAdmin?.id || existingSuperAdmin?.id;
 
-  if (superAdminPassword) {
-    validateSeedSuperAdminPassword(superAdminPassword);
-    const hashedPassword = await bcrypt.hash(superAdminPassword, PASSWORD_HASH_ROUNDS);
-
-    if (existingAdmin) {
+  if (existingAdmin) {
+    if (existingAdmin.role !== "super_admin" || existingAdmin.isActive === false) {
       await db
         .update(users)
-        .set({ password: hashedPassword, role: "super_admin", isActive: true, updatedAt: new Date() })
+        .set({ role: "super_admin", isActive: true, updatedAt: new Date() })
         .where(eq(users.id, existingAdmin.id));
-      adminId = existingAdmin.id;
-    } else {
-      const [adminUser] = await db.insert(users).values({
-        username: "admin",
-        email: process.env.SEED_SUPER_ADMIN_EMAIL || "admin@mtendere.com",
-        password: hashedPassword,
-        firstName: "Admin",
-        lastName: "User",
-        role: "super_admin",
-      }).onConflictDoNothing().returning();
-      adminId = adminUser?.id || adminId;
     }
+    adminId = existingAdmin.id;
+  } else if (superAdminPassword) {
+    validateSeedSuperAdminPassword(superAdminPassword);
+    const hashedPassword = await bcrypt.hash(superAdminPassword, PASSWORD_HASH_ROUNDS);
+    const [adminUser] = await db.insert(users).values({
+      username: "admin",
+      email: process.env.SEED_SUPER_ADMIN_EMAIL || "admin@mtendere.com",
+      password: hashedPassword,
+      firstName: "Admin",
+      lastName: "User",
+      role: "super_admin",
+      isActive: true,
+    }).onConflictDoNothing().returning();
+    adminId = adminUser?.id || adminId;
   }
 
   if (!adminId) {

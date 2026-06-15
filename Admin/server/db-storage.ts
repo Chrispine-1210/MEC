@@ -82,6 +82,7 @@ export class DatabaseStorage implements IStorage {
     const now = new Date();
     m.set("viewer", { id: "viewer", name: "Viewer", description: "Read-only access to public content", permissions: ["view_dashboard"], createdAt: now, updatedAt: now });
     m.set("writer", { id: "writer", name: "Writer", description: "Can create and edit content", permissions: ["view_dashboard", "manage_scholarships", "manage_jobs", "manage_blog", "manage_partners", "manage_team"], createdAt: now, updatedAt: now });
+    m.set("admin", { id: "admin", name: "Administrator", description: "Operational administration access", permissions: ["view_dashboard", "manage_scholarships", "manage_jobs", "manage_blog", "manage_partners", "manage_team", "review_applications", "view_analytics"], createdAt: now, updatedAt: now });
     m.set("super_admin", { id: "super_admin", name: "Super Administrator", description: "Complete system access including settings", permissions: ["view_dashboard", "manage_scholarships", "manage_jobs", "manage_partners", "manage_blog", "manage_team", "manage_users", "review_applications", "manage_roles", "view_analytics", "manage_settings"], createdAt: now, updatedAt: now });
     return m;
   })();

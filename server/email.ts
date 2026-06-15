@@ -7,7 +7,7 @@ import nodemailer from "nodemailer";
 import { env } from "./env";
 import { resolveWritableRuntimePath } from "./runtime-paths";
 import { storage } from "./storage";
-import type { EmailJob } from "@shared/schema";
+import type { EmailJob, EmailPreference } from "@shared/schema";
 
 export type EmailCategory =
   | "account_verification"
@@ -79,6 +79,23 @@ type Provider = {
   send: (message: DeliverableEmail) => Promise<ProviderResult>;
 };
 
+type ProviderCircuitState = {
+  failures: number;
+  openedAt: number | null;
+  openUntil: number | null;
+  lastFailureAt: number | null;
+  lastError: string | null;
+};
+
+type NormalizedProviderWebhookEvent = {
+  providerMessageId: string | null;
+  jobId: string | null;
+  rawType: string;
+  recipient: string;
+  category: string;
+  metadata: Record<string, unknown>;
+};
+
 type DeliverableEmail = {
   id: string;
   from: string;
@@ -125,6 +142,9 @@ const retryDelaysMs = [0, 60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000];
 const defaultMaxAttempts = retryDelaysMs.length;
 const inlineProviderAttempts = env.EMAIL_PROVIDER_INLINE_RETRIES;
 const providerRateLimitRetryDelayMs = 1_250;
+const providerCircuitFailureThreshold = env.EMAIL_PROVIDER_CIRCUIT_FAILURE_THRESHOLD;
+const providerCircuitCooldownMs = env.EMAIL_PROVIDER_CIRCUIT_COOLDOWN_MS;
+const providerWebhookDedupTtlMs = env.EMAIL_WEBHOOK_DEDUP_TTL_MS;
 const queuePollMs = env.EMAIL_QUEUE_WORKER_INTERVAL_MS;
 const isVercelProductionRuntime = process.env.VERCEL === "1" && process.env.VERCEL_ENV === "production";
 const isLiveDeliveryRuntime = env.NODE_ENV === "production" || isVercelProductionRuntime;
@@ -142,12 +162,93 @@ let queueLastRunError: string | null = null;
 let activationReadinessCache:
   | { checkedAt: number; value: TransactionalEmailActivationReadiness }
   | null = null;
+const providerCircuitBreakers = new Map<string, ProviderCircuitState>();
+const processedProviderWebhookEvents = new Map<string, number>();
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const isProviderRateLimitError = (message: string) =>
   /\b429\b|rate[_ -]?limit|too many requests/i.test(message);
 const getInlineProviderRetryDelayMs = (message: string) =>
   isProviderRateLimitError(message) ? providerRateLimitRetryDelayMs : 0;
+const isPermanentProviderError = (message: string) =>
+  !isProviderRateLimitError(message) &&
+  /\b(400|401|403)\b|validation_error|unauthorized|forbidden|invalid sender|sender identity|verify (a )?domain|only send testing emails/i.test(
+    message,
+  );
+
+const emptyProviderCircuitState = (): ProviderCircuitState => ({
+  failures: 0,
+  openedAt: null,
+  openUntil: null,
+  lastFailureAt: null,
+  lastError: null,
+});
+
+const getProviderCircuitState = (providerName: string) =>
+  providerCircuitBreakers.get(providerName) || emptyProviderCircuitState();
+
+const getProviderCircuitOpenStatus = (providerName: string, now = Date.now()) => {
+  const state = getProviderCircuitState(providerName);
+  if (state.openUntil && state.openUntil > now) {
+    return {
+      open: true,
+      state,
+      remainingMs: state.openUntil - now,
+    };
+  }
+
+  if (state.openUntil && state.openUntil <= now) {
+    const halfOpenState = {
+      ...state,
+      openedAt: null,
+      openUntil: null,
+    };
+    providerCircuitBreakers.set(providerName, halfOpenState);
+    return {
+      open: false,
+      state: halfOpenState,
+      remainingMs: 0,
+    };
+  }
+
+  return {
+    open: false,
+    state,
+    remainingMs: 0,
+  };
+};
+
+const registerProviderCircuitFailure = (providerName: string, error: string, now = Date.now()) => {
+  const state = getProviderCircuitState(providerName);
+  const failures = state.failures + 1;
+  const opened = failures >= providerCircuitFailureThreshold;
+  const nextState = {
+    failures,
+    openedAt: opened ? state.openedAt || now : state.openedAt,
+    openUntil: opened ? now + providerCircuitCooldownMs : state.openUntil,
+    lastFailureAt: now,
+    lastError: error,
+  };
+  providerCircuitBreakers.set(providerName, nextState);
+  return {
+    opened,
+    state: nextState,
+    threshold: providerCircuitFailureThreshold,
+    cooldownMs: providerCircuitCooldownMs,
+  };
+};
+
+const registerProviderCircuitSuccess = (providerName: string) => {
+  const previous = getProviderCircuitState(providerName);
+  const wasDegraded = previous.failures > 0 || Boolean(previous.openUntil);
+  providerCircuitBreakers.set(providerName, emptyProviderCircuitState());
+  return { wasDegraded, previous };
+};
+
+export const resetEmailProviderCircuitBreakers = () => {
+  providerCircuitBreakers.clear();
+  processedProviderWebhookEvents.clear();
+};
 
 type EmailEnqueueOptions = {
   awaitDelivery?: boolean;
@@ -226,6 +327,11 @@ const categoryPreferenceMap: Partial<Record<EmailCategory, (typeof emailPreferen
   marketing: "marketing",
 };
 
+const globalSuppressionConsentStatuses = new Set(["bounced", "complained", "suppressed"]);
+
+const isGloballySuppressedPreference = (preference: Pick<EmailPreference, "consentStatus">) =>
+  globalSuppressionConsentStatuses.has(preference.consentStatus);
+
 export const emailTemplateCatalog = [
   { key: "auth.welcome", category: "Authentication", name: "Welcome Email" },
   { key: "auth.verify", category: "Authentication", name: "Email Verification" },
@@ -288,6 +394,34 @@ const safeCompare = (left: string, right: string) => {
 
 const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+
+const asStringArray = (value: unknown) => {
+  if (Array.isArray(value)) return value.map((item) => String(item)).filter(Boolean);
+  if (typeof value === "string" && value) return [value];
+  return [];
+};
+
+const firstString = (...values: unknown[]): string => {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+    if (Array.isArray(value)) {
+      const nested: string = firstString(...value);
+      if (nested) return nested;
+    }
+  }
+  return "";
+};
+
+const parseJsonRecord = (value: unknown) => {
+  if (typeof value !== "string") return null;
+  try {
+    const parsed = JSON.parse(value);
+    return asRecord(parsed);
+  } catch {
+    return null;
+  }
+};
 
 export const createEmailTokenHash = (token: string) => hmacHex(`email-token:${token}`);
 
@@ -361,9 +495,11 @@ const ensureEmailPreference = async (
 };
 
 const shouldSuppressForPreferences = async (payload: EmailPayload) => {
+  const preference = await ensureEmailPreference(payload.to, payload.category, payload.metadata);
+  if (isGloballySuppressedPreference(preference)) return true;
+
   if (!commercialCategories.has(payload.category)) return false;
 
-  const preference = await ensureEmailPreference(payload.to, payload.category, payload.metadata);
   const mappedPreference = categoryPreferenceMap[payload.category];
   if (!mappedPreference) return Boolean(preference.unsubscribedAt);
 
@@ -376,6 +512,31 @@ const parseAddress = (value: string) => {
   return {
     name: match[1].replace(/^"|"$/g, "").trim() || undefined,
     email: match[2].trim(),
+  };
+};
+
+const getEmailDomain = (value: string) => {
+  const email = parseAddress(value).email.toLowerCase();
+  const [, domain] = email.split("@");
+  return domain?.replace(/\.$/, "") || null;
+};
+
+export const getEmailSenderDiagnosticsForAddress = (
+  address: string,
+  activeProviders: string[],
+  liveRuntime = isLiveDeliveryRuntime,
+) => {
+  const domain = getEmailDomain(address);
+  const resendTestSender = Boolean(
+    domain && activeProviders.includes("resend") && /(^|\.)resend\.dev$/i.test(domain),
+  );
+
+  return {
+    configured: Boolean(address),
+    domain,
+    resendTestSender,
+    publicRecipientRestricted: Boolean(liveRuntime && resendTestSender),
+    recommendedFrom: "Mtendere Education Consult <no-reply@mail.mtendereeducationconsult.com>",
   };
 };
 
@@ -702,6 +863,32 @@ const providers: Record<string, Provider> = {
   },
 };
 
+export const getEmailProviderCircuitBreakerStatus = () => {
+  const now = Date.now();
+  return Object.fromEntries(
+    Object.keys(providers)
+      .filter((providerName) => providerName !== "dry_run")
+      .map((providerName) => {
+        const state = getProviderCircuitState(providerName);
+        const remainingMs = state.openUntil ? Math.max(0, state.openUntil - now) : 0;
+        return [
+          providerName,
+          {
+            state: remainingMs > 0 ? "open" : state.failures > 0 ? "degraded" : "closed",
+            failures: state.failures,
+            openedAt: state.openedAt ? new Date(state.openedAt).toISOString() : null,
+            openUntil: state.openUntil ? new Date(state.openUntil).toISOString() : null,
+            remainingMs,
+            lastFailureAt: state.lastFailureAt ? new Date(state.lastFailureAt).toISOString() : null,
+            lastError: state.lastError,
+            threshold: providerCircuitFailureThreshold,
+            cooldownMs: providerCircuitCooldownMs,
+          },
+        ];
+      }),
+  );
+};
+
 const getProviderOrder = () => {
   if (dryRunEnabled) return [providers.dry_run];
 
@@ -718,14 +905,15 @@ const getProviderOrder = () => {
 };
 
 export const isTransactionalEmailDeliveryReady = () => {
-  const activeProviders = getProviderOrder().map((provider) => provider.name);
-  return activeProviders.some((provider) => provider !== "dry_run") || !isLiveDeliveryRuntime;
+  return getEmailDeliveryDiagnostics().ready || !isLiveDeliveryRuntime;
 };
 
 export const getEmailDeliveryDiagnostics = () => {
   const activeProviders = getProviderOrder().map((provider) => provider.name);
+  const liveProviderConfigured = activeProviders.some((provider) => provider !== "dry_run");
+  const sender = getEmailSenderDiagnosticsForAddress(fromAddress, activeProviders);
   return {
-    ready: activeProviders.some((provider) => provider !== "dry_run"),
+    ready: liveProviderConfigured && !sender.publicRecipientRestricted,
     activeProviders,
     dryRunEnabled,
     liveProviderDeliveryAllowed,
@@ -733,8 +921,10 @@ export const getEmailDeliveryDiagnostics = () => {
     activationRequiresDnsReady,
     inlineProviderAttempts,
     fromConfigured: Boolean(env.EMAIL_FROM),
+    sender,
     linkBaseUrlConfigured: Boolean(emailLinkBaseUrl),
     sendGridTrackingEnabled,
+    providerCircuitBreakers: getEmailProviderCircuitBreakerStatus(),
     providerConfigured: {
       resend: isUsableSecret(env.RESEND_API_KEY),
       sendgrid: Boolean(sendGridApiKey),
@@ -769,6 +959,90 @@ const normalizeDnsValue = (value: string) =>
 
 const flattenTxtRecords = (records: string[][]) =>
   records.map((record) => record.join(""));
+
+const findTxtRecord = (records: string[], prefix: string) =>
+  records.find((record) => record.trim().toLowerCase().startsWith(prefix.toLowerCase()));
+
+const parseDnsTagRecord = (record?: string) =>
+  Object.fromEntries(
+    String(record || "")
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const [key, ...rest] = part.split("=");
+        return [key.trim().toLowerCase(), rest.join("=").trim()];
+      }),
+  );
+
+const getSpfProviderCoverage = (spfRecord?: string) => {
+  const normalized = String(spfRecord || "").toLowerCase();
+  return {
+    sendgrid: /include:sendgrid\.net\b/.test(normalized),
+    ses: /include:amazonses\.com\b/.test(normalized),
+    resend: /include:amazonses\.com\b/.test(normalized),
+    mailgun: /include:(mailgun\.org|spf\.mailgun\.org)\b/.test(normalized),
+    postmark: /include:spf\.mtasv\.net\b/.test(normalized),
+    microsoft365: /include:spf\.protection\.outlook\.com\b/.test(normalized),
+  };
+};
+
+const buildAuthenticationPolicySummary = (checks: DeliverabilityCheck[]) => {
+  const rootSpfRecords = checks.find((check) => check.host === mtendereEmailDomain && check.type === "TXT")?.actual || [];
+  const rootDmarcRecords = checks.find((check) => check.host === `_dmarc.${mtendereEmailDomain}`)?.actual || [];
+  const bimiRecords = checks.find((check) => check.host === `default._bimi.${mtendereEmailDomain}`)?.actual || [];
+  const spfRecord = findTxtRecord(rootSpfRecords, "v=spf1");
+  const dmarcRecord = findTxtRecord(rootDmarcRecords, "v=DMARC1");
+  const bimiRecord = findTxtRecord(bimiRecords, "v=BIMI1");
+  const dmarc = parseDnsTagRecord(dmarcRecord);
+  const providerCoverage = getSpfProviderCoverage(spfRecord);
+  const configuredProviders = getEmailDeliveryDiagnostics().providerConfigured;
+  const missingConfiguredProviderIncludes = Object.entries({
+    sendgrid: configuredProviders.sendgrid,
+    ses: configuredProviders.ses,
+    resend: configuredProviders.resend,
+    mailgun: configuredProviders.mailgun,
+  })
+    .filter(([provider, configured]) => configured && !providerCoverage[provider as keyof typeof providerCoverage])
+    .map(([provider]) => provider);
+
+  return {
+    spf: {
+      present: Boolean(spfRecord),
+      record: spfRecord || null,
+      providerCoverage,
+      missingConfiguredProviderIncludes,
+      qualifier: spfRecord?.match(/\s([~?+-]all)\b/i)?.[1] || null,
+    },
+    dkim: {
+      sendgridSelectors: checks
+        .filter((check) => check.host.includes("._domainkey."))
+        .map((check) => ({ host: check.host, status: check.status })),
+      note: "Provider-specific DKIM selectors are verified through CNAME/TXT checks and provider dashboards.",
+    },
+    dmarc: {
+      present: Boolean(dmarcRecord),
+      record: dmarcRecord || null,
+      policy: dmarc.p || null,
+      subdomainPolicy: dmarc.sp || null,
+      alignment: {
+        dkim: dmarc.adkim || "relaxed",
+        spf: dmarc.aspf || "relaxed",
+      },
+      reportUris: {
+        aggregate: dmarc.rua || null,
+        forensic: dmarc.ruf || null,
+      },
+      pct: dmarc.pct || "100",
+      enforcementReady: ["quarantine", "reject"].includes(String(dmarc.p || "").toLowerCase()),
+    },
+    bimi: {
+      present: Boolean(bimiRecord),
+      record: bimiRecord || null,
+      status: bimiRecord ? "configured" : "not_configured",
+    },
+  };
+};
 
 const dnsWithTimeout = async <T>(lookup: Promise<T>, timeoutMs: number): Promise<T> => {
   let timer: NodeJS.Timeout | undefined;
@@ -913,6 +1187,7 @@ export const getEmailDeliverabilityDiagnostics = async (options: { timeoutMs?: n
     },
     { pass: 0, warn: 0, fail: 0 },
   );
+  const authenticationPolicy = buildAuthenticationPolicySummary(checks);
 
   return {
     domain: mtendereEmailDomain,
@@ -921,6 +1196,7 @@ export const getEmailDeliverabilityDiagnostics = async (options: { timeoutMs?: n
     ready: summary.fail === 0,
     summary,
     checks,
+    authenticationPolicy,
     reputationSegmentation: {
       transactional: ["notifications", "support", "admissions", "billing"],
       commercial: ["marketing"],
@@ -961,10 +1237,19 @@ export const getTransactionalEmailActivationReadiness = async (
   let deliverability: Awaited<ReturnType<typeof getEmailDeliverabilityDiagnostics>> | undefined;
   let dnsReady: boolean | null = null;
 
-  if (!providerReady) {
+  const hasLiveProvider = diagnostics.activeProviders.some((provider) => provider !== "dry_run");
+  if (!hasLiveProvider && !providerReady) {
     blockingReasons.push({
       code: "email_provider_unavailable",
       message: "No transactional email provider is configured for account activation.",
+    });
+  }
+
+  if (diagnostics.sender.publicRecipientRestricted) {
+    blockingReasons.push({
+      code: "resend_test_sender_restricted",
+      message:
+        "EMAIL_FROM is using a Resend testing sender. Resend can reject non-owner recipients until a verified Mtendere sender domain is configured.",
     });
   }
 
@@ -980,7 +1265,7 @@ export const getTransactionalEmailActivationReadiness = async (
   }
 
   const value = {
-    ready: providerReady && (dnsReady !== false),
+    ready: providerReady && (dnsReady !== false) && blockingReasons.length === 0,
     providerReady,
     dnsReady,
     checkedAt: new Date().toISOString(),
@@ -1177,6 +1462,91 @@ const recordEmailEvent = async (event: {
   }
 };
 
+const providerSuppressionStatuses: Record<string, string> = {
+  bounced: "bounced",
+  spam_complaint: "complained",
+  suppressed: "suppressed",
+  unsubscribed: "unsubscribed",
+};
+
+const applyProviderSuppression = async (input: {
+  provider: string;
+  eventType: string;
+  recipient: string;
+  job?: EmailJob | null;
+  providerMessageId?: string | null;
+  metadata?: Record<string, unknown>;
+}) => {
+  const consentStatus = providerSuppressionStatuses[input.eventType];
+  if (!consentStatus) return;
+
+  const normalizedRecipient = normalizeEmail(input.recipient);
+  if (!normalizedRecipient || !normalizedRecipient.includes("@")) return;
+
+  const existing = await storage.getEmailPreferenceByEmail(normalizedRecipient).catch(() => undefined);
+  const categories = Object.fromEntries(
+    emailPreferenceCategories.map((category) => [category, false]),
+  ) as Record<string, boolean>;
+  const actionAt = new Date();
+  const auditTrail = [
+    ...(Array.isArray(existing?.auditTrail) ? existing.auditTrail : []),
+    {
+      action: `provider_${input.eventType}`,
+      provider: input.provider,
+      jobId: input.job?.id || null,
+      providerMessageId: input.providerMessageId || null,
+      at: actionAt.toISOString(),
+    },
+  ];
+
+  if (existing) {
+    await storage.updateEmailPreference(existing.id, {
+      categories,
+      consentStatus,
+      consentSource: `provider:${input.provider}`,
+      unsubscribedAt: actionAt,
+      auditTrail,
+    });
+  } else {
+    const token = createEmailPreferenceToken(normalizedRecipient);
+    await storage.upsertEmailPreference({
+      userId: input.job?.metadata && typeof input.job.metadata.userId === "number"
+        ? input.job.metadata.userId
+        : null,
+      email: normalizedRecipient,
+      categories,
+      consentStatus,
+      consentSource: `provider:${input.provider}`,
+      consentAt: null,
+      unsubscribedAt: actionAt,
+      unsubscribeTokenHash: createEmailPreferenceTokenHash(token),
+      auditTrail,
+    });
+  }
+
+  const subscriber = await storage.getSubscriberByEmail(normalizedRecipient).catch(() => undefined);
+  if (subscriber) {
+    await storage.updateSubscriber(subscriber.id, {
+      preferences: [],
+      status: "unsubscribed",
+      unsubscribedAt: actionAt,
+    }).catch(() => undefined);
+  }
+
+  await recordEmailEvent({
+    jobId: input.job?.id || null,
+    provider: input.provider,
+    eventType: "suppression_applied",
+    recipient: normalizedRecipient,
+    category: input.job?.category || null,
+    providerMessageId: input.providerMessageId || null,
+    metadata: {
+      sourceEventType: input.eventType,
+      consentStatus,
+    },
+  });
+};
+
 const deliverWithFailover = async (job: EmailJob) => {
   const message = buildDeliverableEmail(job);
   const activeProviders = getProviderOrder();
@@ -1187,9 +1557,45 @@ const deliverWithFailover = async (job: EmailJob) => {
 
   const failures: string[] = [];
   for (const provider of activeProviders) {
+    const circuit = getProviderCircuitOpenStatus(provider.name);
+    if (circuit.open) {
+      failures.push(`${provider.name}: circuit open until ${new Date(Date.now() + circuit.remainingMs).toISOString()}`);
+      await recordEmailEvent({
+        jobId: job.id,
+        provider: provider.name,
+        eventType: "provider_circuit_open_skipped",
+        recipient: job.recipient,
+        category: job.category,
+        metadata: {
+          attempt: job.attempts,
+          failures: circuit.state.failures,
+          openUntil: circuit.state.openUntil ? new Date(circuit.state.openUntil).toISOString() : null,
+          remainingMs: circuit.remainingMs,
+          lastError: circuit.state.lastError,
+        },
+      });
+      continue;
+    }
+
     for (let providerAttempt = 1; providerAttempt <= inlineProviderAttempts; providerAttempt += 1) {
       try {
         const result = await provider.send(message);
+        const circuitRecovery = registerProviderCircuitSuccess(provider.name);
+        if (circuitRecovery.wasDegraded) {
+          await recordEmailEvent({
+            jobId: job.id,
+            provider: result.provider,
+            eventType: "provider_circuit_closed",
+            recipient: job.recipient,
+            category: job.category,
+            providerMessageId: result.messageId,
+            metadata: {
+              attempt: job.attempts,
+              previousFailures: circuitRecovery.previous.failures,
+              previousLastError: circuitRecovery.previous.lastError,
+            },
+          });
+        }
         if (failures.length > 0) {
           await recordEmailEvent({
             jobId: job.id,
@@ -1218,6 +1624,7 @@ const deliverWithFailover = async (job: EmailJob) => {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown provider error";
         const retryDelayMs = getInlineProviderRetryDelayMs(errorMessage);
+        const circuitFailure = registerProviderCircuitFailure(provider.name, errorMessage);
         failures.push(`${provider.name}#${providerAttempt}: ${errorMessage}`);
         await recordEmailEvent({
           jobId: job.id,
@@ -1231,8 +1638,38 @@ const deliverWithFailover = async (job: EmailJob) => {
             providerAttempt,
             maxProviderAttempts: inlineProviderAttempts,
             retryDelayMs,
+            circuit: {
+              failures: circuitFailure.state.failures,
+              threshold: circuitFailure.threshold,
+              opened: circuitFailure.opened,
+              openUntil: circuitFailure.state.openUntil
+                ? new Date(circuitFailure.state.openUntil).toISOString()
+                : null,
+              cooldownMs: circuitFailure.cooldownMs,
+            },
           },
         });
+
+        if (circuitFailure.opened) {
+          await recordEmailEvent({
+            jobId: job.id,
+            provider: provider.name,
+            eventType: "provider_circuit_opened",
+            recipient: job.recipient,
+            category: job.category,
+            metadata: {
+              attempt: job.attempts,
+              providerAttempt,
+              failures: circuitFailure.state.failures,
+              threshold: circuitFailure.threshold,
+              openUntil: circuitFailure.state.openUntil
+                ? new Date(circuitFailure.state.openUntil).toISOString()
+                : null,
+              error: errorMessage,
+            },
+          });
+          break;
+        }
 
         if (providerAttempt < inlineProviderAttempts) {
           await recordEmailEvent({
@@ -1306,8 +1743,9 @@ const processClaimedEmailJob = async (job: EmailJob) => {
     await storage.markEmailJobSent(job.id, result.provider, result.messageId);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown email delivery error";
-    const finalFailure = job.attempts >= job.maxAttempts;
-    const retryDelay = retryDelaysMs[Math.min(job.attempts, retryDelaysMs.length - 1)];
+    const permanentFailure = isPermanentProviderError(errorMessage);
+    const finalFailure = permanentFailure || job.attempts >= job.maxAttempts;
+    const retryDelay = finalFailure ? 0 : retryDelaysMs[Math.min(job.attempts, retryDelaysMs.length - 1)];
     const retryAt = new Date(Date.now() + retryDelay);
     await storage.markEmailJobFailed(job.id, errorMessage, retryAt, finalFailure);
     await recordEmailEvent({
@@ -1319,6 +1757,7 @@ const processClaimedEmailJob = async (job: EmailJob) => {
         attempt: job.attempts,
         maxAttempts: job.maxAttempts,
         retryAt: finalFailure ? null : retryAt.toISOString(),
+        permanentFailure,
         error: errorMessage,
       },
     });
@@ -1547,48 +1986,238 @@ export const recordEmailClick = async (input: {
   });
 };
 
+const firstWebhookRecipient = (...values: unknown[]): string => {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (Array.isArray(value)) {
+      const nested: string = firstWebhookRecipient(...value);
+      if (nested) return nested;
+    }
+    if (!value || typeof value !== "object") continue;
+    const record = asRecord(value);
+    const nested: string = firstWebhookRecipient(
+      record.email,
+      record.emailAddress,
+      record.recipient,
+      record.address,
+      record.To,
+    );
+    if (nested) return nested;
+  }
+  return "";
+};
+
+const getWebhookTagValue = (tags: Record<string, unknown>, key: string) =>
+  firstString(tags[key], tags[`mec:${key}`], tags[`mec_${key}`]);
+
+const normalizeProviderWebhookEvent = (
+  provider: string,
+  rawEvent: unknown,
+): NormalizedProviderWebhookEvent => {
+  const event = asRecord(rawEvent);
+  const snsMessage = parseJsonRecord(event.Message);
+  if (snsMessage && (snsMessage.eventType || snsMessage.notificationType || snsMessage.mail)) {
+    return normalizeProviderWebhookEvent(provider, {
+      ...snsMessage,
+      sns: {
+        Type: event.Type,
+        MessageId: event.MessageId,
+        TopicArn: event.TopicArn,
+        Timestamp: event.Timestamp,
+      },
+    });
+  }
+
+  const eventData = asRecord(event["event-data"]);
+  const data = asRecord(event.data);
+  const mail = asRecord(event.mail);
+  const bounce = asRecord(event.bounce);
+  const complaint = asRecord(event.complaint);
+  const delivery = asRecord(event.delivery);
+  const message = asRecord(event.message);
+  const messageHeaders = asRecord(message.headers);
+  const eventMetadata = asRecord(event.Metadata || event.metadata || data.metadata);
+  const mailTags = asRecord(mail.tags);
+  const eventTags = asRecord(event.tags || data.tags);
+  const userVariables = asRecord(eventData["user-variables"]);
+  const eventDataMessage = asRecord(eventData.message);
+  const eventDataMessageHeaders = asRecord(eventDataMessage.headers);
+  const providerName = provider.toLowerCase();
+
+  const providerEventId = firstString(
+    event.sg_event_id,
+    event.event_id,
+    event.id,
+    data.id,
+    eventData.id,
+    event.MessageId,
+  );
+  const providerMessageId = firstString(
+    event.email_id,
+    event.sg_message_id,
+    event.MessageID,
+    event.MessageId,
+    event.message_id,
+    data.email_id,
+    data.id,
+    eventData.messageId,
+    eventDataMessageHeaders["message-id"],
+    mail.messageId,
+    messageHeaders["message-id"],
+  ) || null;
+  const jobId = firstString(
+    event.mec_email_job_id,
+    event.jobId,
+    event.job_id,
+    data.mec_email_job_id,
+    data.jobId,
+    eventMetadata.mec_email_job_id,
+    eventMetadata.jobId,
+    getWebhookTagValue(eventTags, "email_job_id"),
+    getWebhookTagValue(eventTags, "job_id"),
+    getWebhookTagValue(mailTags, "email_job_id"),
+    getWebhookTagValue(mailTags, "job_id"),
+    userVariables.mec_email_job_id,
+    userVariables.jobId,
+  ) || null;
+  const rawType = firstString(
+    event.type,
+    event.event,
+    event.RecordType,
+    event.eventType,
+    event.notificationType,
+    eventData.event,
+    data.type,
+    data.event,
+  ).toLowerCase();
+  const recipient = firstWebhookRecipient(
+    event.email,
+    event.To,
+    event.Recipient,
+    event.recipient,
+    data.to,
+    data.recipient,
+    eventData.recipient,
+    asStringArray(mail.destination),
+    asStringArray(delivery.recipients),
+    bounce.bouncedRecipients,
+    complaint.complainedRecipients,
+  );
+  const category = firstString(
+    event.category,
+    event.tag,
+    eventData.tags,
+    data.category,
+    eventMetadata.mec_email_category,
+    userVariables.mec_email_category,
+    getWebhookTagValue(eventTags, "email_category"),
+    getWebhookTagValue(mailTags, "email_category"),
+  );
+
+  return {
+    providerMessageId,
+    jobId,
+    rawType: rawType || providerName,
+    recipient,
+    category,
+    metadata: {
+      ...event,
+      normalized: {
+        providerEventId: providerEventId || null,
+        providerMessageId,
+        jobId,
+        rawType: rawType || providerName,
+        recipient,
+        category,
+      },
+    },
+  };
+};
+
+const pruneProviderWebhookDedup = (now = Date.now()) => {
+  for (const [key, expiresAt] of processedProviderWebhookEvents.entries()) {
+    if (expiresAt <= now) processedProviderWebhookEvents.delete(key);
+  }
+};
+
+const getProviderWebhookDedupKey = (
+  provider: string,
+  eventType: string,
+  event: NormalizedProviderWebhookEvent,
+) =>
+  sha256Hex(
+    JSON.stringify([
+      provider.toLowerCase(),
+      eventType,
+      event.jobId || "",
+      event.providerMessageId || "",
+      normalizeEmail(event.recipient || ""),
+      event.rawType,
+      event.metadata.normalized,
+    ]),
+  );
+
+const isDuplicateProviderWebhookEvent = (
+  provider: string,
+  eventType: string,
+  event: NormalizedProviderWebhookEvent,
+) => {
+  if (providerWebhookDedupTtlMs <= 0) return false;
+  const now = Date.now();
+  pruneProviderWebhookDedup(now);
+  const key = getProviderWebhookDedupKey(provider, eventType, event);
+  if (processedProviderWebhookEvents.has(key)) return true;
+  processedProviderWebhookEvents.set(key, now + providerWebhookDedupTtlMs);
+  return false;
+};
+
 export const recordProviderWebhookEvent = async (provider: string, payload: unknown) => {
   const events = Array.isArray(payload) ? payload : [payload];
 
   for (const rawEvent of events) {
-    const event = rawEvent as Record<string, unknown>;
-    const metadata = event as Record<string, unknown>;
-    const mail = asRecord(event.mail);
-    const eventMetadata = asRecord(event.Metadata || event.metadata);
-    const tags = asRecord(event.tags);
-    const providerMessageId =
-      String(
-        event.email_id ||
-          event.sg_message_id ||
-          event.MessageID ||
-          event.MessageId ||
-          mail.messageId ||
-          "",
-      ) || null;
-    const jobId =
-      String(
-        event.mec_email_job_id ||
-          event.jobId ||
-          eventMetadata.mec_email_job_id ||
-          tags.mec_email_job_id ||
-          "",
-      ) || null;
-    const job = jobId
-      ? await storage.getEmailJob(jobId)
-      : providerMessageId
-        ? await storage.getEmailJobByProviderMessageId(providerMessageId)
+    const normalized = normalizeProviderWebhookEvent(provider, rawEvent);
+    const eventType = mapProviderEventType(normalized.rawType);
+    const duplicate = isDuplicateProviderWebhookEvent(provider, eventType, normalized);
+    const job = normalized.jobId
+      ? await storage.getEmailJob(normalized.jobId)
+      : normalized.providerMessageId
+        ? await storage.getEmailJobByProviderMessageId(normalized.providerMessageId)
         : undefined;
-    const rawType = String(event.type || event.event || event.RecordType || event.eventType || "").toLowerCase();
-    const eventType = mapProviderEventType(rawType);
+    const recipient = normalized.recipient || job?.recipient || "";
+
+    if (duplicate) {
+      await recordEmailEvent({
+        jobId: job?.id || normalized.jobId,
+        provider,
+        eventType: "provider_webhook_duplicate_ignored",
+        recipient,
+        category: job?.category || normalized.category,
+        providerMessageId: normalized.providerMessageId,
+        metadata: {
+          sourceEventType: eventType,
+          rawType: normalized.rawType,
+        },
+      });
+      continue;
+    }
 
     await recordEmailEvent({
-      jobId: job?.id || jobId,
+      jobId: job?.id || normalized.jobId,
       provider,
       eventType,
-      recipient: String(event.email || event.To || event.recipient || job?.recipient || ""),
-      category: job?.category || String(event.category || event.tag || ""),
-      providerMessageId,
-      metadata,
+      recipient,
+      category: job?.category || normalized.category,
+      providerMessageId: normalized.providerMessageId,
+      metadata: normalized.metadata,
+    });
+
+    await applyProviderSuppression({
+      provider,
+      eventType,
+      recipient,
+      job,
+      providerMessageId: normalized.providerMessageId,
+      metadata: normalized.metadata,
     });
   }
 };
@@ -1616,6 +2245,10 @@ export const getEmailPlatformHealth = async (days = 30) => {
   const retryScheduled = stats.queue.retry_scheduled || 0;
   const processing = stats.queue.processing || 0;
   const deadLetter = stats.queue.failed || 0;
+  const circuitBreakers = getEmailProviderCircuitBreakerStatus();
+  const openCircuitBreakers = Object.entries(circuitBreakers)
+    .filter(([, breaker]) => breaker.state === "open")
+    .map(([provider]) => provider);
   const deliverability = await getEmailDeliverabilityDiagnostics({ timeoutMs: 1_500 }).catch((error) => ({
     ready: false,
     summary: { pass: 0, warn: 0, fail: 1 },
@@ -1649,6 +2282,13 @@ export const getEmailPlatformHealth = async (days = 30) => {
           severity: "warning",
           code: "email_queue_congestion",
           message: `${queued + retryScheduled + processing} email job(s) are waiting or processing.`,
+        }
+      : null,
+    openCircuitBreakers.length > 0
+      ? {
+          severity: "warning",
+          code: "email_provider_circuit_open",
+          message: `Provider circuit breaker open for: ${openCircuitBreakers.join(", ")}.`,
         }
       : null,
     sent > 0 && bounced / sent >= 0.02
@@ -1732,7 +2372,135 @@ export const getEmailPlatformHealth = async (days = 30) => {
         .map((provider) => provider.name),
       dryRunEnabled,
     },
+    circuitBreakers,
     templates: emailTemplateCatalog,
+  };
+};
+
+export const getEmailProductionReadinessReport = async (days = 30) => {
+  const health = await getEmailPlatformHealth(days);
+  const activation = await getTransactionalEmailActivationReadiness({ cacheTtlMs: 60_000 }).catch((error) => ({
+    ready: false,
+    providerReady: false,
+    dnsReady: null,
+    checkedAt: new Date().toISOString(),
+    diagnostics: getEmailDeliveryDiagnostics(),
+    blockingReasons: [
+      {
+        code: "email_activation_check_failed",
+        message: error instanceof Error ? error.message : "Email activation readiness check failed.",
+      },
+    ],
+  }));
+  const alerts = health.alerts as Array<{ severity: string; code: string; message: string }>;
+  const criticalAlerts = alerts.filter((alert) => alert.severity === "critical");
+  const warningAlerts = alerts.filter((alert) => alert.severity === "warning");
+  const deliverabilityChecks = Array.isArray((health.deliverability as { checks?: unknown }).checks)
+    ? ((health.deliverability as { checks: DeliverabilityCheck[] }).checks)
+    : [];
+  const authenticationPolicy = "authenticationPolicy" in health.deliverability
+    ? health.deliverability.authenticationPolicy
+    : null;
+  const missingConfiguredProviderIncludes = Array.isArray(
+    authenticationPolicy?.spf?.missingConfiguredProviderIncludes,
+  )
+    ? authenticationPolicy.spf.missingConfiguredProviderIncludes
+    : [];
+  const findDnsStatus = (predicate: (check: DeliverabilityCheck) => boolean) =>
+    deliverabilityChecks.find(predicate)?.status || "unknown";
+  const activeLiveProviders = health.providers.active.filter((provider) => provider !== "dry_run");
+  const configuredLiveProviders = health.providers.configured.filter((provider) => provider !== "dry_run");
+  const scoreDeductions = [
+    criticalAlerts.length * 12,
+    warningAlerts.length * 5,
+    activation.ready ? 0 : 15,
+    activeLiveProviders.length >= 2 ? 0 : 8,
+    env.EMAIL_WEBHOOK_SIGNING_SECRET ? 0 : 6,
+    emailLinkBaseUrl ? 0 : 3,
+    health.queueOperations.deadLetter > 0 ? 10 : 0,
+    Math.min(10, missingConfiguredProviderIncludes.length * 4),
+  ];
+  const score = Math.max(0, Math.min(100, 100 - scoreDeductions.reduce((sum, value) => sum + value, 0)));
+  const requiredActions = [
+    ...criticalAlerts.map((alert) => alert.message),
+    ...activation.blockingReasons.map((reason) => reason.message),
+    activeLiveProviders.length < 2
+      ? "Configure at least two live providers in EMAIL_PROVIDER_ORDER for production failover."
+      : null,
+    !env.EMAIL_WEBHOOK_SIGNING_SECRET
+      ? "Set EMAIL_WEBHOOK_SIGNING_SECRET and configure provider webhooks to use signed delivery events."
+      : null,
+    !emailLinkBaseUrl
+      ? "Set EMAIL_LINK_BASE_URL to a verified branded tracking domain."
+      : null,
+    ...missingConfiguredProviderIncludes.map(
+      (provider) => `Add the SPF include required by the configured ${provider} provider.`,
+    ),
+  ].filter(Boolean);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    periodDays: days,
+    score,
+    certifiedForDeployment: score >= 95 && activation.ready && criticalAlerts.length === 0,
+    deploymentGate: {
+      pass: score >= 95 && activation.ready && criticalAlerts.length === 0,
+      requiredScore: 95,
+      blockingReasons: requiredActions,
+    },
+    deliverabilityReport: {
+      domain: "mtendereeducationconsult.com",
+      providerReady: activation.providerReady,
+      dnsReady: activation.dnsReady,
+      spfStatus: findDnsStatus((check) => check.host === "mtendereeducationconsult.com" && check.type === "TXT"),
+      dkimStatus: findDnsStatus((check) => check.host.includes("._domainkey.")),
+      dmarcStatus: findDnsStatus((check) => check.host.startsWith("_dmarc.")),
+      bimiStatus: findDnsStatus((check) => check.host.startsWith("default._bimi.")),
+      inboxPlacementScore: "requires external seed-list testing",
+      summary: "summary" in health.deliverability ? health.deliverability.summary : null,
+      authenticationPolicy,
+      checks: deliverabilityChecks,
+    },
+    reliabilityReport: {
+      failoverValidation: {
+        providerCount: activeLiveProviders.length,
+        activeProviders: activeLiveProviders,
+        configuredProviders: configuredLiveProviders,
+        failoverTriggered: health.reliability.failoverTriggered,
+        failoverRate: health.reliability.failoverRate,
+        ready: activeLiveProviders.length >= 2,
+      },
+      queueValidation: health.queueOperations,
+      retryPolicy: health.queueOperations.retrySchedule,
+      providerReliability: health.providerReliability,
+      circuitBreakers: getEmailProviderCircuitBreakerStatus(),
+    },
+    securityReport: {
+      webhookSigningEnabled: Boolean(env.EMAIL_WEBHOOK_SIGNING_SECRET),
+      trackingLinksSigned: Boolean(trackingSecret),
+      preferenceCenterEnabled: Boolean(emailBaseUrl),
+      automaticSuppressionEnabled: true,
+      dryRunEnabled,
+      remainingRisks: [
+        !env.EMAIL_WEBHOOK_SIGNING_SECRET ? "Provider webhook signing secret is not configured." : null,
+        dryRunEnabled ? "EMAIL_DRY_RUN is enabled." : null,
+        activation.dnsReady === false ? "DNS alignment is not complete." : null,
+      ].filter(Boolean),
+    },
+    scaleAssessment: {
+      observedSentInPeriod: health.reliability.sent,
+      projectedMonthlyVolume:
+        days > 0 ? Math.round((health.reliability.sent / Math.max(1, days)) * 30) : health.reliability.sent,
+      queueBacklog: health.queueOperations.congestion,
+      currentArchitecture:
+        "Durable database-backed queue with cron/worker drain, provider failover, retries, tracking, and dead-letter visibility.",
+      growthPath: [
+        "Move queue execution to Redis/BullMQ or managed workers when campaign volume exceeds process-level drain capacity.",
+        "Segment transactional and marketing traffic across dedicated subdomains and provider pools.",
+        "Use provider dashboards for dedicated IP warmup, reverse DNS, reputation monitoring, and seed-list inbox testing.",
+      ],
+    },
+    alerts,
   };
 };
 

@@ -210,6 +210,31 @@ export type AiChatMessage = {
   role: "user" | "assistant" | "system";
   content: string;
   createdAt: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type AiChatMemoryState = {
+  enabled: boolean;
+  userPreferences: string[];
+  shortTermSummary: string | null;
+  lastUpdatedAt: string | null;
+};
+
+export type AiChatIntelligence = {
+  intent: string;
+  confidence: number;
+  riskLevel: "low" | "medium" | "high";
+  selectedAgent?: string;
+  agentTrace?: Record<string, unknown>;
+  safetyFlags: string[];
+  retrievalSources: Array<Record<string, unknown>>;
+  suggestedActions: Array<Record<string, unknown>>;
+  actionPlan?: Record<string, unknown>;
+  responseQuality: Record<string, unknown>;
+  escalationRequired: boolean;
+  provider: string;
+  model: string;
+  usedFallback: boolean;
 };
 
 export type AiChatConversation = {
@@ -221,6 +246,9 @@ export type AiChatConversation = {
   summary: string | null;
   isActive: boolean;
   moderationFlags: string[];
+  memory?: AiChatMemoryState;
+  intelligence?: AiChatIntelligence;
+  auditTrail?: Array<Record<string, unknown>>;
   createdAt: string;
   updatedAt: string;
   lastMessageAt: string;
@@ -341,6 +369,7 @@ const DEFAULT_ROLES: AdminRole[] = [
       "publish",
       "export",
       "manage_security",
+      "manage_automation",
     ],
     isActive: true,
     createdAt: nowIso(),
@@ -368,6 +397,7 @@ const DEFAULT_ROLES: AdminRole[] = [
       "export",
       "manage_security",
       "manage_webhooks",
+      "manage_automation",
     ],
     isActive: true,
     createdAt: nowIso(),
@@ -640,6 +670,7 @@ export const upsertAiChatConversation = (
     ...conversation,
     messages: conversation.messages.slice(-40),
     moderationFlags: Array.from(new Set(conversation.moderationFlags ?? [])),
+    auditTrail: (conversation.auditTrail ?? previous?.auditTrail ?? []).slice(-80),
     createdAt: previous?.createdAt ?? conversation.createdAt ?? now,
     updatedAt: now,
     lastMessageAt: conversation.lastMessageAt ?? now,
@@ -647,6 +678,33 @@ export const upsertAiChatConversation = (
 
   updateCollectionItem("aiConversations", conversation.id, nextConversation);
   return nextConversation;
+};
+
+export const updateAiChatMemory = (id: string, memory: AiChatMemoryState) => {
+  const conversation = getAiChatConversation(id);
+  if (!conversation) return null;
+
+  return upsertAiChatConversation({
+    ...conversation,
+    memory,
+    lastMessageAt: conversation.lastMessageAt,
+  });
+};
+
+export const clearAiChatMemory = (id: string) => {
+  const conversation = getAiChatConversation(id);
+  if (!conversation) return null;
+
+  return upsertAiChatConversation({
+    ...conversation,
+    memory: {
+      enabled: false,
+      userPreferences: [],
+      shortTermSummary: null,
+      lastUpdatedAt: nowIso(),
+    },
+    lastMessageAt: conversation.lastMessageAt,
+  });
 };
 
 export const closeAiChatConversation = (id: string) => {

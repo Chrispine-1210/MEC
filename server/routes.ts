@@ -31,7 +31,7 @@ import path from "path";
 import QRCode from "qrcode";
 import { z } from "zod";
 import { env } from "./env";
-import { getChatResponse } from "./ai";
+import { getEnterpriseChatResponse, type EnterpriseChatResponse } from "./ai";
 import {
   createEmailPreferenceToken,
   createEmailPreferenceTokenHash,
@@ -40,6 +40,7 @@ import {
   getEmailDeliveryDiagnostics,
   getEmailQueueWorkerStatus,
   getEmailPlatformHealth,
+  getEmailProductionReadinessReport,
   getTransactionalEmailActivationReadiness,
   processEmailQueue,
   recordEmailClick,
@@ -114,11 +115,14 @@ import {
   setTeamMeta,
   setUserMeta,
   closeAiChatConversation,
+  clearAiChatMemory,
   upsertAiChatConversation,
+  updateAiChatMemory,
   updateAdminSettings,
   upsertAdminRole,
   deleteAdminRole,
   type AiChatConversation,
+  type AiChatMemoryState,
   type AiChatMessage,
   type ApplicationMeta,
   type BlogMeta,
@@ -454,6 +458,15 @@ const publicApplicationRequestSchema = z.object({
 const chatRequestSchema = z.object({
   message: z.string().trim().min(1).max(2000),
   conversationId: z.string().trim().min(8).max(120).optional(),
+  currentPage: z.string().trim().max(500).optional(),
+  memoryEnabled: z.boolean().optional(),
+  memoryPreferences: z.array(z.string().trim().min(1).max(160)).max(20).optional(),
+});
+
+const chatMemoryRequestSchema = z.object({
+  conversationId: z.string().trim().min(8).max(120),
+  enabled: z.boolean().optional(),
+  userPreferences: z.array(z.string().trim().min(1).max(160)).max(20).optional(),
 });
 
 const eventPayloadSchema = z.object({
@@ -1976,15 +1989,17 @@ type AuthUserRecord = {
   mfaConfirmedAt?: Date | string | null;
 };
 
-const MFA_REQUIRED_DEFAULT_ROLES = new Set(["writer", "editor", "admin", "super_admin"]);
 const TOTP_PERIOD_SECONDS = 30;
 const TOTP_DIGITS = 6;
 const TOTP_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 const isMfaRequiredForRole = (role: string | null | undefined) => {
   if (!role) return false;
-  if (getAdminSettings().twoFactorRequired && ADMIN_PORTAL_ROLES.has(role)) return true;
-  return MFA_REQUIRED_DEFAULT_ROLES.has(role);
+  const mfaPolicyOverride = process.env.ADMIN_TWO_FACTOR_REQUIRED?.trim().toLowerCase();
+  if (mfaPolicyOverride) {
+    return ["1", "true", "yes", "on"].includes(mfaPolicyOverride) && ADMIN_PORTAL_ROLES.has(role);
+  }
+  return getAdminSettings().twoFactorRequired && ADMIN_PORTAL_ROLES.has(role);
 };
 
 const hasConfirmedMfa = (user: AuthUserRecord) =>
@@ -2451,17 +2466,19 @@ const authenticateToken = async (req: Request, res: Response, next: NextFunction
 
 const enforceVerifiedMfa = async (req: Request, res: Response, next: NextFunction) => {
   const jwtUser = getAuthenticatedUser(req);
-  if (!isMfaRequiredForRole(jwtUser.role)) {
-    return next();
-  }
-
   try {
     const user = await storage.getUser(Number(jwtUser.id));
     if (!user || user.isActive === false) {
       return res.status(401).json({ message: "Account is inactive or no longer exists" });
     }
 
-    if (!hasConfirmedMfa(user as AuthUserRecord)) {
+    const mfaConfigured = hasConfirmedMfa(user as AuthUserRecord);
+    const mfaRequiredByPolicy = isMfaRequiredForRole(user.role);
+    if (!mfaConfigured && !mfaRequiredByPolicy) {
+      return next();
+    }
+
+    if (!mfaConfigured) {
       return res.status(403).json({
         message: "Multi-factor authentication setup is required for this role",
         code: "MFA_SETUP_REQUIRED",
@@ -3334,20 +3351,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return lastUserMessage?.content.slice(0, 180) ?? "AI chat conversation";
   };
 
+  const createEmptyAiMemoryState = (enabled = true): AiChatMemoryState => ({
+    enabled,
+    userPreferences: [],
+    shortTermSummary: null,
+    lastUpdatedAt: null,
+  });
+
+  const buildAiMemoryState = (
+    existing: AiChatConversation | undefined,
+    payload: z.infer<typeof chatRequestSchema>,
+  ): AiChatMemoryState => ({
+    enabled: payload.memoryEnabled ?? existing?.memory?.enabled ?? true,
+    userPreferences: Array.from(new Set(payload.memoryPreferences ?? existing?.memory?.userPreferences ?? [])).slice(0, 20),
+    shortTermSummary: existing?.memory?.shortTermSummary ?? null,
+    lastUpdatedAt: existing?.memory?.lastUpdatedAt ?? null,
+  });
+
   const appendAiConversationTurn = ({
     conversationId,
     userId,
     userEmail,
     channel,
     message,
-    response,
+    assistant,
   }: {
     conversationId?: string;
     userId: string | null;
     userEmail?: string | null;
     channel: "public" | "admin";
     message: string;
-    response: string;
+    assistant: EnterpriseChatResponse;
   }) => {
     const now = new Date().toISOString();
     const id = conversationId || randomUUID();
@@ -3355,9 +3389,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const messages: AiChatMessage[] = [
       ...(existing?.messages ?? []),
       { role: "user", content: message, createdAt: now },
-      { role: "assistant", content: response, createdAt: new Date().toISOString() },
+      {
+        role: "assistant",
+        content: assistant.response,
+        createdAt: new Date().toISOString(),
+        metadata: {
+          intent: assistant.metadata.intent,
+          confidence: assistant.metadata.confidence,
+          riskLevel: assistant.metadata.riskLevel,
+          selectedAgent: assistant.metadata.selectedAgent,
+          actionStatus: assistant.metadata.actionPlan.status,
+          requiredPermission: assistant.metadata.actionPlan.requiredPermission,
+          safetyFlags: assistant.metadata.safetyFlags,
+          retrievalSourceCount: assistant.metadata.retrievalSources.length,
+          suggestedActionCount: assistant.metadata.suggestedActions.length,
+          provider: assistant.metadata.provider,
+          model: assistant.metadata.model,
+        },
+      },
     ];
-    const flags = Array.from(new Set([...(existing?.moderationFlags ?? []), ...detectChatFlags(message)]));
+    const flags = Array.from(
+      new Set([
+        ...(existing?.moderationFlags ?? []),
+        ...detectChatFlags(message),
+        ...assistant.metadata.safetyFlags,
+      ]),
+    );
+    const auditTrail = [
+      ...(existing?.auditTrail ?? []),
+      {
+        id: randomUUID(),
+        event: "ai_assistant_turn",
+        at: now,
+        actorId: userId,
+        channel,
+        intent: assistant.metadata.intent,
+        riskLevel: assistant.metadata.riskLevel,
+        selectedAgent: assistant.metadata.selectedAgent,
+        actionStatus: assistant.metadata.actionPlan.status,
+        requiredPermission: assistant.metadata.actionPlan.requiredPermission,
+        confidence: assistant.metadata.confidence,
+        provider: assistant.metadata.provider,
+        model: assistant.metadata.model,
+        usedFallback: assistant.metadata.usedFallback,
+        inputCharacters: assistant.audit.inputCharacters,
+        historyMessagesUsed: assistant.audit.historyMessagesUsed,
+        contextSourcesUsed: assistant.audit.contextSourcesUsed,
+        safetyFlags: assistant.audit.safetyFlags,
+        auditReference: assistant.metadata.actionPlan.auditReference,
+      },
+    ];
 
     return upsertAiChatConversation({
       id,
@@ -3368,9 +3449,156 @@ export async function registerRoutes(app: Express): Promise<Server> {
       summary: buildConversationSummary(messages),
       isActive: true,
       moderationFlags: flags,
+      memory: assistant.metadata.memory,
+      intelligence: {
+        intent: assistant.metadata.intent,
+        confidence: assistant.metadata.confidence,
+        riskLevel: assistant.metadata.riskLevel,
+        selectedAgent: assistant.metadata.selectedAgent,
+        agentTrace: assistant.metadata.agentTrace,
+        safetyFlags: assistant.metadata.safetyFlags,
+        retrievalSources: assistant.metadata.retrievalSources,
+        suggestedActions: assistant.metadata.suggestedActions,
+        actionPlan: assistant.metadata.actionPlan,
+        responseQuality: assistant.metadata.responseQuality,
+        escalationRequired: assistant.metadata.escalationRequired,
+        provider: assistant.metadata.provider,
+        model: assistant.metadata.model,
+        usedFallback: assistant.metadata.usedFallback,
+      },
+      auditTrail,
       createdAt: existing?.createdAt ?? now,
       lastMessageAt: now,
     });
+  };
+
+  const incrementCount = (record: Record<string, number>, key: unknown) => {
+    const normalized = String(key ?? "unknown").trim() || "unknown";
+    record[normalized] = (record[normalized] ?? 0) + 1;
+  };
+
+  const averageNumber = (values: number[]) => {
+    if (values.length === 0) return 0;
+    return Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2));
+  };
+
+  const percentage = (value: number, total: number) =>
+    total > 0 ? Number(((value / total) * 100).toFixed(1)) : 0;
+
+  const buildAiCommandCenter = async () => {
+    const conversations = listAiChatConversations();
+    const totalConversations = conversations.length;
+    const totalMessages = conversations.reduce((sum, conversation) => sum + conversation.messages.length, 0);
+    const activeConversations = conversations.filter((conversation) => conversation.isActive).length;
+    const flaggedConversations = conversations.filter((conversation) => conversation.moderationFlags.length > 0).length;
+    const escalatedConversations = conversations.filter((conversation) => conversation.intelligence?.escalationRequired).length;
+    const memoryEnabledConversations = conversations.filter((conversation) => conversation.memory?.enabled !== false).length;
+    const fallbackConversations = conversations.filter((conversation) => conversation.intelligence?.usedFallback).length;
+    const confidenceValues = conversations
+      .map((conversation) => conversation.intelligence?.confidence)
+      .filter((value): value is number => typeof value === "number");
+
+    const riskLevels: Record<string, number> = { low: 0, medium: 0, high: 0, unknown: 0 };
+    const flags: Record<string, number> = {};
+    const agents: Record<string, number> = {};
+    const providers: Record<string, number> = {};
+    const actionStatuses: Record<string, number> = {};
+    const requiredPermissions: Record<string, number> = {};
+    const retrievalSources: Record<string, number> = {};
+
+    for (const conversation of conversations) {
+      const intelligence = conversation.intelligence;
+      incrementCount(riskLevels, intelligence?.riskLevel ?? "unknown");
+      incrementCount(agents, intelligence?.selectedAgent ?? "unknown");
+      incrementCount(providers, intelligence?.provider ?? "unknown");
+
+      const actionPlan = intelligence?.actionPlan as { status?: string; requiredPermission?: string } | undefined;
+      incrementCount(actionStatuses, actionPlan?.status ?? "not_required");
+      if (actionPlan?.requiredPermission) incrementCount(requiredPermissions, actionPlan.requiredPermission);
+
+      for (const flag of conversation.moderationFlags) incrementCount(flags, flag);
+      for (const source of intelligence?.retrievalSources ?? []) {
+        incrementCount(retrievalSources, (source as { type?: unknown }).type ?? "platform");
+      }
+    }
+
+    const degradedSources: string[] = [];
+    const safeCount = async (label: string, loader: () => Promise<unknown[]>) => {
+      try {
+        return (await loader()).length;
+      } catch (error) {
+        degradedSources.push(label);
+        console.warn(`AI command center degraded for ${label}:`, getErrorMessage(error));
+        return null;
+      }
+    };
+
+    const [activeScholarships, activeJobs, activePartners, publishedBlogPosts, applications] = await Promise.all([
+      safeCount("scholarships", () => storage.getActiveScholarships()),
+      safeCount("jobs", () => storage.getActiveJobs()),
+      safeCount("partners", () => storage.getActivePartners()),
+      safeCount("blog", () => storage.getPublishedBlogPosts()),
+      safeCount("applications", () => storage.getAllApplications()),
+    ]);
+
+    const recentAuditTrail = conversations
+      .flatMap((conversation) =>
+        (conversation.auditTrail ?? []).map((entry) => {
+          const auditEntry = entry as Record<string, unknown> & { at?: string };
+          return {
+            conversationId: conversation.id,
+            summary: conversation.summary,
+            at: auditEntry.at ?? "",
+            ...auditEntry,
+          };
+        }),
+      )
+      .sort((a, b) => new Date(String(b.at ?? 0)).getTime() - new Date(String(a.at ?? 0)).getTime())
+      .slice(0, 12);
+
+    return {
+      generatedAt: new Date().toISOString(),
+      overview: {
+        totalConversations,
+        activeConversations,
+        totalMessages,
+        flaggedConversations,
+        escalatedConversations,
+        memoryEnabledConversations,
+      },
+      quality: {
+        averageConfidence: averageNumber(confidenceValues),
+        fallbackRate: percentage(fallbackConversations, totalConversations),
+        escalationRate: percentage(escalatedConversations, totalConversations),
+        flaggedRate: percentage(flaggedConversations, totalConversations),
+      },
+      security: {
+        riskLevels,
+        flags,
+        blockedActionRequests: actionStatuses.blocked ?? 0,
+        approvalRequired: actionStatuses.requires_approval ?? 0,
+      },
+      agents,
+      actions: {
+        statuses: actionStatuses,
+        requiredPermissions,
+      },
+      knowledge: {
+        activeScholarships,
+        activeJobs,
+        activePartners,
+        publishedBlogPosts,
+        applications,
+        retrievalSources,
+        degradedSources,
+      },
+      reliability: {
+        providers,
+        fallbackConversations,
+        modelStatus: process.env.OPENAI_API_KEY ? "primary_configured" : "local_safe_mode",
+      },
+      recentAuditTrail,
+    };
   };
 
   const uploadsDir = resolveWritableRuntimePath("uploads");
@@ -4297,7 +4525,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       broadcast('user_activity', { type: 'user_logged_in', user: buildPublicUser(user) });
 
-      if (isMfaRequiredForRole(user.role) && hasConfirmedMfa(user as AuthUserRecord)) {
+      const mfaConfigured = hasConfirmedMfa(user as AuthUserRecord);
+      const mfaRequired = isMfaRequiredForRole(user.role) || mfaConfigured;
+      if (mfaConfigured) {
         return res.status(202).json({
           message: "Multi-factor authentication required",
           mfaRequired: true,
@@ -4306,12 +4536,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const mfaVerified = !isMfaRequiredForRole(user.role);
+      const mfaVerified = !mfaRequired;
       setRefreshCookie(res, user, { mfaVerified, rememberMe: loginPayload.rememberMe });
       res.json({
         message: 'Login successful',
         token: signToken(user, { mfaVerified, rememberMe: loginPayload.rememberMe }),
-        mfaRequired: isMfaRequiredForRole(user.role),
+        mfaRequired,
         mfaVerified,
         user: buildPublicUser(user),
       });
@@ -4818,6 +5048,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Admin email deliverability error:", getErrorLogMessage(error));
       res.status(500).json({ message: "Failed to fetch email deliverability diagnostics" });
+    }
+  });
+
+  app.get('/api/admin/email/readiness', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const days = Number(req.query.days ?? 30);
+      res.json(await getEmailProductionReadinessReport(Number.isFinite(days) ? days : 30));
+    } catch (error) {
+      console.error("Admin email readiness error:", getErrorLogMessage(error));
+      res.status(500).json({ message: "Failed to fetch email production readiness report" });
     }
   });
 
@@ -10353,6 +10593,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/admin/ai-chat/command-center', authenticateToken, requireAdmin, async (_req, res) => {
+    try {
+      res.json(await buildAiCommandCenter());
+    } catch (error) {
+      console.error("AI command center error:", error);
+      res.status(500).json({ message: "Failed to load AI command center", error: getErrorMessage(error) });
+    }
+  });
+
   app.get('/api/admin/ai-chat/conversations', authenticateToken, requireAdmin, (req, res) => {
     const { page, limit, offset } = parsePagination(req.query.page, req.query.limit, 100);
     const search = normalizeSearchQuery(req.query.search);
@@ -10420,9 +10669,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const payload = chatRequestSchema.parse(req.body);
       const user = getAuthenticatedUser(req);
       const existing = payload.conversationId ? getAiChatConversation(payload.conversationId) : undefined;
-      const response = await getChatResponse(payload.message, {
+      const assistant = await getEnterpriseChatResponse(payload.message, {
         channel: "admin",
         platformContext: await buildAiPlatformContext(),
+        userContext: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          currentPage: payload.currentPage ?? "/admin/ai-chat",
+        },
+        memory: buildAiMemoryState(existing, payload),
         history: existing?.messages.map((item) => ({
           role: item.role === "system" ? "assistant" : item.role,
           content: item.content,
@@ -10434,7 +10690,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userEmail: user.email,
         channel: "admin",
         message: payload.message,
-        response,
+        assistant,
       });
 
       await storage.logAnalytics({
@@ -10443,13 +10699,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: {
           conversationId: conversation.id,
           flags: conversation.moderationFlags,
+          intent: assistant.metadata.intent,
+          confidence: assistant.metadata.confidence,
+          riskLevel: assistant.metadata.riskLevel,
+          sourceCount: assistant.metadata.retrievalSources.length,
+          escalationRequired: assistant.metadata.escalationRequired,
         },
         ipAddress: req.ip,
         userAgent: req.get("user-agent"),
       });
 
       broadcast("ai-chat", { type: "ai_chat_updated", conversation });
-      res.json({ response, conversationId: conversation.id, conversation });
+      res.json({
+        response: assistant.response,
+        conversationId: conversation.id,
+        conversation,
+        metadata: assistant.metadata,
+        audit: assistant.audit,
+      });
     } catch (error) {
       console.error("Admin AI chat error:", error);
       res.status(400).json({ message: "Failed to get chat response", error: getErrorMessage(error) });
@@ -12041,15 +12308,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/chat/memory', (req, res) => {
+    try {
+      const payload = chatMemoryRequestSchema.pick({ conversationId: true }).parse(req.query);
+      const conversation = getAiChatConversation(payload.conversationId);
+      if (!conversation) return res.status(404).json({ message: "Conversation not found" });
+
+      res.json({
+        conversationId: conversation.id,
+        memory: conversation.memory ?? createEmptyAiMemoryState(),
+        intelligence: conversation.intelligence
+          ? {
+              intent: conversation.intelligence.intent,
+              confidence: conversation.intelligence.confidence,
+              riskLevel: conversation.intelligence.riskLevel,
+              selectedAgent: conversation.intelligence.selectedAgent,
+              actionStatus: (conversation.intelligence.actionPlan as { status?: string } | undefined)?.status,
+              escalationRequired: conversation.intelligence.escalationRequired,
+            }
+          : null,
+      });
+    } catch (error) {
+      res.status(400).json({ message: "Failed to read AI memory", error: getErrorMessage(error) });
+    }
+  });
+
+  app.put('/api/chat/memory', (req, res) => {
+    try {
+      const payload = chatMemoryRequestSchema.parse(req.body);
+      const conversation = getAiChatConversation(payload.conversationId);
+      if (!conversation) return res.status(404).json({ message: "Conversation not found" });
+
+      const memory: AiChatMemoryState = {
+        enabled: payload.enabled ?? conversation.memory?.enabled ?? true,
+        userPreferences: Array.from(new Set(payload.userPreferences ?? conversation.memory?.userPreferences ?? [])).slice(0, 20),
+        shortTermSummary: conversation.memory?.shortTermSummary ?? null,
+        lastUpdatedAt: new Date().toISOString(),
+      };
+      const updated = updateAiChatMemory(payload.conversationId, memory);
+      res.json({ conversationId: payload.conversationId, memory: updated?.memory ?? memory });
+    } catch (error) {
+      res.status(400).json({ message: "Failed to update AI memory", error: getErrorMessage(error) });
+    }
+  });
+
+  app.delete('/api/chat/memory', (req, res) => {
+    try {
+      const source = Object.keys(req.body ?? {}).length > 0 ? req.body : req.query;
+      const payload = chatMemoryRequestSchema.pick({ conversationId: true }).parse(source);
+      const updated = clearAiChatMemory(payload.conversationId);
+      if (!updated) return res.status(404).json({ message: "Conversation not found" });
+
+      res.json({ conversationId: payload.conversationId, memory: updated.memory ?? createEmptyAiMemoryState(false) });
+    } catch (error) {
+      res.status(400).json({ message: "Failed to clear AI memory", error: getErrorMessage(error) });
+    }
+  });
+
   // AI Chat route
   app.post('/api/chat', async (req, res) => {
     try {
       const payload = chatRequestSchema.parse(req.body);
       const requester = getOptionalAuthenticatedUser(req);
       const existing = payload.conversationId ? getAiChatConversation(payload.conversationId) : undefined;
-      const response = await getChatResponse(payload.message, {
+      const assistant = await getEnterpriseChatResponse(payload.message, {
         channel: "public",
         platformContext: await buildAiPlatformContext(),
+        userContext: {
+          id: requester?.id ?? null,
+          email: requester?.email ?? null,
+          role: requester?.role ?? "guest",
+          currentPage: payload.currentPage ?? req.get("referer") ?? null,
+        },
+        memory: buildAiMemoryState(existing, payload),
         history: existing?.messages.map((item) => ({
           role: item.role === "system" ? "assistant" : item.role,
           content: item.content,
@@ -12061,7 +12392,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userEmail: requester?.email ?? null,
         channel: "public",
         message: payload.message,
-        response,
+        assistant,
       });
 
       await storage.logAnalytics({
@@ -12070,13 +12401,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: {
           conversationId: conversation.id,
           flags: conversation.moderationFlags,
+          intent: assistant.metadata.intent,
+          confidence: assistant.metadata.confidence,
+          riskLevel: assistant.metadata.riskLevel,
+          sourceCount: assistant.metadata.retrievalSources.length,
+          escalationRequired: assistant.metadata.escalationRequired,
         },
         ipAddress: req.ip,
         userAgent: req.get("user-agent"),
       });
 
       broadcast("ai-chat", { type: "ai_chat_updated", conversation });
-      res.json({ response, conversationId: conversation.id });
+      res.json({
+        response: assistant.response,
+        conversationId: conversation.id,
+        metadata: assistant.metadata,
+        audit: assistant.audit,
+      });
     } catch (error) {
       console.error('Chat error:', error);
       res.status(400).json({ message: 'Failed to get chat response', error: getErrorMessage(error) });

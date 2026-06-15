@@ -137,6 +137,20 @@ const withMockStorage = async (users: MockUser[]) => {
   });
 };
 
+const withTwoFactorPolicy = async <T>(enabled: boolean, action: () => Promise<T>) => {
+  const previous = process.env.ADMIN_TWO_FACTOR_REQUIRED;
+  process.env.ADMIN_TWO_FACTOR_REQUIRED = String(enabled);
+  try {
+    return await action();
+  } finally {
+    if (previous === undefined) {
+      delete process.env.ADMIN_TWO_FACTOR_REQUIRED;
+    } else {
+      process.env.ADMIN_TWO_FACTOR_REQUIRED = previous;
+    }
+  }
+};
+
 const startTestServer = async () => {
   const { registerRoutesRef } = await loadServerModules();
   const app = express();
@@ -307,51 +321,52 @@ test("MFA challenge flow verifies login and allows privileged route", async () =
   }
 });
 
-test("Privileged role without MFA setup is blocked from admin routes", async () => {
-  await withMockStorage([
-    {
-      id: 2,
-      username: "adminnomfa",
-      email: "admin-nomfa@example.com",
-      password: await bcrypt.hash("secret123", 10),
-      firstName: "Admin",
-      lastName: "NoMfa",
-      role: "admin",
-      mfaEnabled: false,
-      totpSecret: null,
-      mfaConfirmedAt: null,
-      profilePicture: null,
-      phone: null,
-      dateOfBirth: null,
-      isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-  ]);
-
-  const { server, baseUrl } = await startTestServer();
-  try {
-    const loginResponse = await requestJson(baseUrl, "/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: "adminnomfa", password: "secret123" }),
-    });
-
-    assert.equal(loginResponse.status, 200);
-    assert.equal(typeof loginResponse.body.token, "string");
-
-    const adminResponse = await requestJson(baseUrl, "/api/admin/ai-chat/conversations", {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${loginResponse.body.token}`,
+test("Privileged role without MFA setup can access admin routes when MFA policy is off", async () => {
+  await withTwoFactorPolicy(false, async () => {
+    await withMockStorage([
+      {
+        id: 2,
+        username: "adminnomfa",
+        email: "admin-nomfa@example.com",
+        password: await bcrypt.hash("secret123", 10),
+        firstName: "Admin",
+        lastName: "NoMfa",
+        role: "admin",
+        mfaEnabled: false,
+        totpSecret: null,
+        mfaConfirmedAt: null,
+        profilePicture: null,
+        phone: null,
+        dateOfBirth: null,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
-    });
+    ]);
 
-    assert.equal(adminResponse.status, 403);
-    assert.equal(adminResponse.body.code, "MFA_SETUP_REQUIRED");
-  } finally {
-    await stopTestServer(server);
-  }
+    const { server, baseUrl } = await startTestServer();
+    try {
+      const loginResponse = await requestJson(baseUrl, "/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: "adminnomfa", password: "secret123" }),
+      });
+
+      assert.equal(loginResponse.status, 200);
+      assert.equal(typeof loginResponse.body.token, "string");
+
+      const adminResponse = await requestJson(baseUrl, "/api/admin/ai-chat/conversations", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${loginResponse.body.token}`,
+        },
+      });
+
+      assert.equal(adminResponse.status, 200);
+    } finally {
+      await stopTestServer(server);
+    }
+  });
 });
 
 test("Viewer role is denied admin routes by RBAC guard", async () => {

@@ -9,12 +9,14 @@ The platform also includes a centralized event-driven communication layer in `se
 The service provides:
 
 - Provider failover across SendGrid, Amazon SES, Mailgun, Resend, Postmark, SMTP, custom HTTP providers, and controlled dry-run mode.
+- Provider circuit breakers that temporarily skip repeatedly failing providers while preserving failover to healthy providers.
 - Queue-backed processing with retry scheduling at 1 minute, 5 minutes, 15 minutes, and 1 hour.
 - Dead-letter visibility through failed `email_jobs`.
 - Branded responsive templates with Mtendere identity, preference links, unsubscribe links, tracking links, and open tracking pixels.
-- Email preference records, consent state, and suppression for commercial categories.
+- Email preference records, consent state, automatic bounce/complaint suppression, and suppression for commercial categories.
+- Provider webhook normalization and deduplication for SendGrid, Amazon SES/SNS, Mailgun, Resend, and Postmark event payloads.
 - Delivery event logging for queued, processing, sent, delivered, opened, clicked, bounced, unsubscribed, spam complaint, retry, provider failure, and final failure events.
-- Admin diagnostics at `/api/admin/email/diagnostics`, `/api/admin/email/stats`, `/api/admin/email/templates`, and `/api/admin/email/deliverability`.
+- Admin diagnostics at `/api/admin/email/diagnostics`, `/api/admin/email/stats`, `/api/admin/email/templates`, `/api/admin/email/deliverability`, and `/api/admin/email/readiness`.
 
 ## Event-Driven Notifications And Documents
 
@@ -77,7 +79,10 @@ Production Vercel must contain real server-side values. These values must not be
 - `RESEND_API_KEY`
 - `RESEND_DOMAIN=mtendereeducationconsult.com`
 - `EMAIL_PROVIDER_ORDER=sendgrid,ses,mailgun,resend,postmark,smtp,custom`
+- `EMAIL_PROVIDER_CIRCUIT_FAILURE_THRESHOLD=3`
+- `EMAIL_PROVIDER_CIRCUIT_COOLDOWN_MS=120000`
 - `EMAIL_DRY_RUN=false`
+- `EMAIL_WEBHOOK_DEDUP_TTL_MS=86400000`
 - `EMAIL_FROM=Mtendere Education Consult <onboarding@resend.dev>` for immediate Resend testing, then `EMAIL_FROM=Mtendere Education Consult <no-reply@mtendereeducationconsult.com>` after the sender domain is verified
 - `SENDGRID_TRACKING_ENABLED=true`
 - `EMAIL_LINK_BASE_URL=https://links.mtendereeducationconsult.com`
@@ -123,6 +128,8 @@ The email health payload now exposes:
 - `queueOperations.congestion`
 - `alerts`
 - `deliverability`
+- `circuitBreakers`
+- `deliverability.authenticationPolicy`
 
 Alert codes include:
 
@@ -130,6 +137,7 @@ Alert codes include:
 - `email_dry_run_enabled`
 - `email_dead_letter_jobs`
 - `email_queue_congestion`
+- `email_provider_circuit_open`
 - `email_bounce_rate_high`
 - `email_spam_complaints_high`
 - `email_dns_not_ready`
@@ -144,6 +152,7 @@ Alert codes include:
 - Configure `mtendereeducationconsult.com` in Resend, add the returned DNS records to Cloudflare, and run Resend verification.
 - Correct the Cloudflare `mail` CNAME target.
 - Configure SendGrid Event Webhook to post delivery events into `/api/email/webhooks/sendgrid` if that route is enabled in the deployment.
+- For Postmark, add and verify the Mtendere sender/domain in Postmark so DKIM passes for `mtendereeducationconsult.com`; a root `include:spf.mtasv.net` TXT is optional under Postmark's Return-Path SPF model.
 - Move DMARC from `p=none` to `p=quarantine`, then `p=reject` after bounce and complaint rates are stable.
 - Add a scheduled queue drain if Vercel cold starts are not enough for high-volume marketing campaigns.
 - Configure and smoke-test the selected SMS/WhatsApp provider before enabling high-priority security/payment text delivery in production.
