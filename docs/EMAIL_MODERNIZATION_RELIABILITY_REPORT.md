@@ -18,6 +18,13 @@ The service provides:
 - Delivery event logging for queued, processing, sent, delivered, opened, clicked, bounced, unsubscribed, spam complaint, retry, provider failure, and final failure events.
 - Admin diagnostics at `/api/admin/email/diagnostics`, `/api/admin/email/stats`, `/api/admin/email/templates`, `/api/admin/email/deliverability`, and `/api/admin/email/readiness`.
 
+Operational status semantics:
+
+- `email_jobs.status = sent` means the configured provider accepted the message and returned a provider message id when available.
+- Inbox placement is not confirmed by `sent`. Mailbox delivery is confirmed only after provider webhook events such as `delivered`, `opened`, `clicked`, `bounced`, or `spam_complaint`.
+- Public responses expose `acceptedByProvider`, `mailboxDeliveryConfirmed`, `confirmationPending`, and `queued` so user notifications avoid promising delivery before the provider confirms it.
+- Permanent provider rejections such as Resend testing-mode recipient restrictions, invalid senders, unauthorized keys, and 400/401/403 validation failures are dead-lettered instead of being retried repeatedly.
+
 ## Event-Driven Notifications And Documents
 
 Communication events use this pipeline:
@@ -83,7 +90,7 @@ Production Vercel must contain real server-side values. These values must not be
 - `EMAIL_PROVIDER_CIRCUIT_COOLDOWN_MS=120000`
 - `EMAIL_DRY_RUN=false`
 - `EMAIL_WEBHOOK_DEDUP_TTL_MS=86400000`
-- `EMAIL_FROM=Mtendere Education Consult <onboarding@resend.dev>` for immediate Resend testing, then `EMAIL_FROM=Mtendere Education Consult <no-reply@mtendereeducationconsult.com>` after the sender domain is verified
+- `EMAIL_FROM=Mtendere Education Consult <no-reply@mail.mtendereeducationconsult.com>` after the sender domain is verified. `Mtendere Education Consult <onboarding@resend.dev>` is only acceptable for one-off Resend smoke tests to the Resend account owner.
 - `SENDGRID_TRACKING_ENABLED=true`
 - `EMAIL_LINK_BASE_URL=https://links.mtendereeducationconsult.com`
 - `PUBLIC_APP_URL=https://mtendereeducationconsult.com`

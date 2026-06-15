@@ -111,6 +111,20 @@ test("Vercel production runtime uses configured live email providers", async () 
   assert.equal(diagnostics.activeProviders[0], "resend");
 });
 
+test("Resend testing sender is not production-ready for public recipients", async () => {
+  const { getEmailSenderDiagnosticsForAddress } = await emailModulePromise;
+
+  const diagnostics = getEmailSenderDiagnosticsForAddress(
+    "Mtendere Education Consult <onboarding@resend.dev>",
+    ["resend"],
+    true,
+  );
+
+  assert.equal(diagnostics.resendTestSender, true);
+  assert.equal(diagnostics.publicRecipientRestricted, true);
+  assert.equal(diagnostics.recommendedFrom, "Mtendere Education Consult <no-reply@mail.mtendereeducationconsult.com>");
+});
+
 const installQueueStorage = async (initialJob: any) => {
   const state = { job: initialJob };
   const deliveryEvents: any[] = [];
@@ -252,6 +266,33 @@ test("email queue schedules the first retry one minute after an all-provider fai
   const retryDelayMs = queue.failedUpdates[0].scheduledFor.getTime() - startedAt;
   assert.ok(retryDelayMs >= 55_000 && retryDelayMs <= 70_000, `expected ~60s retry, got ${retryDelayMs}ms`);
   assert.equal(queue.deliveryEvents.some((event) => event.eventType === "retry_scheduled"), true);
+});
+
+test("email queue dead-letters permanent provider rejections without retry churn", { concurrency: false }, async () => {
+  const { processEmailQueue } = await emailModulePromise;
+  const queue = await installQueueStorage(makeEmailJob({ id: "permanent-rejection-job" }));
+
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        statusCode: 403,
+        name: "validation_error",
+        message: "You can only send testing emails to your own email address. To send emails to other recipients, please verify a domain.",
+      }),
+      {
+        status: 403,
+        statusText: "Forbidden",
+        headers: { "content-type": "application/json" },
+      },
+    )) as typeof fetch;
+
+  await processEmailQueue();
+
+  assert.equal(queue.state.job.status, "failed");
+  assert.equal(queue.failedUpdates.length, 1);
+  assert.equal(queue.failedUpdates[0].finalFailure, true);
+  assert.equal(queue.deliveryEvents.some((event) => event.eventType === "failed"), true);
+  assert.equal(queue.deliveryEvents.some((event) => event.eventType === "retry_scheduled"), false);
 });
 
 test("email queue skips jobs that cannot be claimed for processing", { concurrency: false }, async () => {
@@ -975,12 +1016,18 @@ test("newsletter signup succeeds once the subscriber is saved and confirmation e
     const body = await response.json();
 
     assert.equal(response.status, 201);
-    assert.equal(body.message, "Please check your inbox shortly to confirm your subscription.");
+    assert.equal(
+      body.message,
+      "Your confirmation email was accepted by our email provider. Please check your inbox and spam folder shortly to confirm your subscription.",
+    );
     assert.equal(body.subscriber.email, "newsletter-student@example.test");
     assert.equal(body.subscriber.status, "pending");
     assert.equal(body.delivery.status, "sent");
     assert.equal(body.delivery.provider, "resend");
     assert.equal(body.delivery.queued, false);
+    assert.equal(body.delivery.acceptedByProvider, true);
+    assert.equal(body.delivery.mailboxDeliveryConfirmed, false);
+    assert.equal(body.delivery.confirmationPending, true);
     assert.equal(state.subscribers.get("newsletter-student@example.test")?.status, "pending");
     assert.equal(state.emailJobs.length, 1);
     assert.equal(state.emailJobs[0].category, "subscription_confirmation");

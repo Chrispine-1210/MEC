@@ -27,6 +27,11 @@ type EventRegistrationDialogProps = {
 type RegistrationResponse = {
   registration: ApiEventRegistration;
   ticketUrl: string;
+  delivery?: {
+    acceptedByProvider?: boolean;
+    mailboxDeliveryConfirmed?: boolean;
+    confirmationPending?: boolean;
+  };
 };
 
 export default function EventRegistrationDialog({ event, trigger }: EventRegistrationDialogProps) {
@@ -67,7 +72,9 @@ export default function EventRegistrationDialog({ event, trigger }: EventRegistr
         title: payload.registration.status === "waitlisted" ? "Added to waitlist" : "Registration received",
         description:
           payload.registration.status === "approved"
-            ? "Your event confirmation is ready."
+            ? payload.delivery?.acceptedByProvider
+              ? "Your ticket is ready. The confirmation email was accepted by our email provider."
+              : "Your ticket is ready. If the confirmation email is delayed, keep the ticket link shown here."
             : "Mtendere will follow up with your registration status.",
       });
     },

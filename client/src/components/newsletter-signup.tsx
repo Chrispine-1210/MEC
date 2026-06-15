@@ -9,6 +9,12 @@ import { trackConversionEvent } from "@/lib/conversion-tracking";
 import { getRecaptchaToken } from "@/lib/recaptcha";
 import { cn } from "@/lib/utils";
 
+type DeliveryState = {
+  acceptedByProvider?: boolean;
+  mailboxDeliveryConfirmed?: boolean;
+  confirmationPending?: boolean;
+};
+
 type NewsletterSignupProps = {
   source?: string;
   compact?: boolean;
@@ -71,11 +77,16 @@ export default function NewsletterSignup({
       });
     },
     onSuccess: async (response) => {
-      const payload = await response.json();
+      const payload = (await response.json()) as { message?: string; delivery?: DeliveryState };
       trackConversionEvent("newsletter_signup_completed", { source, preferences });
+      const acceptedByProvider = payload.delivery?.acceptedByProvider === true;
       toast({
         title: "Confirm your subscription",
-        description: payload.message || "Check your inbox to confirm your email.",
+        description:
+          payload.message ||
+          (acceptedByProvider
+            ? "The confirmation email was accepted by our email provider. Check your inbox and spam folder shortly."
+            : "Your subscription was saved. If the confirmation email is delayed, please contact support."),
       });
       setEmail("");
       setName("");

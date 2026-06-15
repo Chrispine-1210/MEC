@@ -760,9 +760,31 @@ const getPublicErrorMessage = (error: unknown, fallback = "Request failed") => {
 const isRealEmailDelivery = (result: { status?: string; provider?: string | null }) =>
   result.status === "sent" && result.provider !== "dry_run";
 
+const getEmailDeliveryState = (result: {
+  status?: string;
+  provider?: string | null;
+  providerMessageId?: string | null;
+  error?: string;
+  lastError?: string | null;
+}) => {
+  const acceptedByProvider = isRealEmailDelivery(result);
+  const queued = !acceptedByProvider && result.status !== "failed";
+  return {
+    status: result.status,
+    provider: result.provider,
+    providerMessageId: result.providerMessageId ?? null,
+    acceptedByProvider,
+    mailboxDeliveryConfirmed: false,
+    confirmationPending: acceptedByProvider,
+    queued,
+    error: result.status === "failed" ? result.error || result.lastError || null : null,
+  };
+};
+
 const emailDeliveryFailureResponse = (result: {
   status?: string;
   provider?: string | null;
+  providerMessageId?: string | null;
   error?: string;
   lastError?: string | null;
 }) => ({
@@ -772,6 +794,7 @@ const emailDeliveryFailureResponse = (result: {
       : "The submission was saved, but we could not send the confirmation email right now. Please try again shortly or contact support.",
   deliveryStatus: result.status,
   deliveryProvider: result.provider,
+  delivery: getEmailDeliveryState(result),
 });
 
 const logAnalyticsBestEffort = async (input: Parameters<typeof storage.logAnalytics>[0]) => {
@@ -6276,11 +6299,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(confirmationEmailFailed ? 202 : 201).json({
         ...application,
         meta: getApplicationMeta(application.id),
-        delivery: {
-          status: applicationConfirmation.status,
-          provider: applicationConfirmation.provider,
-          queued: !confirmationEmailFailed && !isRealEmailDelivery(applicationConfirmation),
-        },
+        delivery: getEmailDeliveryState(applicationConfirmation),
       });
     } catch (error) {
       console.error('Application creation error:', error);
@@ -7052,7 +7071,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ticketUrl: `/api/events/registrations/${registration.ticketCode}/ticket`,
         });
       }
-      res.status(201).json({ registration, ticketUrl: `/api/events/registrations/${registration.ticketCode}/ticket` });
+      res.status(201).json({
+        registration,
+        ticketUrl: `/api/events/registrations/${registration.ticketCode}/ticket`,
+        delivery: getEmailDeliveryState(registrationEmail),
+      });
     } catch (error) {
       console.error('Event registration error:', error);
       res.status(400).json({ message: 'Failed to register for event', error: getErrorMessage(error) });
@@ -11937,18 +11960,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(confirmationEmailFailed ? 202 : 201).json({
         message: confirmationEmailFailed
           ? "Your subscription was saved. We could not send the confirmation email immediately; please contact support if it does not arrive."
-          : "Please check your inbox shortly to confirm your subscription.",
+          : "Your confirmation email was accepted by our email provider. Please check your inbox and spam folder shortly to confirm your subscription.",
         subscriber: {
           id: subscriber.id,
           email: subscriber.email,
           status: subscriber.status,
           preferences: subscriber.preferences,
         },
-        delivery: {
-          status: confirmationEmail.status,
-          provider: confirmationEmail.provider,
-          queued: !confirmationEmailFailed && !isRealEmailDelivery(confirmationEmail),
-        },
+        delivery: getEmailDeliveryState(confirmationEmail),
       });
     } catch (error) {
       console.error('Subscriber creation error:', getErrorLogMessage(error));
@@ -12207,10 +12226,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Message sent successfully",
         ticketCode,
         data: message,
-        acknowledgement: {
-          status: contactAcknowledgement.status,
-          provider: contactAcknowledgement.provider || null,
-        },
+        acknowledgement: getEmailDeliveryState(contactAcknowledgement),
       });
     } catch (error) {
       console.error('Message creation error:', error);

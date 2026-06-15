@@ -80,7 +80,10 @@ Dynamic variables use `{{variable_name}}` syntax. Values are HTML-escaped for em
 ## Reliability And Audit
 
 - High-priority email routes request immediate delivery for their own queued job. This covers account verification, welcome, password reset, password changed, application confirmations and status updates, event registration confirmations and status updates, partner onboarding, contact acknowledgments, and admin notifications triggered by public submissions.
+- `email_jobs.status = sent` means the provider accepted the message. It does not prove inbox placement. Mailbox-level confirmation is recorded later through provider webhook events such as `delivered`, `opened`, `clicked`, `bounced`, or `spam_complaint`.
+- Public API responses expose `acceptedByProvider`, `mailboxDeliveryConfirmed`, `confirmationPending`, and `queued` so the UI does not claim mailbox delivery before webhook confirmation exists.
 - The queue drain remains responsible for retrying provider failures, recovering stale processing jobs, and clearing backlog from durable storage.
+- Permanent provider rejections such as Resend testing-mode recipient blocks, invalid senders, unauthorized keys, or 400/401/403 validation failures are marked as failed instead of being retried repeatedly. Temporary failures such as rate limits and 5xx responses remain retryable.
 - Every channel output writes a `communication_messages` row with status, recipient, template, provider IDs, metadata, and diagnostics.
 - Every emitted event writes a `communication_events` row with original payload and status.
 - Failed or unsupported SMS/WhatsApp provider paths are recorded explicitly instead of failing silently.
@@ -106,7 +109,8 @@ Before final launch, verify:
 - For Postmark, root-domain SPF is optional because SPF alignment is handled through Postmark's Return-Path; DKIM verification for the Mtendere sender domain is still required before relying on `no-reply@mtendereeducationconsult.com`.
 - Sending subdomains are segmented for `notifications`, `support`, `admissions`, `billing`, and `marketing`.
 - Reverse DNS is verified in the active provider dashboard when dedicated IPs are enabled.
-- `EMAIL_FROM` uses `Mtendere Education Consult <onboarding@resend.dev>` only for initial Resend testing, then switches to a verified Mtendere sender domain.
+- `EMAIL_FROM` must use a verified Mtendere sender domain in production, for example `Mtendere Education Consult <no-reply@mail.mtendereeducationconsult.com>`.
+- `onboarding@resend.dev` is only acceptable for local or one-off smoke tests to the Resend account owner. Health/readiness treats it as public-recipient restricted when Resend is active.
 - `ADMIN_NOTIFICATION_EMAIL` is set to the operations inbox.
 - `ADMIN_NOTIFICATION_PHONE` is set when SMS/WhatsApp provider integration is added.
 - For Twilio SMS: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_SMS_FROM`.

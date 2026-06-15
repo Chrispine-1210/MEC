@@ -28,6 +28,12 @@ import {
   Linkedin
 } from "lucide-react";
 
+type DeliveryState = {
+  acceptedByProvider?: boolean;
+  mailboxDeliveryConfirmed?: boolean;
+  confirmationPending?: boolean;
+};
+
 export default function Contact() {
   const emptyFormData = {
     name: "",
@@ -100,7 +106,11 @@ export default function Contact() {
         source: "contact_page",
         ...getAttributionMetadata(),
       });
-      const payload = await response.json();
+      const payload = (await response.json()) as {
+        ticketCode?: string;
+        acknowledgement?: DeliveryState;
+      };
+      const acknowledgementAccepted = payload.acknowledgement?.acceptedByProvider === true;
       trackConversionEvent("contact_form_completed", {
         form: "contact",
         ticketCode: payload.ticketCode,
@@ -108,9 +118,11 @@ export default function Contact() {
       });
       
       toast({
-        title: "Message Sent Successfully",
+        title: "Message Received",
         description: payload.ticketCode
-          ? `Thank you for contacting us. Your ticket is ${payload.ticketCode}.`
+          ? acknowledgementAccepted
+            ? `Your ticket is ${payload.ticketCode}. The confirmation email was accepted by our email provider.`
+            : `Your ticket is ${payload.ticketCode}. If the confirmation email is delayed, our team can still see your message.`
           : "Thank you for contacting us. We'll get back to you within 24 hours.",
       });
 
