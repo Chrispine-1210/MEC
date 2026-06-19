@@ -5,9 +5,16 @@ import {
   type IssueFinding,
   type MonitoringEvidence,
   type MonitoringReport,
-  type MonitoringReport as ReportType,
 } from "./types";
-import { analyzeEvidence, buildIceBreaker, computeSystemHealthScore } from "./analyzer";
+import {
+  analyzeEvidence,
+  buildExecutiveSummary,
+  buildIceBreaker,
+  buildOperationalSignals,
+  buildOptimizationRoadmap,
+  buildProductIntelligence,
+  computeSystemHealthScore,
+} from "./analyzer";
 
 const ensureDir = (dir: string) => {
   fs.mkdirSync(dir, { recursive: true });
@@ -36,6 +43,28 @@ const severityRank = (s: IssueFinding["severity"]) =>
 const renderMarkdownReport = (report: MonitoringReport) => {
   const sortedFindings = [...report.findings].sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
 
+  const signalsMd = report.operationalSignals
+    .map((signal) => {
+      const note = signal.note ? ` - ${signal.note}` : "";
+      return `- **${signal.domain} / ${signal.label}:** ${signal.value} (${signal.status})${note}`;
+    })
+    .join("\n");
+
+  const roadmapMd = report.optimizationRoadmap
+    .map((item, idx) => `${idx + 1}. **${item.domain} [${item.severity}]** ${item.action}\n   - ${item.expectedOutcome}`)
+    .join("\n");
+
+  const productMd = Object.entries(report.productIntelligence)
+    .map(([section, insights]) => {
+      const list = insights.length
+        ? insights
+            .map((insight) => `- **${insight.area}:** ${insight.observation} Recommendation: ${insight.recommendedAction}`)
+            .join("\n")
+        : "- _No evidence-backed insights for this section._";
+      return `### ${section}\n${list}`;
+    })
+    .join("\n\n");
+
   const findingsMd = sortedFindings
     .map((f, idx) => {
       const impl = f.implementationSteps?.length
@@ -53,7 +82,7 @@ const renderMarkdownReport = (report: MonitoringReport) => {
         .map((src) => `- ${src.kind}${src.path ? ` (${src.path})` : ""}: ${src.detail}`)
         .join("\n")}`;
 
-      return `### ${idx + 1}. ${f.title}  \n**Severity:** ${f.severity}\n\n**Problem**\n${f.problem}\n\n**Impact**\n${f.impact}\n\n**Recommendations**\n${f.recommendation.map((r) => `- ${r}`).join("\n")}${impl}${outcome}${evidence}`;
+      return `### ${idx + 1}. ${f.title}  \n**Domain:** ${f.domain ?? "Unclassified"}  \n**Severity:** ${f.severity}\n\n**Problem**\n${f.problem}\n\n**Impact**\n${f.impact}\n\n**Recommendations**\n${f.recommendation.map((r) => `- ${r}`).join("\n")}${impl}${outcome}${evidence}`;
     })
     .join("\n\n---\n\n");
 
@@ -65,10 +94,18 @@ const renderMarkdownReport = (report: MonitoringReport) => {
     `Tone: ${report.iceBreaker.tone}\n` +
     `**Opener:** ${report.iceBreaker.opener}\n\n` +
     `**Next action:** ${report.iceBreaker.nextAction}\n\n` +
+    `## Executive summary\n` +
+    `${report.executiveSummary.healthNarrative}\n\n` +
+    `**Top risks**\n${report.executiveSummary.topRisks.map((risk) => `- ${risk}`).join("\n") || "- _None._"}\n\n` +
+    `**Recommended next actions**\n${report.executiveSummary.recommendedNextActions.map((action) => `- ${action}`).join("\n") || "- _None._"}\n\n` +
+    `**Business opportunities**\n${report.executiveSummary.businessOpportunities.map((item) => `- ${item}`).join("\n") || "- _None._"}\n\n` +
     `## Daily summary\n` +
     `- New issues: ${report.daily.newIssues.length}\n` +
     `- Resolved issues: ${report.daily.resolvedIssues.length}\n` +
     `- Security alerts: ${report.daily.securityAlerts.length}\n\n` +
+    `## Operational signals\n\n${signalsMd || "_No operational signals._"}\n\n` +
+    `## Product intelligence\n\n${productMd}\n\n` +
+    `## Optimization roadmap\n\n${roadmapMd || "_No roadmap actions._"}\n\n` +
     `## Findings (prioritized)\n\n${findingsMd || "_No findings._"}\n`;
 };
 
@@ -76,8 +113,20 @@ export const buildReportFromEvidence = async (evidence: MonitoringEvidence): Pro
   const findings = await analyzeEvidence(evidence);
   const systemHealthScore = computeSystemHealthScore(evidence, findings);
   const iceBreaker = buildIceBreaker(findings);
+  const operationalSignals = buildOperationalSignals(evidence, findings);
+  const productIntelligence = buildProductIntelligence(evidence, findings);
+  const optimizationRoadmap = buildOptimizationRoadmap(findings);
+  const executiveSummary = buildExecutiveSummary(
+    evidence,
+    findings,
+    systemHealthScore,
+    productIntelligence,
+    optimizationRoadmap,
+  );
 
-  const dailyNewIssues = findings
+  const prioritizedFindings = [...findings].sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
+
+  const dailyNewIssues = prioritizedFindings
     .slice(0, 10)
     .filter((f) => f.severity === "Critical" || f.severity === "High");
 
@@ -105,14 +154,18 @@ export const buildReportFromEvidence = async (evidence: MonitoringEvidence): Pro
       infrastructureStatus: [
         { label: "Metrics endpoint", value: evidence.configSnapshot?.metricsSecretConfigured ? "secured" : "unknown" },
       ],
-      technicalDebt: findings
+      technicalDebt: prioritizedFindings
         .slice(0, 5)
         .map((f) => ({ label: f.title, severity: f.severity, note: f.problem })),
-      recommendedPriorities: findings
+      recommendedPriorities: prioritizedFindings
         .slice(0, 5)
         .map((f) => ({ priority: f.severity, rationale: f.recommendation[0] ?? f.problem })),
     },
     findings,
+    operationalSignals,
+    executiveSummary,
+    productIntelligence,
+    optimizationRoadmap,
     iceBreaker,
     evidence,
   };
