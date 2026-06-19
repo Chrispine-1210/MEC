@@ -32,7 +32,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { buildBotDefenseSubmission } from "@/lib/bot-defense";
 import { apiRequest } from "@/lib/queryClient";
+import { getRecaptchaToken } from "@/lib/recaptcha";
 import type { ApiEvent, ApiEventComment } from "@/lib/api-types";
 import {
   buildBreadcrumbSchema,
@@ -52,7 +54,9 @@ export default function EventDetail() {
   const identifier = params?.id ?? "";
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [commentData, setCommentData] = useState({ authorName: "", authorEmail: "", content: "" });
+  const [commentData, setCommentData] = useState({ authorName: "", authorEmail: "", content: "", website: "", company: "", homepage: "" });
+  const [formStartedAt, setFormStartedAt] = useState<number | null>(null);
+  const markFormStarted = () => setFormStartedAt((current) => current ?? Date.now());
 
   const { data: event, isLoading } = useQuery<ApiEvent>({
     queryKey: [`/api/events/${identifier}`],
@@ -105,11 +109,26 @@ export default function EventDetail() {
   const commentMutation = useMutation({
     mutationFn: async () => {
       if (!event) return null;
-      const response = await apiRequest("POST", `/api/events/${event.id}/comments`, commentData);
+      const recaptchaToken = await getRecaptchaToken("event_comment");
+      const security = await buildBotDefenseSubmission({
+        flow: "event_comment",
+        startedAt: formStartedAt,
+        website: commentData.website,
+        company: commentData.company,
+        homepage: commentData.homepage,
+        recaptchaToken,
+      });
+      const response = await apiRequest("POST", `/api/events/${event.id}/comments`, {
+        authorName: commentData.authorName,
+        authorEmail: commentData.authorEmail,
+        content: commentData.content,
+        ...security,
+      });
       return (await response.json()) as ApiEventComment;
     },
     onSuccess: () => {
-      setCommentData({ authorName: "", authorEmail: "", content: "" });
+      setCommentData({ authorName: "", authorEmail: "", content: "", website: "", company: "", homepage: "" });
+      setFormStartedAt(null);
       queryClient.invalidateQueries({ queryKey: [`/api/events/${identifier}`] });
       toast({ title: "Comment posted", description: "Your discussion comment is now visible." });
     },
@@ -357,22 +376,63 @@ export default function EventDetail() {
                 <CardDescription>Ask questions, share expectations, or leave post-event feedback.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
-                <div className="grid gap-3 md:grid-cols-2">
+                <div
+                  className="space-y-5"
+                  onPointerDownCapture={markFormStarted}
+                  onFocusCapture={markFormStarted}
+                >
+                  <input
+                    tabIndex={-1}
+                    autoComplete="off"
+                    name="website"
+                    value={commentData.website}
+                    onChange={(event) => setCommentData((prev) => ({ ...prev, website: event.target.value }))}
+                    className="hidden"
+                    aria-hidden="true"
+                  />
+                  <input
+                    tabIndex={-1}
+                    autoComplete="off"
+                    name="company"
+                    value={commentData.company}
+                    onChange={(event) => setCommentData((prev) => ({ ...prev, company: event.target.value }))}
+                    className="hidden"
+                    aria-hidden="true"
+                  />
+                  <input
+                    tabIndex={-1}
+                    autoComplete="off"
+                    name="homepage"
+                    value={commentData.homepage}
+                    onChange={(event) => setCommentData((prev) => ({ ...prev, homepage: event.target.value }))}
+                    className="hidden"
+                    aria-hidden="true"
+                  />
+                  <div className="grid gap-3 md:grid-cols-2">
                   <Input
                     value={commentData.authorName}
-                    onChange={(event) => setCommentData((prev) => ({ ...prev, authorName: event.target.value }))}
+                    onChange={(event) => {
+                      markFormStarted();
+                      setCommentData((prev) => ({ ...prev, authorName: event.target.value }));
+                    }}
                     placeholder="Your name"
                   />
                   <Input
                     value={commentData.authorEmail}
-                    onChange={(event) => setCommentData((prev) => ({ ...prev, authorEmail: event.target.value }))}
+                    onChange={(event) => {
+                      markFormStarted();
+                      setCommentData((prev) => ({ ...prev, authorEmail: event.target.value }));
+                    }}
                     placeholder="Email"
                     type="email"
                   />
                 </div>
                 <Textarea
                   value={commentData.content}
-                  onChange={(event) => setCommentData((prev) => ({ ...prev, content: event.target.value }))}
+                  onChange={(event) => {
+                    markFormStarted();
+                    setCommentData((prev) => ({ ...prev, content: event.target.value }));
+                  }}
                   placeholder="Write a comment or question..."
                   rows={4}
                 />
@@ -398,6 +458,7 @@ export default function EventDetail() {
                       </div>
                     ))
                   )}
+                </div>
                 </div>
               </CardContent>
             </Card>

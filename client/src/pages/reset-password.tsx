@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
+import { buildBotDefenseSubmission } from "@/lib/bot-defense";
+import { getRecaptchaToken } from "@/lib/recaptcha";
 
 const passwordRules = [
   (value: string) => value.length >= 12,
@@ -33,8 +35,13 @@ export default function ResetPassword() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [formStartedAt, setFormStartedAt] = useState<number | null>(null);
+  const [website, setWebsite] = useState("");
+  const [company, setCompany] = useState("");
+  const [homepage, setHomepage] = useState("");
   const { toast } = useToast();
   const strength = passwordRules.filter((rule) => rule(password)).length * 20;
+  const markFormStarted = () => setFormStartedAt((current) => current ?? Date.now());
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -50,7 +57,16 @@ export default function ResetPassword() {
 
     setIsLoading(true);
     try {
-      await apiRequest("POST", "/api/auth/reset-password", { token, password });
+      const recaptchaToken = await getRecaptchaToken("password_reset_complete");
+      const security = await buildBotDefenseSubmission({
+        flow: "password_reset_complete",
+        startedAt: formStartedAt,
+        website,
+        company,
+        homepage,
+        recaptchaToken,
+      });
+      await apiRequest("POST", "/api/auth/reset-password", { token, password, ...security });
       toast({ title: "Password reset", description: "Sign in with your new password." });
       setLocation("/login?reset=1");
     } catch (error) {
@@ -75,6 +91,11 @@ export default function ResetPassword() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="hidden" aria-hidden="true">
+              <Input tabIndex={-1} autoComplete="off" name="website" value={website} onChange={(event) => setWebsite(event.target.value)} />
+              <Input tabIndex={-1} autoComplete="off" name="company" value={company} onChange={(event) => setCompany(event.target.value)} />
+              <Input tabIndex={-1} autoComplete="off" name="homepage" value={homepage} onChange={(event) => setHomepage(event.target.value)} />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="password">New password</Label>
               <div className="relative">
@@ -83,7 +104,10 @@ export default function ResetPassword() {
                   type={showPassword ? "text" : "password"}
                   autoComplete="new-password"
                   value={password}
-                  onChange={(event) => setPassword(event.target.value)}
+                  onChange={(event) => {
+                    markFormStarted();
+                    setPassword(event.target.value);
+                  }}
                   required
                   disabled={isLoading || !token}
                   className="pr-12"
@@ -111,7 +135,10 @@ export default function ResetPassword() {
                 type={showPassword ? "text" : "password"}
                 autoComplete="new-password"
                 value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
+                onChange={(event) => {
+                  markFormStarted();
+                  setConfirmPassword(event.target.value);
+                }}
                 required
                 disabled={isLoading || !token}
               />

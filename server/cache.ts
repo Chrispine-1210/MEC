@@ -9,6 +9,9 @@ type RedisClientLike = {
   connect: () => Promise<void>;
   get: (key: string) => Promise<string | null>;
   set: (key: string, value: string, options?: { EX?: number }) => Promise<unknown>;
+  incr: (key: string) => Promise<number>;
+  expire: (key: string, seconds: number) => Promise<boolean | number>;
+  ttl: (key: string) => Promise<number>;
   del: (key: string) => Promise<number>;
   quit: () => Promise<void>;
   on: (event: string, listener: (...args: unknown[]) => void) => void;
@@ -73,6 +76,23 @@ const writeToMemory = (key: string, value: string, ttlSeconds?: number) => {
   const expiresAt =
     typeof ttlSeconds === "number" && ttlSeconds > 0 ? Date.now() + ttlSeconds * 1000 : null;
   memoryStore.set(key, { value, expiresAt });
+};
+
+const incrementMemoryCounter = (key: string, ttlSeconds: number) => {
+  const now = Date.now();
+  const existing = memoryStore.get(key);
+  const expiresAt = existing?.expiresAt && existing.expiresAt > now
+    ? existing.expiresAt
+    : now + ttlSeconds * 1000;
+  const current = existing && existing.expiresAt !== null && existing.expiresAt > now
+    ? Number(existing.value) || 0
+    : 0;
+  const count = current + 1;
+  memoryStore.set(key, { value: String(count), expiresAt });
+  return {
+    count,
+    ttlSeconds: Math.max(1, Math.ceil((expiresAt - now) / 1000)),
+  };
 };
 
 export const initializeCache = async () => {
@@ -193,6 +213,28 @@ export const cacheDelete = async (key: string) => {
     }
   }
   memoryStore.delete(key);
+};
+
+export const cacheIncrement = async (key: string, ttlSeconds: number) => {
+  const safeTtlSeconds = Math.max(1, Math.ceil(ttlSeconds));
+
+  if (cacheMode === "redis" && redisClient) {
+    try {
+      const count = await redisClient.incr(key);
+      if (count === 1) {
+        await redisClient.expire(key, safeTtlSeconds);
+      }
+      const ttl = await redisClient.ttl(key);
+      return {
+        count,
+        ttlSeconds: ttl > 0 ? ttl : safeTtlSeconds,
+      };
+    } catch {
+      // Fallback to memory when Redis counter operations fail.
+    }
+  }
+
+  return incrementMemoryCounter(key, safeTtlSeconds);
 };
 
 export const cacheGetJson = async <T>(key: string): Promise<T | null> => {

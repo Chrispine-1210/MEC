@@ -17,8 +17,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { buildBotDefenseSubmission } from "@/lib/bot-defense";
 import { apiFetch } from "@/lib/api-base";
 import { apiRequest } from "@/lib/queryClient";
+import { getRecaptchaToken } from "@/lib/recaptcha";
 import type { ApiJob } from "@/lib/api-types";
 
 type ApplicationField = {
@@ -96,9 +98,14 @@ export default function ApplicationDialog({ type, referenceId, title, trigger, j
   const [coverLetterFile, setCoverLetterFile] = useState<File | null>(null);
   const [portfolioFile, setPortfolioFile] = useState<File | null>(null);
   const [consent, setConsent] = useState(false);
+  const [formStartedAt, setFormStartedAt] = useState<number | null>(null);
+  const [website, setWebsite] = useState("");
+  const [company, setCompany] = useState("");
+  const [homepage, setHomepage] = useState("");
   const draftKey = `mtendere-application-draft-${type}-${referenceId}`;
 
   const fields = useMemo(() => buildApplicationFields(type, job, customFields), [customFields, job, type]);
+  const markFormStarted = () => setFormStartedAt((current) => current ?? Date.now());
 
   useEffect(() => {
     if (!open || typeof window === "undefined") return;
@@ -129,6 +136,10 @@ export default function ApplicationDialog({ type, referenceId, title, trigger, j
     setCoverLetterFile(null);
     setPortfolioFile(null);
     setConsent(false);
+    setWebsite("");
+    setCompany("");
+    setHomepage("");
+    setFormStartedAt(null);
   };
 
   const saveDraft = () => {
@@ -213,6 +224,15 @@ export default function ApplicationDialog({ type, referenceId, title, trigger, j
     setIsSubmitting(true);
 
     try {
+      const recaptchaToken = await getRecaptchaToken("application_submit");
+      const security = await buildBotDefenseSubmission({
+        flow: "application_submit",
+        startedAt: formStartedAt,
+        website,
+        company,
+        homepage,
+        recaptchaToken,
+      });
       const uploadedDocuments = await uploadDocuments();
       const filteredEducation = education.filter((item) => item.degree || item.institution || item.graduationDate);
       const filteredReferences = references.filter((item) => item.name || item.email || item.phone);
@@ -222,6 +242,7 @@ export default function ApplicationDialog({ type, referenceId, title, trigger, j
         referenceId,
         status: "pending",
         notes,
+        ...security,
         documents: {
           ...uploadedDocuments,
           source: type === "job" ? "jobs-portal" : "public-application",
@@ -279,29 +300,61 @@ export default function ApplicationDialog({ type, referenceId, title, trigger, j
           <DialogDescription>Submit your profile, supporting documents, and opportunity-specific answers.</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form
+          onSubmit={handleSubmit}
+          onPointerDownCapture={markFormStarted}
+          onFocusCapture={markFormStarted}
+          className="space-y-6"
+        >
+          <input
+            tabIndex={-1}
+            autoComplete="off"
+            name="website"
+            value={website}
+            onChange={(event) => setWebsite(event.target.value)}
+            className="hidden"
+            aria-hidden="true"
+          />
+          <input
+            tabIndex={-1}
+            autoComplete="off"
+            name="company"
+            value={company}
+            onChange={(event) => setCompany(event.target.value)}
+            className="hidden"
+            aria-hidden="true"
+          />
+          <input
+            tabIndex={-1}
+            autoComplete="off"
+            name="homepage"
+            value={homepage}
+            onChange={(event) => setHomepage(event.target.value)}
+            className="hidden"
+            aria-hidden="true"
+          />
           <Section title="Personal information">
             <div className="grid gap-4 md:grid-cols-2">
-              <TextInput label="First name" value={personal.firstName} onChange={(firstName) => setPersonal((prev) => ({ ...prev, firstName }))} required />
-              <TextInput label="Last name" value={personal.lastName} onChange={(lastName) => setPersonal((prev) => ({ ...prev, lastName }))} required />
-              <TextInput label="Email" type="email" value={personal.email} onChange={(email) => setPersonal((prev) => ({ ...prev, email }))} required />
-              <TextInput label="Phone" value={personal.phone} onChange={(phone) => setPersonal((prev) => ({ ...prev, phone }))} />
-              <TextInput label="Country" value={personal.country} onChange={(country) => setPersonal((prev) => ({ ...prev, country }))} />
-              <TextInput label="Nationality" value={personal.nationality} onChange={(nationality) => setPersonal((prev) => ({ ...prev, nationality }))} />
+              <TextInput label="First name" value={personal.firstName} onChange={(firstName) => { markFormStarted(); setPersonal((prev) => ({ ...prev, firstName })); }} required />
+              <TextInput label="Last name" value={personal.lastName} onChange={(lastName) => { markFormStarted(); setPersonal((prev) => ({ ...prev, lastName })); }} required />
+              <TextInput label="Email" type="email" value={personal.email} onChange={(email) => { markFormStarted(); setPersonal((prev) => ({ ...prev, email })); }} required />
+              <TextInput label="Phone" value={personal.phone} onChange={(phone) => { markFormStarted(); setPersonal((prev) => ({ ...prev, phone })); }} />
+              <TextInput label="Country" value={personal.country} onChange={(country) => { markFormStarted(); setPersonal((prev) => ({ ...prev, country })); }} />
+              <TextInput label="Nationality" value={personal.nationality} onChange={(nationality) => { markFormStarted(); setPersonal((prev) => ({ ...prev, nationality })); }} />
             </div>
             <div className="mt-4">
               <Label>Address</Label>
-              <Textarea value={personal.address} onChange={(event) => setPersonal((prev) => ({ ...prev, address: event.target.value }))} rows={2} />
+              <Textarea value={personal.address} onChange={(event) => { markFormStarted(); setPersonal((prev) => ({ ...prev, address: event.target.value })); }} rows={2} />
             </div>
           </Section>
 
           <Section title="Professional profiles">
             <div className="grid gap-4 md:grid-cols-2">
-              <TextInput label="Portfolio" type="url" value={professional.portfolio} onChange={(portfolio) => setProfessional((prev) => ({ ...prev, portfolio }))} />
-              <TextInput label="LinkedIn" type="url" value={professional.linkedIn} onChange={(linkedIn) => setProfessional((prev) => ({ ...prev, linkedIn }))} />
-              <TextInput label="Github" type="url" value={professional.github} onChange={(github) => setProfessional((prev) => ({ ...prev, github }))} />
-              <TextInput label="Behance" type="url" value={professional.behance} onChange={(behance) => setProfessional((prev) => ({ ...prev, behance }))} />
-              <TextInput label="Personal website" type="url" value={professional.website} onChange={(website) => setProfessional((prev) => ({ ...prev, website }))} />
+              <TextInput label="Portfolio" type="url" value={professional.portfolio} onChange={(portfolio) => { markFormStarted(); setProfessional((prev) => ({ ...prev, portfolio })); }} />
+              <TextInput label="LinkedIn" type="url" value={professional.linkedIn} onChange={(linkedIn) => { markFormStarted(); setProfessional((prev) => ({ ...prev, linkedIn })); }} />
+              <TextInput label="Github" type="url" value={professional.github} onChange={(github) => { markFormStarted(); setProfessional((prev) => ({ ...prev, github })); }} />
+              <TextInput label="Behance" type="url" value={professional.behance} onChange={(behance) => { markFormStarted(); setProfessional((prev) => ({ ...prev, behance })); }} />
+              <TextInput label="Personal website" type="url" value={professional.website} onChange={(website) => { markFormStarted(); setProfessional((prev) => ({ ...prev, website })); }} />
             </div>
           </Section>
 
@@ -317,9 +370,9 @@ export default function ApplicationDialog({ type, referenceId, title, trigger, j
             <div className="space-y-4">
               {education.map((entry, index) => (
                 <div key={index} className="grid gap-3 md:grid-cols-3">
-                  <TextInput label={`Degree ${index + 1}`} value={entry.degree} onChange={(degree) => updateEducation(index, { degree })} />
-                  <TextInput label="Institution" value={entry.institution} onChange={(institution) => updateEducation(index, { institution })} />
-                  <TextInput label="Graduation date" type="month" value={entry.graduationDate} onChange={(graduationDate) => updateEducation(index, { graduationDate })} />
+                  <TextInput label={`Degree ${index + 1}`} value={entry.degree} onChange={(degree) => { markFormStarted(); updateEducation(index, { degree }); }} />
+                  <TextInput label="Institution" value={entry.institution} onChange={(institution) => { markFormStarted(); updateEducation(index, { institution }); }} />
+                  <TextInput label="Graduation date" type="month" value={entry.graduationDate} onChange={(graduationDate) => { markFormStarted(); updateEducation(index, { graduationDate }); }} />
                 </div>
               ))}
               <Button type="button" variant="outline" size="sm" onClick={() => setEducation((prev) => [...prev, emptyEducation()])}>
@@ -330,12 +383,12 @@ export default function ApplicationDialog({ type, referenceId, title, trigger, j
 
           <Section title="Experience">
             <div className="grid gap-4 md:grid-cols-2">
-              <TextInput label="Current employer" value={experience.currentEmployer} onChange={(currentEmployer) => setExperience((prev) => ({ ...prev, currentEmployer }))} />
-              <TextInput label="Previous employers" value={experience.previousEmployers} onChange={(previousEmployers) => setExperience((prev) => ({ ...prev, previousEmployers }))} />
+              <TextInput label="Current employer" value={experience.currentEmployer} onChange={(currentEmployer) => { markFormStarted(); setExperience((prev) => ({ ...prev, currentEmployer })); }} />
+              <TextInput label="Previous employers" value={experience.previousEmployers} onChange={(previousEmployers) => { markFormStarted(); setExperience((prev) => ({ ...prev, previousEmployers })); }} />
             </div>
             <div className="mt-4">
               <Label>Achievements</Label>
-              <Textarea value={experience.achievements} onChange={(event) => setExperience((prev) => ({ ...prev, achievements: event.target.value }))} rows={3} />
+              <Textarea value={experience.achievements} onChange={(event) => { markFormStarted(); setExperience((prev) => ({ ...prev, achievements: event.target.value })); }} rows={3} />
             </div>
           </Section>
 
@@ -343,10 +396,10 @@ export default function ApplicationDialog({ type, referenceId, title, trigger, j
             <div className="space-y-4">
               {references.map((entry, index) => (
                 <div key={index} className="grid gap-3 md:grid-cols-4">
-                  <TextInput label={`Reference ${index + 1}`} value={entry.name} onChange={(name) => updateReference(index, { name })} />
-                  <TextInput label="Relationship" value={entry.relationship} onChange={(relationship) => updateReference(index, { relationship })} />
-                  <TextInput label="Email" type="email" value={entry.email} onChange={(email) => updateReference(index, { email })} />
-                  <TextInput label="Phone" value={entry.phone} onChange={(phone) => updateReference(index, { phone })} />
+                  <TextInput label={`Reference ${index + 1}`} value={entry.name} onChange={(name) => { markFormStarted(); updateReference(index, { name }); }} />
+                  <TextInput label="Relationship" value={entry.relationship} onChange={(relationship) => { markFormStarted(); updateReference(index, { relationship }); }} />
+                  <TextInput label="Email" type="email" value={entry.email} onChange={(email) => { markFormStarted(); updateReference(index, { email }); }} />
+                  <TextInput label="Phone" value={entry.phone} onChange={(phone) => { markFormStarted(); updateReference(index, { phone }); }} />
                 </div>
               ))}
             </div>
@@ -362,7 +415,10 @@ export default function ApplicationDialog({ type, referenceId, title, trigger, j
                       <Textarea
                         id={`application-custom-${type}-${referenceId}-${field.name}`}
                         value={answers[field.name] || ""}
-                        onChange={(event) => setAnswers((prev) => ({ ...prev, [field.name]: event.target.value }))}
+                        onChange={(event) => {
+                          markFormStarted();
+                          setAnswers((prev) => ({ ...prev, [field.name]: event.target.value }));
+                        }}
                         required={field.required}
                         placeholder={field.placeholder}
                         rows={3}
@@ -371,7 +427,10 @@ export default function ApplicationDialog({ type, referenceId, title, trigger, j
                       <Input
                         id={`application-custom-${type}-${referenceId}-${field.name}`}
                         value={answers[field.name] || ""}
-                        onChange={(event) => setAnswers((prev) => ({ ...prev, [field.name]: event.target.value }))}
+                        onChange={(event) => {
+                          markFormStarted();
+                          setAnswers((prev) => ({ ...prev, [field.name]: event.target.value }));
+                        }}
                         required={field.required}
                         type={field.type === "url" ? "url" : "text"}
                         placeholder={field.placeholder}
@@ -388,7 +447,10 @@ export default function ApplicationDialog({ type, referenceId, title, trigger, j
             <Textarea
               id={`application-notes-${type}-${referenceId}`}
               value={notes}
-              onChange={(event) => setNotes(event.target.value)}
+              onChange={(event) => {
+                markFormStarted();
+                setNotes(event.target.value);
+              }}
               placeholder="Add availability, eligibility context, or anything the team should review."
               className="min-h-[120px]"
             />

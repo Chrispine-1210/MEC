@@ -16,7 +16,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { buildBotDefenseSubmission } from "@/lib/bot-defense";
 import { apiRequest } from "@/lib/queryClient";
+import { getRecaptchaToken } from "@/lib/recaptcha";
 import type { ApiEvent, ApiEventRegistration } from "@/lib/api-types";
 
 type EventRegistrationDialogProps = {
@@ -39,6 +41,10 @@ export default function EventRegistrationDialog({ event, trigger }: EventRegistr
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [ticketUrl, setTicketUrl] = useState("");
+  const [formStartedAt, setFormStartedAt] = useState<number | null>(null);
+  const [website, setWebsite] = useState("");
+  const [company, setCompany] = useState("");
+  const [homepage, setHomepage] = useState("");
   const ticketTypes = getTicketTypes(event);
   const customFields = getCustomFields(event);
   const [formData, setFormData] = useState({
@@ -51,9 +57,19 @@ export default function EventRegistrationDialog({ event, trigger }: EventRegistr
   });
   const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
   const missingRequiredField = customFields.some((field) => field.required && !String(customAnswers[field.key] ?? "").trim());
+  const markFormStarted = () => setFormStartedAt((current) => current ?? Date.now());
 
   const mutation = useMutation({
     mutationFn: async () => {
+      const recaptchaToken = await getRecaptchaToken("event_registration");
+      const security = await buildBotDefenseSubmission({
+        flow: "event_registration",
+        startedAt: formStartedAt,
+        website,
+        company,
+        homepage,
+        recaptchaToken,
+      });
       const response = await apiRequest("POST", `/api/events/${event.id}/registrations`, {
         fullName: formData.fullName,
         email: formData.email,
@@ -63,6 +79,7 @@ export default function EventRegistrationDialog({ event, trigger }: EventRegistr
         source: "public_event_page",
         answers: buildAnswers(formData.notes, customAnswers),
         reminderOptIn: true,
+        ...security,
       });
       return (await response.json()) as RegistrationResponse;
     },
@@ -132,14 +149,48 @@ export default function EventRegistrationDialog({ event, trigger }: EventRegistr
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div
+            className="space-y-4"
+            onPointerDownCapture={markFormStarted}
+            onFocusCapture={markFormStarted}
+          >
+            <input
+              tabIndex={-1}
+              autoComplete="off"
+              name="website"
+              value={website}
+              onChange={(event) => setWebsite(event.target.value)}
+              className="hidden"
+              aria-hidden="true"
+            />
+            <input
+              tabIndex={-1}
+              autoComplete="off"
+              name="company"
+              value={company}
+              onChange={(event) => setCompany(event.target.value)}
+              className="hidden"
+              aria-hidden="true"
+            />
+            <input
+              tabIndex={-1}
+              autoComplete="off"
+              name="homepage"
+              value={homepage}
+              onChange={(event) => setHomepage(event.target.value)}
+              className="hidden"
+              aria-hidden="true"
+            />
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <Label htmlFor={`event-name-${event.id}`}>Full name</Label>
                 <Input
                   id={`event-name-${event.id}`}
                   value={formData.fullName}
-                  onChange={(event) => setFormData((prev) => ({ ...prev, fullName: event.target.value }))}
+                  onChange={(event) => {
+                    markFormStarted();
+                    setFormData((prev) => ({ ...prev, fullName: event.target.value }));
+                  }}
                   placeholder="Your full name"
                 />
               </div>
@@ -149,7 +200,10 @@ export default function EventRegistrationDialog({ event, trigger }: EventRegistr
                   id={`event-email-${event.id}`}
                   type="email"
                   value={formData.email}
-                  onChange={(event) => setFormData((prev) => ({ ...prev, email: event.target.value }))}
+                  onChange={(event) => {
+                    markFormStarted();
+                    setFormData((prev) => ({ ...prev, email: event.target.value }));
+                  }}
                   placeholder="you@example.com"
                 />
               </div>
@@ -161,7 +215,10 @@ export default function EventRegistrationDialog({ event, trigger }: EventRegistr
                 <Input
                   id={`event-phone-${event.id}`}
                   value={formData.phone}
-                  onChange={(event) => setFormData((prev) => ({ ...prev, phone: event.target.value }))}
+                  onChange={(event) => {
+                    markFormStarted();
+                    setFormData((prev) => ({ ...prev, phone: event.target.value }));
+                  }}
                   placeholder="+265..."
                 />
               </div>
@@ -170,7 +227,10 @@ export default function EventRegistrationDialog({ event, trigger }: EventRegistr
                 <Input
                   id={`event-org-${event.id}`}
                   value={formData.organization}
-                  onChange={(event) => setFormData((prev) => ({ ...prev, organization: event.target.value }))}
+                  onChange={(event) => {
+                    markFormStarted();
+                    setFormData((prev) => ({ ...prev, organization: event.target.value }));
+                  }}
                   placeholder="School, company, or institution"
                 />
               </div>
@@ -179,7 +239,13 @@ export default function EventRegistrationDialog({ event, trigger }: EventRegistr
             {ticketTypes.length > 0 && (
               <div>
                 <Label>Ticket type</Label>
-                <Select value={formData.ticketType} onValueChange={(ticketType) => setFormData((prev) => ({ ...prev, ticketType }))}>
+                <Select
+                  value={formData.ticketType}
+                  onValueChange={(ticketType) => {
+                    markFormStarted();
+                    setFormData((prev) => ({ ...prev, ticketType }));
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select ticket type" />
                   </SelectTrigger>
@@ -201,7 +267,10 @@ export default function EventRegistrationDialog({ event, trigger }: EventRegistr
                     key={field.key}
                     field={field}
                     value={customAnswers[field.key] ?? ""}
-                    onChange={(value) => setCustomAnswers((prev) => ({ ...prev, [field.key]: value }))}
+                    onChange={(value) => {
+                      markFormStarted();
+                      setCustomAnswers((prev) => ({ ...prev, [field.key]: value }));
+                    }}
                   />
                 ))}
               </div>
@@ -212,7 +281,10 @@ export default function EventRegistrationDialog({ event, trigger }: EventRegistr
               <Textarea
                 id={`event-notes-${event.id}`}
                 value={formData.notes}
-                onChange={(event) => setFormData((prev) => ({ ...prev, notes: event.target.value }))}
+                onChange={(event) => {
+                  markFormStarted();
+                  setFormData((prev) => ({ ...prev, notes: event.target.value }));
+                }}
                 placeholder="Anything the team should know?"
                 rows={3}
               />

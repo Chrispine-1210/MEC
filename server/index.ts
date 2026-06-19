@@ -5,6 +5,8 @@ import { env } from "./env";
 
 import helmet from "helmet";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
+import { initializeCache } from "./cache";
+import { consumeFixedWindowRateLimit, getRequestIp, normalizeRateLimitPath } from "./bot-defense";
 import { startEmailQueueWorker } from "./email";
 import { recordAppError, recordHttpRequest } from "./observability";
 import { ensureRuntimeDatabaseSchema } from "./runtime-migrations";
@@ -37,7 +39,7 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com", "https://www.googletagmanager.com", "https://www.google-analytics.com"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com", "https://www.googletagmanager.com", "https://www.google-analytics.com", "https://www.google.com", "https://www.gstatic.com"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         imgSrc: ["'self'", "data:", "https:", "https://www.google-analytics.com"],
         connectSrc: ["'self'", "https:", "https://www.google-analytics.com", "https://region1.google-analytics.com", "ws:", "wss:"],
@@ -47,11 +49,15 @@ app.use(
           "'self'",
           "https://www.youtube.com",
           "https://www.youtube-nocookie.com",
+          "https://www.google.com",
+          "https://www.recaptcha.net",
         ],
         childSrc: [
           "'self'",
           "https://www.youtube.com",
           "https://www.youtube-nocookie.com",
+          "https://www.google.com",
+          "https://www.recaptcha.net",
         ],
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"],
@@ -260,50 +266,30 @@ const rateLimitMaxByScope = {
   admin: env.ADMIN_RATE_LIMIT_MAX,
   api: env.RATE_LIMIT_MAX,
 };
-const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 
-const pruneRateLimitStore = () => {
-  const now = Date.now();
-  if (rateLimitStore.size < 1000) return;
-  for (const [key, value] of rateLimitStore.entries()) {
-    if (value.resetAt <= now) {
-      rateLimitStore.delete(key);
-    }
-  }
-};
-
-app.use((req: Request, res: Response, next: NextFunction) => {
+app.use(async (req: Request, res: Response, next: NextFunction) => {
   if (!req.path.startsWith("/api") && !req.path.startsWith("/auth")) {
     return next();
   }
 
-  pruneRateLimitStore();
-
-  const now = Date.now();
-  const ip = req.ip || req.socket.remoteAddress || "unknown";
   const scope = req.path.startsWith("/auth") || req.path.startsWith("/api/auth")
     ? "auth"
     : req.path.startsWith("/api/admin")
       ? "admin"
       : "api";
-  const endpoint = req.path.replace(/\/\d+(?=\/|$)/g, "/:id").replace(/\/[0-9a-f]{8,}(?=\/|$)/gi, "/:token");
-  const key = `${ip}:${scope}:${req.method}:${endpoint}`;
+  const endpoint = normalizeRateLimitPath(req.path);
   const maxRequests = rateLimitMaxByScope[scope];
-  const entry = rateLimitStore.get(key);
+  const key = `global:${scope}:${req.method}:${endpoint}:${getRequestIp(req)}`;
+  const result = await consumeFixedWindowRateLimit({
+    key,
+    limit: maxRequests,
+    windowMs: rateLimitWindowMs,
+  });
 
-  if (!entry || entry.resetAt <= now) {
-    rateLimitStore.set(key, { count: 1, resetAt: now + rateLimitWindowMs });
-    res.setHeader("X-RateLimit-Limit", String(maxRequests));
-    res.setHeader("X-RateLimit-Remaining", String(Math.max(0, maxRequests - 1)));
-    return next();
-  }
-
-  entry.count += 1;
   res.setHeader("X-RateLimit-Limit", String(maxRequests));
-  res.setHeader("X-RateLimit-Remaining", String(Math.max(0, maxRequests - entry.count)));
-  if (entry.count > maxRequests) {
-    const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
-    res.setHeader("Retry-After", retryAfter.toString());
+  res.setHeader("X-RateLimit-Remaining", String(result.remaining));
+  if (!result.allowed) {
+    res.setHeader("Retry-After", result.retryAfterSeconds.toString());
     return res.status(429).json({ message: "Too many requests. Please try again shortly." });
   }
 
@@ -353,6 +339,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 export const ready = (async () => {
+  await initializeCache();
   await ensureRuntimeDatabaseSchema();
   const server = await registerRoutes(app);
   if (!isVercelRuntime) {

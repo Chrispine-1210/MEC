@@ -157,6 +157,12 @@ import {
 import { normalizeSearchQuery, parsePagination, searchAndRank } from "./search";
 import { renderPrometheusMetrics } from "./observability";
 import { isVercelRuntime, resolveWritableRuntimePath } from "./runtime-paths";
+import {
+  createBotDefenseMiddleware,
+  recordFingerprintEvent,
+  stripBotDefenseFields,
+  verifyRecaptchaForRequest,
+} from "./bot-defense";
 
 const JWT_SECRET = env.JWT_SECRET;
 const PASSWORD_HASH_ROUNDS = 12;
@@ -987,6 +993,173 @@ const recordSecurityAuditEvent = async (
   }
 };
 
+const minuteMs = 60 * 1000;
+const hourMs = 60 * minuteMs;
+const dayMs = 24 * hourMs;
+
+const loginBotDefense = createBotDefenseMiddleware({
+  action: ["auth_login", "admin_login"],
+  flow: "login",
+  captcha: "always",
+  velocityMinimumMs: 2_000,
+  rateLimits: [
+    { scope: "minute", limit: 30, windowMs: minuteMs },
+    { scope: "hour", limit: 25, windowMs: hourMs },
+    { scope: "day", limit: 100, windowMs: dayMs },
+  ],
+  logEvent: recordSecurityAuditEvent,
+});
+
+const registrationBotDefense = createBotDefenseMiddleware({
+  action: "auth_register",
+  flow: "registration",
+  captcha: "always",
+  velocityMinimumMs: 3_000,
+  rateLimits: [
+    { scope: "hour", limit: 3, windowMs: hourMs },
+    { scope: "day", limit: 10, windowMs: dayMs },
+  ],
+  logEvent: recordSecurityAuditEvent,
+});
+
+const passwordResetRequestBotDefense = createBotDefenseMiddleware({
+  action: "password_reset_request",
+  flow: "password_reset",
+  captcha: "always",
+  velocityMinimumMs: 2_000,
+  rateLimits: [{ scope: "hour", limit: 3, windowMs: hourMs }],
+  logEvent: recordSecurityAuditEvent,
+});
+
+const passwordResetCompleteBotDefense = createBotDefenseMiddleware({
+  action: "password_reset_complete",
+  flow: "password_reset_complete",
+  captcha: "always",
+  velocityMinimumMs: 2_000,
+  rateLimits: [{ scope: "hour", limit: 8, windowMs: hourMs }],
+  logEvent: recordSecurityAuditEvent,
+});
+
+const verificationRecoveryBotDefense = createBotDefenseMiddleware({
+  action: ["resend_verification", "change_verification_email"],
+  flow: "verification_recovery",
+  captcha: "risk",
+  velocityMinimumMs: 2_000,
+  rateLimits: [{ scope: "hour", limit: 5, windowMs: hourMs }],
+  logEvent: recordSecurityAuditEvent,
+});
+
+const contactBotDefense = createBotDefenseMiddleware({
+  action: "contact",
+  flow: "contact",
+  captcha: "always",
+  velocityMinimumMs: 1_000,
+  rateLimits: [
+    { scope: "minute", limit: 3, windowMs: minuteMs },
+    { scope: "day", limit: 20, windowMs: dayMs },
+  ],
+  honeypotResponse: {
+    statusCode: 201,
+    body: { message: "Message sent successfully", ticketCode: "MEC-RECEIVED" },
+  },
+  logEvent: recordSecurityAuditEvent,
+});
+
+const newsletterBotDefense = createBotDefenseMiddleware({
+  action: "newsletter",
+  flow: "newsletter",
+  captcha: "always",
+  velocityMinimumMs: 1_000,
+  rateLimits: [
+    { scope: "minute", limit: 3, windowMs: minuteMs },
+    { scope: "day", limit: 20, windowMs: dayMs },
+  ],
+  honeypotResponse: {
+    statusCode: 201,
+    body: { message: "Please check your inbox to confirm your subscription." },
+  },
+  logEvent: recordSecurityAuditEvent,
+});
+
+const publicApplicationBotDefense = createBotDefenseMiddleware({
+  action: "application_submit",
+  flow: "application_submit",
+  captcha: "risk",
+  velocityMinimumMs: 2_000,
+  rateLimits: [
+    { scope: "hour", limit: 10, windowMs: hourMs },
+    { scope: "day", limit: 50, windowMs: dayMs },
+  ],
+  logEvent: recordSecurityAuditEvent,
+});
+
+const eventCommentBotDefense = createBotDefenseMiddleware({
+  action: "event_comment",
+  flow: "event_comment",
+  captcha: "always",
+  velocityMinimumMs: 1_000,
+  rateLimits: [
+    { scope: "minute", limit: 5, windowMs: minuteMs },
+    { scope: "day", limit: 30, windowMs: dayMs },
+  ],
+  honeypotResponse: {
+    statusCode: 201,
+    body: { message: "Comment received." },
+  },
+  logEvent: recordSecurityAuditEvent,
+});
+
+const eventRegistrationBotDefense = createBotDefenseMiddleware({
+  action: "event_registration",
+  flow: "event_registration",
+  captcha: "always",
+  velocityMinimumMs: 2_000,
+  rateLimits: [
+    { scope: "hour", limit: 5, windowMs: hourMs },
+    { scope: "day", limit: 20, windowMs: dayMs },
+  ],
+  honeypotResponse: {
+    statusCode: 201,
+    body: {
+      registration: { status: "approved" },
+      ticketUrl: "/api/events/registrations/MEC-RECEIVED/ticket",
+      delivery: { acceptedByProvider: true },
+    },
+  },
+  logEvent: recordSecurityAuditEvent,
+});
+
+const publicAnalyticsBotDefense = createBotDefenseMiddleware({
+  action: "analytics_track",
+  flow: "analytics_track",
+  captcha: "risk",
+  rateLimits: [{ scope: "minute", limit: 60, windowMs: minuteMs }],
+  logEvent: recordSecurityAuditEvent,
+});
+
+const mfaChallengeBotDefense = createBotDefenseMiddleware({
+  action: "mfa_verify",
+  flow: "mfa_verify",
+  captcha: "risk",
+  rateLimits: [
+    { scope: "minute", limit: 5, windowMs: minuteMs },
+    { scope: "hour", limit: 25, windowMs: hourMs },
+  ],
+  logEvent: recordSecurityAuditEvent,
+});
+
+const mfaConfirmBotDefense = createBotDefenseMiddleware({
+  action: "mfa_confirm",
+  flow: "mfa_confirm",
+  captcha: "always",
+  velocityMinimumMs: 1_000,
+  rateLimits: [
+    { scope: "minute", limit: 5, windowMs: minuteMs },
+    { scope: "hour", limit: 20, windowMs: hourMs },
+  ],
+  logEvent: recordSecurityAuditEvent,
+});
+
 const stableJson = (value: unknown): string => {
   if (Array.isArray(value)) {
     return `[${value.map(stableJson).join(",")}]`;
@@ -1087,63 +1260,13 @@ const isVercelCronRequest = (req: Request) =>
   req.method === "GET" &&
   (req.get("user-agent") || "").toLowerCase().includes("vercel-cron/1.0");
 
-const flowRateLimits = new Map<string, { count: number; resetAt: number }>();
-
-const guardPublicFlowRateLimit = (req: Request, res: Response, flow: string, max = 8, windowMs = 10 * 60 * 1000) => {
-  const now = Date.now();
-  const key = `${flow}:${getClientIp(req)}`;
-  const current = flowRateLimits.get(key);
-
-  if (!current || current.resetAt <= now) {
-    flowRateLimits.set(key, { count: 1, resetAt: now + windowMs });
-    return true;
+const verifyRecaptcha = async (token: string | undefined, req: Request, action: string) => {
+  if (req.botDefense?.recaptcha?.ok) {
+    return req.botDefense.recaptcha;
   }
 
-  current.count += 1;
-  if (current.count <= max) return true;
-
-  const retryAfterSeconds = Math.ceil((current.resetAt - now) / 1000);
-  res.setHeader("Retry-After", String(retryAfterSeconds));
-  res.status(429).json({
-    message: "Too many submissions. Please wait a few minutes before trying again.",
-    retryAfterSeconds,
-  });
-  return false;
-};
-
-const verifyRecaptcha = async (token: string | undefined, req: Request, action: string) => {
-  if (!env.RECAPTCHA_SECRET_KEY) return { ok: true, skipped: true };
-  if (!token) return { ok: false, reason: "reCAPTCHA verification is required" };
-
-  const response = await fetch("https://www.google.com/recaptcha/api/siteverify", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      secret: env.RECAPTCHA_SECRET_KEY,
-      response: token,
-      remoteip: getClientIp(req),
-    }),
-  });
-
-  if (!response.ok) return { ok: false, reason: "reCAPTCHA verification failed" };
-
-  const payload = (await response.json()) as {
-    success?: boolean;
-    score?: number;
-    action?: string;
-    hostname?: string;
-    "error-codes"?: string[];
-  };
-  const score = typeof payload.score === "number" ? payload.score : 1;
-  const actionMatches = !payload.action || payload.action === action;
-
-  return {
-    ok: Boolean(payload.success && actionMatches && score >= 0.5),
-    reason: payload.success ? "reCAPTCHA risk score is too low" : "reCAPTCHA verification failed",
-    score,
-    hostname: payload.hostname,
-    errorCodes: payload["error-codes"],
-  };
+  if (!token && !env.RECAPTCHA_SECRET_KEY) return { ok: true, skipped: true };
+  return verifyRecaptchaForRequest(req, action, { required: Boolean(env.RECAPTCHA_SECRET_KEY) });
 };
 
 const buildPublicUser = (user: {
@@ -4337,13 +4460,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { referralCode: bodyReferralCode, ...registrationBody } =
         req.body && typeof req.body === "object" ? req.body : {};
+      const sanitizedRegistrationBody = stripBotDefenseFields(registrationBody as Record<string, unknown>);
       const referralCode =
         typeof bodyReferralCode === "string"
           ? bodyReferralCode
           : typeof req.query.ref === "string"
             ? req.query.ref
             : null;
-      const userData = insertUserSchema.parse(registrationBody);
+      const userData = insertUserSchema.parse(sanitizedRegistrationBody);
       userData.email = userData.email.trim().toLowerCase();
       userData.username = userData.username.trim();
 
@@ -4402,6 +4526,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const user = { ...createdUser, referralCode: generatedReferralCode };
+      void recordFingerprintEvent(req, "account_created")
+        .then((result) => {
+          if (result.banned) {
+            void recordSecurityAuditEvent(req, "bot_detected", {
+              reason: "account_creation_threshold",
+              count: result.count,
+            }, 201);
+          }
+        })
+        .catch((error) => {
+          console.warn("Fingerprint tracking failed:", getErrorLogMessage(error));
+        });
       try {
         await attachReferralToNewUser(user, req, referralCode);
       } catch (error) {
@@ -4494,7 +4630,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const loginHandler = async (req: Request, res: Response) => {
     try {
-      const loginPayload = loginRequestSchema.parse(req.body);
+      const loginPayload = loginRequestSchema.parse(
+        stripBotDefenseFields((req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>),
+      );
       const identifier = loginPayload.email ?? loginPayload.username ?? loginPayload.identifier;
       const { password } = loginPayload;
       
@@ -4521,10 +4659,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : await storage.getUserByUsername(lookupIdentifier);
       if (!user) {
         registerLoginFailure(normalizedIdentifier);
+        void recordFingerprintEvent(req, "failed_login").catch((error) => {
+          console.warn("Fingerprint tracking failed:", getErrorLogMessage(error));
+        });
         return res.status(401).json({ message: 'Invalid credentials' });
       }
       if (user.isActive === false) {
         registerLoginFailure(normalizedIdentifier);
+        void recordFingerprintEvent(req, "failed_login").catch((error) => {
+          console.warn("Fingerprint tracking failed:", getErrorLogMessage(error));
+        });
         return res.status(403).json({ message: 'This account is inactive.' });
       }
 
@@ -4532,6 +4676,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) {
         registerLoginFailure(normalizedIdentifier);
+        void recordFingerprintEvent(req, "failed_login").catch((error) => {
+          console.warn("Fingerprint tracking failed:", getErrorLogMessage(error));
+        });
         return res.status(401).json({ message: 'Invalid credentials' });
       }
       clearLoginFailure(normalizedIdentifier);
@@ -4584,14 +4731,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
-  app.post('/api/auth/register', registerHandler);
-  app.post('/api/auth/admin/register', registerHandler);
-  app.post('/api/admin/auth/register', registerHandler);
-  app.post('/api/auth/login', loginHandler);
+  app.post('/api/auth/register', registrationBotDefense, registerHandler);
+  app.post('/api/auth/admin/register', registrationBotDefense, registerHandler);
+  app.post('/api/admin/auth/register', registrationBotDefense, registerHandler);
+  app.post('/api/auth/login', loginBotDefense, loginHandler);
 
   // Admin client aliases
-  app.post('/auth/register', registerHandler);
-  app.post('/auth/login', loginHandler);
+  app.post('/auth/register', registrationBotDefense, registerHandler);
+  app.post('/auth/login', loginBotDefense, loginHandler);
 
   const verifyEmailHandler = async (req: Request, res: Response) => {
     try {
@@ -4659,7 +4806,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const resendVerificationHandler = async (req: Request, res: Response) => {
     try {
-      if (!guardPublicFlowRateLimit(req, res, "resend_verification", 8, 60 * 60 * 1000)) return;
       const payload = resendVerificationSchema.parse(req.body);
       const user = await storage.getUserByEmail(payload.email);
 
@@ -4685,7 +4831,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const changeVerificationEmailHandler = async (req: Request, res: Response) => {
     try {
-      if (!guardPublicFlowRateLimit(req, res, "change_verification_email", 5, 60 * 60 * 1000)) return;
       const payload = changeVerificationEmailSchema.parse(req.body);
       if (payload.currentEmail === payload.newEmail) {
         return res.status(400).json({ message: "Use a different email address for the update" });
@@ -4731,14 +4876,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
-  app.post('/api/auth/resend-verification', resendVerificationHandler);
-  app.post('/auth/resend-verification', resendVerificationHandler);
-  app.post('/api/auth/change-verification-email', changeVerificationEmailHandler);
-  app.post('/auth/change-verification-email', changeVerificationEmailHandler);
+  app.post('/api/auth/resend-verification', verificationRecoveryBotDefense, resendVerificationHandler);
+  app.post('/auth/resend-verification', verificationRecoveryBotDefense, resendVerificationHandler);
+  app.post('/api/auth/change-verification-email', verificationRecoveryBotDefense, changeVerificationEmailHandler);
+  app.post('/auth/change-verification-email', verificationRecoveryBotDefense, changeVerificationEmailHandler);
 
   const forgotPasswordHandler = async (req: Request, res: Response) => {
     try {
-      if (!guardPublicFlowRateLimit(req, res, "forgot_password", 5, 15 * 60 * 1000)) return;
       const payload = forgotPasswordSchema.parse(req.body);
       const user = await storage.getUserByEmail(payload.email);
 
@@ -4769,7 +4913,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const resetPasswordHandler = async (req: Request, res: Response) => {
     try {
-      if (!guardPublicFlowRateLimit(req, res, "reset_password", 8, 15 * 60 * 1000)) return;
       const payload = resetPasswordSchema.parse(req.body);
       const decoded = jwt.verify(payload.token, JWT_SECRET) as JwtUser;
       if (decoded.type !== "password_reset" || !decoded.id || !decoded.email || !decoded.pwd) {
@@ -4816,10 +4959,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
-  app.post('/api/auth/forgot-password', forgotPasswordHandler);
-  app.post('/auth/forgot-password', forgotPasswordHandler);
-  app.post('/api/auth/reset-password', resetPasswordHandler);
-  app.post('/auth/reset-password', resetPasswordHandler);
+  app.post('/api/auth/forgot-password', passwordResetRequestBotDefense, forgotPasswordHandler);
+  app.post('/auth/forgot-password', passwordResetRequestBotDefense, forgotPasswordHandler);
+  app.post('/api/auth/reset-password', passwordResetCompleteBotDefense, resetPasswordHandler);
+  app.post('/auth/reset-password', passwordResetCompleteBotDefense, resetPasswordHandler);
 
   app.get('/api/email/track/open/:jobId', async (req, res) => {
     try {
@@ -5424,7 +5567,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   const mfaConfirmHandler = async (req: Request, res: Response) => {
-    const payload = mfaConfirmSchema.parse(req.body);
+    const payload = mfaConfirmSchema.parse(
+      stripBotDefenseFields((req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>),
+    );
     const jwtUser = getAuthenticatedUser(req);
     const user = await storage.getUser(Number(jwtUser.id));
     if (!user?.totpSecret) {
@@ -5467,7 +5612,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   const mfaVerifyHandler = async (req: Request, res: Response) => {
-    const payload = mfaVerifySchema.parse(req.body);
+    const payload = mfaVerifySchema.parse(
+      stripBotDefenseFields((req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>),
+    );
     let decoded: JwtUser;
     try {
       decoded = jwt.verify(payload.challengeToken, JWT_SECRET) as JwtUser;
@@ -5564,10 +5711,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/auth/mfa/status', authenticateToken, mfaStatusHandler);
   app.post('/api/auth/mfa/setup', authenticateToken, mfaSetupHandler);
   app.post('/auth/mfa/setup', authenticateToken, mfaSetupHandler);
-  app.post('/api/auth/mfa/confirm', authenticateToken, mfaConfirmHandler);
-  app.post('/auth/mfa/confirm', authenticateToken, mfaConfirmHandler);
-  app.post('/api/auth/mfa/verify', mfaVerifyHandler);
-  app.post('/auth/mfa/verify', mfaVerifyHandler);
+  app.post('/api/auth/mfa/confirm', authenticateToken, mfaConfirmBotDefense, mfaConfirmHandler);
+  app.post('/auth/mfa/confirm', authenticateToken, mfaConfirmBotDefense, mfaConfirmHandler);
+  app.post('/api/auth/mfa/enable', authenticateToken, mfaConfirmBotDefense, mfaConfirmHandler);
+  app.post('/auth/mfa/enable', authenticateToken, mfaConfirmBotDefense, mfaConfirmHandler);
+  app.post('/api/auth/mfa/verify', mfaChallengeBotDefense, mfaVerifyHandler);
+  app.post('/auth/mfa/verify', mfaChallengeBotDefense, mfaVerifyHandler);
   app.post('/api/auth/mfa/disable', authenticateToken, enforceVerifiedMfa, mfaDisableHandler);
   app.post('/auth/mfa/disable', authenticateToken, enforceVerifiedMfa, mfaDisableHandler);
 
@@ -6143,7 +6292,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
-  app.post('/api/applications', authenticateToken, async (req, res) => {
+  app.post('/api/applications', authenticateToken, publicApplicationBotDefense, async (req, res) => {
     try {
       const authUser = getAuthenticatedUser(req);
       const payload = publicApplicationRequestSchema.parse(req.body);
@@ -6960,7 +7109,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/events/:id/comments', async (req, res) => {
+  app.post('/api/events/:id/comments', eventCommentBotDefense, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
@@ -6988,7 +7137,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/events/:id/registrations', async (req, res) => {
+  app.post('/api/events/:id/registrations', eventRegistrationBotDefense, async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
@@ -11760,9 +11909,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/analytics/track', async (req, res) => {
+  app.post('/api/analytics/track', publicAnalyticsBotDefense, async (req, res) => {
     try {
-      if (!guardPublicFlowRateLimit(req, res, "analytics_track", 60, 60_000)) return;
       const payload = publicAnalyticsTrackSchema.parse(req.body);
       const user = getOptionalAuthenticatedUser(req);
       await storage.logAnalytics({
@@ -11846,9 +11994,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Newsletter / subscription routes
-  app.post('/api/subscribers', async (req, res) => {
+  app.post('/api/subscribers', newsletterBotDefense, async (req, res) => {
     try {
-      if (!guardPublicFlowRateLimit(req, res, "newsletter", 10, 10 * 60 * 1000)) return;
       const payload = subscriberRequestSchema.parse(req.body);
 
       // Honeypot spam trap. Return success without storing so bots get no signal.
@@ -11866,7 +12013,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const recaptcha = await verifyRecaptcha(payload.recaptchaToken, req, "newsletter");
       if (!recaptcha.ok) {
-        return res.status(400).json({ message: recaptcha.reason || "reCAPTCHA verification failed" });
+        return res.status(400).json({ message: ("reason" in recaptcha ? recaptcha.reason : undefined) || "reCAPTCHA verification failed" });
       }
 
       const verificationToken = randomBytes(32).toString("hex");
@@ -12145,9 +12292,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Messages / Contact routes
-  app.post('/api/messages', async (req, res) => {
+  app.post('/api/messages', contactBotDefense, async (req, res) => {
     try {
-      if (!guardPublicFlowRateLimit(req, res, "contact", 6, 10 * 60 * 1000)) return;
       const payload = contactMessageRequestSchema.parse(req.body);
 
       // Honeypot spam trap. Return success without storing so automated spam gets no signal.
@@ -12166,7 +12312,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const recaptcha = await verifyRecaptcha(payload.recaptchaToken, req, "contact");
       if (!recaptcha.ok) {
-        return res.status(400).json({ message: recaptcha.reason || "reCAPTCHA verification failed" });
+        return res.status(400).json({ message: ("reason" in recaptcha ? recaptcha.reason : undefined) || "reCAPTCHA verification failed" });
       }
 
       const messageData = insertMessageSchema.parse({
@@ -12231,6 +12377,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         data: message,
         acknowledgement: getEmailDeliveryState(contactAcknowledgement),
       });
+      void recordFingerprintEvent(req, "contact_submission")
+        .then((result) => {
+          if (result.banned) {
+            void recordSecurityAuditEvent(req, "bot_detected", {
+              reason: "contact_submission_threshold",
+              count: result.count,
+            }, 201);
+          }
+        })
+        .catch((error) => {
+          console.warn("Fingerprint tracking failed:", getErrorLogMessage(error));
+        });
     } catch (error) {
       console.error('Message creation error:', error);
       res.status(400).json({ message: 'Failed to send message', error: getErrorMessage(error) });

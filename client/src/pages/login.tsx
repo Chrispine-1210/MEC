@@ -8,6 +8,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Eye, EyeOff, GraduationCap, Globe, Award, ArrowRight, ArrowLeft } from "lucide-react";
 import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
 import { getGovernedBackgroundImage } from "@/lib/image-governance";
+import { buildBotDefenseSubmission } from "@/lib/bot-defense";
+import { getRecaptchaToken } from "@/lib/recaptcha";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -17,13 +19,28 @@ export default function Login() {
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [formStartedAt, setFormStartedAt] = useState<number | null>(null);
+  const [website, setWebsite] = useState("");
+  const [company, setCompany] = useState("");
+  const [homepage, setHomepage] = useState("");
   const { login } = useAuth();
+
+  const markFormStarted = () => setFormStartedAt((current) => current ?? Date.now());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const success = await login(email, password, rememberMe);
+      const recaptchaToken = await getRecaptchaToken("auth_login");
+      const security = await buildBotDefenseSubmission({
+        flow: "auth_login",
+        startedAt: formStartedAt,
+        website,
+        company,
+        homepage,
+        recaptchaToken,
+      });
+      const success = await login(email, password, rememberMe, security);
       if (success) {
         setLocation("/dashboard");
       }
@@ -106,6 +123,29 @@ export default function Login() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="hidden" aria-hidden="true">
+              <Input
+                tabIndex={-1}
+                autoComplete="off"
+                name="website"
+                value={website}
+                onChange={(event) => setWebsite(event.target.value)}
+              />
+              <Input
+                tabIndex={-1}
+                autoComplete="off"
+                name="company"
+                value={company}
+                onChange={(event) => setCompany(event.target.value)}
+              />
+              <Input
+                tabIndex={-1}
+                autoComplete="off"
+                name="homepage"
+                value={homepage}
+                onChange={(event) => setHomepage(event.target.value)}
+              />
+            </div>
             <div>
               <Label htmlFor="email" className="text-sm font-semibold text-foreground/80">
                 Email address
@@ -116,7 +156,10 @@ export default function Login() {
                 autoComplete="email"
                 placeholder="you@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  markFormStarted();
+                  setEmail(e.target.value);
+                }}
                 required
                 disabled={isLoading}
                 className="mt-1.5 h-12 border-border/60 focus-visible:ring-mtendere-blue"
@@ -139,7 +182,10 @@ export default function Login() {
                   autoComplete="current-password"
                   placeholder="Enter your password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    markFormStarted();
+                    setPassword(e.target.value);
+                  }}
                   required
                   disabled={isLoading}
                   className="h-12 border-border/60 pr-12 focus-visible:ring-mtendere-blue"
@@ -158,7 +204,10 @@ export default function Login() {
             <label className="flex items-center gap-3 text-sm text-muted-foreground">
               <Checkbox
                 checked={rememberMe}
-                onCheckedChange={(checked) => setRememberMe(checked === true)}
+                onCheckedChange={(checked) => {
+                  markFormStarted();
+                  setRememberMe(checked === true);
+                }}
                 disabled={isLoading}
                 aria-label="Remember this device"
               />

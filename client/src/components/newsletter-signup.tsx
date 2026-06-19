@@ -4,6 +4,7 @@ import { ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { buildBotDefenseSubmission } from "@/lib/bot-defense";
 import { apiRequest } from "@/lib/queryClient";
 import { trackConversionEvent } from "@/lib/conversion-tracking";
 import { getRecaptchaToken } from "@/lib/recaptcha";
@@ -58,22 +59,33 @@ export default function NewsletterSignup({
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [website, setWebsite] = useState("");
+  const [company, setCompany] = useState("");
+  const [homepage, setHomepage] = useState("");
   const [preferences, setPreferences] = useState(["scholarships", "jobs", "news"]);
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [hasTrackedStart, setHasTrackedStart] = useState(false);
+  const [formStartedAt, setFormStartedAt] = useState<number | null>(null);
   const { toast } = useToast();
+  const markFormStarted = () => setFormStartedAt((current) => current ?? Date.now());
 
   const mutation = useMutation({
     mutationFn: async () => {
       const recaptchaToken = await getRecaptchaToken("newsletter");
+      const security = await buildBotDefenseSubmission({
+        flow: "newsletter",
+        startedAt: formStartedAt,
+        website,
+        company,
+        homepage,
+        recaptchaToken,
+      });
       return apiRequest("POST", "/api/subscribers", {
         email,
         name: name.trim() || undefined,
         source,
         preferences,
-        website,
         consentAccepted,
-        recaptchaToken,
+        ...security,
       });
     },
     onSuccess: async (response) => {
@@ -91,8 +103,11 @@ export default function NewsletterSignup({
       setEmail("");
       setName("");
       setWebsite("");
+      setCompany("");
+      setHomepage("");
       setConsentAccepted(false);
       setHasTrackedStart(false);
+      setFormStartedAt(null);
     },
     onError: (error) => {
       toast({
@@ -119,14 +134,35 @@ export default function NewsletterSignup({
 
   return (
     <form
+      onPointerDownCapture={markFormStarted}
+      onFocusCapture={markFormStarted}
       onSubmit={handleSubmit}
       className={cn("flex w-full flex-col gap-3", compact ? "max-w-md" : "max-w-xl", className)}
     >
       <input
         tabIndex={-1}
         autoComplete="off"
+        name="website"
         value={website}
         onChange={(event) => setWebsite(event.target.value)}
+        className="hidden"
+        aria-hidden="true"
+      />
+      <input
+        tabIndex={-1}
+        autoComplete="off"
+        name="company"
+        value={company}
+        onChange={(event) => setCompany(event.target.value)}
+        className="hidden"
+        aria-hidden="true"
+      />
+      <input
+        tabIndex={-1}
+        autoComplete="off"
+        name="homepage"
+        value={homepage}
+        onChange={(event) => setHomepage(event.target.value)}
         className="hidden"
         aria-hidden="true"
       />
@@ -137,7 +173,10 @@ export default function NewsletterSignup({
             placeholder="Your name"
             autoComplete="name"
             value={name}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => {
+              markFormStarted();
+              setName(event.target.value);
+            }}
             disabled={mutation.isPending}
             className={cn(
               "min-h-12 flex-1 rounded-lg",
@@ -151,6 +190,7 @@ export default function NewsletterSignup({
           placeholder="Enter your email address"
           value={email}
           onChange={(event) => {
+            markFormStarted();
             setEmail(event.target.value);
             if (!hasTrackedStart) {
               setHasTrackedStart(true);
@@ -192,7 +232,10 @@ export default function NewsletterSignup({
             <input
               type="checkbox"
               checked={preferences.includes(value)}
-              onChange={() => togglePreference(value)}
+              onChange={() => {
+                markFormStarted();
+                togglePreference(value);
+              }}
               disabled={mutation.isPending}
             />
             <span>{label}</span>
@@ -203,7 +246,10 @@ export default function NewsletterSignup({
         <input
           type="checkbox"
           checked={consentAccepted}
-          onChange={(event) => setConsentAccepted(event.target.checked)}
+          onChange={(event) => {
+            markFormStarted();
+            setConsentAccepted(event.target.checked);
+          }}
           disabled={mutation.isPending}
           required
         />

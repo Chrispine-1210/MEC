@@ -11,6 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { buildBotDefenseSubmission } from "@/lib/bot-defense";
+import { getRecaptchaToken } from "@/lib/recaptcha";
 import { Eye, EyeOff, Info } from "lucide-react";
 import { type User } from "@shared/schema";
 import { ADMIN_APP_NAME, BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
@@ -44,6 +46,11 @@ export default function AuthPage() {
   const [mfaCode, setMfaCode] = useState("");
   const [pendingCredentials, setPendingCredentials] = useState<{ username: string; password: string } | null>(null);
   const [secretCopied, setSecretCopied] = useState(false);
+  const [formStartedAt, setFormStartedAt] = useState<number | null>(null);
+  const [website, setWebsite] = useState("");
+  const [company, setCompany] = useState("");
+  const [homepage, setHomepage] = useState("");
+  const markFormStarted = () => setFormStartedAt((current) => current ?? Date.now());
 
   const loginForm = useForm({
     resolver: zodResolver(loginSchema),
@@ -86,7 +93,19 @@ export default function AuthPage() {
     setIsLoading(true);
     try {
       setPendingCredentials({ username: data.username, password: data.password });
-      const res = await apiRequest("POST", adminAuthPath("/login"), data);
+      const recaptchaToken = await getRecaptchaToken("admin_login");
+      const security = await buildBotDefenseSubmission({
+        flow: "admin_login",
+        startedAt: formStartedAt,
+        website,
+        company,
+        homepage,
+        recaptchaToken,
+      });
+      const res = await apiRequest("POST", adminAuthPath("/login"), {
+        ...data,
+        ...security,
+      });
       const body = await res.json();
 
       if (body.mfaRequired && body.challengeToken) {
@@ -111,9 +130,19 @@ export default function AuthPage() {
     if (!pendingMfaChallengeToken || !mfaCode.trim()) return;
     setIsLoading(true);
     try {
+      const recaptchaToken = await getRecaptchaToken("mfa_verify");
+      const security = await buildBotDefenseSubmission({
+        flow: "mfa_verify",
+        startedAt: formStartedAt,
+        website,
+        company,
+        homepage,
+        recaptchaToken,
+      });
       const res = await apiRequest("POST", adminAuthPath("/mfa/verify"), {
         challengeToken: pendingMfaChallengeToken,
         code: mfaCode.trim(),
+        ...security,
       });
       const body = await res.json();
       setPendingMfaChallengeToken(null);
@@ -130,11 +159,33 @@ export default function AuthPage() {
     if (!pendingMfaSetup || !mfaCode.trim() || !pendingCredentials) return;
     setIsLoading(true);
     try {
-      await apiRequest("POST", adminAuthPath("/mfa/enable"), { code: mfaCode.trim() });
+      const recaptchaToken = await getRecaptchaToken("mfa_confirm");
+      const security = await buildBotDefenseSubmission({
+        flow: "mfa_confirm",
+        startedAt: formStartedAt,
+        website,
+        company,
+        homepage,
+        recaptchaToken,
+      });
+      await apiRequest("POST", adminAuthPath("/mfa/confirm"), {
+        code: mfaCode.trim(),
+        ...security,
+      });
+      const loginRecaptchaToken = await getRecaptchaToken("admin_login");
+      const loginSecurity = await buildBotDefenseSubmission({
+        flow: "admin_login",
+        startedAt: formStartedAt,
+        website,
+        company,
+        homepage,
+        recaptchaToken: loginRecaptchaToken,
+      });
       const loginRes = await apiRequest("POST", adminAuthPath("/login"), {
         username: pendingCredentials.username,
         password: pendingCredentials.password,
         mfaCode: mfaCode.trim(),
+        ...loginSecurity,
       });
       const loginBody = await loginRes.json();
       setPendingMfaSetup(null);
@@ -226,12 +277,52 @@ export default function AuthPage() {
                   </Alert>
 
                   <Form {...loginForm}>
-                    <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
+                    <form
+                      onSubmit={loginForm.handleSubmit(onLogin)}
+                      onPointerDownCapture={markFormStarted}
+                      onFocusCapture={markFormStarted}
+                      className="space-y-4"
+                    >
+                      <input
+                        tabIndex={-1}
+                        autoComplete="off"
+                        name="website"
+                        value={website}
+                        onChange={(event) => setWebsite(event.target.value)}
+                        className="hidden"
+                        aria-hidden="true"
+                      />
+                      <input
+                        tabIndex={-1}
+                        autoComplete="off"
+                        name="company"
+                        value={company}
+                        onChange={(event) => setCompany(event.target.value)}
+                        className="hidden"
+                        aria-hidden="true"
+                      />
+                      <input
+                        tabIndex={-1}
+                        autoComplete="off"
+                        name="homepage"
+                        value={homepage}
+                        onChange={(event) => setHomepage(event.target.value)}
+                        className="hidden"
+                        aria-hidden="true"
+                      />
                       <FormField control={loginForm.control} name="username" render={({ field }) => (
                         <FormItem>
                           <FormLabel>Username</FormLabel>
                           <FormControl>
-                            <Input autoComplete="username" placeholder="Enter your username" {...field} />
+                            <Input
+                              autoComplete="username"
+                              placeholder="Enter your username"
+                              {...field}
+                              onChange={(event) => {
+                                markFormStarted();
+                                field.onChange(event);
+                              }}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -241,7 +332,16 @@ export default function AuthPage() {
                           <FormLabel>Password</FormLabel>
                           <FormControl>
                             <div className="relative">
-                              <Input autoComplete="current-password" type={showPassword ? "text" : "password"} placeholder="Enter your password" {...field} />
+                              <Input
+                                autoComplete="current-password"
+                                type={showPassword ? "text" : "password"}
+                                placeholder="Enter your password"
+                                {...field}
+                                onChange={(event) => {
+                                  markFormStarted();
+                                  field.onChange(event);
+                                }}
+                              />
                               <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 hover:text-muted-foreground">
                                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                               </button>
@@ -260,14 +360,21 @@ export default function AuthPage() {
               </Tabs>
 
               {pendingMfaChallengeToken && (
-                <div className="mt-6 space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
+                <div
+                  className="mt-6 space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4"
+                  onPointerDownCapture={markFormStarted}
+                  onFocusCapture={markFormStarted}
+                >
                   <p className="text-sm font-medium text-foreground">Two-Factor Verification</p>
                   <p className="text-xs text-muted-foreground">
                     Enter the 6-digit code from your authenticator app.
                   </p>
                   <Input
                     value={mfaCode}
-                    onChange={(event) => setMfaCode(event.target.value)}
+                    onChange={(event) => {
+                      markFormStarted();
+                      setMfaCode(event.target.value);
+                    }}
                     placeholder="123456"
                     maxLength={6}
                     inputMode="numeric"
@@ -285,7 +392,11 @@ export default function AuthPage() {
               )}
 
               {pendingMfaSetup && (
-                <div className="mt-6 space-y-3 rounded-lg border border-primary/30 bg-primary/10 p-4">
+                <div
+                  className="mt-6 space-y-3 rounded-lg border border-primary/30 bg-primary/10 p-4"
+                  onPointerDownCapture={markFormStarted}
+                  onFocusCapture={markFormStarted}
+                >
                   <p className="text-sm font-medium text-foreground">Set Up MFA to Continue</p>
                   <p className="text-xs text-muted-foreground">
                     Admin accounts require MFA. Scan the QR code with Google Authenticator, Microsoft Authenticator, Authy, or any TOTP app, then enter the generated 6-digit code.
@@ -325,7 +436,10 @@ export default function AuthPage() {
                   </div>
                   <Input
                     value={mfaCode}
-                    onChange={(event) => setMfaCode(event.target.value)}
+                    onChange={(event) => {
+                      markFormStarted();
+                      setMfaCode(event.target.value);
+                    }}
                     placeholder="Enter 6-digit setup code"
                     maxLength={6}
                     inputMode="numeric"

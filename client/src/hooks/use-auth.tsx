@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { apiRequest, authFetch, clearLocalAuthSession, refreshAuthSession } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import type { BotDefenseSubmission } from "@/lib/bot-defense";
 
 export interface User {
   id: number;
@@ -19,8 +20,8 @@ export type ProfileUpdateInput = Partial<Pick<User, "firstName" | "lastName" | "
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string, rememberMe?: boolean) => Promise<boolean>;
-  register: (userData: any) => Promise<boolean>;
+  login: (email: string, password: string, rememberMe?: boolean, security?: BotDefenseSubmission) => Promise<boolean>;
+  register: (userData: any, security?: BotDefenseSubmission) => Promise<boolean>;
   updateProfile: (updates: ProfileUpdateInput) => Promise<User>;
   uploadProfilePicture: (file: File) => Promise<User>;
   refreshProfile: () => Promise<User | null>;
@@ -90,9 +91,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return null;
   };
 
-  const login = async (email: string, password: string, rememberMe = true): Promise<boolean> => {
+  const login = async (
+    email: string,
+    password: string,
+    rememberMe = true,
+    security?: BotDefenseSubmission,
+  ): Promise<boolean> => {
     try {
-      const response = await apiRequest("POST", "/api/auth/login", { email, password, rememberMe });
+      const response = await apiRequest("POST", "/api/auth/login", {
+        email,
+        password,
+        rememberMe,
+        ...(security || {}),
+      });
       const data = await response.json();
       
       localStorage.setItem("token", data.token);
@@ -115,9 +126,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const register = async (userData: any): Promise<boolean> => {
+  const register = async (userData: any, security?: BotDefenseSubmission): Promise<boolean> => {
     try {
-      const response = await apiRequest("POST", "/api/auth/register", userData);
+      const response = await apiRequest("POST", "/api/auth/register", {
+        ...userData,
+        ...(security || {}),
+      });
       const data = await response.json();
 
       if (data.token) {

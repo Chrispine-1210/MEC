@@ -8,6 +8,8 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
+import { buildBotDefenseSubmission } from "@/lib/bot-defense";
+import { getRecaptchaToken } from "@/lib/recaptcha";
 
 const COMMON_WEAK_PASSWORDS = ["password", "admin", "qwerty", "welcome", "mtendere"];
 
@@ -41,10 +43,18 @@ export default function Register() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formStartedAt, setFormStartedAt] = useState<number | null>(null);
+  const [website, setWebsite] = useState("");
+  const [company, setCompany] = useState("");
+  const [homepage, setHomepage] = useState("");
   const { register } = useAuth();
+  const markFormStarted = () => setFormStartedAt((current) => current ?? Date.now());
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, type, value, checked } = e.target;
+    if (!["website", "company", "homepage"].includes(name)) {
+      markFormStarted();
+    }
     setFormData(prev => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
     // Clear error when user starts typing
     if (errors[name]) {
@@ -105,6 +115,15 @@ export default function Register() {
     setIsLoading(true);
 
     try {
+      const recaptchaToken = await getRecaptchaToken("auth_register");
+      const security = await buildBotDefenseSubmission({
+        flow: "auth_register",
+        startedAt: formStartedAt,
+        website,
+        company,
+        homepage,
+        recaptchaToken,
+      });
       const success = await register({
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
@@ -113,7 +132,7 @@ export default function Register() {
         password: formData.password,
         consentAccepted: formData.acceptTerms,
         referralCode: referralCode || undefined,
-      });
+      }, security);
 
       if (success) {
         setLocation("/dashboard?registered=1");
@@ -143,6 +162,29 @@ export default function Register() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="hidden" aria-hidden="true">
+              <Input
+                tabIndex={-1}
+                autoComplete="off"
+                name="website"
+                value={website}
+                onChange={(event) => setWebsite(event.target.value)}
+              />
+              <Input
+                tabIndex={-1}
+                autoComplete="off"
+                name="company"
+                value={company}
+                onChange={(event) => setCompany(event.target.value)}
+              />
+              <Input
+                tabIndex={-1}
+                autoComplete="off"
+                name="homepage"
+                value={homepage}
+                onChange={(event) => setHomepage(event.target.value)}
+              />
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="firstName">First Name</Label>

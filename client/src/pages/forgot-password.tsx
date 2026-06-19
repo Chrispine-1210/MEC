@@ -8,19 +8,36 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
+import { buildBotDefenseSubmission } from "@/lib/bot-defense";
+import { getRecaptchaToken } from "@/lib/recaptcha";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [formStartedAt, setFormStartedAt] = useState<number | null>(null);
+  const [website, setWebsite] = useState("");
+  const [company, setCompany] = useState("");
+  const [homepage, setHomepage] = useState("");
   const { toast } = useToast();
+  const markFormStarted = () => setFormStartedAt((current) => current ?? Date.now());
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setIsLoading(true);
 
     try {
+      const recaptchaToken = await getRecaptchaToken("password_reset_request");
+      const security = await buildBotDefenseSubmission({
+        flow: "password_reset_request",
+        startedAt: formStartedAt,
+        website,
+        company,
+        homepage,
+        recaptchaToken,
+      });
       const response = await apiRequest("POST", "/api/auth/forgot-password", {
         email: email.trim().toLowerCase(),
+        ...security,
       });
       const payload = await response.json();
       toast({
@@ -50,6 +67,11 @@ export default function ForgotPassword() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="hidden" aria-hidden="true">
+              <Input tabIndex={-1} autoComplete="off" name="website" value={website} onChange={(event) => setWebsite(event.target.value)} />
+              <Input tabIndex={-1} autoComplete="off" name="company" value={company} onChange={(event) => setCompany(event.target.value)} />
+              <Input tabIndex={-1} autoComplete="off" name="homepage" value={homepage} onChange={(event) => setHomepage(event.target.value)} />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email address</Label>
               <Input
@@ -58,7 +80,10 @@ export default function ForgotPassword() {
                 autoComplete="email"
                 placeholder="you@example.com"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) => {
+                  markFormStarted();
+                  setEmail(event.target.value);
+                }}
                 required
                 disabled={isLoading}
               />

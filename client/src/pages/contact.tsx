@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { getAttributionMetadata, trackConversionEvent } from "@/lib/conversion-tracking";
+import { buildBotDefenseSubmission } from "@/lib/bot-defense";
 import { getRecaptchaToken } from "@/lib/recaptcha";
 import { socialLinks } from "@/lib/social-links";
 import { 
@@ -43,6 +44,8 @@ export default function Contact() {
     message: "",
     inquiryType: "",
     website: "",
+    company: "",
+    homepage: "",
     consentAccepted: false,
   };
   const [formData, setFormData] = useState({
@@ -51,15 +54,20 @@ export default function Contact() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [hasTrackedStart, setHasTrackedStart] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [formStartedAt, setFormStartedAt] = useState<number | null>(null);
   const { toast } = useToast();
+  const markFormStarted = () => setFormStartedAt((current) => current ?? Date.now());
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const target = e.target;
     const isCheckbox = target instanceof HTMLInputElement && target.type === "checkbox";
     const name = target.name;
+    if (!["website", "company", "homepage"].includes(name)) {
+      markFormStarted();
+    }
     setFormData(prev => ({ ...prev, [name]: isCheckbox ? target.checked : target.value }));
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: "" }));
-    if (!hasTrackedStart && name !== "website") {
+    if (!hasTrackedStart && !["website", "company", "homepage"].includes(name)) {
       setHasTrackedStart(true);
       trackConversionEvent("contact_form_started", { form: "contact" });
     }
@@ -69,6 +77,7 @@ export default function Contact() {
     setFormData(prev => ({ ...prev, [name]: value }));
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: "" }));
     if (!hasTrackedStart) {
+      markFormStarted();
       setHasTrackedStart(true);
       trackConversionEvent("contact_form_started", { form: "contact" });
     }
@@ -93,6 +102,14 @@ export default function Contact() {
 
     try {
       const recaptchaToken = await getRecaptchaToken("contact");
+      const security = await buildBotDefenseSubmission({
+        flow: "contact",
+        startedAt: formStartedAt,
+        website: formData.website,
+        company: formData.company,
+        homepage: formData.homepage,
+        recaptchaToken,
+      });
       const response = await apiRequest("POST", "/api/messages", {
         name: formData.name.trim(),
         email: formData.email.trim().toLowerCase(),
@@ -100,11 +117,10 @@ export default function Contact() {
         subject: formData.subject.trim(),
         inquiryCategory: formData.inquiryType,
         message: formData.message.trim(),
-        website: formData.website,
         consentAccepted: formData.consentAccepted,
-        recaptchaToken,
         source: "contact_page",
         ...getAttributionMetadata(),
+        ...security,
       });
       const payload = (await response.json()) as {
         ticketCode?: string;
@@ -128,6 +144,8 @@ export default function Contact() {
 
       // Reset form
       setFormData({ ...emptyFormData });
+      setFormStartedAt(null);
+      setHasTrackedStart(false);
     } catch (error) {
       const payload =
         error && typeof error === "object" && "payload" in error
@@ -147,6 +165,8 @@ export default function Contact() {
           description: `Thank you for contacting us. Your ticket is ${ticketCode}. If the confirmation email is delayed, our team can still see your message.`,
         });
         setFormData({ ...emptyFormData });
+        setFormStartedAt(null);
+        setHasTrackedStart(false);
         return;
       }
 
@@ -306,6 +326,24 @@ export default function Contact() {
                       autoComplete="off"
                       name="website"
                       value={formData.website}
+                      onChange={handleChange}
+                      className="hidden"
+                      aria-hidden="true"
+                    />
+                    <input
+                      tabIndex={-1}
+                      autoComplete="off"
+                      name="company"
+                      value={formData.company}
+                      onChange={handleChange}
+                      className="hidden"
+                      aria-hidden="true"
+                    />
+                    <input
+                      tabIndex={-1}
+                      autoComplete="off"
+                      name="homepage"
+                      value={formData.homepage}
                       onChange={handleChange}
                       className="hidden"
                       aria-hidden="true"
