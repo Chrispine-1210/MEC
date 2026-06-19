@@ -435,6 +435,50 @@ test("email provider circuit breaker skips a repeatedly failing provider and kee
   assert.equal(deliveryEvents.some((event) => event.eventType === "provider_circuit_open_skipped" && event.provider === "resend"), true);
 });
 
+test("commercial email sends standards headers for Gmail-compatible unsubscribe and traceability", { concurrency: false }, async () => {
+  const { processEmailQueue } = await emailModulePromise;
+  const queue = await installQueueStorage(
+    makeEmailJob({
+      id: "newsletter-header-job",
+      category: "newsletter",
+      recipient: "newsletter@example.test",
+      subject: "Mtendere newsletter",
+      payload: {
+        from: process.env.EMAIL_FROM,
+        to: "newsletter@example.test",
+        subject: "Mtendere newsletter",
+        html: '<!doctype html><html><body><a href="https://example.test/news">News</a></body></html>',
+        text: "News: https://example.test/news",
+        category: "newsletter",
+        metadata: { flow: "newsletter" },
+        headers: {
+          "X-Custom-Trace": "safe\r\nfolded",
+          "Bad\r\nHeader": "blocked",
+        },
+      },
+    }),
+  );
+  let providerPayload: any = null;
+
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    providerPayload = JSON.parse(String(init?.body));
+    return new Response(JSON.stringify({ id: "resend-newsletter-message-1" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  await processEmailQueue();
+
+  assert.equal(queue.state.job.status, "sent");
+  assert.equal(providerPayload?.headers["Message-ID"].startsWith("<newsletter-header-job."), true);
+  assert.match(providerPayload?.headers["List-Unsubscribe"], /\/api\/email\/unsubscribe\//);
+  assert.equal(providerPayload?.headers["List-Unsubscribe-Post"], "List-Unsubscribe=One-Click");
+  assert.equal(providerPayload?.headers["X-MEC-Email-Job"], "newsletter-header-job");
+  assert.equal(providerPayload?.headers["Bad\r\nHeader"], undefined);
+  assert.equal(providerPayload?.headers["X-Custom-Trace"], "safe folded");
+});
+
 test("provider bounce webhooks apply recipient suppression before future sends", { concurrency: false }, async () => {
   const { enqueueEmail, recordProviderWebhookEvent } = await emailModulePromise;
   const preferences = new Map<string, any>();
@@ -473,16 +517,31 @@ test("provider bounce webhooks apply recipient suppression before future sends",
     },
   });
 
-  await recordProviderWebhookEvent("sendgrid", {
-    event: "bounce",
-    email: "Suppressed.Student@Example.Test",
-    sg_message_id: "provider-message-1",
+  await recordProviderWebhookEvent("ses", {
+    eventType: "Bounce",
+    mail: {
+      messageId: "soft-bounce-message-1",
+      destination: ["Soft.Student@Example.Test"],
+    },
+    bounce: {
+      bounceType: "Transient",
+      bounceSubType: "MailboxFull",
+      bouncedRecipients: [{ emailAddress: "Soft.Student@Example.Test" }],
+    },
   });
   await recordProviderWebhookEvent("sendgrid", {
     event: "bounce",
     email: "Suppressed.Student@Example.Test",
     sg_message_id: "provider-message-1",
   });
+  await recordProviderWebhookEvent("sendgrid", {
+    event: "bounce",
+    email: "Suppressed.Student@Example.Test",
+    sg_message_id: "provider-message-1",
+  });
+
+  assert.equal(preferences.has("soft.student@example.test"), false);
+  assert.equal(deliveryEvents.some((event) => event.eventType === "deferred" && event.recipient === "Soft.Student@Example.Test"), true);
 
   const preference = preferences.get("suppressed.student@example.test");
   assert.ok(preference);

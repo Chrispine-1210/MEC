@@ -93,6 +93,8 @@ const envSchema = z.object({
   SMTP_USER: optionalEnvString,
   SMTP_PASSWORD: optionalEnvString,
   SMTP_PORT: optionalEnvString,
+  SMTP_SECURE: optionalEnvBoolean,
+  SMTP_REQUIRE_TLS: optionalEnvBoolean,
   POSTMARK_SERVER_TOKEN: optionalEnvString,
   POSTMARK_MESSAGE_STREAM: optionalEnvString,
   MAILGUN_API_KEY: optionalEnvString,

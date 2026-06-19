@@ -5173,6 +5173,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/email/unsubscribe/:token', async (req, res) => {
+    try {
+      await updatePreferenceRecord(req.params.token, {}, true);
+      res.setHeader("Cache-Control", "no-store");
+      res.status(200).json({ unsubscribed: true });
+    } catch (error) {
+      console.error("One-click email unsubscribe error:", getErrorLogMessage(error));
+      res.status(400).json({ unsubscribed: false, message: "Invalid unsubscribe link" });
+    }
+  });
+
   const emailQueueDrainHandler = async (req: Request, res: Response) => {
     if (!env.CRON_SECRET && !isVercelCronRequest(req)) {
       return res.status(503).json({

@@ -134,6 +134,9 @@ const sendGridApiKey = isSendGridApiKey(env.SENDGRID_API_KEY)
     ? env.SMTP_PASSWORD
     : undefined;
 const smtpPort = Number.parseInt(env.SMTP_PORT || "", 10);
+const smtpResolvedPort = Number.isFinite(smtpPort) ? smtpPort : 587;
+const smtpSecure = env.SMTP_SECURE ?? smtpResolvedPort === 465;
+const smtpRequireTls = env.SMTP_REQUIRE_TLS ?? smtpResolvedPort !== 465;
 const smtpConfigured = Boolean(
   isUsableSmtpHost(env.SMTP_HOST) && isUsableSecret(env.SMTP_USER) && isUsableSecret(env.SMTP_PASSWORD),
 );
@@ -280,6 +283,7 @@ type TransactionalEmailActivationReadiness = {
   checkedAt: string;
   diagnostics: ReturnType<typeof getEmailDeliveryDiagnostics>;
   resendDomain?: ResendSenderDomainReadiness;
+  smtpConnection?: Awaited<ReturnType<typeof getSmtpConnectionDiagnostics>>;
   deliverability?: Awaited<ReturnType<typeof getEmailDeliverabilityDiagnostics>>;
   blockingReasons: Array<{ code: string; message: string }>;
 };
@@ -393,6 +397,28 @@ const escapeHtml = (value: string | number | null | undefined) =>
     .replace(/'/g, "&#039;");
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
+const isValidEmailAddress = (email: string) =>
+  /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(email.trim()) && !/[\r\n]/.test(email);
+
+const stripHeaderUnsafeChars = (value: string) => value.replace(/[\r\n]+/g, " ").trim();
+
+const safeHeaderValue = (value: unknown) => {
+  const cleaned = stripHeaderUnsafeChars(String(value ?? ""));
+  return cleaned ? cleaned.slice(0, 998) : "";
+};
+
+const sanitizeCustomHeaders = (headers: Record<string, string> | undefined) => {
+  const safeHeaders: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers || {})) {
+    const safeKey = key.trim();
+    if (!/^[A-Za-z0-9-]{1,80}$/.test(safeKey)) continue;
+    const safeValue = safeHeaderValue(value);
+    if (!safeValue) continue;
+    safeHeaders[safeKey] = safeValue;
+  }
+  return safeHeaders;
+};
 
 const sha256Hex = (value: string) => createHash("sha256").update(value).digest("hex");
 
@@ -536,6 +562,37 @@ const getEmailDomain = (value: string) => {
   const email = parseAddress(value).email.toLowerCase();
   const [, domain] = email.split("@");
   return domain?.replace(/\.$/, "") || null;
+};
+
+const buildMessageId = (job: EmailJob, senderDomain: string | null) => {
+  const domain = senderDomain && /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(senderDomain)
+    ? senderDomain
+    : mtendereEmailDomain;
+  return `<${job.id}.${sha256Hex(job.recipient).slice(0, 16)}@${domain}>`;
+};
+
+const buildDeliverabilityHeaders = (job: EmailJob, messageFrom: string, payloadHeaders?: Record<string, string>) => {
+  const customHeaders = sanitizeCustomHeaders(payloadHeaders);
+  const senderDomain = getEmailDomain(messageFrom);
+  const headers: Record<string, string> = {
+    ...customHeaders,
+    "Message-ID": customHeaders["Message-ID"] || customHeaders["Message-Id"] || buildMessageId(job, senderDomain),
+    "X-Entity-Ref-ID": job.id,
+    "X-MEC-Email-Job": job.id,
+    "X-MEC-Email-Category": job.category,
+    "Feedback-ID": `${job.category}:mec:${job.id}:mtendere`,
+  };
+
+  if (commercialCategories.has(job.category as EmailCategory) && emailBaseUrl) {
+    const unsubscribeUrl = getUnsubscribeUrl(job.recipient);
+    const sender = senderDomain || mtendereEmailDomain;
+    headers["List-Unsubscribe"] =
+      `<mailto:unsubscribe@${sender}?subject=${encodeURIComponent(`unsubscribe ${job.id}`)}>, <${unsubscribeUrl}>`;
+    headers["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click";
+    headers["List-ID"] = `Mtendere ${job.category.replace(/_/g, " ")} <${job.category}.${mtendereEmailDomain}>`;
+  }
+
+  return headers;
 };
 
 export const getEmailSenderDiagnosticsForAddress = (
@@ -836,6 +893,7 @@ const sendWithSes: Provider["send"] = async (message) => {
     Destination: { ToAddresses: [message.to] },
     Content: {
       Simple: {
+        Headers: Object.entries(message.headers).map(([Name, Value]) => ({ Name, Value })),
         Subject: { Data: message.subject, Charset: "UTF-8" },
         Body: {
           Text: { Data: message.text, Charset: "UTF-8" },
@@ -898,8 +956,9 @@ const sendWithSes: Provider["send"] = async (message) => {
 const sendWithSmtp: Provider["send"] = async (message) => {
   const transporter = nodemailer.createTransport({
     host: env.SMTP_HOST,
-    port: Number.isFinite(smtpPort) ? smtpPort : 587,
-    secure: Number.isFinite(smtpPort) ? smtpPort === 465 : false,
+    port: smtpResolvedPort,
+    secure: smtpSecure,
+    requireTLS: smtpRequireTls,
     connectionTimeout: 10_000,
     greetingTimeout: 10_000,
     socketTimeout: 15_000,
@@ -915,6 +974,7 @@ const sendWithSmtp: Provider["send"] = async (message) => {
     subject: message.subject,
     text: message.text,
     html: message.html,
+    messageId: message.headers["Message-ID"],
     headers: {
       ...message.headers,
       "X-MEC-Email-Job": message.id,
@@ -1032,6 +1092,84 @@ const getProviderOrder = () => {
   return activeProviders;
 };
 
+const getSmtpConfigurationDiagnostics = () => ({
+  configured: smtpConfigured,
+  hostConfigured: isUsableSmtpHost(env.SMTP_HOST),
+  port: smtpResolvedPort,
+  secure: smtpSecure,
+  requireTLS: smtpRequireTls,
+  usernameConfigured: isUsableSecret(env.SMTP_USER),
+  passwordConfigured: isUsableSecret(env.SMTP_PASSWORD),
+  senderDomain: getEmailDomain(fromAddress),
+});
+
+export const getSmtpConnectionDiagnostics = async (
+  options: { verifyConnection?: boolean; timeoutMs?: number } = {},
+) => {
+  const checkedAt = new Date().toISOString();
+  const config = getSmtpConfigurationDiagnostics();
+
+  if (!smtpConfigured) {
+    return {
+      ...config,
+      checkedAt,
+      ready: false,
+      verified: false,
+      error: "smtp_not_configured",
+      message: "SMTP is not configured with a usable host, username, and password.",
+    };
+  }
+
+  if (options.verifyConnection === false) {
+    return {
+      ...config,
+      checkedAt,
+      ready: true,
+      verified: null,
+      error: null,
+      message: "SMTP configuration is present; connection verification was not requested.",
+    };
+  }
+
+  const timeoutMs = Math.max(1_000, options.timeoutMs ?? 5_000);
+  const transporter = nodemailer.createTransport({
+    host: env.SMTP_HOST,
+    port: smtpResolvedPort,
+    secure: smtpSecure,
+    requireTLS: smtpRequireTls,
+    connectionTimeout: timeoutMs,
+    greetingTimeout: timeoutMs,
+    socketTimeout: timeoutMs,
+    auth: {
+      user: env.SMTP_USER,
+      pass: env.SMTP_PASSWORD,
+    },
+  });
+
+  try {
+    await transporter.verify();
+    return {
+      ...config,
+      checkedAt,
+      ready: true,
+      verified: true,
+      error: null,
+      message: "SMTP connection verified successfully.",
+    };
+  } catch (error) {
+    return {
+      ...config,
+      checkedAt,
+      ready: false,
+      verified: false,
+      error: error instanceof Error ? stripHeaderUnsafeChars(error.message) : "smtp_verify_failed",
+      message: "SMTP connection verification failed.",
+    };
+  } finally {
+    transporter.close();
+  }
+};
+
 export const isTransactionalEmailDeliveryReady = () => {
   return getEmailDeliveryDiagnostics().ready || !isLiveDeliveryRuntime;
 };
@@ -1050,6 +1188,7 @@ export const getEmailDeliveryDiagnostics = () => {
     inlineProviderAttempts,
     fromConfigured: Boolean(env.EMAIL_FROM),
     sender,
+    smtp: getSmtpConfigurationDiagnostics(),
     linkBaseUrlConfigured: Boolean(emailLinkBaseUrl),
     sendGridTrackingEnabled,
     providerCircuitBreakers: getEmailProviderCircuitBreakerStatus(),
@@ -1365,6 +1504,7 @@ export const getTransactionalEmailActivationReadiness = async (
   const blockingReasons: TransactionalEmailActivationReadiness["blockingReasons"] = [];
   let deliverability: Awaited<ReturnType<typeof getEmailDeliverabilityDiagnostics>> | undefined;
   let resendDomain: ResendSenderDomainReadiness | undefined;
+  let smtpConnection: Awaited<ReturnType<typeof getSmtpConnectionDiagnostics>> | undefined;
   let dnsReady: boolean | null = null;
 
   const hasLiveProvider = diagnostics.activeProviders.some((provider) => provider !== "dry_run");
@@ -1397,6 +1537,19 @@ export const getTransactionalEmailActivationReadiness = async (
     }
   }
 
+  if (diagnostics.activeProviders.includes("smtp")) {
+    smtpConnection = await getSmtpConnectionDiagnostics({
+      verifyConnection: true,
+      timeoutMs: options.timeoutMs ?? 1_500,
+    });
+    if (!smtpConnection.ready) {
+      blockingReasons.push({
+        code: "smtp_connection_not_ready",
+        message: smtpConnection.message,
+      });
+    }
+  }
+
   if (activationRequiresDnsReady) {
     deliverability = await getEmailDeliverabilityDiagnostics({ timeoutMs: options.timeoutMs ?? 1_500 });
     dnsReady = deliverability.ready;
@@ -1415,6 +1568,7 @@ export const getTransactionalEmailActivationReadiness = async (
     checkedAt: new Date().toISOString(),
     diagnostics,
     resendDomain,
+    smtpConnection,
     deliverability,
     blockingReasons,
   };
@@ -1558,19 +1712,22 @@ const addOpenPixel = (html: string, jobId: string) => {
 
 const buildDeliverableEmail = (job: EmailJob): DeliverableEmail => {
   const payload = job.payload as StoredEmailPayload;
+  const from = stripHeaderUnsafeChars(payload.from || fromAddress);
+  const to = normalizeEmail(payload.to || job.recipient);
+  const subject = stripHeaderUnsafeChars(payload.subject || job.subject);
   const withCompliance = addComplianceFooter(payload.html, job.recipient);
   const withTrackedLinks = rewriteTrackedLinks(withCompliance, job.id);
   const html = addOpenPixel(withTrackedLinks, job.id);
   return {
     id: job.id,
-    from: payload.from || fromAddress,
-    to: payload.to || job.recipient,
-    subject: payload.subject || job.subject,
+    from,
+    to,
+    subject,
     html,
-    text: payload.text,
+    text: payload.text || subject,
     category: payload.category,
     metadata: payload.metadata || {},
-    headers: payload.headers || {},
+    headers: buildDeliverabilityHeaders(job, from, payload.headers),
   };
 };
 
@@ -2001,8 +2158,20 @@ export const startEmailQueueWorker = () => {
 export const enqueueEmail = async (payload: EmailPayload, options: EmailEnqueueOptions = {}): Promise<EmailEnqueueResult> => {
   const id = randomUUID();
   const normalizedRecipient = normalizeEmail(payload.to);
+  const sanitizedSubject = stripHeaderUnsafeChars(payload.subject);
 
   try {
+    if (!isValidEmailAddress(normalizedRecipient)) {
+      await recordEmailEvent({
+        jobId: id,
+        eventType: "invalid_recipient",
+        recipient: normalizedRecipient,
+        category: payload.category,
+        metadata: { reason: "recipient_email_failed_validation" },
+      });
+      return { id, status: "failed", error: "Invalid recipient email address" };
+    }
+
     if (await shouldSuppressForPreferences({ ...payload, to: normalizedRecipient })) {
       await recordEmailEvent({
         jobId: id,
@@ -2040,10 +2209,12 @@ export const enqueueEmail = async (payload: EmailPayload, options: EmailEnqueueO
       id,
       category: payload.category,
       recipient: normalizedRecipient,
-      subject: payload.subject,
+      subject: sanitizedSubject,
       payload: {
         ...payload,
         to: normalizedRecipient,
+        subject: sanitizedSubject,
+        headers: sanitizeCustomHeaders(payload.headers),
         from: fromAddress,
       },
       metadata: payload.metadata || null,
@@ -2154,6 +2325,27 @@ const firstWebhookRecipient = (...values: unknown[]): string => {
 
 const getWebhookTagValue = (tags: Record<string, unknown>, key: string) =>
   firstString(tags[key], tags[`mec:${key}`], tags[`mec_${key}`]);
+
+const classifyBounceOrDeferral = (...values: unknown[]) => {
+  const text = values
+    .map((value) => {
+      if (typeof value === "string" || typeof value === "number") return String(value);
+      if (value && typeof value === "object") return JSON.stringify(value);
+      return "";
+    })
+    .join(" ")
+    .toLowerCase();
+
+  if (/\b(defer|deferred|delay|delayed|transient|temporary|temporarily|try again|greylist|mailbox full|over quota|4\.\d+\.\d+|rate limit)\b/.test(text)) {
+    return "soft";
+  }
+
+  if (/\b(permanent|hard|invalid|unknown user|user unknown|no such user|no such recipient|does not exist|bad destination|5\.\d+\.\d+)\b/.test(text)) {
+    return "hard";
+  }
+
+  return "unknown";
+};
 
 const normalizeProviderWebhookEvent = (
   provider: string,
@@ -2267,6 +2459,18 @@ const normalizeProviderWebhookEvent = (
     category,
     metadata: {
       ...event,
+      deliverabilityClassification: classifyBounceOrDeferral(
+        rawType,
+        bounce.bounceType,
+        bounce.bounceSubType,
+        bounce.bouncedRecipients,
+        event.reason,
+        event.response,
+        event.status,
+        eventData.reason,
+        eventData.severity,
+        data.reason,
+      ),
       normalized: {
         providerEventId: providerEventId || null,
         providerMessageId,
@@ -2321,7 +2525,7 @@ export const recordProviderWebhookEvent = async (provider: string, payload: unkn
 
   for (const rawEvent of events) {
     const normalized = normalizeProviderWebhookEvent(provider, rawEvent);
-    const eventType = mapProviderEventType(normalized.rawType);
+    const eventType = mapProviderEventType(normalized.rawType, normalized.metadata);
     const duplicate = isDuplicateProviderWebhookEvent(provider, eventType, normalized);
     const job = normalized.jobId
       ? await storage.getEmailJob(normalized.jobId)
@@ -2367,10 +2571,12 @@ export const recordProviderWebhookEvent = async (provider: string, payload: unkn
   }
 };
 
-const mapProviderEventType = (rawType: string) => {
+const mapProviderEventType = (rawType: string, metadata: Record<string, unknown> = {}) => {
   if (rawType.includes("deliver")) return "delivered";
   if (rawType.includes("open")) return "opened";
   if (rawType.includes("click")) return "clicked";
+  if (rawType.includes("defer") || rawType.includes("delay")) return "deferred";
+  if (rawType.includes("bounce") && metadata.deliverabilityClassification === "soft") return "deferred";
   if (rawType.includes("bounce")) return "bounced";
   if (rawType.includes("complain") || rawType.includes("spam")) return "spam_complaint";
   if (rawType.includes("unsubscribe")) return "unsubscribed";
@@ -2381,8 +2587,20 @@ const mapProviderEventType = (rawType: string) => {
 export const getEmailPlatformHealth = async (days = 30) => {
   const stats = await storage.getEmailDeliveryStats(days);
   const providerOrder = getProviderOrder().map((provider) => provider.name);
+  const smtpConnection = await getSmtpConnectionDiagnostics({
+    verifyConnection: providerOrder.includes("smtp"),
+    timeoutMs: 1_500,
+  }).catch((error) => ({
+    ...getSmtpConfigurationDiagnostics(),
+    checkedAt: new Date().toISOString(),
+    ready: false,
+    verified: false,
+    error: error instanceof Error ? stripHeaderUnsafeChars(error.message) : "smtp_diagnostics_failed",
+    message: "SMTP diagnostics failed.",
+  }));
   const sent = stats.totals.sent || 0;
   const delivered = stats.totals.delivered || 0;
+  const deferred = stats.totals.deferred || 0;
   const bounced = stats.totals.bounced || 0;
   const spamComplaints = stats.totals.spam_complaint || 0;
   const failed = stats.totals.failed || 0;
@@ -2436,6 +2654,13 @@ export const getEmailPlatformHealth = async (days = 30) => {
           message: `Provider circuit breaker open for: ${openCircuitBreakers.join(", ")}.`,
         }
       : null,
+    providerOrder.includes("smtp") && !smtpConnection.ready
+      ? {
+          severity: "critical",
+          code: "smtp_connection_not_ready",
+          message: `SMTP provider is active but connection verification failed: ${smtpConnection.error || "unknown error"}.`,
+        }
+      : null,
     sent > 0 && bounced / sent >= 0.02
       ? {
           severity: "warning",
@@ -2464,6 +2689,7 @@ export const getEmailPlatformHealth = async (days = 30) => {
     reliability: {
       sent,
       delivered,
+      deferred,
       failed,
       bounced,
       spamComplaints,
@@ -2477,6 +2703,7 @@ export const getEmailPlatformHealth = async (days = 30) => {
       Object.entries(stats.byProvider).map(([provider, events]) => {
         const providerSent = events.sent || 0;
         const providerDelivered = events.delivered || 0;
+        const providerDeferred = events.deferred || 0;
         const providerBounced = events.bounced || 0;
         const providerFailed = events.failed || events.provider_failed || 0;
         return [
@@ -2484,6 +2711,7 @@ export const getEmailPlatformHealth = async (days = 30) => {
           {
             sent: providerSent,
             delivered: providerDelivered,
+            deferred: providerDeferred,
             failed: providerFailed,
             bounced: providerBounced,
             successRate: providerSent > 0 ? providerDelivered / providerSent : null,
@@ -2517,6 +2745,7 @@ export const getEmailPlatformHealth = async (days = 30) => {
         .map((provider) => provider.name),
       dryRunEnabled,
     },
+    smtp: smtpConnection,
     circuitBreakers,
     templates: emailTemplateCatalog,
   };
@@ -2555,11 +2784,13 @@ export const getEmailProductionReadinessReport = async (days = 30) => {
     deliverabilityChecks.find(predicate)?.status || "unknown";
   const activeLiveProviders = health.providers.active.filter((provider) => provider !== "dry_run");
   const configuredLiveProviders = health.providers.configured.filter((provider) => provider !== "dry_run");
+  const smtpActiveButUnverified = activeLiveProviders.includes("smtp") && !health.smtp.ready;
   const scoreDeductions = [
     criticalAlerts.length * 12,
     warningAlerts.length * 5,
     activation.ready ? 0 : 15,
     activeLiveProviders.length >= 2 ? 0 : 8,
+    smtpActiveButUnverified ? 10 : 0,
     env.EMAIL_WEBHOOK_SIGNING_SECRET ? 0 : 6,
     emailLinkBaseUrl ? 0 : 3,
     health.queueOperations.deadLetter > 0 ? 10 : 0,
@@ -2577,6 +2808,9 @@ export const getEmailProductionReadinessReport = async (days = 30) => {
       : null,
     !emailLinkBaseUrl
       ? "Set EMAIL_LINK_BASE_URL to a verified branded tracking domain."
+      : null,
+    smtpActiveButUnverified
+      ? `Fix SMTP connection verification before using SMTP in production: ${health.smtp.error || "unknown SMTP error"}.`
       : null,
     ...missingConfiguredProviderIncludes.map(
       (provider) => `Add the SPF include required by the configured ${provider} provider.`,
@@ -2619,17 +2853,25 @@ export const getEmailProductionReadinessReport = async (days = 30) => {
       retryPolicy: health.queueOperations.retrySchedule,
       providerReliability: health.providerReliability,
       circuitBreakers: getEmailProviderCircuitBreakerStatus(),
+      smtp: health.smtp,
     },
     securityReport: {
       webhookSigningEnabled: Boolean(env.EMAIL_WEBHOOK_SIGNING_SECRET),
       trackingLinksSigned: Boolean(trackingSecret),
       preferenceCenterEnabled: Boolean(emailBaseUrl),
       automaticSuppressionEnabled: true,
+      standardsHeaders: {
+        messageIdGenerated: true,
+        listUnsubscribeForCommercialMail: Boolean(emailBaseUrl),
+        oneClickUnsubscribeEnabled: Boolean(emailBaseUrl),
+        headerSanitizationEnabled: true,
+      },
       dryRunEnabled,
       remainingRisks: [
         !env.EMAIL_WEBHOOK_SIGNING_SECRET ? "Provider webhook signing secret is not configured." : null,
         dryRunEnabled ? "EMAIL_DRY_RUN is enabled." : null,
         activation.dnsReady === false ? "DNS alignment is not complete." : null,
+        smtpActiveButUnverified ? "SMTP provider is active but connection verification failed." : null,
       ].filter(Boolean),
     },
     scaleAssessment: {

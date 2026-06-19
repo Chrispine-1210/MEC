@@ -84,12 +84,15 @@ Dynamic variables use `{{variable_name}}` syntax. Values are HTML-escaped for em
 - Public API responses expose `acceptedByProvider`, `mailboxDeliveryConfirmed`, `confirmationPending`, and `queued` so the UI does not claim mailbox delivery before webhook confirmation exists.
 - The queue drain remains responsible for retrying provider failures, recovering stale processing jobs, and clearing backlog from durable storage.
 - Permanent provider rejections such as Resend testing-mode recipient blocks, invalid senders, unauthorized keys, or 400/401/403 validation failures are marked as failed instead of being retried repeatedly. Temporary failures such as rate limits and 5xx responses remain retryable.
+- Every deliverable email is normalized with a standards-compliant `Message-ID`, sanitized custom headers, plaintext and HTML bodies, stable Mtendere job/category headers, and commercial-mail `List-Unsubscribe` plus `List-Unsubscribe-Post: List-Unsubscribe=One-Click` headers.
+- `/api/email/unsubscribe/:token` accepts both browser GET unsubscribe requests and one-click POST unsubscribe requests from mailbox providers.
+- SMTP fallback uses explicit TLS controls: `SMTP_SECURE` and `SMTP_REQUIRE_TLS`. When SMTP is an active provider, production readiness performs a bounded SMTP connection verification and blocks certification if it fails.
 - Every channel output writes a `communication_messages` row with status, recipient, template, provider IDs, metadata, and diagnostics.
 - Every emitted event writes a `communication_events` row with original payload and status.
 - Failed or unsupported SMS/WhatsApp provider paths are recorded explicitly instead of failing silently.
 - Admin notification feed formats communication and in-app notification analytics into readable operational alerts.
 - Provider circuit breakers stop repeatedly failing providers from being hammered during outages while preserving failover to the next configured provider.
-- Bounce, complaint, unsubscribe, and provider suppression webhooks update email preferences automatically so future sends honor suppression state.
+- Hard bounce, complaint, unsubscribe, and provider suppression webhooks update email preferences automatically so future sends honor suppression state. Transient/soft bounce signals are recorded as `deferred` and do not globally suppress the address.
 - Provider webhook ingestion normalizes SendGrid, Amazon SES/SNS, Mailgun, Resend, and Postmark payloads and deduplicates repeated deliveries for `EMAIL_WEBHOOK_DEDUP_TTL_MS`.
 - Communication diagnostics expose route/template consistency, undeclared variables, orphan templates, provider readiness, and document-link TTL.
 - Communication analytics expose message totals by channel, status, template, event type, and recent problem deliveries.
@@ -109,6 +112,7 @@ Before final launch, verify:
 - For Postmark, root-domain SPF is optional because SPF alignment is handled through Postmark's Return-Path; DKIM verification for the Mtendere sender domain is still required before relying on `no-reply@mtendereeducationconsult.com`.
 - Sending subdomains are segmented for `notifications`, `support`, `admissions`, `billing`, and `marketing`.
 - Reverse DNS is verified in the active provider dashboard when dedicated IPs are enabled.
+- Inbox placement must be verified with real mailbox tests before release: Gmail, Outlook, Yahoo, and at least one custom-domain recipient. Provider acceptance, `email_jobs.status = sent`, and webhook delivery events are not enough to certify inbox placement.
 - `EMAIL_FROM` must use a verified Mtendere sender domain in production, for example `Mtendere Education Consult <no-reply@notifications.mtendereeducationconsult.com>`.
 - `mail.mtendereeducationconsult.com` is reserved for the existing SendGrid CNAME and must not be reused as the Resend sending domain unless the SendGrid DNS plan is intentionally migrated.
 - `onboarding@resend.dev` is only acceptable for local or one-off smoke tests to the Resend account owner. Health/readiness treats it as public-recipient restricted when Resend is active.
@@ -119,6 +123,7 @@ Before final launch, verify:
 - For WhatsApp Cloud API: `WHATSAPP_CLOUD_ACCESS_TOKEN` and `WHATSAPP_CLOUD_PHONE_NUMBER_ID`.
 - For generic SMS/WhatsApp webhooks: `SMS_API_URL`, `SMS_API_KEY`, `SMS_API_FROM`, `WHATSAPP_API_URL`, `WHATSAPP_API_KEY`, and `WHATSAPP_API_FROM`.
 - For Mailgun failover: `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, and optional `MAILGUN_BASE_URL`.
+- For SMTP failover: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_SECURE`, and `SMTP_REQUIRE_TLS`. Use `SMTP_PORT=587`, `SMTP_SECURE=false`, and `SMTP_REQUIRE_TLS=true` for STARTTLS providers; use `SMTP_PORT=465` and `SMTP_SECURE=true` only for implicit TLS providers.
 - Provider circuit breaker tuning: `EMAIL_PROVIDER_CIRCUIT_FAILURE_THRESHOLD` and `EMAIL_PROVIDER_CIRCUIT_COOLDOWN_MS`.
 - Webhook deduplication tuning: `EMAIL_WEBHOOK_DEDUP_TTL_MS`.
 
