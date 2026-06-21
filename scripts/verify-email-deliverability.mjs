@@ -78,11 +78,14 @@ const {
   const startedAt = Date.now();
   const runId = `deliverability-${Date.now()}-${randomUUID().slice(0, 8)}`;
 
-  // Import from TS directly (node can handle via ts-node?); fallback to dynamic import of compiled JS
-  // In this repo, scripts run in node with type: module; server files are TS.
-  // We'll rely on runtime transpilation from ts-node/register if present.
-  const resolved = path.isAbsolute(EMAIL_MODULE_PATH) ? EMAIL_MODULE_PATH : path.resolve(process.cwd(), EMAIL_MODULE_PATH);
+  // Import from TS directly using tsx/Node ESM.
+  // Always convert absolute filesystem paths to proper file:// URLs on Windows.
+  const resolved = path.isAbsolute(EMAIL_MODULE_PATH)
+    ? EMAIL_MODULE_PATH
+    : path.resolve(process.cwd(), EMAIL_MODULE_PATH);
   const emailMod = await import(`file://${resolved.replace(/\\/g, "/")}`);
+
+
 
 
 
