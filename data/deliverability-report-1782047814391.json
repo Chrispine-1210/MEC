@@ -1,0 +1,764 @@
+{
+  "runId": "deliverability-1782047803952-8c15d426",
+  "startedAt": "2026-06-21T13:16:46.664Z",
+  "params": {
+    "to": [
+      "test@example.com"
+    ],
+    "category": "account_verification",
+    "maxWaitMs": 2000,
+    "pollMs": 500,
+    "drainMode": "direct"
+  },
+  "authenticationChecks": {
+    "dryRunEnabled": true,
+    "providerCircuitBreakers": {
+      "resend": {
+        "state": "closed",
+        "failures": 0,
+        "openedAt": null,
+        "openUntil": null,
+        "remainingMs": 0,
+        "lastFailureAt": null,
+        "lastError": null,
+        "threshold": 3,
+        "cooldownMs": 120000
+      },
+      "sendgrid": {
+        "state": "closed",
+        "failures": 0,
+        "openedAt": null,
+        "openUntil": null,
+        "remainingMs": 0,
+        "lastFailureAt": null,
+        "lastError": null,
+        "threshold": 3,
+        "cooldownMs": 120000
+      },
+      "postmark": {
+        "state": "closed",
+        "failures": 0,
+        "openedAt": null,
+        "openUntil": null,
+        "remainingMs": 0,
+        "lastFailureAt": null,
+        "lastError": null,
+        "threshold": 3,
+        "cooldownMs": 120000
+      },
+      "mailgun": {
+        "state": "closed",
+        "failures": 0,
+        "openedAt": null,
+        "openUntil": null,
+        "remainingMs": 0,
+        "lastFailureAt": null,
+        "lastError": null,
+        "threshold": 3,
+        "cooldownMs": 120000
+      },
+      "ses": {
+        "state": "closed",
+        "failures": 0,
+        "openedAt": null,
+        "openUntil": null,
+        "remainingMs": 0,
+        "lastFailureAt": null,
+        "lastError": null,
+        "threshold": 3,
+        "cooldownMs": 120000
+      },
+      "smtp": {
+        "state": "closed",
+        "failures": 0,
+        "openedAt": null,
+        "openUntil": null,
+        "remainingMs": 0,
+        "lastFailureAt": null,
+        "lastError": null,
+        "threshold": 3,
+        "cooldownMs": 120000
+      },
+      "custom": {
+        "state": "closed",
+        "failures": 0,
+        "openedAt": null,
+        "openUntil": null,
+        "remainingMs": 0,
+        "lastFailureAt": null,
+        "lastError": null,
+        "threshold": 3,
+        "cooldownMs": 120000
+      }
+    },
+    "deliverabilityReadyInDiagnostics": false,
+    "summary": {
+      "ready": false,
+      "activeProviders": [
+        "dry_run"
+      ],
+      "dryRunEnabled": true,
+      "liveProviderDeliveryAllowed": false,
+      "configuredDryRunEnabled": false,
+      "activationRequiresDnsReady": false,
+      "inlineProviderAttempts": 2,
+      "fromConfigured": true,
+      "sender": {
+        "configured": true,
+        "domain": "resend.dev",
+        "resendTestSender": false,
+        "publicRecipientRestricted": false,
+        "recommendedFrom": "Mtendere Education Consult <no-reply@notifications.mtendereeducationconsult.com>"
+      },
+      "smtp": {
+        "configured": true,
+        "hostConfigured": true,
+        "port": 587,
+        "secure": false,
+        "requireTLS": true,
+        "usernameConfigured": true,
+        "passwordConfigured": true,
+        "senderDomain": "resend.dev"
+      },
+      "linkBaseUrlConfigured": true,
+      "sendGridTrackingEnabled": true,
+      "providerCircuitBreakers": {
+        "resend": {
+          "state": "closed",
+          "failures": 0,
+          "openedAt": null,
+          "openUntil": null,
+          "remainingMs": 0,
+          "lastFailureAt": null,
+          "lastError": null,
+          "threshold": 3,
+          "cooldownMs": 120000
+        },
+        "sendgrid": {
+          "state": "closed",
+          "failures": 0,
+          "openedAt": null,
+          "openUntil": null,
+          "remainingMs": 0,
+          "lastFailureAt": null,
+          "lastError": null,
+          "threshold": 3,
+          "cooldownMs": 120000
+        },
+        "postmark": {
+          "state": "closed",
+          "failures": 0,
+          "openedAt": null,
+          "openUntil": null,
+          "remainingMs": 0,
+          "lastFailureAt": null,
+          "lastError": null,
+          "threshold": 3,
+          "cooldownMs": 120000
+        },
+        "mailgun": {
+          "state": "closed",
+          "failures": 0,
+          "openedAt": null,
+          "openUntil": null,
+          "remainingMs": 0,
+          "lastFailureAt": null,
+          "lastError": null,
+          "threshold": 3,
+          "cooldownMs": 120000
+        },
+        "ses": {
+          "state": "closed",
+          "failures": 0,
+          "openedAt": null,
+          "openUntil": null,
+          "remainingMs": 0,
+          "lastFailureAt": null,
+          "lastError": null,
+          "threshold": 3,
+          "cooldownMs": 120000
+        },
+        "smtp": {
+          "state": "closed",
+          "failures": 0,
+          "openedAt": null,
+          "openUntil": null,
+          "remainingMs": 0,
+          "lastFailureAt": null,
+          "lastError": null,
+          "threshold": 3,
+          "cooldownMs": 120000
+        },
+        "custom": {
+          "state": "closed",
+          "failures": 0,
+          "openedAt": null,
+          "openUntil": null,
+          "remainingMs": 0,
+          "lastFailureAt": null,
+          "lastError": null,
+          "threshold": 3,
+          "cooldownMs": 120000
+        }
+      },
+      "providerConfigured": {
+        "resend": true,
+        "sendgrid": true,
+        "sendgridSmtpFallback": false,
+        "postmark": false,
+        "mailgun": false,
+        "ses": false,
+        "smtp": true,
+        "custom": false
+      }
+    }
+  },
+  "smtpChecks": {
+    "configured": true,
+    "hostConfigured": true,
+    "port": 587,
+    "secure": false,
+    "requireTLS": true,
+    "usernameConfigured": true,
+    "passwordConfigured": true,
+    "senderDomain": "resend.dev"
+  },
+  "providerActivation": {
+    "ready": true,
+    "providerReady": true,
+    "dnsReady": null,
+    "blockingReasons": [],
+    "checkedAt": "2026-06-21T13:16:46.673Z"
+  },
+  "emailJobs": [
+    {
+      "recipient": "test@example.com",
+      "jobId": "d74f3eb5-1cee-4afd-ab3a-3c09be461cfe",
+      "enqueueResult": {
+        "id": "d74f3eb5-1cee-4afd-ab3a-3c09be461cfe",
+        "status": "queued"
+      }
+    }
+  ],
+  "deliveryEvents": {
+    "delivered": [],
+    "deferred": [],
+    "bounced": [],
+    "spamComplaint": [],
+    "failed": [],
+    "other": []
+  },
+  "gate": {
+    "providerDeliveredConfirmed": false,
+    "mailboxInboxConfirmed": "not_automated_in_repo",
+    "pass": false,
+    "failReasons": [
+      "Timed out waiting for provider-delivered evidence."
+    ],
+    "elapsedMs": 10439
+  },
+  "remainingIssues": [
+    "No delivered webhook/provider event detected during the verification window."
+  ],
+  "productionReadiness": {
+    "generatedAt": "2026-06-21T13:16:50.647Z",
+    "periodDays": 7,
+    "score": 27,
+    "certifiedForDeployment": false,
+    "deploymentGate": {
+      "pass": false,
+      "requiredScore": 95,
+      "blockingReasons": [
+        "No real transactional email provider is configured. Verification and subscription emails cannot be delivered.",
+        "16 email job(s) are in the dead-letter queue and need operator review.",
+        "One or more sending-domain DNS records are not aligned.",
+        "Configure at least two live providers in EMAIL_PROVIDER_ORDER for production failover.",
+        "Set EMAIL_WEBHOOK_SIGNING_SECRET and configure provider webhooks to use signed delivery events.",
+        "Add the SPF include required by the configured sendgrid provider.",
+        "Add the SPF include required by the configured resend provider."
+      ]
+    },
+    "deliverabilityReport": {
+      "domain": "mtendereeducationconsult.com",
+      "providerReady": true,
+      "dnsReady": null,
+      "spfStatus": "warn",
+      "dkimStatus": "fail",
+      "dmarcStatus": "warn",
+      "bimiStatus": "warn",
+      "inboxPlacementScore": "requires external seed-list testing",
+      "summary": {
+        "pass": 0,
+        "warn": 13,
+        "fail": 5
+      },
+      "authenticationPolicy": {
+        "spf": {
+          "present": false,
+          "record": null,
+          "providerCoverage": {
+            "sendgrid": false,
+            "ses": false,
+            "resend": false,
+            "mailgun": false,
+            "postmark": false,
+            "microsoft365": false
+          },
+          "missingConfiguredProviderIncludes": [
+            "sendgrid",
+            "resend"
+          ],
+          "qualifier": null
+        },
+        "dkim": {
+          "sendgridSelectors": [
+            {
+              "host": "mtd1._domainkey.mtendereeducationconsult.com",
+              "status": "fail"
+            },
+            {
+              "host": "mtd12._domainkey.mtendereeducationconsult.com",
+              "status": "fail"
+            }
+          ],
+          "note": "Provider-specific DKIM selectors are verified through CNAME/TXT checks and provider dashboards."
+        },
+        "dmarc": {
+          "present": false,
+          "record": null,
+          "policy": null,
+          "subdomainPolicy": null,
+          "alignment": {
+            "dkim": "relaxed",
+            "spf": "relaxed"
+          },
+          "reportUris": {
+            "aggregate": null,
+            "forensic": null
+          },
+          "pct": "100",
+          "enforcementReady": false
+        },
+        "bimi": {
+          "present": false,
+          "record": null,
+          "status": "not_configured"
+        }
+      },
+      "checks": [
+        {
+          "name": "links.mtendereeducationconsult.com",
+          "host": "links.mtendereeducationconsult.com",
+          "type": "CNAME",
+          "expected": "sendgrid.net",
+          "actual": [],
+          "status": "fail",
+          "message": "queryCname ECONNREFUSED links.mtendereeducationconsult.com"
+        },
+        {
+          "name": "54085667.mtendereeducationconsult.com",
+          "host": "54085667.mtendereeducationconsult.com",
+          "type": "CNAME",
+          "expected": "sendgrid.net",
+          "actual": [],
+          "status": "fail",
+          "message": "queryCname ECONNREFUSED 54085667.mtendereeducationconsult.com"
+        },
+        {
+          "name": "mail.mtendereeducationconsult.com",
+          "host": "mail.mtendereeducationconsult.com",
+          "type": "CNAME",
+          "expected": "u54085667.wl168.sendgrid.net",
+          "actual": [],
+          "status": "fail",
+          "message": "queryCname ECONNREFUSED mail.mtendereeducationconsult.com"
+        },
+        {
+          "name": "mtd1._domainkey.mtendereeducationconsult.com",
+          "host": "mtd1._domainkey.mtendereeducationconsult.com",
+          "type": "CNAME",
+          "expected": "mtd1.domainkey.u54085667.wl168.sendgrid.net",
+          "actual": [],
+          "status": "fail",
+          "message": "queryCname ECONNREFUSED mtd1._domainkey.mtendereeducationconsult.com"
+        },
+        {
+          "name": "mtd12._domainkey.mtendereeducationconsult.com",
+          "host": "mtd12._domainkey.mtendereeducationconsult.com",
+          "type": "CNAME",
+          "expected": "mtd12.domainkey.u54085667.wl168.sendgrid.net",
+          "actual": [],
+          "status": "fail",
+          "message": "queryCname ECONNREFUSED mtd12._domainkey.mtendereeducationconsult.com"
+        },
+        {
+          "name": "_dmarc.mtendereeducationconsult.com",
+          "host": "_dmarc.mtendereeducationconsult.com",
+          "type": "TXT",
+          "expected": "v=DMARC1; p=quarantine or p=reject",
+          "actual": [],
+          "status": "warn",
+          "message": "queryTxt ECONNREFUSED _dmarc.mtendereeducationconsult.com"
+        },
+        {
+          "name": "mtendereeducationconsult.com",
+          "host": "mtendereeducationconsult.com",
+          "type": "TXT",
+          "expected": "v=spf1 with configured provider includes",
+          "actual": [],
+          "status": "warn",
+          "message": "queryTxt ECONNREFUSED mtendereeducationconsult.com"
+        },
+        {
+          "name": "default._bimi.mtendereeducationconsult.com",
+          "host": "default._bimi.mtendereeducationconsult.com",
+          "type": "TXT",
+          "expected": "v=BIMI1; l=...; a=...",
+          "actual": [],
+          "status": "warn",
+          "message": "queryTxt ECONNREFUSED default._bimi.mtendereeducationconsult.com"
+        },
+        {
+          "name": "notifications.mtendereeducationconsult.com",
+          "host": "notifications.mtendereeducationconsult.com",
+          "type": "TXT",
+          "expected": "v=spf1 with provider include",
+          "actual": [],
+          "status": "warn",
+          "message": "queryTxt ECONNREFUSED notifications.mtendereeducationconsult.com"
+        },
+        {
+          "name": "_dmarc.notifications.mtendereeducationconsult.com",
+          "host": "_dmarc.notifications.mtendereeducationconsult.com",
+          "type": "TXT",
+          "expected": "v=DMARC1; p=none/quarantine/reject",
+          "actual": [],
+          "status": "warn",
+          "message": "queryTxt ECONNREFUSED _dmarc.notifications.mtendereeducationconsult.com"
+        },
+        {
+          "name": "support.mtendereeducationconsult.com",
+          "host": "support.mtendereeducationconsult.com",
+          "type": "TXT",
+          "expected": "v=spf1 with provider include",
+          "actual": [],
+          "status": "warn",
+          "message": "queryTxt ECONNREFUSED support.mtendereeducationconsult.com"
+        },
+        {
+          "name": "_dmarc.support.mtendereeducationconsult.com",
+          "host": "_dmarc.support.mtendereeducationconsult.com",
+          "type": "TXT",
+          "expected": "v=DMARC1; p=none/quarantine/reject",
+          "actual": [],
+          "status": "warn",
+          "message": "queryTxt ECONNREFUSED _dmarc.support.mtendereeducationconsult.com"
+        },
+        {
+          "name": "admissions.mtendereeducationconsult.com",
+          "host": "admissions.mtendereeducationconsult.com",
+          "type": "TXT",
+          "expected": "v=spf1 with provider include",
+          "actual": [],
+          "status": "warn",
+          "message": "queryTxt ECONNREFUSED admissions.mtendereeducationconsult.com"
+        },
+        {
+          "name": "_dmarc.admissions.mtendereeducationconsult.com",
+          "host": "_dmarc.admissions.mtendereeducationconsult.com",
+          "type": "TXT",
+          "expected": "v=DMARC1; p=none/quarantine/reject",
+          "actual": [],
+          "status": "warn",
+          "message": "queryTxt ECONNREFUSED _dmarc.admissions.mtendereeducationconsult.com"
+        },
+        {
+          "name": "billing.mtendereeducationconsult.com",
+          "host": "billing.mtendereeducationconsult.com",
+          "type": "TXT",
+          "expected": "v=spf1 with provider include",
+          "actual": [],
+          "status": "warn",
+          "message": "queryTxt ECONNREFUSED billing.mtendereeducationconsult.com"
+        },
+        {
+          "name": "_dmarc.billing.mtendereeducationconsult.com",
+          "host": "_dmarc.billing.mtendereeducationconsult.com",
+          "type": "TXT",
+          "expected": "v=DMARC1; p=none/quarantine/reject",
+          "actual": [],
+          "status": "warn",
+          "message": "queryTxt ECONNREFUSED _dmarc.billing.mtendereeducationconsult.com"
+        },
+        {
+          "name": "marketing.mtendereeducationconsult.com",
+          "host": "marketing.mtendereeducationconsult.com",
+          "type": "TXT",
+          "expected": "v=spf1 with provider include",
+          "actual": [],
+          "status": "warn",
+          "message": "queryTxt ECONNREFUSED marketing.mtendereeducationconsult.com"
+        },
+        {
+          "name": "_dmarc.marketing.mtendereeducationconsult.com",
+          "host": "_dmarc.marketing.mtendereeducationconsult.com",
+          "type": "TXT",
+          "expected": "v=DMARC1; p=none/quarantine/reject",
+          "actual": [],
+          "status": "warn",
+          "message": "queryTxt ECONNREFUSED _dmarc.marketing.mtendereeducationconsult.com"
+        }
+      ]
+    },
+    "reliabilityReport": {
+      "failoverValidation": {
+        "providerCount": 0,
+        "activeProviders": [],
+        "configuredProviders": [
+          "resend",
+          "sendgrid",
+          "smtp"
+        ],
+        "failoverTriggered": 0,
+        "failoverRate": 0,
+        "ready": false
+      },
+      "queueValidation": {
+        "queued": 0,
+        "retryScheduled": 0,
+        "processing": 0,
+        "deadLetter": 16,
+        "congestion": 0,
+        "priorityBands": {
+          "critical": "0-19",
+          "high": "20-49",
+          "medium": "50-99",
+          "low": "100+"
+        },
+        "retrySchedule": [
+          "1 minute",
+          "5 minutes",
+          "15 minutes",
+          "1 hour"
+        ],
+        "deadLetterStatus": "failed"
+      },
+      "retryPolicy": [
+        "1 minute",
+        "5 minutes",
+        "15 minutes",
+        "1 hour"
+      ],
+      "providerReliability": {
+        "unknown": {
+          "sent": 0,
+          "delivered": 0,
+          "deferred": 0,
+          "failed": 16,
+          "bounced": 0,
+          "successRate": null,
+          "bounceRate": null,
+          "latencyMs": null
+        },
+        "dry_run": {
+          "sent": 20,
+          "delivered": 0,
+          "deferred": 0,
+          "failed": 0,
+          "bounced": 0,
+          "successRate": 0,
+          "bounceRate": 0,
+          "latencyMs": {
+            "count": 20,
+            "average": 351716,
+            "max": 6093757
+          }
+        },
+        "sendgrid": {
+          "sent": 0,
+          "delivered": 4,
+          "deferred": 0,
+          "failed": 0,
+          "bounced": 0,
+          "successRate": null,
+          "bounceRate": null,
+          "latencyMs": null
+        },
+        "ses": {
+          "sent": 0,
+          "delivered": 4,
+          "deferred": 0,
+          "failed": 0,
+          "bounced": 0,
+          "successRate": null,
+          "bounceRate": null,
+          "latencyMs": null
+        },
+        "resend": {
+          "sent": 0,
+          "delivered": 0,
+          "deferred": 0,
+          "failed": 31,
+          "bounced": 0,
+          "successRate": null,
+          "bounceRate": null,
+          "latencyMs": null
+        }
+      },
+      "circuitBreakers": {
+        "resend": {
+          "state": "closed",
+          "failures": 0,
+          "openedAt": null,
+          "openUntil": null,
+          "remainingMs": 0,
+          "lastFailureAt": null,
+          "lastError": null,
+          "threshold": 3,
+          "cooldownMs": 120000
+        },
+        "sendgrid": {
+          "state": "closed",
+          "failures": 0,
+          "openedAt": null,
+          "openUntil": null,
+          "remainingMs": 0,
+          "lastFailureAt": null,
+          "lastError": null,
+          "threshold": 3,
+          "cooldownMs": 120000
+        },
+        "postmark": {
+          "state": "closed",
+          "failures": 0,
+          "openedAt": null,
+          "openUntil": null,
+          "remainingMs": 0,
+          "lastFailureAt": null,
+          "lastError": null,
+          "threshold": 3,
+          "cooldownMs": 120000
+        },
+        "mailgun": {
+          "state": "closed",
+          "failures": 0,
+          "openedAt": null,
+          "openUntil": null,
+          "remainingMs": 0,
+          "lastFailureAt": null,
+          "lastError": null,
+          "threshold": 3,
+          "cooldownMs": 120000
+        },
+        "ses": {
+          "state": "closed",
+          "failures": 0,
+          "openedAt": null,
+          "openUntil": null,
+          "remainingMs": 0,
+          "lastFailureAt": null,
+          "lastError": null,
+          "threshold": 3,
+          "cooldownMs": 120000
+        },
+        "smtp": {
+          "state": "closed",
+          "failures": 0,
+          "openedAt": null,
+          "openUntil": null,
+          "remainingMs": 0,
+          "lastFailureAt": null,
+          "lastError": null,
+          "threshold": 3,
+          "cooldownMs": 120000
+        },
+        "custom": {
+          "state": "closed",
+          "failures": 0,
+          "openedAt": null,
+          "openUntil": null,
+          "remainingMs": 0,
+          "lastFailureAt": null,
+          "lastError": null,
+          "threshold": 3,
+          "cooldownMs": 120000
+        }
+      },
+      "smtp": {
+        "configured": true,
+        "hostConfigured": true,
+        "port": 587,
+        "secure": false,
+        "requireTLS": true,
+        "usernameConfigured": true,
+        "passwordConfigured": true,
+        "senderDomain": "resend.dev",
+        "checkedAt": "2026-06-21T13:16:50.609Z",
+        "ready": true,
+        "verified": null,
+        "error": null,
+        "message": "SMTP configuration is present; connection verification was not requested."
+      }
+    },
+    "securityReport": {
+      "webhookSigningEnabled": false,
+      "trackingLinksSigned": true,
+      "preferenceCenterEnabled": true,
+      "automaticSuppressionEnabled": true,
+      "standardsHeaders": {
+        "messageIdGenerated": true,
+        "listUnsubscribeForCommercialMail": true,
+        "oneClickUnsubscribeEnabled": true,
+        "headerSanitizationEnabled": true
+      },
+      "dryRunEnabled": true,
+      "remainingRisks": [
+        "Provider webhook signing secret is not configured.",
+        "EMAIL_DRY_RUN is enabled."
+      ]
+    },
+    "scaleAssessment": {
+      "observedSentInPeriod": 20,
+      "projectedMonthlyVolume": 86,
+      "queueBacklog": 0,
+      "currentArchitecture": "Durable database-backed queue with cron/worker drain, provider failover, retries, tracking, and dead-letter visibility.",
+      "growthPath": [
+        "Move queue execution to Redis/BullMQ or managed workers when campaign volume exceeds process-level drain capacity.",
+        "Segment transactional and marketing traffic across dedicated subdomains and provider pools.",
+        "Use provider dashboards for dedicated IP warmup, reverse DNS, reputation monitoring, and seed-list inbox testing."
+      ]
+    },
+    "alerts": [
+      {
+        "severity": "critical",
+        "code": "email_provider_unavailable",
+        "message": "No real transactional email provider is configured. Verification and subscription emails cannot be delivered."
+      },
+      {
+        "severity": "warning",
+        "code": "email_dry_run_enabled",
+        "message": "EMAIL_DRY_RUN is enabled. Production should use real provider delivery."
+      },
+      {
+        "severity": "critical",
+        "code": "email_dead_letter_jobs",
+        "message": "16 email job(s) are in the dead-letter queue and need operator review."
+      },
+      {
+        "severity": "critical",
+        "code": "email_dns_not_ready",
+        "message": "One or more sending-domain DNS records are not aligned."
+      }
+    ]
+  },
+  "queueDrain": null,
+  "deliveryEvidence": {
+    "count": 12,
+    "byType": {
+      "queued": 4,
+      "processing": 4,
+      "sent": 4
+    },
+    "snapshotAt": "2026-06-21T13:16:53.890Z"
+  }
+}
