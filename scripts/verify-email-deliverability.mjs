@@ -81,8 +81,8 @@ const {
   // Import from TS directly (node can handle via ts-node?); fallback to dynamic import of compiled JS
   // In this repo, scripts run in node with type: module; server files are TS.
   // We'll rely on runtime transpilation from ts-node/register if present.
-const resolved = path.isAbsolute(EMAIL_MODULE_PATH) ? EMAIL_MODULE_PATH : path.resolve(process.cwd(), EMAIL_MODULE_PATH);
-  const emailMod = await import(new URL(`file://${resolved}`));
+  const resolved = path.isAbsolute(EMAIL_MODULE_PATH) ? EMAIL_MODULE_PATH : path.resolve(process.cwd(), EMAIL_MODULE_PATH);
+  const emailMod = await import(`file://${resolved.replace(/\\/g, "/")}`);
 
 
 
@@ -117,10 +117,10 @@ const resolved = path.isAbsolute(EMAIL_MODULE_PATH) ? EMAIL_MODULE_PATH : path.r
 
     const baseUrl = process.env.APP_BASE_URL || process.env.PUBLIC_APP_URL || "";
     const health = parseArg("--health-url");
-    const drainUrl = parseArg("--drain-url") || (process.env.EMAIL_DRAIN_URL || `${baseUrl}/api/email/queue/drain`);
+  const drainUrl = parseArg("--drain-url") || (process.env.EMAIL_DRAIN_URL || `${baseUrl}/api/email/queue/drain`);
 
     if (!drainUrl || drainUrl.includes("/api/email/queue/drain") === false) {
-      return { skipped: true, reason: "drain endpoint not configured" };
+      return { skipped: true, reason: "drain endpoint not configured", drainUrl };
     }
 
     try {
