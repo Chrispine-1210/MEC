@@ -100,7 +100,7 @@ const {
   // Some environments may not surface TS re-exports depending on module entry.
   // If enqueueEmail is missing, re-import the email module directly.
   if (typeof enqueueEmail !== "function" || typeof getEmailDeliveryDiagnostics !== "function") {
-    const directEmailMod = await import(path.resolve(process.cwd(), "server/email.ts"));
+    const directEmailMod = await import(new URL("../server/email.ts", import.meta.url));
     if (typeof enqueueEmail !== "function" && typeof directEmailMod.enqueueEmail === "function") {
       // eslint-disable-next-line no-param-reassign
       emailMod.enqueueEmail = directEmailMod.enqueueEmail;
