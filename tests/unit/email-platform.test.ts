@@ -169,6 +169,34 @@ test("Resend sender domain readiness requires a verified Resend domain", { concu
   assert.equal(readiness.expectedDomain, "notifications.mtendereeducationconsult.com");
   assert.equal(readiness.ready, false);
   assert.equal(readiness.error, "resend_domain_not_verified");
+  assert.equal(readiness.credentialScope, "full_access");
+  assert.equal(readiness.verificationMethod, "resend_api");
+});
+
+test("Resend sending-only keys defer domain verification to authenticated DNS checks", { concurrency: false }, async () => {
+  const { getResendSenderDomainReadiness } = await emailModulePromise;
+
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        statusCode: 401,
+        message: "This API key is restricted to only send emails",
+        name: "restricted_api_key",
+      }),
+      { status: 401, headers: { "content-type": "application/json" } },
+    )) as typeof fetch;
+
+  const readiness = await getResendSenderDomainReadiness({
+    senderAddress: "Mtendere Education Consult <no-reply@notifications.mtendereeducationconsult.com>",
+    activeProviders: ["resend"],
+  });
+
+  assert.equal(readiness.required, true);
+  assert.equal(readiness.ready, null);
+  assert.equal(readiness.error, null);
+  assert.equal(readiness.status, "dns_verification_required");
+  assert.equal(readiness.credentialScope, "sending_access");
+  assert.equal(readiness.verificationMethod, "dns");
 });
 
 const installQueueStorage = async (initialJob: any) => {

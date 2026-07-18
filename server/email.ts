@@ -293,6 +293,8 @@ type ResendSenderDomainReadiness = {
   required: boolean;
   checkedAt: string;
   ready: boolean | null;
+  credentialScope: "full_access" | "sending_access" | null;
+  verificationMethod: "resend_api" | "dns" | null;
   senderDomain: string | null;
   expectedDomain: string | null;
   matchedDomain: string | null;
@@ -668,6 +670,8 @@ export const getResendSenderDomainReadiness = async (
     expectedDomain,
     matchedDomain: null,
     status: null,
+    credentialScope: null,
+    verificationMethod: null,
   };
 
   if (!activeProviders.includes("resend")) {
@@ -715,11 +719,34 @@ export const getResendSenderDomainReadiness = async (
         headers: {
           Authorization: `Bearer ${env.RESEND_API_KEY}`,
           "Content-Type": "application/json",
+          "User-Agent": "MEC-Email-Platform/1.0",
         },
       },
       options.timeoutMs ?? 5_000,
     );
-    if (!response.ok) throw new Error(await responseError(response));
+    if (!response.ok) {
+      const responseText = await response.text().catch(() => "");
+      const isSendingOnlyCredential =
+        response.status === 401 &&
+        /restricted_api_key|restricted to only send emails/i.test(responseText);
+
+      if (isSendingOnlyCredential) {
+        return {
+          ...base,
+          ready: null,
+          credentialScope: "sending_access",
+          verificationMethod: "dns",
+          status: "dns_verification_required",
+          error: null,
+          message:
+            "Resend accepted a sending-only API key. Sender-domain readiness must be verified through SPF, MX, and DKIM DNS checks.",
+        };
+      }
+
+      throw new Error(
+        `${response.status} ${response.statusText}${responseText ? `: ${responseText.slice(0, 500)}` : ""}`,
+      );
+    }
 
     const domains = parseResendDomainsResponse(await response.json().catch(() => ({})));
     const matched = domains.find((domain) => String(domain.name || "").toLowerCase() === expectedDomain);
@@ -729,6 +756,8 @@ export const getResendSenderDomainReadiness = async (
     return {
       ...base,
       ready,
+      credentialScope: "full_access",
+      verificationMethod: "resend_api",
       matchedDomain: matched ? String(matched.name || expectedDomain) : null,
       status,
       error: ready ? null : matched ? "resend_domain_not_verified" : "resend_domain_missing",
@@ -755,6 +784,7 @@ const sendWithResend: Provider["send"] = async (message) => {
     headers: {
       Authorization: `Bearer ${env.RESEND_API_KEY}`,
       "Content-Type": "application/json",
+      "User-Agent": "MEC-Email-Platform/1.0",
     },
     body: JSON.stringify({
       from: message.from,
@@ -1610,10 +1640,24 @@ export const getTransactionalEmailActivationReadiness = async (
       timeoutMs: options.timeoutMs ?? 1_500,
     });
 
-    if (!diagnostics.sender.publicRecipientRestricted && resendDomain.ready !== true) {
+    const canVerifyResendDomainThroughDns =
+      resendDomain.verificationMethod === "dns" && resendDomain.credentialScope === "sending_access";
+
+    if (
+      !diagnostics.sender.publicRecipientRestricted &&
+      resendDomain.ready !== true &&
+      !canVerifyResendDomainThroughDns
+    ) {
       blockingReasons.push({
         code: resendDomain.error || "resend_domain_not_ready",
         message: resendDomain.message,
+      });
+    }
+
+    if (canVerifyResendDomainThroughDns && !activationRequiresDnsReady) {
+      blockingReasons.push({
+        code: "resend_domain_dns_verification_required",
+        message: "A sending-only Resend key requires DNS readiness checks to remain enabled.",
       });
     }
   }
@@ -1639,6 +1683,19 @@ export const getTransactionalEmailActivationReadiness = async (
         code: "email_dns_not_ready",
         message: "Sending-domain DNS is not aligned for transactional email activation.",
       });
+    }
+
+    if (
+      deliverability.ready &&
+      resendDomain?.verificationMethod === "dns" &&
+      resendDomain.credentialScope === "sending_access"
+    ) {
+      resendDomain = {
+        ...resendDomain,
+        ready: true,
+        status: "verified_via_dns",
+        message: "Resend sending-only credentials are valid and the sender-domain SPF, MX, and DKIM checks pass.",
+      };
     }
   }
 
