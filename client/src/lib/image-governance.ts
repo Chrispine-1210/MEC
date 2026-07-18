@@ -99,6 +99,18 @@ const imageModules = import.meta.glob(
     "../assets/imgs/Partners/our-partners.jpg",
     "../assets/imgs/Partners/partners-2.jpg",
     "../assets/imgs/Partners/partners-default.jpg",
+    "../assets/imgs/universities/university-of-malawi.jpg",
+    "../assets/imgs/universities/university-of-oxford.jpg",
+    "../assets/imgs/universities/african-development-bank.jpg",
+    "../assets/imgs/universities/chandigarh-university.jpg",
+    "../assets/imgs/universities/gbs-dubai.webp",
+    "../assets/imgs/universities/ct-university-logo.png",
+    "../assets/imgs/universities/amity-university-logo.png",
+    "../assets/imgs/universities/msm-unify-logo.png",
+    "../assets/imgs/universities/gedu-global-banner.png",
+    "../assets/imgs/universities/technical-university-of-munich.jpg",
+    "../assets/imgs/universities/london-school-of-economics.jpg",
+    "../assets/imgs/universities/inlaks-foundation.png",
     "../assets/imgs/scholarships/application-guidance.jpg",
     "../assets/imgs/scholarships/application-registration.jpg",
     "../assets/imgs/scholarships/graduates-default.jpg",
@@ -149,6 +161,21 @@ const assets: AssetEntry[] = Object.entries(imageModules)
     };
   })
   .sort((left, right) => left.normalizedPath.localeCompare(right.normalizedPath));
+
+const CURATED_CATALOGUE_ASSETS = [
+  { terms: ["mastercard foundation scholars program", "university of malawi"], path: "universities/university-of-malawi.jpg" },
+  { terms: ["commonwealth scholarship for africa", "university of oxford"], path: "universities/university-of-oxford.jpg" },
+  { terms: ["daad study scholarship germany", "technical university of munich"], path: "universities/technical-university-of-munich.jpg" },
+  { terms: ["chevening scholarship", "london school of economics"], path: "universities/london-school-of-economics.jpg" },
+  { terms: ["african development bank scholarship", "african development bank"], path: "universities/african-development-bank.jpg" },
+  { terms: ["inlaks shivdasani foundation scholarship", "inlaks foundation"], path: "universities/inlaks-foundation.png" },
+  { terms: ["chandigarh university"], path: "universities/chandigarh-university.jpg" },
+  { terms: ["gbs dubai"], path: "universities/gbs-dubai.webp" },
+  { terms: ["ct university"], path: "universities/ct-university-logo.png" },
+  { terms: ["amity university"], path: "universities/amity-university-logo.png" },
+  { terms: ["msm unify"], path: "universities/msm-unify-logo.png" },
+  { terms: ["gedu global education"], path: "universities/gedu-global-banner.png" },
+];
 
 const MODULE_FOLDERS: Record<GovernedImageModule, string[]> = {
   blog: ["blogs", "blog"],
@@ -245,6 +272,11 @@ export function getGovernedImageAssets() {
 
 export function resolveGovernedImage(input: GovernedImageInput): ResolvedGovernedImage {
   const module = input.module;
+  const curated = resolveCuratedCatalogueAsset(input);
+  if (curated) {
+    return toResolved(curated, input, "assigned");
+  }
+
   const assigned = resolveAssignedLocalAsset(input.src);
 
   if (assigned && shouldHonorAssignedAsset(assigned, input)) {
@@ -349,6 +381,17 @@ function getModulePool(module: GovernedImageModule) {
       keywords.some((keyword) => path.includes(normalizePath(keyword)))
     );
   });
+}
+
+function resolveCuratedCatalogueAsset(input: GovernedImageInput) {
+  if (!["scholarship", "university", "partner"].includes(input.module)) return undefined;
+
+  const content = [input.title, input.category, ...(input.tags || [])]
+    .filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
+    .map(normalizePath)
+    .join(" ");
+  const match = CURATED_CATALOGUE_ASSETS.find((entry) => entry.terms.some((term) => content.includes(term)));
+  return match ? assets.find((asset) => asset.normalizedPath === match.path) : undefined;
 }
 
 function resolveAssignedLocalAsset(src?: string | null) {

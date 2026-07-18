@@ -1,8 +1,12 @@
 import { enqueueEmail, type EmailCategory } from "./email";
 import { env } from "./env";
+import { storage } from "./storage";
 
-type NotificationChannel = "email" | "sms" | "whatsapp" | "push";
+type NotificationChannel = "email" | "admin_email" | "sms" | "whatsapp" | "push";
 type NotificationPriority = "critical" | "high" | "medium" | "low";
+type AdminRole = "viewer" | "writer" | "editor" | "admin" | "super_admin";
+
+const adminRoles: AdminRole[] = ["viewer", "writer", "editor", "admin", "super_admin"];
 
 const priorityToEmailRank: Record<NotificationPriority, number> = {
   critical: 10,
@@ -24,19 +28,34 @@ type EmailNotification = {
   awaitDelivery?: boolean;
 };
 
+type AdminRoleEmailNotification = {
+  channel: "admin_email";
+  roles?: AdminRole[];
+  subject: string;
+  html: string;
+  text: string;
+  title?: string;
+  message?: string;
+  category: EmailCategory;
+  metadata?: Record<string, unknown>;
+  headers?: Record<string, string>;
+  priority?: NotificationPriority;
+  awaitDelivery?: boolean;
+};
+
 type FutureNotification = {
-  channel: Exclude<NotificationChannel, "email">;
+  channel: Exclude<NotificationChannel, "email" | "admin_email">;
   to: string;
   message: string;
   metadata?: Record<string, unknown>;
   priority?: NotificationPriority;
 };
 
-export type NotificationRequest = EmailNotification | FutureNotification;
+export type NotificationRequest = EmailNotification | AdminRoleEmailNotification | FutureNotification;
 
 type ProviderDelivery = {
   status: "sent" | "failed" | "unsupported_channel";
-  channel: Exclude<NotificationChannel, "email">;
+  channel: Exclude<NotificationChannel, "email" | "admin_email">;
   provider?: string;
   providerMessageId?: string | null;
   httpStatus?: number;
@@ -48,6 +67,13 @@ type FutureProvider = {
   name: string;
   isConfigured: () => boolean;
   send: (notification: FutureNotification) => Promise<ProviderDelivery>;
+};
+
+type AdminRoleEmailRecipient = {
+  role: AdminRole;
+  email: string;
+  userId?: number | null;
+  source: "database" | "environment" | "fallback";
 };
 
 const getErrorMessage = (error: unknown) =>
@@ -84,9 +110,92 @@ const extractProviderMessageId = (body: Record<string, unknown>) => {
   return null;
 };
 
+const parseEmailList = (value?: string | null) =>
+  Array.from(
+    new Set(
+      String(value || "")
+        .split(/[,\n;]/)
+        .map((item) => item.trim().match(/<([^<>]+)>/)?.[1] || item.trim())
+        .map((item) => item.toLowerCase())
+        .filter((item) => /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(item)),
+    ),
+  );
+
+const normalizeAdminRoles = (roles?: AdminRole[]) => {
+  const requested = roles?.length ? roles : adminRoles;
+  const normalized = requested.filter((role): role is AdminRole => adminRoles.includes(role));
+  return Array.from(new Set(normalized));
+};
+
+const getAdminRoleEnvEmails = (role: AdminRole) => {
+  const values: Record<AdminRole, string | undefined> = {
+    viewer: env.ADMIN_VIEWER_EMAILS,
+    writer: env.ADMIN_WRITER_EMAILS,
+    editor: env.ADMIN_EDITOR_EMAILS,
+    admin: env.ADMIN_ADMIN_EMAILS,
+    super_admin: env.ADMIN_SUPER_ADMIN_EMAILS,
+  };
+  return parseEmailList(values[role]);
+};
+
+export const resolveAdminRoleEmailRecipients = async (
+  roles?: AdminRole[],
+): Promise<AdminRoleEmailRecipient[]> => {
+  const targetRoles = normalizeAdminRoles(roles);
+  const recipients = new Map<string, AdminRoleEmailRecipient>();
+
+  for (const role of targetRoles) {
+    for (const email of getAdminRoleEnvEmails(role)) {
+      recipients.set(`${role}:${email}`, { role, email, source: "environment" });
+    }
+  }
+
+  try {
+    const users = await storage.getUsersByRoles(targetRoles, true);
+    for (const user of users) {
+      const role = user.role as AdminRole;
+      if (!targetRoles.includes(role)) continue;
+      const email = String(user.email || "").trim().toLowerCase();
+      if (!parseEmailList(email).length) continue;
+      recipients.set(`${role}:${email}`, { role, email, userId: user.id, source: "database" });
+    }
+  } catch (error) {
+    console.warn("Admin role email recipient lookup skipped:", getErrorMessage(error));
+  }
+
+  if (recipients.size === 0) {
+    for (const email of parseEmailList(env.ADMIN_NOTIFICATION_EMAIL || env.EMAIL_FROM)) {
+      recipients.set(`fallback:${email}`, {
+        role: "admin",
+        email,
+        source: "fallback",
+      });
+    }
+  }
+
+  return Array.from(recipients.values());
+};
+
+export const getAdminRoleEmailDiagnostics = async () => {
+  const roles = adminRoles.map((role) => ({
+    role,
+    configuredInboxCount: getAdminRoleEnvEmails(role).length,
+  }));
+  const recipients = await resolveAdminRoleEmailRecipients(adminRoles);
+  return {
+    roles,
+    recipientCount: recipients.length,
+    recipientsByRole: adminRoles.reduce<Record<AdminRole, number>>((acc, role) => {
+      acc[role] = recipients.filter((recipient) => recipient.role === role).length;
+      return acc;
+    }, {} as Record<AdminRole, number>),
+    fallbackConfigured: parseEmailList(env.ADMIN_NOTIFICATION_EMAIL || env.EMAIL_FROM).length > 0,
+  };
+};
+
 const postJsonProvider = async (
   provider: string,
-  channel: Exclude<NotificationChannel, "email">,
+  channel: Exclude<NotificationChannel, "email" | "admin_email">,
   url: string,
   body: Record<string, unknown>,
   headers: Record<string, string> = {},
@@ -271,6 +380,78 @@ export const getNotificationProviderDiagnostics = () => ({
   push: { configured: false, providers: [] },
 });
 
+const sendAdminRoleEmailNotification = async (notification: AdminRoleEmailNotification) => {
+  const recipients = await resolveAdminRoleEmailRecipients(notification.roles);
+  const uniqueRecipients = recipients.filter((recipient, index, all) =>
+    all.findIndex((candidate) => candidate.email === recipient.email) === index,
+  );
+
+  if (uniqueRecipients.length === 0) {
+    return {
+      status: "failed" as const,
+      channel: "admin_email" as const,
+      providerMessageId: null,
+      message: "No admin role email recipients are configured.",
+      recipients: [],
+    };
+  }
+
+  const deliveries = [];
+  for (const recipient of uniqueRecipients) {
+    if (recipient.userId) {
+      await storage.createNotification({
+        userId: recipient.userId,
+        channel: "admin_email",
+        title: notification.title || notification.subject,
+        message: notification.message || notification.text,
+        status: "unread",
+        metadata: {
+          ...(notification.metadata || {}),
+          adminRole: recipient.role,
+          emailRecipient: recipient.email,
+          source: recipient.source,
+        },
+      }).catch((error) => {
+        console.warn("Admin role notification persistence skipped:", getErrorMessage(error));
+      });
+    }
+
+    const delivery = await enqueueEmail(
+      {
+        to: recipient.email,
+        subject: notification.subject,
+        html: notification.html,
+        text: notification.text,
+        category: notification.category,
+        metadata: {
+          ...(notification.metadata || {}),
+          notificationChannel: "admin_email",
+          adminRole: recipient.role,
+          recipientSource: recipient.source,
+        },
+        headers: notification.headers,
+        priority: priorityToEmailRank[notification.priority || "high"],
+      },
+      { awaitDelivery: notification.awaitDelivery },
+    );
+    deliveries.push({ ...delivery, recipient: recipient.email, role: recipient.role, source: recipient.source });
+  }
+
+  const accepted = deliveries.filter((delivery) => delivery.status !== "failed");
+  return {
+    status: accepted.length > 0 ? "sent" as const : "failed" as const,
+    channel: "admin_email" as const,
+    provider: "email_queue",
+    providerMessageId: null,
+    message:
+      accepted.length > 0
+        ? `Queued admin role email alert for ${accepted.length} recipient(s).`
+        : "All admin role email deliveries failed.",
+    recipients: uniqueRecipients.map(({ email, role, source }) => ({ email, role, source })),
+    deliveries,
+  };
+};
+
 export const sendNotification = async (notification: NotificationRequest) => {
   if (notification.channel === "sms") {
     return sendViaProviders(notification, smsProviders);
@@ -286,6 +467,10 @@ export const sendNotification = async (notification: NotificationRequest) => {
       channel: notification.channel,
       message: "Push notifications are not enabled yet. The platform is ready for provider integration.",
     };
+  }
+
+  if (notification.channel === "admin_email") {
+    return sendAdminRoleEmailNotification(notification);
   }
 
   const emailNotification = notification as EmailNotification;

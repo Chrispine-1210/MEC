@@ -92,7 +92,7 @@ Dynamic variables use `{{variable_name}}` syntax. Values are HTML-escaped for em
 - Failed or unsupported SMS/WhatsApp provider paths are recorded explicitly instead of failing silently.
 - Admin notification feed formats communication and in-app notification analytics into readable operational alerts.
 - Provider circuit breakers stop repeatedly failing providers from being hammered during outages while preserving failover to the next configured provider.
-- Hard bounce, complaint, unsubscribe, and provider suppression webhooks update email preferences automatically so future sends honor suppression state. Transient/soft bounce signals are recorded as `deferred` and do not globally suppress the address.
+- Hard bounce, complaint, unsubscribe, and provider suppression webhooks update email preferences automatically so future sends honor suppression state. Transient/soft bounce signals are recorded as `deferred`; repeated consecutive soft bounces suppress the recipient after `EMAIL_SOFT_BOUNCE_SUPPRESSION_THRESHOLD` events.
 - Provider webhook ingestion normalizes SendGrid, Amazon SES/SNS, Mailgun, Resend, and Postmark payloads and deduplicates repeated deliveries for `EMAIL_WEBHOOK_DEDUP_TTL_MS`.
 - Communication diagnostics expose route/template consistency, undeclared variables, orphan templates, provider readiness, and document-link TTL.
 - Communication analytics expose message totals by channel, status, template, event type, and recent problem deliveries.

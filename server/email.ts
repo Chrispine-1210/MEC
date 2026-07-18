@@ -147,6 +147,7 @@ const inlineProviderAttempts = env.EMAIL_PROVIDER_INLINE_RETRIES;
 const providerRateLimitRetryDelayMs = 1_250;
 const providerCircuitFailureThreshold = env.EMAIL_PROVIDER_CIRCUIT_FAILURE_THRESHOLD;
 const providerCircuitCooldownMs = env.EMAIL_PROVIDER_CIRCUIT_COOLDOWN_MS;
+const softBounceSuppressionThreshold = env.EMAIL_SOFT_BOUNCE_SUPPRESSION_THRESHOLD;
 const providerWebhookDedupTtlMs = env.EMAIL_WEBHOOK_DEDUP_TTL_MS;
 const queuePollMs = env.EMAIL_QUEUE_WORKER_INTERVAL_MS;
 const isVercelProductionRuntime = process.env.VERCEL === "1" && process.env.VERCEL_ENV === "production";
@@ -1529,7 +1530,7 @@ export const getTransactionalEmailActivationReadiness = async (
       timeoutMs: options.timeoutMs ?? 1_500,
     });
 
-    if (!diagnostics.sender.publicRecipientRestricted && resendDomain.ready === false) {
+    if (!diagnostics.sender.publicRecipientRestricted && resendDomain.ready !== true) {
       blockingReasons.push({
         code: resendDomain.error || "resend_domain_not_ready",
         message: resendDomain.message,
@@ -1771,27 +1772,24 @@ const providerSuppressionStatuses: Record<string, string> = {
   unsubscribed: "unsubscribed",
 };
 
-const applyProviderSuppression = async (input: {
+const suppressRecipientForProviderSignal = async (input: {
   provider: string;
   eventType: string;
   recipient: string;
+  consentStatus: string;
   job?: EmailJob | null;
   providerMessageId?: string | null;
+  auditTrail: Array<Record<string, unknown>>;
   metadata?: Record<string, unknown>;
 }) => {
-  const consentStatus = providerSuppressionStatuses[input.eventType];
-  if (!consentStatus) return;
-
   const normalizedRecipient = normalizeEmail(input.recipient);
-  if (!normalizedRecipient || !normalizedRecipient.includes("@")) return;
-
-  const existing = await storage.getEmailPreferenceByEmail(normalizedRecipient).catch(() => undefined);
   const categories = Object.fromEntries(
     emailPreferenceCategories.map((category) => [category, false]),
   ) as Record<string, boolean>;
   const actionAt = new Date();
+  const existing = await storage.getEmailPreferenceByEmail(normalizedRecipient).catch(() => undefined);
   const auditTrail = [
-    ...(Array.isArray(existing?.auditTrail) ? existing.auditTrail : []),
+    ...input.auditTrail,
     {
       action: `provider_${input.eventType}`,
       provider: input.provider,
@@ -1804,7 +1802,7 @@ const applyProviderSuppression = async (input: {
   if (existing) {
     await storage.updateEmailPreference(existing.id, {
       categories,
-      consentStatus,
+      consentStatus: input.consentStatus,
       consentSource: `provider:${input.provider}`,
       unsubscribedAt: actionAt,
       auditTrail,
@@ -1817,7 +1815,7 @@ const applyProviderSuppression = async (input: {
         : null,
       email: normalizedRecipient,
       categories,
-      consentStatus,
+      consentStatus: input.consentStatus,
       consentSource: `provider:${input.provider}`,
       consentAt: null,
       unsubscribedAt: actionAt,
@@ -1844,9 +1842,145 @@ const applyProviderSuppression = async (input: {
     providerMessageId: input.providerMessageId || null,
     metadata: {
       sourceEventType: input.eventType,
-      consentStatus,
+      consentStatus: input.consentStatus,
+      ...input.metadata,
     },
   });
+};
+
+const applyProviderSuppression = async (input: {
+  provider: string;
+  eventType: string;
+  recipient: string;
+  job?: EmailJob | null;
+  providerMessageId?: string | null;
+  metadata?: Record<string, unknown>;
+}) => {
+  const consentStatus = providerSuppressionStatuses[input.eventType];
+  if (!consentStatus) return;
+
+  const normalizedRecipient = normalizeEmail(input.recipient);
+  if (!normalizedRecipient || !normalizedRecipient.includes("@")) return;
+
+  const existing = await storage.getEmailPreferenceByEmail(normalizedRecipient).catch(() => undefined);
+  const auditTrail = [
+    ...(Array.isArray(existing?.auditTrail) ? existing.auditTrail : []),
+  ];
+
+  await suppressRecipientForProviderSignal({
+    ...input,
+    consentStatus,
+    auditTrail,
+  });
+};
+
+const softBounceResetActions = new Set(["provider_delivered", "provider_opened", "provider_clicked"]);
+
+const countConsecutiveSoftBounces = (auditTrail: Array<Record<string, unknown>>) => {
+  let count = 0;
+  for (let index = auditTrail.length - 1; index >= 0; index -= 1) {
+    const action = String(auditTrail[index]?.action || "");
+    if (action === "provider_soft_bounce") {
+      count += 1;
+      continue;
+    }
+    if (softBounceResetActions.has(action) || action === "provider_soft_bounce_threshold_suppressed") break;
+  }
+  return count;
+};
+
+const recordPositiveProviderSignal = async (input: {
+  provider: string;
+  eventType: string;
+  recipient: string;
+  job?: EmailJob | null;
+  providerMessageId?: string | null;
+}) => {
+  const normalizedRecipient = normalizeEmail(input.recipient);
+  if (!normalizedRecipient || !normalizedRecipient.includes("@")) return;
+
+  const existing = await storage.getEmailPreferenceByEmail(normalizedRecipient).catch(() => undefined);
+  if (!existing) return;
+
+  const auditTrail = Array.isArray(existing.auditTrail) ? existing.auditTrail : [];
+  await storage.updateEmailPreference(existing.id, {
+    auditTrail: [
+      ...auditTrail,
+      {
+        action: `provider_${input.eventType}`,
+        provider: input.provider,
+        jobId: input.job?.id || null,
+        providerMessageId: input.providerMessageId || null,
+        at: new Date().toISOString(),
+      },
+    ],
+  });
+};
+
+const applySoftBouncePolicy = async (input: {
+  provider: string;
+  eventType: string;
+  recipient: string;
+  job?: EmailJob | null;
+  providerMessageId?: string | null;
+  metadata?: Record<string, unknown>;
+}) => {
+  if (input.eventType !== "deferred") return;
+  const normalizedRecipient = normalizeEmail(input.recipient);
+  if (!normalizedRecipient || !normalizedRecipient.includes("@")) return;
+
+  const existing = await storage.getEmailPreferenceByEmail(normalizedRecipient).catch(() => undefined);
+  const actionAt = new Date();
+  const auditTrail = [
+    ...(Array.isArray(existing?.auditTrail) ? existing.auditTrail : []),
+    {
+      action: "provider_soft_bounce",
+      provider: input.provider,
+      jobId: input.job?.id || null,
+      providerMessageId: input.providerMessageId || null,
+      classification: input.metadata?.deliverabilityClassification || "soft",
+      at: actionAt.toISOString(),
+    },
+  ];
+  const consecutiveSoftBounces = countConsecutiveSoftBounces(auditTrail);
+
+  if (consecutiveSoftBounces >= softBounceSuppressionThreshold) {
+    await suppressRecipientForProviderSignal({
+      ...input,
+      eventType: "soft_bounce_threshold_suppressed",
+      consentStatus: "suppressed",
+      auditTrail,
+      metadata: {
+        reason: "soft_bounce_threshold",
+        consecutiveSoftBounces,
+        threshold: softBounceSuppressionThreshold,
+      },
+    });
+    return;
+  }
+
+  if (existing) {
+    await storage.updateEmailPreference(existing.id, {
+      consentStatus: "deferred",
+      consentSource: `provider:${input.provider}:soft_bounce`,
+      auditTrail,
+    });
+  } else {
+    const token = createEmailPreferenceToken(normalizedRecipient);
+    await storage.upsertEmailPreference({
+      userId: input.job?.metadata && typeof input.job.metadata.userId === "number"
+        ? input.job.metadata.userId
+        : null,
+      email: normalizedRecipient,
+      categories: defaultEmailPreferences(),
+      consentStatus: "deferred",
+      consentSource: `provider:${input.provider}:soft_bounce`,
+      consentAt: null,
+      unsubscribedAt: null,
+      unsubscribeTokenHash: createEmailPreferenceTokenHash(token),
+      auditTrail,
+    });
+  }
 };
 
 const deliverWithFailover = async (job: EmailJob) => {
@@ -2568,6 +2702,23 @@ export const recordProviderWebhookEvent = async (provider: string, payload: unkn
       providerMessageId: normalized.providerMessageId,
       metadata: normalized.metadata,
     });
+    await applySoftBouncePolicy({
+      provider,
+      eventType,
+      recipient,
+      job,
+      providerMessageId: normalized.providerMessageId,
+      metadata: normalized.metadata,
+    });
+    if (["delivered", "opened", "clicked"].includes(eventType)) {
+      await recordPositiveProviderSignal({
+        provider,
+        eventType,
+        recipient,
+        job,
+        providerMessageId: normalized.providerMessageId,
+      });
+    }
   }
 };
 
@@ -3254,25 +3405,57 @@ export const sendScholarshipRecommendationEmail = (input: {
   }, options);
 };
 
-export const sendAdminNotification = (input: {
+export const sendAdminNotification = async (input: {
   subject: string;
   message: string;
   metadata?: Record<string, unknown>;
 }, options?: EmailEnqueueOptions) => {
-  const to = env.ADMIN_NOTIFICATION_EMAIL || env.EMAIL_FROM;
-  if (!to) return Promise.resolve(null);
+  const { resolveAdminRoleEmailRecipients } = await import("./notifications");
+  const resolved = await resolveAdminRoleEmailRecipients();
+  const recipients = resolved.filter(
+    (recipient, index, all) => all.findIndex((candidate) => candidate.email === recipient.email) === index,
+  );
+  if (recipients.length === 0) return null;
 
-  return enqueueEmail({
-    to,
-    subject: input.subject,
-    category: "admin_notification",
-    text: input.message,
-    html: renderMtendereEmail({
-      title: input.subject,
-      preheader: "Administrative platform notification.",
-      body: `<p>${escapeHtml(input.message)}</p>`,
+  const html = renderMtendereEmail({
+    title: input.subject,
+    preheader: "Administrative platform notification.",
+    body: `<p>${escapeHtml(input.message)}</p>`,
+  });
+  const deliveries = await Promise.all(
+    recipients.map(async (recipient) => {
+      if (recipient.userId) {
+        await storage.createNotification({
+          userId: recipient.userId,
+          channel: "admin_email",
+          title: input.subject,
+          message: input.message,
+          status: "unread",
+          metadata: {
+            ...(input.metadata || {}),
+            adminRole: recipient.role,
+            recipientSource: recipient.source,
+          },
+        }).catch((error) => {
+          console.warn("Admin notification persistence skipped:", error instanceof Error ? error.message : String(error));
+        });
+      }
+
+      return enqueueEmail({
+        to: recipient.email,
+        subject: input.subject,
+        category: "admin_notification",
+        text: input.message,
+        html,
+        metadata: {
+          ...(input.metadata || {}),
+          adminRole: recipient.role,
+          recipientSource: recipient.source,
+        },
+        priority: 10,
+      }, options);
     }),
-    metadata: input.metadata,
-    priority: 10,
-  }, options);
+  );
+
+  return deliveries[0] || null;
 };

@@ -84,6 +84,7 @@ import {
   seedCommunicationTemplateVersions,
   verifyGeneratedDocumentToken,
 } from "./communication";
+import { getAdminRoleEmailDiagnostics } from "./notifications";
 import {
   deleteBlogMeta,
   deleteApplicationMeta,
@@ -3444,6 +3445,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userAgent: req.get("user-agent"),
       });
 
+      await storage.createNotification({
+        userId: null,
+        channel,
+        title: typeof payload?.event_title === "string" ? payload.event_title : event.replace(/_/g, " "),
+        message:
+          typeof payload?.message === "string"
+            ? payload.message
+            : `${entityType} ${referenceId ? `#${referenceId} ` : ""}${event.replace(/_/g, " ")}`,
+        status: "unread",
+        metadata: {
+          event,
+          type: entityType,
+          referenceId,
+          channel,
+          ...(payload ?? {}),
+        },
+      }).catch((error) => {
+        console.warn("Admin notification persistence skipped:", getErrorLogMessage(error));
+      });
+
       broadcast(channel, { type: event, ...(payload ?? {}) });
       broadcast("admin-dashboard", { type: event, channel, entityType, referenceId });
       broadcast("admin-notifications", { type: event, channel, entityType, referenceId });
@@ -4297,7 +4318,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       },
       database: databaseDiagnostics,
       email: {
-        ready: emailDiagnostics.ready,
+        ready: emailActivation.ready,
         activeProviders: emailDiagnostics.activeProviders,
         dryRunEnabled: emailDiagnostics.dryRunEnabled,
         liveProviderDeliveryAllowed: emailDiagnostics.liveProviderDeliveryAllowed,
@@ -5234,7 +5255,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/admin/email/readiness', authenticateToken, requireAdmin, async (req, res) => {
     try {
       const days = Number(req.query.days ?? 30);
-      res.json(await getEmailProductionReadinessReport(Number.isFinite(days) ? days : 30));
+      const [readiness, adminEmailChannels] = await Promise.all([
+        getEmailProductionReadinessReport(Number.isFinite(days) ? days : 30),
+        getAdminRoleEmailDiagnostics().catch((error) => ({
+          error: error instanceof Error ? error.message : "Admin role email diagnostics failed.",
+          roles: [],
+          recipientCount: 0,
+          recipientsByRole: {},
+          fallbackConfigured: false,
+        })),
+      ]);
+      res.json({ ...readiness, adminEmailChannels });
     } catch (error) {
       console.error("Admin email readiness error:", getErrorLogMessage(error));
       res.status(500).json({ message: "Failed to fetch email production readiness report" });
@@ -11113,7 +11144,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 20);
-      const items = (await storage.getAnalytics()).map((item) => {
+      const [notificationRows, analyticsRows] = await Promise.all([
+        storage.getNotifications(250),
+        storage.getAnalytics(),
+      ]);
+      const durableItems = notificationRows.map((item) => ({
+        id: `notification-${item.id}`,
+        title: item.title,
+        message: item.message,
+        type:
+          item.metadata && typeof item.metadata === "object" && /critical|failed|error/i.test(JSON.stringify(item.metadata))
+            ? "error"
+            : "info",
+        priority:
+          item.metadata && typeof item.metadata === "object" && typeof (item.metadata as Record<string, unknown>).priority === "string"
+            ? String((item.metadata as Record<string, unknown>).priority)
+            : "medium",
+        isRead: item.status === "read",
+        createdAt: item.createdAt,
+      }));
+      const analyticsItems = analyticsRows.map((item) => {
         const id = `analytics-${item.id}`;
         const metadata =
           item.metadata && typeof item.metadata === "object"
@@ -11159,6 +11209,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           createdAt: item.timestamp,
         };
       });
+      const items = [...durableItems, ...analyticsItems].sort(
+        (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
+      );
       const { items: paged, total } = paginate(items, page, limit);
       res.json({ notifications: paged, total });
     } catch (error) {
@@ -11167,13 +11220,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/admin/notifications/:id/read', authenticateToken, requireAdminPortal, (req, res) => {
-    markNotificationRead(req.params.id);
+  app.put('/api/admin/notifications/:id/read', authenticateToken, requireAdminPortal, async (req, res) => {
+    const durableMatch = /^notification-(\d+)$/.exec(req.params.id);
+    if (durableMatch) {
+      await storage.markNotificationRead(Number(durableMatch[1]));
+    } else {
+      markNotificationRead(req.params.id);
+    }
     res.status(204).send();
   });
 
   app.put('/api/admin/notifications/read-all', authenticateToken, requireAdminPortal, async (_req, res) => {
-    const ids = (await storage.getAnalytics()).map((item) => `analytics-${item.id}`);
+    const [notifications, analytics] = await Promise.all([storage.getNotifications(500), storage.getAnalytics()]);
+    await Promise.all(notifications.filter((item) => item.status !== "read").map((item) => storage.markNotificationRead(item.id)));
+    const ids = analytics.map((item) => `analytics-${item.id}`);
     markNotificationsRead(ids);
     res.status(204).send();
   });

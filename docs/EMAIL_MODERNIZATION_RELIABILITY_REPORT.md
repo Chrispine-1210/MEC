@@ -88,6 +88,7 @@ Production Vercel must contain real server-side values. These values must not be
 - `EMAIL_PROVIDER_ORDER=resend,sendgrid,smtp,postmark,ses,custom`
 - `EMAIL_PROVIDER_CIRCUIT_FAILURE_THRESHOLD=3`
 - `EMAIL_PROVIDER_CIRCUIT_COOLDOWN_MS=120000`
+- `EMAIL_SOFT_BOUNCE_SUPPRESSION_THRESHOLD=3`
 - `EMAIL_DRY_RUN=false`
 - `EMAIL_WEBHOOK_DEDUP_TTL_MS=86400000`
 - `EMAIL_FROM=Mtendere Education Consult <no-reply@notifications.mtendereeducationconsult.com>` after the sender domain is verified. `Mtendere Education Consult <onboarding@resend.dev>` is only acceptable for one-off Resend smoke tests to the Resend account owner.

@@ -8,7 +8,7 @@ import {
   type Notification, type InsertNotification,
   type Subscriber, type InsertSubscriber,
   type EmailVerificationToken, type InsertEmailVerificationToken,
-  type EmailJob, type InsertEmailJob, type InsertEmailDeliveryEvent,
+  type EmailJob, type InsertEmailJob, type EmailDeliveryEvent, type InsertEmailDeliveryEvent,
   type CommunicationEventRecord, type InsertCommunicationEvent,
   type CommunicationMessage, type InsertCommunicationMessage,
   type CommunicationTemplateVersion, type InsertCommunicationTemplateVersion,
@@ -31,6 +31,9 @@ export interface IStorage {
   updateUser(id: number, user: Partial<InsertUser>): Promise<User>;
   deleteUser(id: number): Promise<boolean>;
   getAllUsers(): Promise<User[]>;
+  getUsersByRoles(roles: string[], onlyActive?: boolean): Promise<User[]>;
+
+
 
   // Scholarships
   getScholarship(id: number): Promise<Scholarship | undefined>;
@@ -132,7 +135,6 @@ export interface IStorage {
   getAnalyticsSummary(): Promise<any>;
 
   // Saved Items
-  getSavedItem(id: number): Promise<SavedItem | undefined>;
   getUserSavedItems(userId: number): Promise<SavedItem[]>;
   createSavedItem(savedItem: InsertSavedItem): Promise<SavedItem>;
   deleteSavedItem(id: number): Promise<boolean>;
@@ -249,6 +251,21 @@ export class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return await db.select().from(users).orderBy(desc(users.createdAt));
+  }
+
+  async getUsersByRoles(roles: string[], onlyActive = true): Promise<User[]> {
+    const normalizedRoles = Array.from(new Set(roles.map((role) => role.trim()).filter(Boolean)));
+    if (normalizedRoles.length === 0) return [];
+
+    return await db
+      .select()
+      .from(users)
+      .where(
+        onlyActive
+          ? and(inArray(users.role, normalizedRoles), eq(users.isActive, true))
+          : inArray(users.role, normalizedRoles),
+      )
+      .orderBy(desc(users.createdAt));
   }
 
   // Scholarships

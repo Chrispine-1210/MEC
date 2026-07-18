@@ -128,6 +128,22 @@ test("Resend testing sender is not production-ready for public recipients", asyn
   );
 });
 
+test("admin role notifications resolve active role inboxes with role ownership", { concurrency: false }, async () => {
+  const { resolveAdminRoleEmailRecipients } = await import("../../server/notifications");
+  await patchStorage({
+    getUsersByRoles: async () => [
+      { id: 41, role: "viewer", email: "viewer@example.test" },
+      { id: 42, role: "admin", email: "admin@example.test" },
+      { id: 43, role: "super_admin", email: "admin@example.test" },
+    ],
+  });
+
+  const recipients = await resolveAdminRoleEmailRecipients(["viewer", "admin", "super_admin"]);
+
+  assert.equal(recipients.some((recipient) => recipient.email === "viewer@example.test" && recipient.role === "viewer"), true);
+  assert.equal(recipients.filter((recipient) => recipient.email === "admin@example.test").length, 2);
+});
+
 test("Resend sender domain readiness requires a verified Resend domain", { concurrency: false }, async () => {
   const { getResendSenderDomainReadiness } = await emailModulePromise;
 
@@ -540,7 +556,10 @@ test("provider bounce webhooks apply recipient suppression before future sends",
     sg_message_id: "provider-message-1",
   });
 
-  assert.equal(preferences.has("soft.student@example.test"), false);
+  const softPreference = preferences.get("soft.student@example.test");
+  assert.ok(softPreference);
+  assert.equal(softPreference.consentStatus, "deferred");
+  assert.equal(softPreference.unsubscribedAt, null);
   assert.equal(deliveryEvents.some((event) => event.eventType === "deferred" && event.recipient === "Soft.Student@Example.Test"), true);
 
   const preference = preferences.get("suppressed.student@example.test");
@@ -561,6 +580,101 @@ test("provider bounce webhooks apply recipient suppression before future sends",
 
   assert.equal(result.status, "suppressed");
   assert.equal(emailJobs.length, 0);
+
+  await recordProviderWebhookEvent("ses", {
+    eventType: "Bounce",
+    mail: {
+      messageId: "soft-bounce-message-2",
+      destination: ["Soft.Student@Example.Test"],
+    },
+    bounce: {
+      bounceType: "Transient",
+      bounceSubType: "MailboxFull",
+      bouncedRecipients: [{ emailAddress: "Soft.Student@Example.Test" }],
+    },
+  });
+  await recordProviderWebhookEvent("ses", {
+    eventType: "Bounce",
+    mail: {
+      messageId: "soft-bounce-message-3",
+      destination: ["Soft.Student@Example.Test"],
+    },
+    bounce: {
+      bounceType: "Transient",
+      bounceSubType: "MailboxFull",
+      bouncedRecipients: [{ emailAddress: "Soft.Student@Example.Test" }],
+    },
+  });
+
+  const suppressedSoftPreference = preferences.get("soft.student@example.test");
+  assert.equal(suppressedSoftPreference.consentStatus, "suppressed");
+  assert.ok(suppressedSoftPreference.unsubscribedAt instanceof Date);
+  assert.equal(Object.values(suppressedSoftPreference.categories).every((enabled) => enabled === false), true);
+  assert.equal(
+    deliveryEvents.some(
+      (event) =>
+        event.eventType === "suppression_applied" &&
+        event.recipient === "soft.student@example.test" &&
+        event.metadata?.sourceEventType === "soft_bounce_threshold_suppressed",
+    ),
+    true,
+  );
+
+  const softResult = await enqueueEmail({
+    to: "soft.student@example.test",
+    subject: "Mtendere newsletter",
+    html: "<!doctype html><html><body>News</body></html>",
+    text: "News",
+    category: "newsletter",
+  });
+
+  assert.equal(softResult.status, "suppressed");
+  assert.equal(emailJobs.length, 0);
+});
+
+test("deliverability verification gate requires current-run inbox confirmations across required providers", async () => {
+  const { evaluateInboxPlacementGate } = await import("../../scripts/verify-email-deliverability.mjs");
+  const runId = "deliverability-unit-run";
+  const recipients = [
+    "student@gmail.com",
+    "student@outlook.com",
+    "student@yahoo.com",
+    "student@school.example",
+  ];
+
+  const passingGate = evaluateInboxPlacementGate({
+    recipients,
+    runId,
+    confirmations: recipients.map((recipient) => ({
+      recipient,
+      placement: "inbox",
+      runId,
+      verifiedBy: "unit-test",
+    })),
+  });
+
+  assert.equal(passingGate.pass, true);
+  assert.deepEqual(
+    new Set(passingGate.confirmedMailboxProviders),
+    new Set(["gmail", "outlook", "yahoo", "custom"]),
+  );
+
+  const failingGate = evaluateInboxPlacementGate({
+    recipients,
+    runId,
+    confirmations: [
+      { recipient: "student@gmail.com", placement: "inbox", runId },
+      { recipient: "student@outlook.com", placement: "spam", runId },
+      { recipient: "student@yahoo.com", placement: "inbox", runId: "old-run" },
+    ],
+  });
+
+  assert.equal(failingGate.pass, false);
+  assert.equal(failingGate.missingRecipients.includes("student@school.example"), true);
+  assert.equal(failingGate.missingConfirmedMailboxProviders.includes("outlook"), true);
+  assert.equal(failingGate.missingConfirmedMailboxProviders.includes("custom"), true);
+  assert.equal(failingGate.placementFailures.length, 1);
+  assert.equal(failingGate.runIdMismatches.length, 1);
 });
 
 test("provider webhooks normalize SES, Mailgun, Resend, and Postmark payloads", { concurrency: false }, async () => {
