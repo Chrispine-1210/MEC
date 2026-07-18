@@ -30,6 +30,7 @@ import {
   Flame,
   ChevronRight,
   Network,
+  UserPlus,
 } from "lucide-react";
 import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
 
@@ -82,6 +83,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
     { name: "Users", href: "/admin/users", icon: Users, description: "User management", count: stats?.totalUsers },
     { name: "Applications", href: "/admin/applications", icon: ClipboardList, description: "User applications", count: stats?.pendingApplications, countVariant: "warning" },
     { name: "Communications", href: "/admin/communications", icon: Mail, description: "Events and templates", badge: "Ops" },
+    { name: "Subscribers", href: "/admin/subscribers", icon: UserPlus, description: "Newsletter audience", count: stats?.totalSubscribers },
     { name: "Messages", href: "/admin/messages", icon: Inbox, description: "Contact inbox" },
     { name: "Roles & Permissions", href: "/admin/roles", icon: Shield, description: "Access control" },
   ];

@@ -14,6 +14,7 @@ const DEFAULT_CHANNELS = [
   "scholarships",
   "jobs",
   "applications",
+  "subscribers",
   "partners",
   "testimonials",
   "blog-posts",
@@ -108,6 +109,9 @@ export function AdminRealtimeProvider({ children }: { children: React.ReactNode 
               break;
             case "applications":
               invalidateByPrefix(["/api/admin/applications", "/api/applications", "/api/admin/dashboard"]);
+              break;
+            case "subscribers":
+              invalidateByPrefix(["/api/admin/subscribers", "/api/admin/dashboard", "/api/admin/notifications"]);
               break;
             case "user_activity":
               invalidateByPrefix([

@@ -7995,6 +7995,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         publishedBlogPosts,
         activeScholarships,
         activeJobs,
+        subscribers,
       ] = await Promise.all([
         storage.getAllUsers(),
         storage.getAllScholarships(),
@@ -8007,6 +8008,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getPublishedBlogPosts(),
         storage.getActiveScholarships(),
         storage.getActiveJobs(),
+        storage.getAllSubscribers(),
       ]);
 
       const pendingApplications = applications.filter((app) => app.status === "pending").length;
@@ -8048,6 +8050,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalActiveChats: listAiChatConversations().filter((conversation) => conversation.isActive).length,
         activeScholarships: activeScholarships.length,
         activeJobs: activeJobs.length,
+        totalSubscribers: subscribers.length,
+        pendingSubscribers: subscribers.filter((subscriber) => subscriber.status === "pending").length,
         pendingApplications,
         publishedPosts: publishedBlogPosts.length,
         applicationStats,
@@ -12066,6 +12070,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Newsletter / subscription routes
   app.post('/api/subscribers', newsletterBotDefense, async (req, res) => {
+    let persistedSubscriber: {
+      id: number;
+      email: string;
+      status: string;
+      preferences: string[] | null;
+    } | null = null;
+
     try {
       const payload = subscriberRequestSchema.parse(req.body);
 
@@ -12087,6 +12098,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: ("reason" in recaptcha ? recaptcha.reason : undefined) || "reCAPTCHA verification failed" });
       }
 
+      void logAnalyticsBestEffort({
+        event: "subscriber_submission_validated",
+        metadata: {
+          source: payload.source,
+          consentAccepted: payload.consentAccepted,
+          preferenceCount: payload.preferences?.length ?? 0,
+        },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+
       const verificationToken = randomBytes(32).toString("hex");
       const unsubscribeToken = randomBytes(32).toString("hex");
       const existing = await storage.getSubscriberByEmail(payload.email);
@@ -12102,9 +12124,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
         unsubscribedAt: null,
       });
 
-      const subscriber = existing
-        ? await storage.updateSubscriber(existing.id, subscriberPayload)
-        : await storage.createSubscriber(subscriberPayload);
+      const subscriber = await storage.upsertSubscriber(subscriberPayload);
+      persistedSubscriber = {
+        id: subscriber.id,
+        email: subscriber.email,
+        status: subscriber.status,
+        preferences: subscriber.preferences,
+      };
+
+      void logAnalyticsBestEffort({
+        event: "subscriber_persisted",
+        metadata: {
+          subscriberId: subscriber.id,
+          source: payload.source,
+          duplicateResubscription: Boolean(existing),
+          status: subscriber.status,
+        },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+
+      await storage.createNotification({
+        userId: null,
+        channel: "subscribers",
+        title: existing ? "Newsletter subscription renewed" : "New newsletter subscriber",
+        message: existing
+          ? "A newsletter subscriber renewed their subscription."
+          : "A new newsletter subscription was captured.",
+        status: "unread",
+        metadata: {
+          event: existing ? "subscriber_resubscribed" : "subscriber_created",
+          subscriberId: subscriber.id,
+          source: subscriber.source,
+          status: subscriber.status,
+        },
+      }).catch((notificationError) => {
+        console.warn("Subscriber admin notification persistence skipped:", getErrorLogMessage(notificationError));
+      });
+      broadcast("subscribers", {
+        type: existing ? "subscriber_resubscribed" : "subscriber_created",
+        subscriber: {
+          id: subscriber.id,
+          status: subscriber.status,
+          source: subscriber.source,
+          createdAt: subscriber.createdAt,
+        },
+      });
 
       const emailPreferenceToken = createEmailPreferenceToken(subscriber.email);
       try {
@@ -12165,14 +12230,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       void logAnalyticsBestEffort({
         event: "subscriber_created",
         metadata: {
-          email: subscriber.email,
+          subscriberId: subscriber.id,
           source: payload.source,
           preferences: subscriber.preferences,
           consentAccepted: payload.consentAccepted,
+          duplicateResubscription: Boolean(existing),
           recaptchaSkipped: "skipped" in recaptcha ? recaptcha.skipped : false,
           recaptchaScore: "score" in recaptcha ? recaptcha.score : undefined,
           emailJobId: confirmationEmail.id,
           emailProvider: confirmationEmail.provider,
+          emailStatus: confirmationEmail.status,
         },
         ipAddress: req.ip,
         userAgent: req.get("user-agent"),
@@ -12183,17 +12250,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? "Your subscription was saved. We could not send the confirmation email immediately; please contact support if it does not arrive."
           : "Your confirmation email was accepted by our email provider. Please check your inbox and spam folder shortly to confirm your subscription.",
         subscriber: {
-          id: subscriber.id,
-          email: subscriber.email,
-          status: subscriber.status,
-          preferences: subscriber.preferences,
+          ...persistedSubscriber,
         },
         delivery: getEmailDeliveryState(confirmationEmail),
       });
     } catch (error) {
       console.error('Subscriber creation error:', getErrorLogMessage(error));
-      const message = getPublicErrorMessage(error, "Failed to subscribe");
-      res.status(400).json({
+      void logAnalyticsBestEffort({
+        event: persistedSubscriber ? "subscriber_email_orchestration_failed" : "subscriber_submission_failed",
+        metadata: {
+          subscriberId: persistedSubscriber?.id,
+          stage: persistedSubscriber ? "email_orchestration" : error instanceof z.ZodError ? "validation" : "persistence",
+          errorType: error instanceof Error ? error.name : "unknown",
+        },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+
+      if (persistedSubscriber) {
+        return res.status(202).json({
+          message: "Your subscription was saved. We could not send the confirmation email immediately; please contact support if it does not arrive.",
+          subscriber: persistedSubscriber,
+          delivery: {
+            status: "failed",
+            provider: null,
+            queued: false,
+            acceptedByProvider: false,
+            mailboxDeliveryConfirmed: false,
+            confirmationPending: false,
+          },
+        });
+      }
+
+      const isValidationError = error instanceof z.ZodError;
+      const message = isValidationError
+        ? getPublicErrorMessage(error, "Please check your subscription details and try again.")
+        : "We could not save your subscription. Please try again shortly.";
+      res.status(isValidationError ? 400 : 500).json({
         message,
         error: message,
       });
@@ -12312,6 +12405,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const page = Number(req.query.page ?? 1);
       const limit = Number(req.query.limit ?? 50);
       const status = String(req.query.status ?? "").toLowerCase();
+      const source = normalizeSearchQuery(req.query.source);
       const search = normalizeSearchQuery(req.query.search);
 
       const allSubscribers = await storage.getAllSubscribers();
@@ -12323,13 +12417,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         subscriber.status,
       ]).filter((subscriber) => {
         const matchesStatus = !status || subscriber.status === status;
-        return matchesStatus;
+        const matchesSource = !source || subscriber.source?.toLowerCase() === source;
+        return matchesStatus && matchesSource;
       });
       const safePage = Number.isFinite(page) && page > 0 ? page : 1;
       const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 100) : 50;
       const start = (safePage - 1) * safeLimit;
+      const startOfToday = new Date();
+      startOfToday.setUTCHours(0, 0, 0, 0);
+      const summary = allSubscribers.reduce(
+        (counts, subscriber) => {
+          counts.total += 1;
+          if (subscriber.status === "active") counts.active += 1;
+          if (subscriber.status === "pending") counts.pending += 1;
+          if (subscriber.status === "unsubscribed") counts.unsubscribed += 1;
+          if (subscriber.createdAt && subscriber.createdAt >= startOfToday) counts.newToday += 1;
+          return counts;
+        },
+        { total: 0, active: 0, pending: 0, unsubscribed: 0, newToday: 0 },
+      );
+      const sources = Array.from(
+        new Set(allSubscribers.map((subscriber) => subscriber.source?.trim().toLowerCase()).filter(Boolean)),
+      ).sort();
 
-      res.json({ subscribers: filtered.slice(start, start + safeLimit), total: filtered.length });
+      res.json({ subscribers: filtered.slice(start, start + safeLimit), total: filtered.length, summary, sources });
     } catch (error) {
       console.error('Admin subscribers error:', error);
       res.status(500).json({ message: "Failed to fetch subscribers" });

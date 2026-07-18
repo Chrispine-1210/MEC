@@ -154,6 +154,7 @@ export interface IStorage {
   getSubscriberByUnsubscribeToken(token: string): Promise<Subscriber | undefined>;
   getAllSubscribers(): Promise<Subscriber[]>;
   createSubscriber(subscriber: InsertSubscriber): Promise<Subscriber>;
+  upsertSubscriber(subscriber: InsertSubscriber): Promise<Subscriber>;
   updateSubscriber(id: number, subscriber: Partial<InsertSubscriber>): Promise<Subscriber>;
 
   // Enterprise email
@@ -969,6 +970,32 @@ export class DatabaseStorage implements IStorage {
 
   async createSubscriber(insertSubscriber: InsertSubscriber): Promise<Subscriber> {
     const [subscriber] = await db.insert(subscribers).values(insertSubscriber).returning();
+    return subscriber;
+  }
+
+  async upsertSubscriber(insertSubscriber: InsertSubscriber): Promise<Subscriber> {
+    const normalizedSubscriber = {
+      ...insertSubscriber,
+      email: insertSubscriber.email.toLowerCase(),
+    };
+    const [subscriber] = await db
+      .insert(subscribers)
+      .values(normalizedSubscriber)
+      .onConflictDoUpdate({
+        target: subscribers.email,
+        set: {
+          name: normalizedSubscriber.name,
+          status: normalizedSubscriber.status,
+          preferences: normalizedSubscriber.preferences,
+          source: normalizedSubscriber.source,
+          verificationToken: normalizedSubscriber.verificationToken,
+          unsubscribeToken: normalizedSubscriber.unsubscribeToken,
+          verifiedAt: normalizedSubscriber.verifiedAt,
+          unsubscribedAt: normalizedSubscriber.unsubscribedAt,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
     return subscriber;
   }
 

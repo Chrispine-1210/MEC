@@ -16,6 +16,7 @@ const ADMIN_ONLY_ROUTES = [
   "/admin/ecosystem",
   "/admin/applications",
   "/admin/messages",
+  "/admin/subscribers",
   "/admin/analytics",
   "/admin/activity",
   "/admin/communications",

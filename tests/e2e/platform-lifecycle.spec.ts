@@ -171,6 +171,40 @@ test("admin lifecycle: super-admin MFA authentication and users dashboard access
   const users = usersBody.users;
   expect(Array.isArray(users)).toBe(true);
   expect(users.some((user: { email?: string; role?: string }) => user.email === email && user.role === "super_admin")).toBe(true);
+
+  const subscriberEmail = `e2e-subscriber-${suffix}@example.test`;
+  const subscriberResponse = await request.post(e2eApi("/api/subscribers"), {
+    headers: {
+      "X-Forwarded-For": "203.0.113.88",
+    },
+    data: {
+      email: subscriberEmail,
+      name: "E2E Subscriber",
+      preferences: ["scholarships", "news"],
+      consentAccepted: true,
+      source: "e2e-admin-portal",
+    },
+  });
+  expect(subscriberResponse.status(), await subscriberResponse.text()).toBeLessThan(300);
+
+  await page.goto(`${adminBaseURL}/admin/subscribers`);
+  await expect(page.getByRole("heading", { name: "Subscribers", exact: true })).toBeVisible();
+  await expect(page.getByText(subscriberEmail, { exact: true })).toBeVisible();
+
+  const subscribersResponse = await expectApiOk(
+    request,
+    `/api/admin/subscribers?search=${encodeURIComponent(subscriberEmail)}`,
+    { Authorization: `Bearer ${token}` },
+  );
+  const subscribersBody = await subscribersResponse.json();
+  expect(subscribersBody.total).toBe(1);
+  expect(subscribersBody.subscribers[0].email).toBe(subscriberEmail);
+  expect(subscribersBody.summary.total).toBeGreaterThanOrEqual(1);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("heading", { name: "Subscribers", exact: true })).toBeVisible();
+  await expect(page.getByTestId("data-table")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });
 
 test("email provider tracking accepts signed SendGrid and SES webhook events", async ({ request }) => {

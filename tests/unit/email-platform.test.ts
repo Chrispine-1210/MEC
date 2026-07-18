@@ -1003,10 +1003,31 @@ const installSubscriberStorage = async () => {
     emailJobs: [] as any[],
     deliveryEvents: [] as any[],
     analytics: [] as any[],
+    notifications: [] as any[],
+    adminUser: {
+      id: 7001,
+      email: "subscriber-admin@example.test",
+      username: "subscriber-admin",
+      firstName: "Subscriber",
+      lastName: "Admin",
+      role: "admin",
+      password: "subscriber-admin-password-hash",
+      isActive: true,
+      mfaEnabled: true,
+      totpSecret: "subscriber-admin-test-secret",
+      mfaConfirmedAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
   };
 
   await patchStorage({
+    getUser: async (id: number) => (id === state.adminUser.id ? state.adminUser : undefined),
     getSubscriberByEmail: async (email: string) => state.subscribers.get(email.toLowerCase()),
+    getAllSubscribers: async () =>
+      Array.from(state.subscribers.values()).sort(
+        (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+      ),
     createSubscriber: async (insertSubscriber: any) => {
       const now = new Date();
       const subscriber = {
@@ -1017,6 +1038,27 @@ const installSubscriberStorage = async () => {
         ...insertSubscriber,
       };
       state.subscribers.set(subscriber.email.toLowerCase(), subscriber);
+      return subscriber;
+    },
+    upsertSubscriber: async (insertSubscriber: any) => {
+      const key = insertSubscriber.email.toLowerCase();
+      const existing = state.subscribers.get(key);
+      if (existing) {
+        const updated = { ...existing, ...insertSubscriber, email: key, updatedAt: new Date() };
+        state.subscribers.set(key, updated);
+        return updated;
+      }
+
+      const now = new Date();
+      const subscriber = {
+        id: state.nextSubscriberId++,
+        lastEmailAt: null,
+        createdAt: now,
+        updatedAt: now,
+        ...insertSubscriber,
+        email: key,
+      };
+      state.subscribers.set(key, subscriber);
       return subscriber;
     },
     updateSubscriber: async (id: number, updateSubscriber: Record<string, unknown>) => {
@@ -1105,6 +1147,11 @@ const installSubscriberStorage = async () => {
     getEmailJob: async (id: string) => state.emailJobs.find((job) => job.id === id),
     createEmailDeliveryEvent: async (event: any) => {
       state.deliveryEvents.push(event);
+    },
+    createNotification: async (notification: any) => {
+      const saved = { id: state.notifications.length + 1, createdAt: new Date(), ...notification };
+      state.notifications.push(saved);
+      return saved;
     },
     logAnalytics: async (analytics: any) => {
       const saved = { id: state.analytics.length + 1, timestamp: new Date(), ...analytics };
@@ -1237,6 +1284,114 @@ test("newsletter signup succeeds once the subscriber is saved and confirmation e
     assert.equal(state.emailJobs[0].status, "sent");
     assert.equal(state.deliveryEvents.some((event) => event.eventType === "queued"), true);
     assert.equal(state.deliveryEvents.some((event) => event.eventType === "sent"), true);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("newsletter signup remains persisted when confirmation email enqueue fails", { concurrency: false }, async () => {
+  const state = await installSubscriberStorage();
+  await patchStorage({
+    createEmailJob: async () => {
+      throw new Error("Simulated email queue persistence failure");
+    },
+  });
+  const { server, baseUrl } = await startTestServer();
+
+  try {
+    const response = await fetch(`${baseUrl}/api/subscribers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "saved-before-email-failure@example.test",
+        name: "Saved Subscriber",
+        preferences: ["scholarships"],
+        consentAccepted: true,
+        source: "footer",
+      }),
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 202);
+    assert.equal(body.subscriber.email, "saved-before-email-failure@example.test");
+    assert.equal(body.delivery.status, "failed");
+    assert.equal(body.delivery.acceptedByProvider, false);
+    assert.equal(state.subscribers.size, 1);
+    assert.equal(state.subscribers.get("saved-before-email-failure@example.test")?.status, "pending");
+    assert.equal(state.notifications.length, 1);
+    assert.equal(state.notifications[0].message.includes("saved-before-email-failure@example.test"), false);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("duplicate newsletter signup upserts one record that is immediately visible to admin", { concurrency: false }, async () => {
+  const state = await installSubscriberStorage();
+  const { server, baseUrl } = await startTestServer();
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).startsWith(baseUrl)) {
+      return originalFetch(input, init);
+    }
+
+    return new Response(JSON.stringify({ id: `subscription-message-${state.emailJobs.length + 1}` }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const create = (name: string) => fetch(`${baseUrl}/api/subscribers`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Forwarded-For": "203.0.113.77",
+      },
+      body: JSON.stringify({
+        email: "duplicate-subscriber@example.test",
+        name,
+        preferences: ["jobs", "news"],
+        consentAccepted: true,
+        source: "footer",
+      }),
+    });
+
+    const firstResponse = await create("First Name");
+    const firstBody = await firstResponse.json();
+    const secondResponse = await create("Updated Name");
+    const secondBody = await secondResponse.json();
+
+    assert.equal(firstResponse.status, 201);
+    assert.equal(secondResponse.status, 201);
+    assert.equal(firstBody.subscriber.id, secondBody.subscriber.id);
+    assert.equal(state.subscribers.size, 1);
+    assert.equal(state.subscribers.get("duplicate-subscriber@example.test")?.name, "Updated Name");
+
+    const adminToken = jwt.sign(
+      {
+        id: state.adminUser.id,
+        email: state.adminUser.email,
+        role: state.adminUser.role,
+        type: "access",
+        pwd: passwordFingerprint(state.adminUser.password),
+        mfaVerified: true,
+      },
+      process.env.JWT_SECRET as string,
+      { expiresIn: "15m" },
+    );
+    const adminResponse = await fetch(
+      `${baseUrl}/api/admin/subscribers?page=1&limit=10&status=pending&source=footer&search=duplicate`,
+      { headers: { Authorization: `Bearer ${adminToken}` } },
+    );
+    const adminBody = await adminResponse.json();
+
+    assert.equal(adminResponse.status, 200);
+    assert.equal(adminBody.total, 1);
+    assert.equal(adminBody.subscribers.length, 1);
+    assert.equal(adminBody.subscribers[0].email, "duplicate-subscriber@example.test");
+    assert.equal(adminBody.summary.total, state.subscribers.size);
+    assert.equal(adminBody.summary.pending, 1);
+    assert.deepEqual(adminBody.sources, ["footer"]);
   } finally {
     await stopTestServer(server);
   }

@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
-import { resolveCname, resolveTxt } from "dns/promises";
+import { resolveCname, resolveMx, resolveTxt } from "dns/promises";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import { env } from "./env";
@@ -261,7 +261,7 @@ type EmailEnqueueOptions = {
 type DeliverabilityCheck = {
   name: string;
   host: string;
-  type: "CNAME" | "TXT";
+  type: "CNAME" | "MX" | "TXT";
   expected: string;
   actual: string[];
   status: "pass" | "warn" | "fail";
@@ -564,6 +564,9 @@ const getEmailDomain = (value: string) => {
   const [, domain] = email.split("@");
   return domain?.replace(/\.$/, "") || null;
 };
+
+const getConfiguredResendSenderDomain = () =>
+  getEmailDomain(env.EMAIL_FROM || "") || env.RESEND_DOMAIN || defaultResendDomain;
 
 const buildMessageId = (job: EmailJob, senderDomain: string | null) => {
   const domain = senderDomain && /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(senderDomain)
@@ -1259,11 +1262,19 @@ const buildAuthenticationPolicySummary = (checks: DeliverabilityCheck[]) => {
   const rootSpfRecords = checks.find((check) => check.host === mtendereEmailDomain && check.type === "TXT")?.actual || [];
   const rootDmarcRecords = checks.find((check) => check.host === `_dmarc.${mtendereEmailDomain}`)?.actual || [];
   const bimiRecords = checks.find((check) => check.host === `default._bimi.${mtendereEmailDomain}`)?.actual || [];
+  const resendSenderDomain = getConfiguredResendSenderDomain();
+  const resendReturnPath = `send.${resendSenderDomain}`;
+  const resendSpfRecords = checks.find((check) => check.host === resendReturnPath && check.type === "TXT")?.actual || [];
   const spfRecord = findTxtRecord(rootSpfRecords, "v=spf1");
+  const resendSpfRecord = findTxtRecord(resendSpfRecords, "v=spf1");
   const dmarcRecord = findTxtRecord(rootDmarcRecords, "v=DMARC1");
   const bimiRecord = findTxtRecord(bimiRecords, "v=BIMI1");
   const dmarc = parseDnsTagRecord(dmarcRecord);
   const providerCoverage = getSpfProviderCoverage(spfRecord);
+  providerCoverage.resend = providerCoverage.resend || getSpfProviderCoverage(resendSpfRecord).resend;
+  providerCoverage.sendgrid = providerCoverage.sendgrid || checks.some(
+    (check) => check.host === `mail.${mtendereEmailDomain}` && check.type === "CNAME" && check.status === "pass",
+  );
   const configuredProviders = getEmailDeliveryDiagnostics().providerConfigured;
   const missingConfiguredProviderIncludes = Object.entries({
     sendgrid: configuredProviders.sendgrid,
@@ -1287,6 +1298,13 @@ const buildAuthenticationPolicySummary = (checks: DeliverabilityCheck[]) => {
         .filter((check) => check.host.includes("._domainkey."))
         .map((check) => ({ host: check.host, status: check.status })),
       note: "Provider-specific DKIM selectors are verified through CNAME/TXT checks and provider dashboards.",
+    },
+    resend: {
+      senderDomain: resendSenderDomain,
+      returnPath: resendReturnPath,
+      spf: checks.find((check) => check.host === resendReturnPath && check.type === "TXT")?.status || "not_checked",
+      mx: checks.find((check) => check.host === resendReturnPath && check.type === "MX")?.status || "not_checked",
+      dkim: checks.find((check) => check.host === `resend._domainkey.${resendSenderDomain}`)?.status || "not_checked",
     },
     dmarc: {
       present: Boolean(dmarcRecord),
@@ -1395,8 +1413,69 @@ const txtCheck = async (
   }
 };
 
+const mxCheck = async (
+  host: string,
+  expected: string,
+  timeoutMs: number,
+  validator: (records: Array<{ exchange: string; priority: number }>) => boolean,
+): Promise<DeliverabilityCheck> => {
+  try {
+    const records = await dnsWithTimeout(resolveMx(host), timeoutMs);
+    const actual = records.map((record) => `${normalizeDnsValue(record.exchange)} (priority ${record.priority})`);
+    const passed = validator(records);
+    return {
+      name: host,
+      host,
+      type: "MX",
+      expected,
+      actual,
+      status: passed ? "pass" : "fail",
+      message: passed ? "MX return path is aligned." : `Expected ${host} to route to ${expected}.`,
+    };
+  } catch (error) {
+    return {
+      name: host,
+      host,
+      type: "MX",
+      expected,
+      actual: [],
+      status: "fail",
+      message: error instanceof Error ? error.message : "MX lookup failed.",
+    };
+  }
+};
+
 export const getEmailDeliverabilityDiagnostics = async (options: { timeoutMs?: number } = {}) => {
   const timeoutMs = Math.max(500, options.timeoutMs ?? 2_000);
+  const deliveryDiagnostics = getEmailDeliveryDiagnostics();
+  const resendSenderDomain = getConfiguredResendSenderDomain();
+  const shouldCheckResendDns =
+    deliveryDiagnostics.providerConfigured.resend &&
+    resendSenderDomain !== "resend.dev" &&
+    (resendSenderDomain === mtendereEmailDomain || resendSenderDomain.endsWith(`.${mtendereEmailDomain}`));
+  const resendReturnPath = `send.${resendSenderDomain}`;
+  const resendChecks = shouldCheckResendDns
+    ? [
+        txtCheck(
+          resendReturnPath,
+          "v=spf1 include:amazonses.com",
+          timeoutMs,
+          (records) => records.some((record) => /^v=spf1\b/i.test(record) && /include:amazonses\.com\b/i.test(record)),
+        ),
+        mxCheck(
+          resendReturnPath,
+          "feedback-smtp.<region>.amazonses.com",
+          timeoutMs,
+          (records) => records.some((record) => normalizeDnsValue(record.exchange).endsWith(".amazonses.com")),
+        ),
+        txtCheck(
+          `resend._domainkey.${resendSenderDomain}`,
+          "Resend DKIM public key",
+          timeoutMs,
+          (records) => records.some((record) => /(?:^|;)\s*(?:k=rsa;\s*)?p=[A-Za-z0-9+/=]+/i.test(record)),
+        ),
+      ]
+    : [];
   const sendgridChecks = [
     cnameCheck(`links.${mtendereEmailDomain}`, "sendgrid.net", timeoutMs),
     cnameCheck(`54085667.${mtendereEmailDomain}`, "sendgrid.net", timeoutMs),
@@ -1444,6 +1523,7 @@ export const getEmailDeliverabilityDiagnostics = async (options: { timeoutMs?: n
     ),
   ]);
   const checks = await Promise.all([
+    ...resendChecks,
     ...sendgridChecks,
     ...policyChecks,
     ...subdomainChecks,
