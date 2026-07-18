@@ -10,7 +10,7 @@ import {
   varchar,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -1044,6 +1044,7 @@ export const emailDeliveryEvents = pgTable(
     recipient: varchar("recipient", { length: 255 }),
     category: varchar("category", { length: 100 }),
     providerMessageId: text("provider_message_id"),
+    providerEventId: text("provider_event_id"),
     metadata: jsonb("metadata").$type<Record<string, unknown> | null>(),
     ipAddress: varchar("ip_address", { length: 45 }),
     userAgent: text("user_agent"),
@@ -1054,6 +1055,9 @@ export const emailDeliveryEvents = pgTable(
     typeCreatedIdx: index("email_delivery_events_type_created_idx").on(table.eventType, table.createdAt),
     categoryCreatedIdx: index("email_delivery_events_category_created_idx").on(table.category, table.createdAt),
     providerMessageIdx: index("email_delivery_events_provider_message_idx").on(table.providerMessageId),
+    providerEventIdx: uniqueIndex("email_delivery_events_provider_event_unique_idx")
+      .on(table.provider, table.providerEventId)
+      .where(sql`${table.providerEventId} IS NOT NULL`),
   }),
 );
 

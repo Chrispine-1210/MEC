@@ -110,11 +110,14 @@ CREATE TABLE IF NOT EXISTS "email_delivery_events" (
   "recipient" varchar(255),
   "category" varchar(100),
   "provider_message_id" text,
+  "provider_event_id" text,
   "metadata" jsonb,
   "ip_address" varchar(45),
   "user_agent" text,
   "created_at" timestamp DEFAULT now()
 );
+
+ALTER TABLE "email_delivery_events" ADD COLUMN IF NOT EXISTS "provider_event_id" text;
 
 CREATE INDEX IF NOT EXISTS "email_delivery_events_job_idx"
   ON "email_delivery_events" ("job_id");
@@ -124,6 +127,9 @@ CREATE INDEX IF NOT EXISTS "email_delivery_events_category_created_idx"
   ON "email_delivery_events" ("category", "created_at");
 CREATE INDEX IF NOT EXISTS "email_delivery_events_provider_message_idx"
   ON "email_delivery_events" ("provider_message_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "email_delivery_events_provider_event_unique_idx"
+  ON "email_delivery_events" ("provider", "provider_event_id")
+  WHERE "provider_event_id" IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS "communication_events" (
   "id" varchar(36) PRIMARY KEY NOT NULL,

@@ -2791,13 +2791,26 @@ const isDuplicateProviderWebhookEvent = (
   return false;
 };
 
-export const recordProviderWebhookEvent = async (provider: string, payload: unknown) => {
+export const recordProviderWebhookEvent = async (
+  provider: string,
+  payload: unknown,
+  options: { providerEventId?: string | null } = {},
+) => {
+  const providerName = provider.trim().toLowerCase();
   const events = Array.isArray(payload) ? payload : [payload];
 
-  for (const rawEvent of events) {
-    const normalized = normalizeProviderWebhookEvent(provider, rawEvent);
+  for (const [eventIndex, rawEvent] of events.entries()) {
+    const normalized = normalizeProviderWebhookEvent(providerName, rawEvent);
     const eventType = mapProviderEventType(normalized.rawType, normalized.metadata);
-    const duplicate = isDuplicateProviderWebhookEvent(provider, eventType, normalized);
+    const transportEventId = options.providerEventId?.trim();
+    const providerEventId = transportEventId
+      ? events.length > 1
+        ? `${transportEventId}:${eventIndex}`
+        : transportEventId
+      : null;
+    const eventMetadata = providerEventId
+      ? { ...normalized.metadata, providerEventId }
+      : normalized.metadata;
     const job = normalized.jobId
       ? await storage.getEmailJob(normalized.jobId)
       : normalized.providerMessageId
@@ -2805,10 +2818,38 @@ export const recordProviderWebhookEvent = async (provider: string, payload: unkn
         : undefined;
     const recipient = normalized.recipient || job?.recipient || "";
 
-    if (duplicate) {
+    if (providerEventId) {
+      const inserted = await storage.createEmailDeliveryEventIfNew({
+        jobId: job?.id || normalized.jobId,
+        provider: providerName,
+        eventType,
+        recipient,
+        category: job?.category || normalized.category,
+        providerMessageId: normalized.providerMessageId,
+        providerEventId,
+        metadata: eventMetadata,
+      });
+      if (!inserted) {
+        appendEmailEvent({
+          status: "provider_webhook_duplicate_ignored",
+          provider: providerName,
+          providerEventId,
+          sourceEventType: eventType,
+        });
+        continue;
+      }
+      appendEmailEvent({
+        status: "provider_webhook_recorded",
+        provider: providerName,
+        providerEventId,
+        eventType,
+        jobId: job?.id || normalized.jobId,
+        providerMessageId: normalized.providerMessageId,
+      });
+    } else if (isDuplicateProviderWebhookEvent(providerName, eventType, normalized)) {
       await recordEmailEvent({
         jobId: job?.id || normalized.jobId,
-        provider,
+        provider: providerName,
         eventType: "provider_webhook_duplicate_ignored",
         recipient,
         category: job?.category || normalized.category,
@@ -2819,56 +2860,73 @@ export const recordProviderWebhookEvent = async (provider: string, payload: unkn
         },
       });
       continue;
+    } else {
+      await recordEmailEvent({
+        jobId: job?.id || normalized.jobId,
+        provider: providerName,
+        eventType,
+        recipient,
+        category: job?.category || normalized.category,
+        providerMessageId: normalized.providerMessageId,
+        metadata: eventMetadata,
+      });
     }
 
-    await recordEmailEvent({
-      jobId: job?.id || normalized.jobId,
-      provider,
-      eventType,
-      recipient,
-      category: job?.category || normalized.category,
-      providerMessageId: normalized.providerMessageId,
-      metadata: normalized.metadata,
-    });
-
-    await applyProviderSuppression({
-      provider,
-      eventType,
-      recipient,
-      job,
-      providerMessageId: normalized.providerMessageId,
-      metadata: normalized.metadata,
-    });
-    await applySoftBouncePolicy({
-      provider,
-      eventType,
-      recipient,
-      job,
-      providerMessageId: normalized.providerMessageId,
-      metadata: normalized.metadata,
-    });
-    if (["delivered", "opened", "clicked"].includes(eventType)) {
-      await recordPositiveProviderSignal({
-        provider,
+    try {
+      await applyProviderSuppression({
+        provider: providerName,
         eventType,
         recipient,
         job,
         providerMessageId: normalized.providerMessageId,
+        metadata: eventMetadata,
       });
+      await applySoftBouncePolicy({
+        provider: providerName,
+        eventType,
+        recipient,
+        job,
+        providerMessageId: normalized.providerMessageId,
+        metadata: eventMetadata,
+      });
+      if (["delivered", "opened", "clicked"].includes(eventType)) {
+        await recordPositiveProviderSignal({
+          provider: providerName,
+          eventType,
+          recipient,
+          job,
+          providerMessageId: normalized.providerMessageId,
+        });
+      }
+    } catch (error) {
+      if (providerEventId) {
+        try {
+          await storage.deleteEmailDeliveryEventByProviderEventId(providerName, providerEventId);
+        } catch (rollbackError) {
+          appendEmailEvent({
+            status: "provider_webhook_claim_rollback_failed",
+            provider: providerName,
+            providerEventId,
+            error: rollbackError instanceof Error ? rollbackError.message : "Unknown rollback error",
+          });
+        }
+      }
+      throw error;
     }
   }
 };
 
 const mapProviderEventType = (rawType: string, metadata: Record<string, unknown> = {}) => {
-  if (rawType.includes("deliver")) return "delivered";
-  if (rawType.includes("open")) return "opened";
-  if (rawType.includes("click")) return "clicked";
   if (rawType.includes("defer") || rawType.includes("delay")) return "deferred";
   if (rawType.includes("bounce") && metadata.deliverabilityClassification === "soft") return "deferred";
   if (rawType.includes("bounce")) return "bounced";
   if (rawType.includes("complain") || rawType.includes("spam")) return "spam_complaint";
   if (rawType.includes("unsubscribe")) return "unsubscribed";
   if (rawType.includes("reject") || rawType.includes("suppress")) return "suppressed";
+  if (rawType.includes("fail")) return "failed";
+  if (rawType.includes("deliver")) return "delivered";
+  if (rawType.includes("open")) return "opened";
+  if (rawType.includes("click")) return "clicked";
   return rawType || "provider_event";
 };
 

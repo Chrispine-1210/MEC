@@ -158,6 +158,7 @@ import {
 import { normalizeSearchQuery, parsePagination, searchAndRank } from "./search";
 import { renderPrometheusMetrics } from "./observability";
 import { isVercelRuntime, resolveWritableRuntimePath } from "./runtime-paths";
+import { verifyResendWebhook } from "./webhook-signatures";
 import {
   createBotDefenseMiddleware,
   recordFingerprintEvent,
@@ -5032,8 +5033,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post('/api/email/webhooks/:provider', async (req, res) => {
+    const provider = req.params.provider.trim().toLowerCase();
     try {
-      if (env.EMAIL_WEBHOOK_SIGNING_SECRET) {
+      let payload: unknown = req.body;
+      let providerEventId: string | null = null;
+
+      if (provider === "resend") {
+        const verification = verifyResendWebhook({
+          rawBody: (req as Request & { rawBody?: Buffer }).rawBody,
+          signingSecret: env.EMAIL_WEBHOOK_SIGNING_SECRET,
+          id: req.get("svix-id") || undefined,
+          timestamp: req.get("svix-timestamp") || undefined,
+          signature: req.get("svix-signature") || undefined,
+        });
+        if (!verification.valid) {
+          const status = verification.reason === "missing_configuration" ? 503 : 401;
+          console.warn("Rejected Resend webhook", {
+            provider,
+            reason: verification.reason,
+          });
+          return res.status(status).json({ message: "Webhook verification failed" });
+        }
+        payload = verification.payload;
+        providerEventId = verification.providerEventId;
+      } else if (env.EMAIL_WEBHOOK_SIGNING_SECRET) {
         const legacySecret = req.get("x-mec-webhook-secret");
         const signatureValid = isWebhookSignatureMatch(req, env.EMAIL_WEBHOOK_SIGNING_SECRET);
         const legacySecretValid = legacySecret === env.EMAIL_WEBHOOK_SIGNING_SECRET;
@@ -5042,11 +5065,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      await recordProviderWebhookEvent(req.params.provider, req.body);
+      await recordProviderWebhookEvent(provider, payload, { providerEventId });
+      console.info("Processed email provider webhook", { provider, providerEventId });
       res.json({ received: true });
     } catch (error) {
       console.error("Email provider webhook error:", getErrorLogMessage(error));
-      res.status(400).json({ message: "Webhook processing failed", error: getErrorMessage(error) });
+      res.status(500).json({ message: "Webhook processing failed" });
     }
   });
 

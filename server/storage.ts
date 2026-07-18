@@ -174,6 +174,8 @@ export interface IStorage {
   markEmailJobSent(id: string, provider: string, providerMessageId?: string | null): Promise<EmailJob>;
   markEmailJobFailed(id: string, error: string, scheduledFor?: Date | null, finalFailure?: boolean): Promise<EmailJob>;
   createEmailDeliveryEvent(event: InsertEmailDeliveryEvent): Promise<void>;
+  createEmailDeliveryEventIfNew(event: InsertEmailDeliveryEvent): Promise<boolean>;
+  deleteEmailDeliveryEventByProviderEventId(provider: string, providerEventId: string): Promise<void>;
   createCommunicationEvent(event: InsertCommunicationEvent): Promise<CommunicationEventRecord>;
   updateCommunicationEventStatus(
     id: string,
@@ -1193,6 +1195,24 @@ export class DatabaseStorage implements IStorage {
     await db
       .insert(emailDeliveryEvents)
       .values(insertEvent as typeof emailDeliveryEvents.$inferInsert);
+  }
+
+  async createEmailDeliveryEventIfNew(insertEvent: InsertEmailDeliveryEvent): Promise<boolean> {
+    const inserted = await db
+      .insert(emailDeliveryEvents)
+      .values(insertEvent as typeof emailDeliveryEvents.$inferInsert)
+      .onConflictDoNothing()
+      .returning({ id: emailDeliveryEvents.id });
+    return inserted.length > 0;
+  }
+
+  async deleteEmailDeliveryEventByProviderEventId(provider: string, providerEventId: string): Promise<void> {
+    await db
+      .delete(emailDeliveryEvents)
+      .where(and(
+        eq(emailDeliveryEvents.provider, provider),
+        eq(emailDeliveryEvents.providerEventId, providerEventId),
+      ));
   }
 
   async createCommunicationEvent(insertEvent: InsertCommunicationEvent): Promise<CommunicationEventRecord> {

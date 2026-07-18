@@ -4,6 +4,7 @@ import { afterEach, test } from "node:test";
 import bcrypt from "bcryptjs";
 import express from "express";
 import jwt from "jsonwebtoken";
+import { Webhook } from "svix";
 import type { Server } from "node:http";
 
 process.env.NODE_ENV = "test";
@@ -33,6 +34,8 @@ delete process.env.EMAIL_ALLOW_LIVE_TEST_SENDS;
 process.env.EMAIL_QUEUE_WORKER_ENABLED = "false";
 process.env.RECAPTCHA_SECRET_KEY = "";
 process.env.CRON_SECRET = "cron-test-secret";
+const resendWebhookTestSecret = `whsec_${Buffer.from("mec-resend-webhook-unit-test-secret").toString("base64")}`;
+process.env.EMAIL_WEBHOOK_SIGNING_SECRET = resendWebhookTestSecret;
 
 type StoragePatch = Record<string, (...args: any[]) => any>;
 
@@ -785,6 +788,175 @@ test("provider webhooks normalize SES, Mailgun, Resend, and Postmark payloads", 
   assert.equal(sentByProvider.get("postmark")?.recipient, "postmark@example.test");
 });
 
+test("signed provider webhook event IDs are persisted only once", { concurrency: false }, async () => {
+  const { recordProviderWebhookEvent } = await emailModulePromise;
+  const providerEventIds = new Set<string>();
+  const deliveryEvents: any[] = [];
+  const job = makeEmailJob({
+    id: "resend-idempotency-job",
+    provider: "resend",
+    providerMessageId: "resend-idempotency-message",
+    recipient: "student@example.test",
+  });
+
+  await patchStorage({
+    getEmailJob: async () => job,
+    getEmailJobByProviderMessageId: async () => job,
+    getEmailPreferenceByEmail: async () => undefined,
+    createEmailDeliveryEventIfNew: async (event: any) => {
+      if (providerEventIds.has(event.providerEventId)) return false;
+      providerEventIds.add(event.providerEventId);
+      deliveryEvents.push(event);
+      return true;
+    },
+  });
+
+  const payload = {
+    type: "email.delivered",
+    data: {
+      email_id: "resend-idempotency-message",
+      to: ["student@example.test"],
+    },
+  };
+  const options = { providerEventId: "msg_resend_idempotency" };
+
+  await recordProviderWebhookEvent("resend", payload, options);
+  await recordProviderWebhookEvent("resend", payload, options);
+
+  assert.equal(deliveryEvents.length, 1);
+  assert.equal(deliveryEvents[0].eventType, "delivered");
+  assert.equal(deliveryEvents[0].providerEventId, options.providerEventId);
+  assert.equal(deliveryEvents[0].metadata.providerEventId, options.providerEventId);
+});
+
+test("failed signed webhook side effects release the durable event claim for retry", { concurrency: false }, async () => {
+  const { recordProviderWebhookEvent } = await emailModulePromise;
+  const claimedProviderEventIds = new Set<string>();
+  const releasedProviderEventIds: string[] = [];
+
+  await patchStorage({
+    getEmailJob: async () => undefined,
+    getEmailJobByProviderMessageId: async () => undefined,
+    getEmailPreferenceByEmail: async () => ({
+      id: 42,
+      email: "bounced@example.test",
+      auditTrail: [],
+    }),
+    updateEmailPreference: async () => {
+      throw new Error("temporary database failure");
+    },
+    createEmailDeliveryEventIfNew: async (event: any) => {
+      if (claimedProviderEventIds.has(event.providerEventId)) return false;
+      claimedProviderEventIds.add(event.providerEventId);
+      return true;
+    },
+    deleteEmailDeliveryEventByProviderEventId: async (_provider: string, providerEventId: string) => {
+      claimedProviderEventIds.delete(providerEventId);
+      releasedProviderEventIds.push(providerEventId);
+    },
+  });
+
+  const providerEventId = "msg_resend_retryable_bounce";
+  await assert.rejects(
+    recordProviderWebhookEvent(
+      "resend",
+      {
+        type: "email.bounced",
+        data: {
+          email_id: "resend-bounce-message",
+          to: ["bounced@example.test"],
+        },
+      },
+      { providerEventId },
+    ),
+    /temporary database failure/,
+  );
+
+  assert.deepEqual(releasedProviderEventIds, [providerEventId]);
+  assert.equal(claimedProviderEventIds.has(providerEventId), false);
+});
+
+test("Resend delayed and failed webhooks retain their delivery semantics", { concurrency: false }, async () => {
+  const { recordProviderWebhookEvent } = await emailModulePromise;
+  const deliveryEvents: any[] = [];
+
+  await patchStorage({
+    getEmailJob: async () => undefined,
+    getEmailJobByProviderMessageId: async () => undefined,
+    createEmailDeliveryEvent: async (event: any) => {
+      deliveryEvents.push(event);
+    },
+  });
+
+  await recordProviderWebhookEvent("resend", {
+    type: "email.delivery_delayed",
+    data: { email_id: "resend-delayed-message" },
+  });
+  await recordProviderWebhookEvent("resend", {
+    type: "email.failed",
+    data: { email_id: "resend-failed-message" },
+  });
+
+  assert.deepEqual(
+    deliveryEvents.map((event) => event.eventType),
+    ["deferred", "failed"],
+  );
+});
+
+test("Resend webhook route verifies the raw Svix request before persistence", { concurrency: false }, async () => {
+  const deliveryEvents: any[] = [];
+  await patchStorage({
+    getEmailJob: async () => undefined,
+    getEmailJobByProviderMessageId: async () => undefined,
+    getEmailPreferenceByEmail: async () => undefined,
+    createEmailDeliveryEventIfNew: async (event: any) => {
+      deliveryEvents.push(event);
+      return true;
+    },
+  });
+
+  const { server, baseUrl } = await startTestServer();
+  const payload = JSON.stringify({
+    type: "email.delivered",
+    data: {
+      email_id: "resend-route-message",
+      to: ["route.student@example.test"],
+    },
+  });
+  const id = "msg_resend_route_test";
+  const timestamp = new Date();
+  const signature = new Webhook(resendWebhookTestSecret).sign(id, timestamp, payload);
+  const headers = {
+    "content-type": "application/json",
+    "svix-id": id,
+    "svix-timestamp": String(Math.floor(timestamp.getTime() / 1_000)),
+    "svix-signature": signature,
+  };
+
+  try {
+    const accepted = await originalFetch(`${baseUrl}/api/email/webhooks/resend`, {
+      method: "POST",
+      headers,
+      body: payload,
+    });
+    assert.equal(accepted.status, 200, await accepted.text());
+    assert.equal(deliveryEvents.length, 1);
+    assert.equal(deliveryEvents[0].providerEventId, id);
+
+    const rejected = await originalFetch(`${baseUrl}/api/email/webhooks/resend`, {
+      method: "POST",
+      headers,
+      body: payload.replace("delivered", "bounced"),
+    });
+    assert.equal(rejected.status, 401);
+    assert.equal(deliveryEvents.length, 1);
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+  }
+});
+
 const passwordFingerprint = (passwordHash: string) =>
   createHmac("sha256", process.env.JWT_SECRET as string).update(passwordHash).digest("hex").slice(0, 40);
 
@@ -805,7 +977,13 @@ const signVerificationToken = (user: { id: number; email: string; role: string; 
 const startTestServer = async () => {
   const { registerRoutes } = await routesModulePromise;
   const app = express();
-  app.use(express.json());
+  app.use(express.json({
+    verify: (req, _res, buffer) => {
+      if ((req as express.Request).originalUrl.startsWith("/api/email/webhooks/")) {
+        (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
+      }
+    },
+  }));
   app.use(express.urlencoded({ extended: false }));
   const server = await registerRoutes(app);
   await new Promise<void>((resolve) => {
