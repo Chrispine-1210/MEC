@@ -4,162 +4,228 @@ Date: 2026-07-18
 
 ## Executive Status
 
-Subscriber persistence and Admin Portal visibility have separate root causes from email delivery.
+The production subscriber and email transport paths are operational on commit
+`0a320b756a207648bb8e9ba9ce4b74d7af878521`.
 
-- Subscriber persistence uses the production PostgreSQL database through Drizzle. It is not an in-memory production collection.
-- The Admin API already returned subscriber records, but the Admin client had no subscriber route, navigation item, or page. Saved records therefore had no portal view.
-- Production email health is fail-closed and reports Resend as the active provider, but Resend rejects the configured credential with `API key is invalid`.
-- SendGrid is not configured as an active production provider. Empty SendGrid activity is expected while the application sends through Resend.
-- Gmail inbox placement cannot be evaluated until a provider accepts a production message.
+- A live public subscription was durably upserted in PostgreSQL.
+- The confirmation job was accepted by Resend on its first attempt.
+- Resend reported the Gmail message as `delivered`.
+- A signed Resend webhook reached Vercel, returned HTTP 200, and persisted a
+  distinct `delivered` event with a durable provider event ID.
+- Unsigned production webhook requests are rejected with HTTP 401.
+- The Resend sending domain and sending-only production key are ready.
+- The previously exposed Resend management key was revoked and replaced.
 
-## Root Causes
+Two closure checks still require an authenticated user surface and must not be
+reported as complete:
 
-### Email delivery
+1. Visual Gmail folder placement (Inbox, Promotions, or Spam).
+2. Visual comparison of the protected Admin Subscribers page with the database.
 
-**Failing component:** Vercel Production `RESEND_API_KEY`.
+Provider `delivered` means Gmail's receiving server accepted the message; it is
+not proof of a particular Gmail folder.
 
-Production evidence from `GET https://www.mtendereeducationconsult.com/api/health`:
+## Root Cause Analysis
 
-- Deployment commit: `026f4e12072d10b94fc814d2dea727beaf1f5fce` at the start of this audit.
-- Database: ready through `POSTGRES_URL_NON_POOLING`.
-- Active email provider: `resend`.
-- Email readiness: `false`.
-- Resend sender-domain/API check: `API key is invalid`.
+### 1. Production provider credential
 
-The provider rejects the request before Gmail, Outlook, Yahoo, or another mailbox provider can classify the message as delivered, deferred, spam, or inbox.
+The earlier Vercel Production Resend credential was invalid. The API rejected
+email before any mailbox provider could evaluate it. Production now uses a new
+least-privilege `sending_access` key scoped to the verified sending domain.
 
-### Subscriber visibility
+### 2. Missing provider webhook
 
-**Failing component:** missing Admin client integration.
+The Resend account had zero webhooks and Vercel's
+`EMAIL_WEBHOOK_SIGNING_SECRET` was empty. MEC could record only its outbound
+`sent` event even when Resend later delivered the message. SendGrid logs were
+empty because SendGrid was not the active provider.
 
-The following backend path existed and was durable:
+### 3. Subscriber Admin visibility
 
-```text
-POST /api/subscribers
-  -> request and bot validation
-  -> PostgreSQL subscribers insert/update
-  -> email preference persistence
-  -> durable email job
-  -> inline provider attempt
-```
+Subscriber writes were PostgreSQL-backed, but the Admin client had no
+subscriber route, navigation entry, or page. Records could therefore exist
+without a visible portal workflow. The Admin Subscribers page now consumes the
+protected PostgreSQL-backed endpoint.
 
-The protected `GET /api/admin/subscribers` endpoint also existed, but no Admin page consumed it. This audit adds the missing route, navigation, filters, summary metrics, CSV export, realtime invalidation, and polling fallback.
+### 4. Delivery event misclassification
+
+The existing mapper checked `deliver` before `delay`, causing Resend
+`email.delivery_delayed` events to be counted as delivered. The matcher order
+now records delays as `deferred` and provider failures as `failed`.
+
+### 5. Domain state
+
+Resend sending DNS was valid, but unused inbound receiving remained enabled and
+failed, leaving the domain `partially_failed`. Receiving was disabled while
+sending remained enabled; the domain now reports `verified`.
 
 ## Implemented Fixes
 
-1. Replaced the race-prone find-then-insert subscriber write with a PostgreSQL `ON CONFLICT` upsert keyed by normalized email.
-2. Preserved successful subscriber capture when email orchestration fails and return an accurate `202` response in that state.
-3. Added stage-level analytics for validation, persistence, email status, and failures without storing subscriber email in analytics metadata.
-4. Added a durable, non-PII Admin notification and a `subscribers` realtime channel.
-5. Added an Admin-only Subscribers page with:
-   - exact total, active, pending, unsubscribed, and new-today counts;
-   - status and source filters;
-   - search and pagination;
-   - CSV export;
-   - desktop and mobile responsive layout;
-   - 30-second fallback polling when realtime transport is unavailable.
-6. Added subscriber counts to the existing Admin dashboard response.
-7. Corrected Resend DNS diagnostics to check the provider's real topology:
-   - SPF and MX at `send.<sending-domain>`;
-   - DKIM at `resend._domainkey.<sending-domain>`.
-8. Kept subscriber records and CSV export behind the existing `admin`/`super_admin` plus MFA guard.
+1. Durable PostgreSQL `ON CONFLICT` subscriber upsert keyed by normalized email.
+2. Accurate HTTP 202 response when persistence succeeds but email orchestration
+   fails; a successful send now returns HTTP 201.
+3. Admin Subscribers route, page, navigation, RBAC/MFA guard, filters, search,
+   pagination, CSV export, realtime invalidation, and polling fallback.
+4. Subscriber counts in Admin dashboard data and non-PII notifications/logging.
+5. Verified Resend sender-domain diagnostics for SPF, return path, and DKIM.
+6. Rotated least-privilege Vercel Production Resend sending key.
+7. Official Svix raw-body signature verification for Resend webhooks.
+8. Fail-closed production webhook behavior when configuration or signatures are
+   missing or invalid.
+9. Additive `provider_event_id` column and partial unique index for durable,
+   cross-instance webhook idempotency.
+10. Retry-safe webhook event claim rollback when suppression side effects fail.
+11. Delivery, defer, bounce, complaint, open, click, failure, and suppression
+    webhook subscriptions.
+12. Correct `email.delivery_delayed` and `email.failed` normalization.
+13. Revoked the exposed Resend management key and removed the temporary pulled
+    production environment file.
 
-## DNS and Authentication Findings
+## Production Evidence
 
-Live Windows DNS resolution produced the following evidence:
+### Health and deployment
+
+| Check | Result |
+|---|---|
+| Production commit | `0a320b756a207648bb8e9ba9ce4b74d7af878521` |
+| Deployment | Vercel Production `READY` |
+| Database | Ready via `POSTGRES_URL_NON_POOLING` / Neon |
+| Email ready | `true` |
+| Active provider | `resend` |
+| Activation ready | `true` |
+| Resend domain status | `verified_via_dns` |
+| Credential scope | `sending_access` |
+| Activation blockers | None |
+| Webhook secret | Encrypted Vercel Production variable |
+| Webhook status | Enabled |
+
+### Controlled Gmail subscription
+
+Recipient: controlled Gmail account supplied by the operator.
+
+| Evidence | Result |
+|---|---|
+| Public API response | HTTP 201 |
+| Subscriber ID | `1` |
+| Subscriber status | `pending` (double opt-in awaiting link click) |
+| Subscriber source | `production-p0-webhook-verification` |
+| Email job ID | `bc67c508-ea60-4bc9-adf0-8fde86bc79e5` |
+| Job status / attempts | `sent` / `1` |
+| Provider | `resend` |
+| Provider message ID | `5373a631-823d-4a60-88dd-a7ea6c7c7d3d` |
+| Job error / failed time | `null` / `null` |
+| Resend last event | `delivered` |
+| MEC outbound event | Event `816`, `sent` |
+| MEC provider event | Event `817`, `delivered` |
+| Durable provider event ID | Present |
+| Vercel webhook response | HTTP 200 in 33 ms |
+| Unsigned webhook probe | HTTP 401 |
+
+The production database contained nine subscriber rows at verification time;
+all nine were pending double opt-in. Re-subscribing the controlled address
+updated the existing row instead of creating a duplicate.
+
+### Admin visibility
+
+- The deployed `/admin/subscribers` application route returns HTTP 200.
+- The page queries the protected `GET /api/admin/subscribers` endpoint.
+- That endpoint reads `storage.getAllSubscribers()` from production PostgreSQL.
+- Automated coverage proves a duplicate upsert remains one row and is returned
+  immediately by the Admin endpoint.
+- Direct PostgreSQL evidence proves the controlled row and exact database count.
+
+An authenticated Admin browser session was unavailable during this run. No
+production token was forged and MFA/RBAC was not weakened to manufacture a UI
+screenshot. Visual Admin count comparison therefore remains operator-confirmed.
+
+## Provider and DNS Findings
 
 | Check | Status | Evidence |
 |---|---|---|
-| Resend SPF | Pass | `send.notifications.mtendereeducationconsult.com` publishes `v=spf1 include:amazonses.com ~all` |
-| Resend return path | Pass | MX routes to `feedback-smtp.us-east-1.amazonses.com` |
-| Resend DKIM | Pass | `resend._domainkey.notifications.mtendereeducationconsult.com` publishes a public key |
-| Organizational DMARC | Pass, monitoring | `_dmarc.mtendereeducationconsult.com` publishes `v=DMARC1; p=none;` |
-| SendGrid link branding | Pass | `links` and `54085667` point to `sendgrid.net` |
-| SendGrid return path | Pass | `mail` points to `u54085667.wl168.sendgrid.net` |
-| SendGrid DKIM | Pass | `mtd1` and `mtd12` selectors point to SendGrid |
-| Root SPF | Not present | Root TXT contains Google site verification only |
+| Resend sender domain | Pass | `notifications.mtendereeducationconsult.com` is verified |
+| Resend SPF | Pass | `send.notifications...` includes `amazonses.com` |
+| Resend return path | Pass | MX routes to the Resend/SES feedback host |
+| Resend DKIM | Pass | `resend._domainkey.notifications...` is verified |
+| Organizational DMARC | Monitoring | `_dmarc.mtendereeducationconsult.com` uses `p=none` |
+| SendGrid provider | Inactive | Production health reports SendGrid unconfigured |
+| SendGrid activity | Expected empty | MEC is sending through Resend |
+| Reverse DNS / PTR | Not independently verified | Requires the actual outbound IP from received headers |
+| Gmail SPF/DKIM/DMARC header alignment | Not inspected | Requires access to the received message headers |
 
-The root SPF absence does not explain the current Resend API rejection. Resend authenticates the custom return path under `send.notifications...` and DKIM under the `notifications...` sending domain. Add or change root SPF only after inventorying every root-domain sender; never publish multiple SPF records.
+Legacy SendGrid DNS records remain published, but they do not make SendGrid an
+active runtime provider. Do not add a second SPF TXT record. Inventory all
+senders before changing root SPF or progressing DMARC from monitoring to
+`quarantine` and `reject`.
 
-DMARC should remain at monitoring until successful authenticated traffic and aggregate reports are reviewed, then progress to `quarantine` and `reject` deliberately.
+## Reliability and Security Controls
 
-References:
+- Database-backed email jobs and delivery history.
+- Inline transactional attempts on Vercel.
+- Exponential retry scheduling and dead-letter state.
+- Provider failover and circuit breakers.
+- Plaintext and HTML MIME bodies.
+- Standards-compliant Message-ID.
+- List-Unsubscribe and one-click unsubscribe for commercial mail.
+- Hard-bounce, complaint, suppression, and repeated-soft-bounce handling.
+- Signed, timestamp-checked raw webhook verification.
+- Durable replay protection using Resend's `svix-id`.
+- Header injection normalization.
+- Secrets stored outside source and exposed Resend credential revoked.
 
-- [Resend domain management](https://resend.com/docs/dashboard/domains/introduction)
-- [Google email sender guidelines](https://support.google.com/mail/answer/81126)
-- [SendGrid domain authentication](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/how-to-set-up-domain-authentication)
+The Vercel build currently reports seven npm audit findings (two critical, four
+high, one low). They predate this P0 path and require a separate dependency
+impact audit; they are not silently classified as resolved.
 
-## Reliability and Deliverability Controls
-
-The existing email platform already provides:
-
-- durable database-backed jobs;
-- inline transactional delivery;
-- exponential retry scheduling and dead-letter status;
-- provider failover and circuit breakers;
-- plaintext and HTML bodies;
-- standards-compliant Message-ID generation;
-- List-Unsubscribe and one-click unsubscribe headers for commercial mail;
-- delivery, bounce, complaint, defer, open, and click event storage;
-- hard-bounce and repeated-soft-bounce suppression;
-- signed provider webhook support;
-- Admin email health, diagnostics, readiness, and communication analytics APIs.
-
-Vercel runs transactional attempts inline and drains retry/backlog jobs through `/api/email/queue/drain`. The current cron runs daily, so a transient failure can wait until the next scheduled drain. Reassess the schedule or move to a persistent worker when the Vercel plan and campaign volume support it.
-
-## Verification Evidence
+## Verification Matrix
 
 | Verification | Result |
 |---|---|
-| TypeScript check | Pass |
-| Admin TypeScript check | Pass |
-| Unit tests | Pass: 37/37 |
-| Focused email/subscriber tests | Pass: 22/22 |
+| Root TypeScript | Pass |
+| Admin TypeScript | Pass |
+| Unit tests | Pass: 44/44 |
+| Focused email/webhook/subscriber tests | Pass: 29/29 |
 | Integration tests | Pass: 8/8 |
 | Platform smoke test | Pass: 1/1 |
-| Vercel client/Admin/server build | Pass |
-| Serverless backend bundle | Pass |
-| Secret scan of changed diff | Pass: no provider/API/private-key patterns found |
-| Browser E2E | Blocked before assertions: local runtime could not reach Neon (`ETIMEDOUT`) |
-| Live production database health | Pass |
-| Live Resend credential | Fail: invalid API key |
-| Provider acceptance | Not verified |
-| Gmail inbox receipt | Not verified |
-| Outlook/Yahoo/custom-domain receipt | Not verified |
-| Live Admin subscriber count comparison | Not verified; requires authenticated Admin session |
+| npm 10 production `npm ci` lockfile dry run | Pass |
+| Vercel clean `npm ci` | Pass: 535 packages |
+| Vercel client/Admin/Node 20 server build | Pass |
+| Changed-file credential scan | Pass: zero credential-shaped values |
+| Live PostgreSQL additive migration | Pass: column and unique index present |
+| Live subscriber persistence | Pass |
+| Live Resend provider acceptance | Pass |
+| Live signed webhook ingestion | Pass |
+| Live Gmail receiving-server delivery | Pass (`delivered`) |
+| Gmail folder placement | Not verified: no browser backend available |
+| Outlook/Yahoo/custom mailbox tests | Not run |
+| Live bounce simulation | Not run; automated suppression tests pass |
+| Authenticated Admin visual count | Not verified: no Admin browser session |
+| Browser E2E | Not run in this production verification session |
 
-## Production Recovery Procedure
+## Remaining Actions
 
-1. Revoke the previously exposed Resend key and create a fresh sending-capable key in Resend.
-2. Set the fresh key as Vercel Production `RESEND_API_KEY`. Do not place it in source, chat, screenshots, or logs.
-3. In Resend, confirm `notifications.mtendereeducationconsult.com` has status `verified`.
-4. Keep these Vercel Production values:
-
-```env
-RESEND_DOMAIN=notifications.mtendereeducationconsult.com
-EMAIL_FROM=Mtendere Education Consult <no-reply@notifications.mtendereeducationconsult.com>
-EMAIL_PROVIDER_ORDER=resend,sendgrid,smtp,postmark,ses,custom
-EMAIL_DRY_RUN=false
-EMAIL_LINK_BASE_URL=https://links.mtendereeducationconsult.com
-```
-
-5. Redeploy the latest `main` commit.
-6. Confirm `/api/health` reports:
-
-```text
-email.ready = true
-email.activation.ready = true
-email.activation.resendDomain.ready = true
-email.activeProviders includes resend
-```
-
-7. Submit one controlled Gmail subscription and capture its returned subscriber ID and email job ID.
-8. Confirm the same subscriber appears at `/admin/subscribers` and through `GET /api/admin/subscribers`.
-9. Confirm the email job has `status=sent`, `provider=resend`, a non-null provider message ID, and no final error.
-10. Match that provider message ID in Resend logs, then confirm delivered status and actual inbox/spam placement.
-11. Repeat with Outlook, Yahoo, and a controlled custom-domain mailbox.
-12. Inspect authentication headers from received messages for SPF, DKIM, and DMARC pass/alignment before closing the incident.
+1. Operator confirms the controlled email's Gmail folder and inspects original
+   headers for SPF, DKIM, and DMARC pass/alignment.
+2. Operator opens `/admin/subscribers` in an MFA-authenticated Admin session and
+   confirms the count is nine and subscriber ID `1` has the verification source.
+3. Repeat controlled inbox tests for Outlook, Yahoo, and a custom domain.
+4. Execute a labeled Resend bounce simulation in a controlled environment and
+   confirm suppression without polluting production subscriber data.
+5. Review DMARC aggregate reports before increasing enforcement.
+6. Audit and remediate the seven production dependency findings separately.
+7. Reassess the daily Vercel queue-drain schedule as retry volume grows.
 
 ## Completion Status
 
-Code remediation and automated regression verification are complete. The P0 incident is **not operationally closed** because the production Resend credential is invalid and real mailbox receipt has not been demonstrated.
+The code, production provider, subscriber persistence, signed delivery-event
+tracking, and Gmail receiving-server delivery are verified. The P0 is
+**operational but not fully closed** until the operator confirms actual Gmail
+folder placement and the protected Admin page in an authenticated session.
+
+References:
+
+- [Resend webhook verification](https://resend.com/docs/webhooks/verify-webhooks-requests)
+- [Resend webhook delivery guarantees](https://resend.com/docs/webhooks/introduction)
+- [Resend webhook event types](https://resend.com/docs/webhooks/event-types)
+- [Resend domain management](https://resend.com/docs/dashboard/domains/introduction)
+- [Google email sender guidelines](https://support.google.com/mail/answer/81126)
+- [SendGrid domain authentication](https://www.twilio.com/docs/sendgrid/ui/account-and-settings/how-to-set-up-domain-authentication)
