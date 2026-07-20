@@ -4464,6 +4464,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/media-assets/*", serveMediaAsset);
 
   app.get("/api/health", async (_req, res) => {
+    const isProductionRuntime = env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
     const emailDiagnostics = getEmailDeliveryDiagnostics();
     const emailQueueWorker = getEmailQueueWorkerStatus();
     const emailActivation = await getTransactionalEmailActivationReadiness({
@@ -4501,8 +4502,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         blockingReasons: [{ code: "payment_readiness_check_failed", message: getErrorLogMessage(error) }],
       })),
       getAiActivationReadiness({
-        verifyProvider: env.NODE_ENV === "production",
-        cacheTtlMs: env.NODE_ENV === "production" ? 120_000 : 30_000,
+        verifyProvider: isProductionRuntime,
+        cacheTtlMs: isProductionRuntime ? 120_000 : 30_000,
       }).catch((error) => ({
         enabled: env.AI_CHAT_ENABLED !== false,
         ready: false,
