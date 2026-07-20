@@ -70,6 +70,16 @@ type AiCommandCenter = {
     providers: Record<string, number>;
     fallbackConversations: number;
     modelStatus: string;
+    usage?: {
+      periodDays: number;
+      totals?: {
+        requests: number;
+        totalTokens: number;
+        averageLatencyMs: number;
+        estimatedCostUsd: number;
+        costRatesConfigured: boolean;
+      };
+    };
   };
   recentAuditTrail: any[];
 };
@@ -154,6 +164,7 @@ export default function AiChatPage() {
   const commandActions = commandCenter?.actions;
   const commandKnowledge = commandCenter?.knowledge;
   const commandReliability = commandCenter?.reliability;
+  const usageTotals = commandReliability?.usage?.totals;
   const recentAuditTrail = commandCenter?.recentAuditTrail ?? [];
 
   const refreshAll = () => {
@@ -316,6 +327,27 @@ export default function AiChatPage() {
                     <p className="text-xs uppercase tracking-wide text-muted-foreground">Memory enabled</p>
                     <p className="mt-2 text-2xl font-semibold">{commandOverview ? `${commandOverview.memoryEnabledConversations}/${commandOverview.totalConversations || 0}` : "0/0"}</p>
                     <p className="text-xs text-muted-foreground">Stored preference state</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <div className="rounded-lg border border-border/60 p-3">
+                    <p className="text-xs text-muted-foreground">30-day requests</p>
+                    <p className="mt-1 text-lg font-semibold">{usageTotals?.requests ?? 0}</p>
+                  </div>
+                  <div className="rounded-lg border border-border/60 p-3">
+                    <p className="text-xs text-muted-foreground">30-day tokens</p>
+                    <p className="mt-1 text-lg font-semibold">{(usageTotals?.totalTokens ?? 0).toLocaleString()}</p>
+                  </div>
+                  <div className="rounded-lg border border-border/60 p-3">
+                    <p className="text-xs text-muted-foreground">Average latency</p>
+                    <p className="mt-1 text-lg font-semibold">{usageTotals?.averageLatencyMs ?? 0} ms</p>
+                  </div>
+                  <div className="rounded-lg border border-border/60 p-3">
+                    <p className="text-xs text-muted-foreground">Estimated cost</p>
+                    <p className="mt-1 text-lg font-semibold">
+                      {usageTotals?.costRatesConfigured ? `$${(usageTotals.estimatedCostUsd ?? 0).toFixed(4)}` : "Not configured"}
+                    </p>
                   </div>
                 </div>
 

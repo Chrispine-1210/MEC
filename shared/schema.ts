@@ -640,6 +640,9 @@ export const referralRelationships = pgTable("referral_relationships", {
 export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
+  provider: varchar("provider", { length: 30 }).notNull().default("stripe"),
+  paymentMethod: varchar("payment_method", { length: 80 }),
+  checkoutReference: varchar("checkout_reference", { length: 120 }).unique(),
   stripeCustomerId: text("stripe_customer_id"),
   stripeCheckoutSessionId: text("stripe_checkout_session_id").unique(),
   stripePaymentIntentId: text("stripe_payment_intent_id").unique(),
@@ -647,13 +650,25 @@ export const payments = pgTable("payments", {
   stripeSubscriptionId: text("stripe_subscription_id"),
   amountTotal: integer("amount_total").notNull(),
   amountNet: integer("amount_net"),
+  amountRefunded: integer("amount_refunded").notNull().default(0),
   currency: varchar("currency", { length: 3 }).notNull(),
   status: varchar("status", { length: 40 }).notNull(),
+  providerStatus: varchar("provider_status", { length: 60 }),
   productType: varchar("product_type", { length: 60 }).notNull(),
+  productName: text("product_name"),
+  quantity: integer("quantity").notNull().default(1),
   metadata: jsonb("metadata").$type<Record<string, unknown> | null>(),
+  failureCode: varchar("failure_code", { length: 120 }),
+  failureReason: text("failure_reason"),
+  receiptStatus: varchar("receipt_status", { length: 30 }).notNull().default("not_required"),
+  receiptLastAttemptAt: timestamp("receipt_last_attempt_at"),
+  receiptQueuedAt: timestamp("receipt_queued_at"),
+  receiptError: text("receipt_error"),
   paidAt: timestamp("paid_at"),
   refundedAt: timestamp("refunded_at"),
+  disputedAt: timestamp("disputed_at"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const commissionRules = pgTable("commission_rules", {
@@ -681,6 +696,7 @@ export const commissions = pgTable("commissions", {
   level: integer("level").notNull(),
   grossPaymentAmount: integer("gross_payment_amount").notNull(),
   commissionAmount: integer("commission_amount").notNull(),
+  reversedAmount: integer("reversed_amount").notNull().default(0),
   currency: varchar("currency", { length: 3 }).notNull(),
   status: varchar("status", { length: 40 }).notNull().default("pending_release"),
   releaseAt: timestamp("release_at").notNull(),
@@ -723,10 +739,31 @@ export const stripeEvents = pgTable("stripe_events", {
   objectId: text("object_id").notNull(),
   payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
   processingStatus: varchar("processing_status", { length: 30 }).notNull().default("received"),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  processingStartedAt: timestamp("processing_started_at"),
+  lastAttemptAt: timestamp("last_attempt_at"),
   processedAt: timestamp("processed_at"),
   error: text("error"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+export const paymentStatusEvents = pgTable(
+  "payment_status_events",
+  {
+    id: serial("id").primaryKey(),
+    paymentId: integer("payment_id").notNull().references(() => payments.id, { onDelete: "cascade" }),
+    stripeEventId: text("stripe_event_id"),
+    status: varchar("status", { length: 40 }).notNull(),
+    providerStatus: varchar("provider_status", { length: 60 }),
+    details: jsonb("details").$type<Record<string, unknown> | null>(),
+    idempotencyKey: text("idempotency_key").notNull().unique(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    paymentCreatedIdx: index("payment_status_events_payment_created_idx").on(table.paymentId, table.createdAt),
+    stripeEventIdx: index("payment_status_events_stripe_event_idx").on(table.stripeEventId),
+  }),
+);
 
 export const payoutRequests = pgTable("payout_requests", {
   id: serial("id").primaryKey(),
@@ -776,6 +813,75 @@ export const analytics = pgTable("analytics", {
   userAgent: text("user_agent"),
   timestamp: timestamp("timestamp").defaultNow(),
 });
+
+export const aiChatConversations = pgTable(
+  "ai_chat_conversations",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    userEmail: varchar("user_email", { length: 255 }),
+    accessTokenHash: varchar("access_token_hash", { length: 128 }),
+    channel: varchar("channel", { length: 20 }).notNull().default("public"),
+    messages: jsonb("messages").$type<Array<Record<string, unknown>>>().notNull().default([]),
+    summary: text("summary"),
+    isActive: boolean("is_active").notNull().default(true),
+    moderationFlags: jsonb("moderation_flags").$type<string[]>().notNull().default([]),
+    memory: jsonb("memory").$type<Record<string, unknown> | null>(),
+    intelligence: jsonb("intelligence").$type<Record<string, unknown> | null>(),
+    auditTrail: jsonb("audit_trail").$type<Array<Record<string, unknown>>>().notNull().default([]),
+    requestCount: integer("request_count").notNull().default(0),
+    retentionUntil: timestamp("retention_until").notNull(),
+    lastMessageAt: timestamp("last_message_at").notNull().defaultNow(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    userCreatedIdx: index("ai_chat_conversations_user_created_idx").on(table.userId, table.createdAt),
+    statusLastMessageIdx: index("ai_chat_conversations_status_last_message_idx").on(table.isActive, table.lastMessageAt),
+    retentionIdx: index("ai_chat_conversations_retention_idx").on(table.retentionUntil),
+  }),
+);
+
+export const aiChatUsage = pgTable(
+  "ai_chat_usage",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    conversationId: varchar("conversation_id", { length: 36 }).references(() => aiChatConversations.id, { onDelete: "set null" }),
+    userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+    actorHash: varchar("actor_hash", { length: 128 }).notNull(),
+    provider: varchar("provider", { length: 30 }).notNull(),
+    model: varchar("model", { length: 120 }).notNull(),
+    providerRequestId: varchar("provider_request_id", { length: 160 }),
+    requestStatus: varchar("request_status", { length: 30 }).notNull(),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    totalTokens: integer("total_tokens").notNull().default(0),
+    latencyMs: integer("latency_ms").notNull().default(0),
+    errorCode: varchar("error_code", { length: 120 }),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    actorCreatedIdx: index("ai_chat_usage_actor_created_idx").on(table.actorHash, table.createdAt),
+    conversationCreatedIdx: index("ai_chat_usage_conversation_created_idx").on(table.conversationId, table.createdAt),
+    statusCreatedIdx: index("ai_chat_usage_status_created_idx").on(table.requestStatus, table.createdAt),
+  }),
+);
+
+export const aiChatResponseCache = pgTable(
+  "ai_chat_response_cache",
+  {
+    cacheKey: varchar("cache_key", { length: 64 }).primaryKey(),
+    model: varchar("model", { length: 120 }).notNull(),
+    response: jsonb("response").$type<Record<string, unknown>>().notNull(),
+    hitCount: integer("hit_count").notNull().default(0),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    expiryIdx: index("ai_chat_response_cache_expiry_idx").on(table.expiresAt),
+  }),
+);
 
 export const savedItems = pgTable("saved_items", {
   id: serial("id").primaryKey(),
@@ -1569,6 +1675,14 @@ export const paymentsRelations = relations(payments, ({ one, many }) => ({
     references: [users.id],
   }),
   commissions: many(commissions),
+  statusEvents: many(paymentStatusEvents),
+}));
+
+export const paymentStatusEventsRelations = relations(paymentStatusEvents, ({ one }) => ({
+  payment: one(payments, {
+    fields: [paymentStatusEvents.paymentId],
+    references: [payments.id],
+  }),
 }));
 
 export const commissionRulesRelations = relations(commissionRules, ({ one, many }) => ({
@@ -1636,6 +1750,25 @@ export const payoutRequestsRelations = relations(payoutRequests, ({ one }) => ({
 export const analyticsRelations = relations(analytics, ({ one }) => ({
   user: one(users, {
     fields: [analytics.userId],
+    references: [users.id],
+  }),
+}));
+
+export const aiChatConversationsRelations = relations(aiChatConversations, ({ one, many }) => ({
+  user: one(users, {
+    fields: [aiChatConversations.userId],
+    references: [users.id],
+  }),
+  usage: many(aiChatUsage),
+}));
+
+export const aiChatUsageRelations = relations(aiChatUsage, ({ one }) => ({
+  conversation: one(aiChatConversations, {
+    fields: [aiChatUsage.conversationId],
+    references: [aiChatConversations.id],
+  }),
+  user: one(users, {
+    fields: [aiChatUsage.userId],
     references: [users.id],
   }),
 }));
@@ -1938,6 +2071,11 @@ export const insertStripeEventSchema = createInsertSchema(stripeEvents).omit({
   createdAt: true,
 });
 
+export const insertPaymentStatusEventSchema = createInsertSchema(paymentStatusEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertPayoutRequestSchema = createInsertSchema(payoutRequests).omit({
   id: true,
   requestedAt: true,
@@ -1959,6 +2097,15 @@ export const insertReferralDisputeSchema = createInsertSchema(referralDisputes).
 export const insertAnalyticsSchema = createInsertSchema(analytics).omit({
   id: true,
   timestamp: true,
+});
+
+export const insertAiChatConversationSchema = createInsertSchema(aiChatConversations).omit({
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertAiChatUsageSchema = createInsertSchema(aiChatUsage).omit({
+  createdAt: true,
 });
 
 export const insertSavedItemSchema = createInsertSchema(savedItems).omit({
@@ -2156,6 +2303,8 @@ export type LedgerEntry = typeof ledgerEntries.$inferSelect;
 export type InsertLedgerEntry = z.infer<typeof insertLedgerEntrySchema>;
 export type StripeEvent = typeof stripeEvents.$inferSelect;
 export type InsertStripeEvent = z.infer<typeof insertStripeEventSchema>;
+export type PaymentStatusEvent = typeof paymentStatusEvents.$inferSelect;
+export type InsertPaymentStatusEvent = z.infer<typeof insertPaymentStatusEventSchema>;
 export type PayoutRequest = typeof payoutRequests.$inferSelect;
 export type InsertPayoutRequest = z.infer<typeof insertPayoutRequestSchema>;
 export type FraudSignal = typeof fraudSignals.$inferSelect;
@@ -2164,6 +2313,10 @@ export type ReferralDispute = typeof referralDisputes.$inferSelect;
 export type InsertReferralDispute = z.infer<typeof insertReferralDisputeSchema>;
 export type Analytics = typeof analytics.$inferSelect;
 export type InsertAnalytics = z.infer<typeof insertAnalyticsSchema>;
+export type AiChatConversationRecord = typeof aiChatConversations.$inferSelect;
+export type InsertAiChatConversationRecord = z.infer<typeof insertAiChatConversationSchema>;
+export type AiChatUsageRecord = typeof aiChatUsage.$inferSelect;
+export type InsertAiChatUsageRecord = z.infer<typeof insertAiChatUsageSchema>;
 export type SavedItem = typeof savedItems.$inferSelect;
 export type InsertSavedItem = z.infer<typeof insertSavedItemSchema>;
 export type ModuleWorkflow = typeof moduleWorkflows.$inferSelect;

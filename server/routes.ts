@@ -2,7 +2,7 @@ import express, { type CookieOptions, type Express, NextFunction, Request, Respo
 import { createServer, type IncomingMessage, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
-import { getDatabaseDiagnostics } from "./db";
+import { getDatabaseDiagnostics, isDatabaseSchemaMissingError } from "./db";
 import {
   insertUserSchema,
   insertScholarshipSchema,
@@ -31,7 +31,13 @@ import path from "path";
 import QRCode from "qrcode";
 import { z } from "zod";
 import { env } from "./env";
-import { getEnterpriseChatResponse, type EnterpriseChatResponse } from "./ai";
+import {
+  AiServiceError,
+  getAiActivationReadiness,
+  getEnterpriseChatResponse,
+  type EnterpriseChatResponse,
+} from "./ai";
+import { createPublicAiCacheKey, isPublicAiCacheEligible } from "./ai-cache-policy";
 import {
   createEmailPreferenceToken,
   createEmailPreferenceTokenHash,
@@ -63,6 +69,7 @@ import {
 } from "./email";
 import {
   emitCommunicationEvent,
+  createDeterministicCommunicationId,
   createCommunicationCampaign,
   getCommunicationAudit,
   getCommunicationAnalytics,
@@ -102,10 +109,8 @@ import {
   getScholarshipMeta,
   getTeamMeta,
   getUserMeta,
-  getAiChatConversation,
   isCoreAdminRole,
   isNotificationRead,
-  listAiChatConversations,
   markNotificationRead,
   markNotificationsRead,
   setBlogMeta,
@@ -115,16 +120,9 @@ import {
   setScholarshipMeta,
   setTeamMeta,
   setUserMeta,
-  closeAiChatConversation,
-  clearAiChatMemory,
-  upsertAiChatConversation,
-  updateAiChatMemory,
   updateAdminSettings,
   upsertAdminRole,
   deleteAdminRole,
-  type AiChatConversation,
-  type AiChatMemoryState,
-  type AiChatMessage,
   type ApplicationMeta,
   type BlogMeta,
   type JobMeta,
@@ -132,21 +130,57 @@ import {
   type TeamMeta,
 } from "./admin-state";
 import {
+  AiConversationAccessError,
+  authorizeAiConversation,
+  beginAiUsageAttempt,
+  beginAiConversationTurn,
+  cacheAiResponse,
+  clearAiChatMemory,
+  closeAiChatConversation,
+  completeAiConversationTurn,
+  completeAiUsageAttempt,
+  createAiActorHash,
+  deleteAiChatConversation,
+  deleteExpiredAiConversations,
+  failAiConversationTurn,
+  getCachedAiResponse,
+  getAiChatConversation,
+  getAiUsageSummary,
+  listAiChatConversations,
+  updateAiChatMemory,
+  type AiChatConversation,
+  type AiChatMemoryState,
+} from "./ai-chat-storage";
+import {
   approvePayoutRequest,
+  cancelCheckoutSession,
+  claimPaymentReceipt,
   createCommissionRule,
   createReferralCampaign,
   attachReferralToNewUser,
   createCheckoutSession,
   ensureUserGrowthRecords,
+  getAdminPaymentDetail,
+  getAdminPaymentSummary,
+  getPaymentActivationReadiness,
+  getPaymentCatalog,
   getReferralDashboard,
   getUserPayouts,
+  listAdminPayments,
+  listAdminStripeEvents,
   listAdminReferralAnalytics,
   listCommissionRules,
+  listPaymentReceiptCandidates,
   listPayoutRequests,
   listReferralCampaigns,
   logReferralAnalytics,
+  markPaymentReceiptFailed,
+  markPaymentReceiptQueued,
   persistStripeEvent,
   processStripeEvent,
+  reconcileCheckoutSession,
+  reconcileStripeEvents,
+  requestStripeRefund,
   rejectPayoutRequest,
   releaseEligibleCommissions,
   requestPayout,
@@ -225,17 +259,9 @@ const isProtectedAdminRole = (role: string | null | undefined) =>
   Boolean(role && PROTECTED_ADMIN_ROLES.has(role));
 
 const checkoutRequestSchema = z.object({
-  mode: z.enum(["payment", "subscription"]).optional(),
-  priceId: z.string().min(1).optional(),
-  amount: z.coerce.number().int().positive().optional(),
-  currency: z.string().length(3).optional(),
-  productName: z.string().min(1).max(120).optional(),
-  productType: z.string().min(1).max(60).optional(),
-  quantity: z.coerce.number().int().positive().max(99).optional(),
-  successUrl: z.string().url().optional(),
-  cancelUrl: z.string().url().optional(),
-  clientReferenceId: z.string().min(1).max(120).optional(),
-});
+  productCode: z.literal("application_support_deposit"),
+  idempotencyKey: z.string().uuid(),
+}).strict();
 
 const payoutRequestSchema = z.object({
   amount: z.coerce.number().int().positive(),
@@ -465,17 +491,19 @@ const publicApplicationRequestSchema = z.object({
 
 const chatRequestSchema = z.object({
   message: z.string().trim().min(1).max(2000),
-  conversationId: z.string().trim().min(8).max(120).optional(),
+  conversationId: z.string().uuid().optional(),
+  conversationToken: z.string().trim().min(32).max(200).optional(),
   currentPage: z.string().trim().max(500).optional(),
   memoryEnabled: z.boolean().optional(),
   memoryPreferences: z.array(z.string().trim().min(1).max(160)).max(20).optional(),
-});
+}).strict();
 
 const chatMemoryRequestSchema = z.object({
-  conversationId: z.string().trim().min(8).max(120),
+  conversationId: z.string().uuid(),
+  conversationToken: z.string().trim().min(32).max(200).optional(),
   enabled: z.boolean().optional(),
   userPreferences: z.array(z.string().trim().min(1).max(160)).max(20).optional(),
-});
+}).strict();
 
 const eventPayloadSchema = z.object({
   title: z.string().trim().min(3).max(220),
@@ -786,6 +814,68 @@ const getEmailDeliveryState = (result: {
     confirmationPending: acceptedByProvider,
     queued,
     error: result.status === "failed" ? result.error || result.lastError || null : null,
+  };
+};
+
+const dispatchPaymentReceipt = async (paymentId: number) => {
+  const claimed = await claimPaymentReceipt(paymentId);
+  if (!claimed) return { claimed: false, status: "not_pending" as const };
+
+  const { payment, user } = claimed;
+  try {
+    const result = await emitCommunicationEvent({
+      event_type: "payment.received",
+      source: "system",
+      user_id: user.id,
+      priority: "high",
+      payload: {
+        email: user.email,
+        phone: user.phone ?? undefined,
+        recipient_name: `${user.firstName} ${user.lastName}`.trim(),
+        amount: (payment.amountTotal / 100).toFixed(2),
+        currency: payment.currency,
+        payment_status: "confirmed",
+        reference_id: payment.stripePaymentIntentId || payment.stripeCheckoutSessionId || `PAY-${payment.id}`,
+        event_title: "Payment received",
+        message: "Your payment was confirmed by Stripe and recorded by Mtendere.",
+        admin_notification_email: env.ADMIN_NOTIFICATION_EMAIL || env.EMAIL_FROM,
+      },
+    }, {
+      eventId: createDeterministicCommunicationId("payment-receipt", payment.id),
+    });
+    const emailResult = result.results.find((item) => item.channel === "email") as
+      | { delivery?: { status?: string } }
+      | undefined;
+    const deliveryStatus = emailResult?.delivery?.status;
+    if (!deliveryStatus || deliveryStatus === "failed" || result.status !== "processed") {
+      throw new Error(`Payment receipt was not accepted for delivery (${deliveryStatus || result.status}).`);
+    }
+    const receiptStatus = deliveryStatus === "sent" ? "sent" : "queued";
+    await markPaymentReceiptQueued(payment.id, receiptStatus);
+    return { claimed: true, status: receiptStatus, eventId: result.eventId };
+  } catch (error) {
+    await markPaymentReceiptFailed(payment.id, getErrorLogMessage(error));
+    throw error;
+  }
+};
+
+const reconcilePaymentOperations = async (limit = 50) => {
+  const stripe = await reconcileStripeEvents(limit);
+  const candidates = await listPaymentReceiptCandidates(limit);
+  let receiptsProcessed = 0;
+  let receiptsFailed = 0;
+  for (const candidate of candidates) {
+    try {
+      const result = await dispatchPaymentReceipt(candidate.id);
+      if (result.claimed) receiptsProcessed += 1;
+    } catch (error) {
+      receiptsFailed += 1;
+      console.error("Payment receipt reconciliation error:", getErrorLogMessage(error));
+    }
+  }
+  return {
+    stripe,
+    receipts: { selected: candidates.length, processed: receiptsProcessed, failed: receiptsFailed },
   };
 };
 
@@ -3514,11 +3604,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return flags;
   };
 
-  const buildConversationSummary = (messages: AiChatMessage[]) => {
-    const lastUserMessage = [...messages].reverse().find((item) => item.role === "user");
-    return lastUserMessage?.content.slice(0, 180) ?? "AI chat conversation";
-  };
-
   const createEmptyAiMemoryState = (enabled = true): AiChatMemoryState => ({
     enabled,
     userPreferences: [],
@@ -3536,108 +3621,180 @@ export async function registerRoutes(app: Express): Promise<Server> {
     lastUpdatedAt: existing?.memory?.lastUpdatedAt ?? null,
   });
 
-  const appendAiConversationTurn = ({
-    conversationId,
-    userId,
-    userEmail,
+  const executeAiChatTurn = async ({
+    req,
+    payload,
     channel,
-    message,
-    assistant,
+    onDelta,
+    signal,
   }: {
-    conversationId?: string;
-    userId: string | null;
-    userEmail?: string | null;
+    req: Request;
+    payload: z.infer<typeof chatRequestSchema>;
     channel: "public" | "admin";
-    message: string;
-    assistant: EnterpriseChatResponse;
+    onDelta?: (delta: string) => void | Promise<void>;
+    signal?: AbortSignal;
   }) => {
-    const now = new Date().toISOString();
-    const id = conversationId || randomUUID();
-    const existing = getAiChatConversation(id);
-    const messages: AiChatMessage[] = [
-      ...(existing?.messages ?? []),
-      { role: "user", content: message, createdAt: now },
-      {
-        role: "assistant",
-        content: assistant.response,
-        createdAt: new Date().toISOString(),
+    const requester = getOptionalAuthenticatedUser(req);
+    if (channel === "admin" && !requester) {
+      throw new AiConversationAccessError("Authentication required", 401, "authentication_required");
+    }
+
+    let existing: AiChatConversation | undefined;
+    if (payload.conversationId) {
+      const authorized = await authorizeAiConversation({
+        id: payload.conversationId,
+        userId: requester?.id ?? null,
+        conversationToken: payload.conversationToken,
+        channel,
+      });
+      if (!authorized.isActive) {
+        throw new AiConversationAccessError("Conversation is closed", 409, "conversation_closed");
+      }
+      existing = authorized.conversation;
+    }
+
+    const actorHash = createAiActorHash(
+      requester ? `user:${requester.id}` : `guest:${req.ip || "unknown"}:${req.get("user-agent") || "unknown"}`,
+    );
+    const usage = await beginAiUsageAttempt({
+      actorHash,
+      userId: requester?.id ?? null,
+      conversationId: existing?.id ?? null,
+    });
+    let assistant: EnterpriseChatResponse | undefined;
+    let startedTurn: Awaited<ReturnType<typeof beginAiConversationTurn>> | undefined;
+
+    try {
+      const detectedFlags = detectChatFlags(payload.message);
+      const memory = buildAiMemoryState(existing, payload);
+      const platformContext = await buildAiPlatformContext();
+      const cacheEligible = channel === "public"
+        && !requester
+        && !existing
+        && isPublicAiCacheEligible(payload.message, detectedFlags);
+      const cacheKey = cacheEligible
+        ? createPublicAiCacheKey({
+            message: payload.message,
+            platformContext,
+            model: env.OPENAI_MODEL,
+          })
+        : null;
+      startedTurn = await beginAiConversationTurn({
+        conversationId: existing?.id,
+        userId: requester?.id ?? null,
+        userEmail: requester?.email ?? null,
+        channel,
+        message: payload.message,
+        memory,
+        detectedFlags,
+      });
+      const cachedResponse = cacheKey
+        ? await getCachedAiResponse(cacheKey).catch(() => null)
+        : null;
+      if (cachedResponse) {
+        if (signal?.aborted) {
+          throw new AiServiceError("Generation stopped.", 499, "generation_stopped");
+        }
+        assistant = {
+          ...cachedResponse,
+          metadata: {
+            ...cachedResponse.metadata,
+            provider: "cache",
+            usedFallback: false,
+          },
+          audit: {
+            ...cachedResponse.audit,
+            generatedAt: new Date().toISOString(),
+            providerRequestId: null,
+            inputTokens: 0,
+            outputTokens: 0,
+            totalTokens: 0,
+            latencyMs: 0,
+          },
+        };
+        await onDelta?.(assistant.response);
+      } else {
+        assistant = await getEnterpriseChatResponse(payload.message, {
+          channel,
+          platformContext,
+          userContext: {
+            id: requester?.id ?? null,
+            email: requester?.email ?? null,
+            role: requester?.role ?? "guest",
+            currentPage: payload.currentPage ?? req.get("referer") ?? null,
+          },
+          memory,
+          history: existing?.messages
+            .filter((item) => item.metadata?.status !== "failed" && item.metadata?.status !== "pending")
+            .map((item) => ({
+              role: item.role === "system" ? "assistant" : item.role,
+              content: item.content,
+            })),
+          safetyIdentifier: actorHash.slice(0, 64),
+          onDelta,
+          signal,
+        });
+        if (cacheKey && assistant.metadata.provider === "openai") {
+          await cacheAiResponse(cacheKey, assistant).catch(() => undefined);
+        }
+      }
+      const conversation = await completeAiConversationTurn({
+        conversationId: startedTurn.conversation.id,
+        turnId: startedTurn.turnId,
+        assistant,
+        detectedFlags,
+      });
+      await completeAiUsageAttempt({ id: usage.id, conversationId: conversation.id, result: assistant });
+      await logAnalyticsBestEffort({
+        event: channel === "admin" ? "admin_ai_chat_message" : "public_ai_chat_message",
+        userId: requester?.id ?? null,
         metadata: {
+          conversationId: conversation.id,
+          flags: conversation.moderationFlags,
           intent: assistant.metadata.intent,
           confidence: assistant.metadata.confidence,
           riskLevel: assistant.metadata.riskLevel,
-          selectedAgent: assistant.metadata.selectedAgent,
-          actionStatus: assistant.metadata.actionPlan.status,
-          requiredPermission: assistant.metadata.actionPlan.requiredPermission,
-          safetyFlags: assistant.metadata.safetyFlags,
-          retrievalSourceCount: assistant.metadata.retrievalSources.length,
-          suggestedActionCount: assistant.metadata.suggestedActions.length,
+          sourceCount: assistant.metadata.retrievalSources.length,
+          escalationRequired: assistant.metadata.escalationRequired,
           provider: assistant.metadata.provider,
           model: assistant.metadata.model,
+          totalTokens: assistant.audit.totalTokens,
         },
-      },
-    ];
-    const flags = Array.from(
-      new Set([
-        ...(existing?.moderationFlags ?? []),
-        ...detectChatFlags(message),
-        ...assistant.metadata.safetyFlags,
-      ]),
-    );
-    const auditTrail = [
-      ...(existing?.auditTrail ?? []),
-      {
-        id: randomUUID(),
-        event: "ai_assistant_turn",
-        at: now,
-        actorId: userId,
-        channel,
-        intent: assistant.metadata.intent,
-        riskLevel: assistant.metadata.riskLevel,
-        selectedAgent: assistant.metadata.selectedAgent,
-        actionStatus: assistant.metadata.actionPlan.status,
-        requiredPermission: assistant.metadata.actionPlan.requiredPermission,
-        confidence: assistant.metadata.confidence,
-        provider: assistant.metadata.provider,
-        model: assistant.metadata.model,
-        usedFallback: assistant.metadata.usedFallback,
-        inputCharacters: assistant.audit.inputCharacters,
-        historyMessagesUsed: assistant.audit.historyMessagesUsed,
-        contextSourcesUsed: assistant.audit.contextSourcesUsed,
-        safetyFlags: assistant.audit.safetyFlags,
-        auditReference: assistant.metadata.actionPlan.auditReference,
-      },
-    ];
-
-    return upsertAiChatConversation({
-      id,
-      userId,
-      userEmail,
-      channel,
-      messages,
-      summary: buildConversationSummary(messages),
-      isActive: true,
-      moderationFlags: flags,
-      memory: assistant.metadata.memory,
-      intelligence: {
-        intent: assistant.metadata.intent,
-        confidence: assistant.metadata.confidence,
-        riskLevel: assistant.metadata.riskLevel,
-        selectedAgent: assistant.metadata.selectedAgent,
-        agentTrace: assistant.metadata.agentTrace,
-        safetyFlags: assistant.metadata.safetyFlags,
-        retrievalSources: assistant.metadata.retrievalSources,
-        suggestedActions: assistant.metadata.suggestedActions,
-        actionPlan: assistant.metadata.actionPlan,
-        responseQuality: assistant.metadata.responseQuality,
-        escalationRequired: assistant.metadata.escalationRequired,
-        provider: assistant.metadata.provider,
-        model: assistant.metadata.model,
-        usedFallback: assistant.metadata.usedFallback,
-      },
-      auditTrail,
-      createdAt: existing?.createdAt ?? now,
-      lastMessageAt: now,
-    });
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+      broadcast("ai-chat", {
+        type: "ai_chat_updated",
+        conversationId: conversation.id,
+        isActive: conversation.isActive,
+        updatedAt: conversation.updatedAt,
+      });
+      return { assistant, conversation, conversationToken: startedTurn.conversationToken };
+    } catch (error) {
+      const errorCode = typeof error === "object" && error !== null && "code" in error
+        ? String((error as { code?: unknown }).code || "ai_request_failed")
+        : "ai_request_failed";
+      if (startedTurn) {
+        await failAiConversationTurn({
+          conversationId: startedTurn.conversation.id,
+          turnId: startedTurn.turnId,
+          errorCode,
+        }).catch(() => undefined);
+      }
+      await completeAiUsageAttempt({
+        id: usage.id,
+        conversationId: startedTurn?.conversation.id ?? existing?.id ?? null,
+        result: assistant,
+        errorCode,
+      }).catch(() => undefined);
+      if (startedTurn && error && typeof error === "object") {
+        Object.assign(error, {
+          conversationId: startedTurn.conversation.id,
+          conversationToken: startedTurn.conversationToken,
+        });
+      }
+      throw error;
+    }
   };
 
   const incrementCount = (record: Record<string, number>, key: unknown) => {
@@ -3653,8 +3810,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const percentage = (value: number, total: number) =>
     total > 0 ? Number(((value / total) * 100).toFixed(1)) : 0;
 
+  const listAiChatConversationsForCompositeView = async () => {
+    try {
+      return await listAiChatConversations();
+    } catch (error) {
+      if (!isDatabaseSchemaMissingError(error)) throw error;
+      console.warn("AI conversation schema is not available for this request.");
+      return [];
+    }
+  };
+
   const buildAiCommandCenter = async () => {
-    const conversations = listAiChatConversations();
+    const [conversations, usage, readiness] = await Promise.all([
+      listAiChatConversations(),
+      getAiUsageSummary(30),
+      getAiActivationReadiness({ verifyProvider: true, cacheTtlMs: 60_000 }),
+    ]);
     const totalConversations = conversations.length;
     const totalMessages = conversations.reduce((sum, conversation) => sum + conversation.messages.length, 0);
     const activeConversations = conversations.filter((conversation) => conversation.isActive).length;
@@ -3763,7 +3934,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       reliability: {
         providers,
         fallbackConversations,
-        modelStatus: process.env.OPENAI_API_KEY ? "primary_configured" : "local_safe_mode",
+        modelStatus: readiness.ready ? "ready" : "unavailable",
+        readiness,
+        usage,
       },
       recentAuditTrail,
     };
@@ -4309,7 +4482,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       ],
     }));
-    const databaseDiagnostics = await getDatabaseDiagnostics();
+    const [databaseDiagnostics, paymentReadiness, aiReadiness] = await Promise.all([
+      getDatabaseDiagnostics(),
+      getPaymentActivationReadiness({ cacheTtlMs: env.NODE_ENV === "production" ? 120_000 : 30_000 }).catch((error) => ({
+        ready: false,
+        enabled: env.PAYMENTS_ENABLED !== false,
+        provider: "stripe" as const,
+        mode: "unknown" as const,
+        secretConfigured: Boolean(env.STRIPE_SECRET_KEY),
+        webhookSecretConfigured: Boolean(env.STRIPE_WEBHOOK_SECRET),
+        webhookUrlConfigured: Boolean(env.STRIPE_WEBHOOK_URL),
+        appUrlConfigured: Boolean(env.PUBLIC_APP_URL),
+        providerReachable: false,
+        chargesEnabled: false,
+        webhookEndpointVerified: false,
+        requiredEventsConfigured: false,
+        checkedAt: new Date().toISOString(),
+        blockingReasons: [{ code: "payment_readiness_check_failed", message: getErrorLogMessage(error) }],
+      })),
+      getAiActivationReadiness().catch((error) => ({
+        enabled: env.AI_CHAT_ENABLED !== false,
+        ready: false,
+        provider: "openai" as const,
+        keyConfigured: Boolean(env.OPENAI_API_KEY),
+        model: env.OPENAI_MODEL,
+        fallbackModelConfigured: Boolean(env.OPENAI_FALLBACK_MODEL),
+        providerReachable: false,
+        checkedAt: new Date().toISOString(),
+        blockingReasons: [{ code: "ai_readiness_check_failed", message: getErrorLogMessage(error) }],
+      })),
+    ]);
     res.json({
       status: "ok",
       deployment: {
@@ -4318,6 +4520,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         vercel: process.env.VERCEL === "1" || process.env.VERCEL === "true",
       },
       database: databaseDiagnostics,
+      payments: paymentReadiness,
+      ai: aiReadiness,
       email: {
         ready: emailActivation.ready,
         activeProviders: emailDiagnostics.activeProviders,
@@ -5242,10 +5446,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
+    const paymentReconciliation = await reconcilePaymentOperations(50).catch((error) => ({
+      error: getErrorLogMessage(error),
+      stripe: null,
+      receipts: null,
+    }));
     const result = await processEmailQueue();
     res.json({
       message: result.skipped ? "Email queue drain skipped because another run is active" : "Email queue drain completed",
       result,
+      paymentReconciliation,
       worker: getEmailQueueWorkerStatus(),
     });
   };
@@ -7464,18 +7674,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Payments, Stripe webhooks, commissions, and payouts
+  // Payments, Stripe webhooks, reconciliation, commissions, and payouts
+  app.get('/api/payments/config', async (_req, res) => {
+    try {
+      const readiness = await getPaymentActivationReadiness();
+      res.setHeader("Cache-Control", "private, max-age=30");
+      res.json({
+        enabled: readiness.enabled,
+        ready: readiness.ready,
+        provider: readiness.provider,
+        products: readiness.ready ? getPaymentCatalog() : [],
+        message: readiness.ready ? null : "Secure checkout is temporarily unavailable.",
+      });
+    } catch (error) {
+      console.error('Payment configuration error:', getErrorLogMessage(error));
+      res.status(503).json({
+        enabled: false,
+        ready: false,
+        provider: "stripe",
+        products: [],
+        message: "Secure checkout is temporarily unavailable.",
+      });
+    }
+  });
+
   app.post('/api/payments/checkout', authenticateToken, async (req, res) => {
     try {
       const payload = checkoutRequestSchema.parse(req.body);
+      console.info("Payment checkout requested", {
+        userId: getAuthenticatedUser(req).id,
+        productCode: payload.productCode,
+        idempotencyKey: payload.idempotencyKey,
+      });
       const session = await createCheckoutSession(getAuthenticatedUser(req).id, payload, req);
+      console.info("Payment checkout created", {
+        userId: getAuthenticatedUser(req).id,
+        checkoutSessionId: session.id,
+        status: session.status,
+      });
       res.status(201).json(session);
     } catch (error) {
-      console.error('Checkout session error:', error);
+      console.error('Checkout session error:', getErrorLogMessage(error));
       const status = typeof error === "object" && error !== null && "status" in error
         ? Number((error as { status?: number }).status) || 500
         : 500;
-      res.status(status).json({ message: 'Failed to create checkout session', error: getErrorMessage(error) });
+      res.status(status).json({
+        message: status >= 500
+          ? "Secure checkout is temporarily unavailable. No payment was taken."
+          : getPublicErrorMessage(error, "Failed to create checkout session"),
+      });
+    }
+  });
+
+  app.get('/api/payments/checkout/:sessionId', authenticateToken, async (req, res) => {
+    try {
+      const sessionId = z.string().min(8).max(255).parse(req.params.sessionId);
+      const result = await reconcileCheckoutSession(getAuthenticatedUser(req).id, sessionId);
+      res.setHeader("Cache-Control", "no-store");
+      res.json(result);
+    } catch (error) {
+      console.error('Checkout status error:', getErrorLogMessage(error));
+      const status = typeof error === "object" && error !== null && "status" in error
+        ? Number((error as { status?: number }).status) || 500
+        : 500;
+      res.status(status).json({
+        message: status >= 500 ? "Payment status is temporarily unavailable." : getPublicErrorMessage(error),
+      });
+    }
+  });
+
+  app.post('/api/payments/checkout/:sessionId/cancel', authenticateToken, async (req, res) => {
+    try {
+      const sessionId = z.string().min(8).max(255).parse(req.params.sessionId);
+      const result = await cancelCheckoutSession(getAuthenticatedUser(req).id, sessionId);
+      res.json(result);
+    } catch (error) {
+      console.error("Checkout cancellation error:", getErrorLogMessage(error));
+      const status = error && typeof error === "object" && "status" in error
+        ? Number((error as { status?: unknown }).status) || 500
+        : error instanceof z.ZodError ? 400 : 500;
+      res.status(status).json({
+        message: status >= 500 ? "Checkout cancellation could not be confirmed." : getPublicErrorMessage(error),
+      });
     }
   });
 
@@ -7483,107 +7763,234 @@ export async function registerRoutes(app: Express): Promise<Server> {
     let event;
     try {
       event = verifyStripeWebhookEvent(req);
+      console.info("Stripe webhook verified", { eventId: event.id, eventType: event.type });
     } catch (error) {
-      console.error('Stripe webhook verification error:', error);
+      console.error('Stripe webhook verification error:', getErrorLogMessage(error));
       return res.status(400).json({ message: 'Invalid Stripe webhook signature' });
     }
 
     try {
-      const saved = await persistStripeEvent(event);
-      res.json({ received: true, duplicate: !saved });
+      const persisted = await persistStripeEvent(event);
+      console.info("Stripe webhook persisted", {
+        eventId: event.id,
+        eventType: event.type,
+        created: persisted.created,
+      });
+      const processing = await processStripeEvent(event);
+      console.info("Stripe webhook processed", {
+        eventId: event.id,
+        eventType: event.type,
+        processingStatus: processing.processingStatus,
+        paymentId: processing.payment?.id ?? null,
+        paymentStatus: processing.payment?.status ?? null,
+        statusChanged: processing.statusChanged,
+      });
 
-      if (saved) {
-        const stripeEvent = event as unknown as { type?: string; data?: { object?: Record<string, unknown> } };
-        const stripeObject = stripeEvent.data?.object ?? {};
-        const stripeBillingDetails =
-          stripeObject.billing_details && typeof stripeObject.billing_details === "object"
-            ? stripeObject.billing_details as Record<string, unknown>
-            : {};
-        const stripeCustomerDetails =
-          stripeObject.customer_details && typeof stripeObject.customer_details === "object"
-            ? stripeObject.customer_details as Record<string, unknown>
-            : {};
-        const amountRaw =
-          typeof stripeObject.amount_total === "number"
-            ? stripeObject.amount_total
-            : typeof stripeObject.amount_received === "number"
-              ? stripeObject.amount_received
-              : typeof stripeObject.amount === "number"
-                ? stripeObject.amount
-                : null;
-        const currency = typeof stripeObject.currency === "string" ? stripeObject.currency.toUpperCase() : env.STRIPE_DEFAULT_CURRENCY;
-        const email =
-          typeof stripeObject.customer_email === "string"
-            ? stripeObject.customer_email
-            : typeof stripeObject.receipt_email === "string"
-              ? stripeObject.receipt_email
-              : typeof stripeCustomerDetails.email === "string"
-                ? stripeCustomerDetails.email
-                : typeof stripeBillingDetails.email === "string"
-                  ? stripeBillingDetails.email
-                  : undefined;
-        const phone =
-          typeof stripeCustomerDetails.phone === "string"
-            ? stripeCustomerDetails.phone
-            : typeof stripeBillingDetails.phone === "string"
-              ? stripeBillingDetails.phone
-              : undefined;
-        const recipientName =
-          typeof stripeObject.customer_name === "string"
-            ? stripeObject.customer_name
-            : typeof stripeCustomerDetails.name === "string"
-              ? stripeCustomerDetails.name
-              : typeof stripeBillingDetails.name === "string"
-                ? stripeBillingDetails.name
-                : "Mtendere client";
-        const referenceId = String(stripeObject.id || stripeEvent.type || `PAY-${Date.now()}`);
-        if (stripeEvent.type === "checkout.session.completed" || stripeEvent.type === "payment_intent.succeeded") {
-          void emitCommunicationEvent({
-            event_type: "payment.received",
-            source: "system",
-            priority: "high",
-            payload: {
-              email,
-              phone,
-              recipient_name: recipientName,
-              amount: amountRaw === null ? "Not provided" : (amountRaw / 100).toFixed(2),
-              currency,
-              payment_status: "confirmed",
-              reference_id: referenceId,
-              event_title: "Payment received",
-              message: "A payment was confirmed by Stripe.",
-              admin_notification_email: env.ADMIN_NOTIFICATION_EMAIL || env.EMAIL_FROM,
-            },
-          });
-        } else if (stripeEvent.type === "payment_intent.payment_failed" || stripeEvent.type === "checkout.session.async_payment_failed") {
-          void emitCommunicationEvent({
+      if (processing.payment?.status === "paid") {
+        await dispatchPaymentReceipt(processing.payment.id).catch((error) => {
+          console.error("Payment receipt dispatch error:", getErrorLogMessage(error));
+        });
+      } else if (processing.payment && processing.statusChanged && ["failed", "expired"].includes(processing.payment.status)) {
+        const user = await storage.getUser(processing.payment.userId);
+        if (user) {
+          await emitCommunicationEvent({
             event_type: "payment.failed",
             source: "system",
+            user_id: user.id,
             priority: "high",
             payload: {
-              email,
-              phone,
-              recipient_name: recipientName,
-              amount: amountRaw === null ? "Not provided" : (amountRaw / 100).toFixed(2),
-              currency,
-              payment_status: "failed",
-              reference_id: referenceId,
-              event_title: "Payment failed",
-              message: "Stripe reported that a payment attempt could not be completed.",
+              email: user.email,
+              phone: user.phone ?? undefined,
+              recipient_name: `${user.firstName} ${user.lastName}`.trim(),
+              amount: (processing.payment.amountTotal / 100).toFixed(2),
+              currency: processing.payment.currency,
+              payment_status: processing.payment.status,
+              reference_id: processing.payment.stripePaymentIntentId || processing.payment.stripeCheckoutSessionId || `PAY-${processing.payment.id}`,
+              event_title: "Payment needs attention",
+              message: processing.payment.failureReason || "Stripe could not complete this payment.",
               admin_notification_email: env.ADMIN_NOTIFICATION_EMAIL || env.EMAIL_FROM,
               admin_phone: env.ADMIN_NOTIFICATION_PHONE,
             },
+          }).catch((error) => {
+            console.error("Payment failure notification error:", getErrorLogMessage(error));
           });
         }
-        setImmediate(() => {
-          processStripeEvent(event).catch((error) => {
-            console.error('Stripe event processing error:', error);
-          });
-        });
       }
+
+      return res.json({
+        received: true,
+        duplicate: !persisted.created,
+        processingStatus: processing.processingStatus,
+      });
     } catch (error) {
-      console.error('Stripe webhook persistence error:', error);
-      res.status(500).json({ message: 'Failed to persist Stripe event' });
+      console.error('Stripe webhook processing error:', getErrorLogMessage(error));
+      return res.status(500).json({ message: 'Stripe event processing failed' });
+    }
+  });
+
+  const paymentReconciliationHandler = async (req: Request, res: Response) => {
+    if (!env.CRON_SECRET && !isVercelCronRequest(req)) {
+      return res.status(503).json({ message: "Payment reconciliation is not configured." });
+    }
+    const authorizedByVercelCron = isVercelCronRequest(req);
+    const authorizedBySecret = isBearerSecretMatch(req.get("authorization"), env.CRON_SECRET);
+    if (!authorizedByVercelCron && !authorizedBySecret) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    try {
+      return res.json(await reconcilePaymentOperations(50));
+    } catch (error) {
+      console.error("Payment reconciliation error:", getErrorLogMessage(error));
+      return res.status(500).json({ message: "Payment reconciliation failed" });
+    }
+  };
+
+  app.get('/api/payments/reconcile', paymentReconciliationHandler);
+  app.post('/api/payments/reconcile', paymentReconciliationHandler);
+
+  app.get('/api/admin/payments/summary', authenticateToken, requireAnyPermission("manage_payments"), async (_req, res) => {
+    try {
+      res.json(await getAdminPaymentSummary());
+    } catch (error) {
+      console.error("Admin payment summary error:", getErrorLogMessage(error));
+      res.status(500).json({ message: "Failed to fetch payment summary" });
+    }
+  });
+
+  app.get('/api/admin/payments/diagnostics', authenticateToken, requireAnyPermission("manage_payments"), async (_req, res) => {
+    try {
+      res.json(await getPaymentActivationReadiness({ cacheTtlMs: 30_000 }));
+    } catch (error) {
+      console.error("Admin payment diagnostics error:", getErrorLogMessage(error));
+      res.status(500).json({ message: "Failed to fetch payment diagnostics" });
+    }
+  });
+
+  app.get('/api/admin/payments', authenticateToken, requireAnyPermission("manage_payments"), async (req, res) => {
+    try {
+      const query = z.object({
+        status: z.string().trim().min(1).max(40).optional(),
+        provider: z.string().trim().min(1).max(30).optional(),
+        paymentMethod: z.string().trim().min(1).max(80).optional(),
+        from: z.coerce.date().optional(),
+        to: z.coerce.date().optional(),
+        search: z.string().trim().max(160).optional(),
+        limit: z.coerce.number().int().min(1).max(200).optional(),
+        offset: z.coerce.number().int().min(0).optional(),
+      }).parse(req.query);
+      res.json(await listAdminPayments(query));
+    } catch (error) {
+      console.error("Admin payment list error:", getErrorLogMessage(error));
+      res.status(error instanceof z.ZodError ? 400 : 500).json({ message: "Failed to fetch payments" });
+    }
+  });
+
+  app.get('/api/admin/payments/export.csv', authenticateToken, requireAnyPermission("manage_payments"), async (req, res) => {
+    try {
+      const query = z.object({
+        status: z.string().trim().min(1).max(40).optional(),
+        provider: z.string().trim().min(1).max(30).optional(),
+        paymentMethod: z.string().trim().min(1).max(80).optional(),
+        from: z.coerce.date().optional(),
+        to: z.coerce.date().optional(),
+        search: z.string().trim().max(160).optional(),
+      }).parse(req.query);
+      const result = await listAdminPayments({ ...query, limit: 5_000, offset: 0 });
+      const rows = [
+        ["Internal ID", "Created", "Customer", "Provider", "Method", "Amount", "Refunded", "Currency", "Status", "Provider status", "Checkout reference", "Payment intent", "Receipt status"],
+        ...result.rows.map(({ payment, userEmail }) => [
+          payment.id,
+          payment.createdAt?.toISOString() ?? "",
+          userEmail ?? "",
+          payment.provider,
+          payment.paymentMethod ?? "",
+          payment.amountTotal,
+          payment.amountRefunded,
+          payment.currency,
+          payment.status,
+          payment.providerStatus ?? "",
+          payment.checkoutReference ?? "",
+          payment.stripePaymentIntentId ?? "",
+          payment.receiptStatus,
+        ]),
+      ];
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="mec-payments-${new Date().toISOString().slice(0, 10)}.csv"`);
+      res.setHeader("X-Total-Count", String(result.total));
+      if (result.total > result.rows.length) res.setHeader("X-Export-Truncated", "true");
+      res.send(rows.map((row) => row.map(escapeCsvValue).join(",")).join("\n"));
+    } catch (error) {
+      console.error("Admin payment export error:", getErrorLogMessage(error));
+      res.status(error instanceof z.ZodError ? 400 : 500).json({ message: "Payment export failed" });
+    }
+  });
+
+  app.get('/api/admin/payments/webhook-events', authenticateToken, requireAnyPermission("manage_payments", "manage_webhooks"), async (req, res) => {
+    try {
+      const query = z.object({
+        status: z.string().trim().min(1).max(30).optional(),
+        eventType: z.string().trim().min(1).max(120).optional(),
+        limit: z.coerce.number().int().min(1).max(500).optional(),
+        offset: z.coerce.number().int().min(0).optional(),
+      }).parse(req.query);
+      res.json(await listAdminStripeEvents(query));
+    } catch (error) {
+      console.error("Admin Stripe event list error:", getErrorLogMessage(error));
+      res.status(error instanceof z.ZodError ? 400 : 500).json({ message: "Failed to fetch Stripe events" });
+    }
+  });
+
+  app.get('/api/admin/payments/:id', authenticateToken, requireAnyPermission("manage_payments"), async (req, res) => {
+    try {
+      const paymentId = z.coerce.number().int().positive().parse(req.params.id);
+      const detail = await getAdminPaymentDetail(paymentId);
+      if (!detail) return res.status(404).json({ message: "Payment not found" });
+      return res.json(detail);
+    } catch (error) {
+      console.error("Admin payment detail error:", getErrorLogMessage(error));
+      return res.status(error instanceof z.ZodError ? 400 : 500).json({ message: "Failed to fetch payment" });
+    }
+  });
+
+  app.post('/api/admin/payments/:id/refunds', authenticateToken, requireAnyPermission("manage_payments"), async (req, res) => {
+    try {
+      const paymentId = z.coerce.number().int().positive().parse(req.params.id);
+      const payload = z.object({
+        amount: z.number().int().positive().optional(),
+        reason: z.string().trim().min(5).max(500),
+        idempotencyKey: z.string().uuid(),
+      }).strict().parse(req.body);
+      const user = getAuthenticatedUser(req);
+      const refund = await requestStripeRefund({ paymentId, requestedBy: user.id, ...payload });
+      await storage.logAnalytics({
+        event: "admin_payment_refund_requested",
+        userId: user.id,
+        metadata: refund,
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+      broadcast("payments", { type: "payment_refund_requested", paymentId, status: refund.status });
+      res.status(202).json(refund);
+    } catch (error) {
+      console.error("Admin payment refund error:", getErrorLogMessage(error));
+      const status = error instanceof z.ZodError
+        ? 400
+        : error && typeof error === "object" && "status" in error
+          ? Number((error as { status?: unknown }).status) || 500
+          : 502;
+      res.status(status).json({
+        message: status >= 500 ? "Stripe could not accept this refund request." : getPublicErrorMessage(error),
+      });
+    }
+  });
+
+  app.post('/api/admin/payments/reconcile', authenticateToken, requireAnyPermission("manage_payments"), async (req, res) => {
+    try {
+      const limit = z.coerce.number().int().min(1).max(100).default(50).parse(req.body?.limit);
+      res.json(await reconcilePaymentOperations(limit));
+    } catch (error) {
+      console.error("Admin payment reconciliation error:", getErrorLogMessage(error));
+      res.status(error instanceof z.ZodError ? 400 : 500).json({ message: "Payment reconciliation failed" });
     }
   });
 
@@ -7800,6 +8207,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         users,
         applications,
         messages,
+        aiConversations,
       ] = await Promise.all([
         storage.getAllScholarships(),
         storage.getAllJobs(),
@@ -7810,6 +8218,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         canSearchSensitive ? storage.getAllUsers() : Promise.resolve([]),
         canSearchSensitive ? storage.getAllApplications() : Promise.resolve([]),
         canSearchSensitive ? storage.getAllMessages() : Promise.resolve([]),
+        canSearchSensitive ? listAiChatConversationsForCompositeView() : Promise.resolve([]),
       ]);
       const usersById = new Map(users.map((user) => [user.id, user]));
 
@@ -7972,7 +8381,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           category: "Message",
           status: item.isRead ? "read" : "unread",
         })),
-        ...searchAndRank(listAiChatConversations(), query, (item) => [
+        ...searchAndRank(aiConversations, query, (item) => [
           item.id,
           item.userEmail,
           item.channel,
@@ -8020,6 +8429,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         activeScholarships,
         activeJobs,
         subscribers,
+        aiConversations,
       ] = await Promise.all([
         storage.getAllUsers(),
         storage.getAllScholarships(),
@@ -8033,6 +8443,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getActiveScholarships(),
         storage.getActiveJobs(),
         storage.getAllSubscribers(),
+        listAiChatConversationsForCompositeView(),
       ]);
 
       const pendingApplications = applications.filter((app) => app.status === "pending").length;
@@ -8071,7 +8482,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ["checked_in", "checked_out", "attended"].includes(registration.attendanceStatus),
         ).length,
         totalApplications: applications.length,
-        totalActiveChats: listAiChatConversations().filter((conversation) => conversation.isActive).length,
+        totalActiveChats: aiConversations.filter((conversation) => conversation.isActive).length,
         activeScholarships: activeScholarships.length,
         activeJobs: activeJobs.length,
         totalSubscribers: subscribers.length,
@@ -10847,50 +11258,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/ai-chat/conversations', authenticateToken, requireAdmin, (req, res) => {
-    const { page, limit, offset } = parsePagination(req.query.page, req.query.limit, 100);
-    const search = normalizeSearchQuery(req.query.search);
-    const channel = normalizeSearchQuery(req.query.channel);
-    const flag = normalizeSearchQuery(req.query.flag);
-    const status = normalizeSearchQuery(req.query.status);
+  app.get('/api/admin/ai-chat/conversations', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { page, limit, offset } = parsePagination(req.query.page, req.query.limit, 100);
+      const search = normalizeSearchQuery(req.query.search);
+      const channel = normalizeSearchQuery(req.query.channel);
+      const flag = normalizeSearchQuery(req.query.flag);
+      const status = normalizeSearchQuery(req.query.status);
+      const conversations = await listAiChatConversations();
+      const filtered = searchAndRank(conversations, search, (conversation) => [
+        conversation.id,
+        conversation.userId,
+        conversation.userEmail,
+        conversation.channel,
+        conversation.summary,
+        conversation.moderationFlags,
+        conversation.messages.map((item) => item.content),
+      ]).filter((conversation) => {
+        const matchesChannel = !channel || conversation.channel === channel;
+        const matchesFlag =
+          !flag ||
+          ((flag === "any" || flag === "flagged") && conversation.moderationFlags.length > 0) ||
+          conversation.moderationFlags.includes(flag);
+        const matchesStatus =
+          !status ||
+          (status === "active" && conversation.isActive) ||
+          (status === "closed" && !conversation.isActive);
+        return matchesChannel && matchesFlag && matchesStatus;
+      });
 
-    const filtered = searchAndRank(listAiChatConversations(), search, (conversation) => [
-      conversation.id,
-      conversation.userId,
-      conversation.userEmail,
-      conversation.channel,
-      conversation.summary,
-      conversation.moderationFlags,
-      conversation.messages.map((item) => item.content),
-    ]).filter((conversation) => {
-      const matchesChannel = !channel || conversation.channel === channel;
-      const matchesFlag =
-        !flag ||
-        ((flag === "any" || flag === "flagged") && conversation.moderationFlags.length > 0) ||
-        conversation.moderationFlags.includes(flag);
-      const matchesStatus =
-        !status ||
-        (status === "active" && conversation.isActive) ||
-        (status === "closed" && !conversation.isActive);
-      return matchesChannel && matchesFlag && matchesStatus;
-    });
-
-    res.json({
-      conversations: filtered.slice(offset, offset + limit),
-      total: filtered.length,
-      page,
-      limit,
-    });
+      res.json({
+        conversations: filtered.slice(offset, offset + limit),
+        total: filtered.length,
+        page,
+        limit,
+      });
+    } catch (error) {
+      console.error("AI conversation list error:", getErrorLogMessage(error));
+      if (isDatabaseSchemaMissingError(error)) {
+        return res.json({
+          conversations: [],
+          total: 0,
+          page: 1,
+          limit: 100,
+          degraded: true,
+          unavailableReason: "ai_schema_pending",
+        });
+      }
+      res.status(500).json({ message: "Failed to load AI conversations" });
+    }
   });
 
-  app.get('/api/admin/ai-chat/conversations/:id', authenticateToken, requireAdmin, (req, res) => {
-    const conversation = getAiChatConversation(req.params.id);
+  app.get('/api/admin/ai-chat/conversations/:id', authenticateToken, requireAdmin, async (req, res) => {
+    const conversation = await getAiChatConversation(req.params.id);
     if (!conversation) return res.status(404).json({ message: "Conversation not found" });
     res.json(conversation);
   });
 
   app.put('/api/admin/ai-chat/conversations/:id/close', authenticateToken, requireAdmin, async (req, res) => {
-    const conversation = closeAiChatConversation(req.params.id);
+    const conversation = await closeAiChatConversation(req.params.id);
     if (!conversation) return res.status(404).json({ message: "Conversation not found" });
 
     await storage.logAnalytics({
@@ -10901,7 +11327,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       userAgent: req.get("user-agent"),
     });
 
-    broadcast("ai-chat", { type: "ai_chat_updated", conversation });
+    broadcast("ai-chat", {
+      type: "ai_chat_updated",
+      conversationId: conversation.id,
+      isActive: conversation.isActive,
+      updatedAt: conversation.updatedAt,
+    });
     res.json(conversation);
   });
 
@@ -10912,59 +11343,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/admin/ai/chat', authenticateToken, requireAdmin, async (req, res) => {
     try {
       const payload = chatRequestSchema.parse(req.body);
-      const user = getAuthenticatedUser(req);
-      const existing = payload.conversationId ? getAiChatConversation(payload.conversationId) : undefined;
-      const assistant = await getEnterpriseChatResponse(payload.message, {
-        channel: "admin",
-        platformContext: await buildAiPlatformContext(),
-        userContext: {
-          id: user.id,
-          email: user.email,
-          role: user.role,
-          currentPage: payload.currentPage ?? "/admin/ai-chat",
-        },
-        memory: buildAiMemoryState(existing, payload),
-        history: existing?.messages.map((item) => ({
-          role: item.role === "system" ? "assistant" : item.role,
-          content: item.content,
-        })),
-      });
-      const conversation = appendAiConversationTurn({
-        conversationId: payload.conversationId,
-        userId: String(user.id),
-        userEmail: user.email,
-        channel: "admin",
-        message: payload.message,
-        assistant,
-      });
-
-      await storage.logAnalytics({
-        event: "admin_ai_chat_message",
-        userId: user.id,
-        metadata: {
-          conversationId: conversation.id,
-          flags: conversation.moderationFlags,
-          intent: assistant.metadata.intent,
-          confidence: assistant.metadata.confidence,
-          riskLevel: assistant.metadata.riskLevel,
-          sourceCount: assistant.metadata.retrievalSources.length,
-          escalationRequired: assistant.metadata.escalationRequired,
-        },
-        ipAddress: req.ip,
-        userAgent: req.get("user-agent"),
-      });
-
-      broadcast("ai-chat", { type: "ai_chat_updated", conversation });
+      const result = await executeAiChatTurn({ req, payload, channel: "admin" });
       res.json({
-        response: assistant.response,
-        conversationId: conversation.id,
-        conversation,
-        metadata: assistant.metadata,
-        audit: assistant.audit,
+        response: result.assistant.response,
+        conversationId: result.conversation.id,
+        conversation: result.conversation,
+        metadata: result.assistant.metadata,
+        audit: result.assistant.audit,
       });
     } catch (error) {
-      console.error("Admin AI chat error:", error);
-      res.status(400).json({ message: "Failed to get chat response", error: getErrorMessage(error) });
+      console.error("Admin AI chat error:", getErrorLogMessage(error));
+      const status = error instanceof AiServiceError || error instanceof AiConversationAccessError ? error.status : 500;
+      res.status(status).json({
+        message: status >= 500 ? "AI chat is temporarily unavailable." : getPublicErrorMessage(error),
+        code: error instanceof AiServiceError || error instanceof AiConversationAccessError ? error.code : "ai_request_failed",
+      });
+    }
+  });
+
+  app.get('/api/admin/ai-chat/diagnostics', authenticateToken, requireAdmin, async (_req, res) => {
+    try {
+      const [readiness, usage] = await Promise.all([
+        getAiActivationReadiness({ verifyProvider: true, cacheTtlMs: 60_000 }),
+        getAiUsageSummary(30),
+      ]);
+      res.json({ readiness, usage });
+    } catch (error) {
+      console.error("AI diagnostics error:", getErrorLogMessage(error));
+      res.status(500).json({ message: "Failed to load AI diagnostics" });
+    }
+  });
+
+  app.post('/api/admin/ai-chat/retention/cleanup', authenticateToken, requireAdmin, async (_req, res) => {
+    try {
+      res.json({ deleted: await deleteExpiredAiConversations() });
+    } catch (error) {
+      console.error("AI retention cleanup error:", getErrorLogMessage(error));
+      res.status(500).json({ message: "AI retention cleanup failed" });
     }
   });
 
@@ -12691,11 +13106,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/chat/memory', (req, res) => {
+  app.get('/api/chat/conversations/:id', async (req, res) => {
     try {
-      const payload = chatMemoryRequestSchema.pick({ conversationId: true }).parse(req.query);
-      const conversation = getAiChatConversation(payload.conversationId);
+      const id = z.string().uuid().parse(req.params.id);
+      const requester = getOptionalAuthenticatedUser(req);
+      const { conversation } = await authorizeAiConversation({
+        id,
+        userId: requester?.id ?? null,
+        conversationToken: req.get("x-ai-conversation-token") ?? undefined,
+        channel: "public",
+      });
+      res.setHeader("Cache-Control", "private, no-store");
+      res.json({
+        id: conversation.id,
+        title: conversation.summary,
+        messages: conversation.messages,
+        memory: conversation.memory ?? createEmptyAiMemoryState(),
+        isActive: conversation.isActive,
+        updatedAt: conversation.updatedAt,
+      });
+    } catch (error) {
+      const status = error instanceof AiConversationAccessError ? error.status : error instanceof z.ZodError ? 400 : 500;
+      res.status(status).json({
+        message: status >= 500 ? "Failed to load AI conversation" : getPublicErrorMessage(error),
+        code: error instanceof AiConversationAccessError ? error.code : "conversation_load_failed",
+      });
+    }
+  });
+
+  app.post('/api/chat/conversations/:id/close', async (req, res) => {
+    try {
+      const id = z.string().uuid().parse(req.params.id);
+      const requester = getOptionalAuthenticatedUser(req);
+      await authorizeAiConversation({
+        id,
+        userId: requester?.id ?? null,
+        conversationToken: req.get("x-ai-conversation-token") ?? undefined,
+        channel: "public",
+      });
+      const conversation = await closeAiChatConversation(id);
       if (!conversation) return res.status(404).json({ message: "Conversation not found" });
+      res.json({ id: conversation.id, isActive: conversation.isActive });
+    } catch (error) {
+      const status = error instanceof AiConversationAccessError ? error.status : error instanceof z.ZodError ? 400 : 500;
+      res.status(status).json({
+        message: status >= 500 ? "Failed to close AI conversation" : getPublicErrorMessage(error),
+        code: error instanceof AiConversationAccessError ? error.code : "conversation_close_failed",
+      });
+    }
+  });
+
+  app.delete('/api/chat/conversations/:id', async (req, res) => {
+    try {
+      const id = z.string().uuid().parse(req.params.id);
+      const requester = getOptionalAuthenticatedUser(req);
+      await authorizeAiConversation({
+        id,
+        userId: requester?.id ?? null,
+        conversationToken: req.get("x-ai-conversation-token") ?? undefined,
+        channel: "public",
+      });
+      const deleted = await deleteAiChatConversation(id);
+      if (!deleted) return res.status(404).json({ message: "Conversation not found" });
+      res.status(204).end();
+    } catch (error) {
+      const status = error instanceof AiConversationAccessError ? error.status : error instanceof z.ZodError ? 400 : 500;
+      res.status(status).json({
+        message: status >= 500 ? "Failed to delete AI conversation" : getPublicErrorMessage(error),
+        code: error instanceof AiConversationAccessError ? error.code : "conversation_delete_failed",
+      });
+    }
+  });
+
+  app.get('/api/chat/memory', async (req, res) => {
+    try {
+      const payload = chatMemoryRequestSchema.pick({ conversationId: true, conversationToken: true }).parse(req.query);
+      const requester = getOptionalAuthenticatedUser(req);
+      const { conversation } = await authorizeAiConversation({
+        id: payload.conversationId,
+        userId: requester?.id ?? null,
+        conversationToken: payload.conversationToken ?? req.get("x-ai-conversation-token") ?? undefined,
+        channel: "public",
+      });
 
       res.json({
         conversationId: conversation.id,
@@ -12712,15 +13204,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : null,
       });
     } catch (error) {
-      res.status(400).json({ message: "Failed to read AI memory", error: getErrorMessage(error) });
+      const status = error instanceof AiConversationAccessError ? error.status : error instanceof z.ZodError ? 400 : 500;
+      res.status(status).json({ message: status >= 500 ? "Failed to read AI memory" : getPublicErrorMessage(error) });
     }
   });
 
-  app.put('/api/chat/memory', (req, res) => {
+  app.put('/api/chat/memory', async (req, res) => {
     try {
       const payload = chatMemoryRequestSchema.parse(req.body);
-      const conversation = getAiChatConversation(payload.conversationId);
-      if (!conversation) return res.status(404).json({ message: "Conversation not found" });
+      const requester = getOptionalAuthenticatedUser(req);
+      const { conversation } = await authorizeAiConversation({
+        id: payload.conversationId,
+        userId: requester?.id ?? null,
+        conversationToken: payload.conversationToken ?? req.get("x-ai-conversation-token") ?? undefined,
+        channel: "public",
+      });
 
       const memory: AiChatMemoryState = {
         enabled: payload.enabled ?? conversation.memory?.enabled ?? true,
@@ -12728,82 +13226,132 @@ export async function registerRoutes(app: Express): Promise<Server> {
         shortTermSummary: conversation.memory?.shortTermSummary ?? null,
         lastUpdatedAt: new Date().toISOString(),
       };
-      const updated = updateAiChatMemory(payload.conversationId, memory);
+      const updated = await updateAiChatMemory(payload.conversationId, memory);
       res.json({ conversationId: payload.conversationId, memory: updated?.memory ?? memory });
     } catch (error) {
-      res.status(400).json({ message: "Failed to update AI memory", error: getErrorMessage(error) });
+      const status = error instanceof AiConversationAccessError ? error.status : error instanceof z.ZodError ? 400 : 500;
+      res.status(status).json({ message: status >= 500 ? "Failed to update AI memory" : getPublicErrorMessage(error) });
     }
   });
 
-  app.delete('/api/chat/memory', (req, res) => {
+  app.delete('/api/chat/memory', async (req, res) => {
     try {
       const source = Object.keys(req.body ?? {}).length > 0 ? req.body : req.query;
-      const payload = chatMemoryRequestSchema.pick({ conversationId: true }).parse(source);
-      const updated = clearAiChatMemory(payload.conversationId);
+      const payload = chatMemoryRequestSchema.pick({ conversationId: true, conversationToken: true }).parse(source);
+      const requester = getOptionalAuthenticatedUser(req);
+      await authorizeAiConversation({
+        id: payload.conversationId,
+        userId: requester?.id ?? null,
+        conversationToken: payload.conversationToken ?? req.get("x-ai-conversation-token") ?? undefined,
+        channel: "public",
+      });
+      const updated = await clearAiChatMemory(payload.conversationId);
       if (!updated) return res.status(404).json({ message: "Conversation not found" });
 
       res.json({ conversationId: payload.conversationId, memory: updated.memory ?? createEmptyAiMemoryState(false) });
     } catch (error) {
-      res.status(400).json({ message: "Failed to clear AI memory", error: getErrorMessage(error) });
+      const status = error instanceof AiConversationAccessError ? error.status : error instanceof z.ZodError ? 400 : 500;
+      res.status(status).json({ message: status >= 500 ? "Failed to clear AI memory" : getPublicErrorMessage(error) });
     }
   });
 
-  // AI Chat route
+  app.get('/api/chat/config', async (_req, res) => {
+    const readiness = await getAiActivationReadiness();
+    res.setHeader("Cache-Control", "private, max-age=30");
+    res.json({
+      enabled: readiness.enabled,
+      ready: readiness.ready,
+      provider: readiness.provider,
+      message: readiness.ready ? null : "AI chat is temporarily unavailable.",
+    });
+  });
+
+  // AI Chat routes
   app.post('/api/chat', async (req, res) => {
     try {
       const payload = chatRequestSchema.parse(req.body);
-      const requester = getOptionalAuthenticatedUser(req);
-      const existing = payload.conversationId ? getAiChatConversation(payload.conversationId) : undefined;
-      const assistant = await getEnterpriseChatResponse(payload.message, {
-        channel: "public",
-        platformContext: await buildAiPlatformContext(),
-        userContext: {
-          id: requester?.id ?? null,
-          email: requester?.email ?? null,
-          role: requester?.role ?? "guest",
-          currentPage: payload.currentPage ?? req.get("referer") ?? null,
-        },
-        memory: buildAiMemoryState(existing, payload),
-        history: existing?.messages.map((item) => ({
-          role: item.role === "system" ? "assistant" : item.role,
-          content: item.content,
-        })),
-      });
-      const conversation = appendAiConversationTurn({
-        conversationId: payload.conversationId,
-        userId: requester ? String(requester.id) : null,
-        userEmail: requester?.email ?? null,
-        channel: "public",
-        message: payload.message,
-        assistant,
-      });
-
-      await storage.logAnalytics({
-        event: "public_ai_chat_message",
-        userId: requester?.id ?? null,
-        metadata: {
-          conversationId: conversation.id,
-          flags: conversation.moderationFlags,
-          intent: assistant.metadata.intent,
-          confidence: assistant.metadata.confidence,
-          riskLevel: assistant.metadata.riskLevel,
-          sourceCount: assistant.metadata.retrievalSources.length,
-          escalationRequired: assistant.metadata.escalationRequired,
-        },
-        ipAddress: req.ip,
-        userAgent: req.get("user-agent"),
-      });
-
-      broadcast("ai-chat", { type: "ai_chat_updated", conversation });
+      const result = await executeAiChatTurn({ req, payload, channel: "public" });
       res.json({
-        response: assistant.response,
-        conversationId: conversation.id,
-        metadata: assistant.metadata,
-        audit: assistant.audit,
+        response: result.assistant.response,
+        conversationId: result.conversation.id,
+        conversationToken: result.conversationToken,
+        metadata: result.assistant.metadata,
+        audit: result.assistant.audit,
       });
     } catch (error) {
-      console.error('Chat error:', error);
-      res.status(400).json({ message: 'Failed to get chat response', error: getErrorMessage(error) });
+      console.error('Chat error:', getErrorLogMessage(error));
+      const conversationContext = error && typeof error === "object"
+        ? error as { conversationId?: string; conversationToken?: string }
+        : {};
+      const status = error instanceof AiServiceError || error instanceof AiConversationAccessError
+        ? error.status
+        : error instanceof z.ZodError ? 400 : 500;
+      res.status(status).json({
+        message: status >= 500 ? "AI chat is temporarily unavailable." : getPublicErrorMessage(error),
+        code: error instanceof AiServiceError || error instanceof AiConversationAccessError ? error.code : "ai_request_failed",
+        conversationId: conversationContext.conversationId,
+        conversationToken: conversationContext.conversationToken,
+      });
+    }
+  });
+
+  app.post('/api/chat/stream', async (req, res) => {
+    let payload: z.infer<typeof chatRequestSchema>;
+    try {
+      payload = chatRequestSchema.parse(req.body);
+      const readiness = await getAiActivationReadiness();
+      if (!readiness.ready) {
+        return res.status(503).json({ message: "AI chat is temporarily unavailable.", code: "openai_not_configured" });
+      }
+    } catch (error) {
+      return res.status(error instanceof z.ZodError ? 400 : 500).json({ message: getPublicErrorMessage(error) });
+    }
+
+    res.status(200);
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders();
+    const abortController = new AbortController();
+    res.on("close", () => {
+      if (!res.writableEnded) abortController.abort();
+    });
+    const sendEvent = (event: string, data: unknown) => {
+      if (!res.writableEnded && !res.destroyed) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    try {
+      sendEvent("ready", { streaming: true });
+      const result = await executeAiChatTurn({
+        req,
+        payload,
+        channel: "public",
+        onDelta: (delta) => sendEvent("delta", { delta }),
+        signal: abortController.signal,
+      });
+      sendEvent("complete", {
+        response: result.assistant.response,
+        conversationId: result.conversation.id,
+        conversationToken: result.conversationToken,
+        metadata: result.assistant.metadata,
+        audit: result.assistant.audit,
+      });
+    } catch (error) {
+      console.error("AI stream error:", getErrorLogMessage(error));
+      const conversationContext = error && typeof error === "object"
+        ? error as { conversationId?: string; conversationToken?: string }
+        : {};
+      sendEvent("error", {
+        message: error instanceof AiConversationAccessError && error.status < 500
+          ? error.message
+          : "AI chat is temporarily unavailable.",
+        code: error instanceof AiServiceError || error instanceof AiConversationAccessError ? error.code : "ai_stream_failed",
+        conversationId: conversationContext.conversationId,
+        conversationToken: conversationContext.conversationToken,
+      });
+    } finally {
+      res.end();
     }
   });
 

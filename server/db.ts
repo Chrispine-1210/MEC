@@ -106,7 +106,7 @@ const getNestedErrorValue = (error: unknown, key: string) => {
     : undefined;
 };
 
-const classifyDatabaseError = (error: unknown) => {
+export const classifyDatabaseError = (error: unknown) => {
   const code = String(getNestedErrorValue(error, "code") || "");
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
   const causeMessage = String(getNestedErrorValue(error, "message") || "").toLowerCase();
@@ -118,6 +118,9 @@ const classifyDatabaseError = (error: unknown) => {
   if (combined.includes("timeout") || combined.includes("fetch failed")) return "connectivity_failed";
   return code || "query_failed";
 };
+
+export const isDatabaseSchemaMissingError = (error: unknown) =>
+  classifyDatabaseError(error) === "schema_missing";
 
 export const getDatabaseDiagnostics = async () => {
   try {

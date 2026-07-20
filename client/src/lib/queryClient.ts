@@ -154,17 +154,19 @@ export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
+  init: RequestInit = {},
 ): Promise<Response> {
   const token = getAuthToken();
-  const headers: Record<string, string> = {};
-  if (data) headers["Content-Type"] = "application/json";
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const headers = new Headers(init.headers);
+  if (data) headers.set("Content-Type", "application/json");
+  if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const res = await fetchWithAuthRefresh(url, {
+    ...init,
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
+    credentials: init.credentials ?? "include",
   });
 
   await throwIfResNotOk(res);

@@ -11,6 +11,17 @@ process.env.DATABASE_URL =
 process.env.DATABASE_URL_UNPOOLED =
   process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
 
+test("communication delivery IDs are stable UUIDs", async () => {
+  const { createDeterministicCommunicationId } = await import("../../server/communication");
+  const first = createDeterministicCommunicationId("payment-receipt", 42, "email");
+  const repeated = createDeterministicCommunicationId("payment-receipt", 42, "email");
+  const different = createDeterministicCommunicationId("payment-receipt", 43, "email");
+
+  assert.match(first, /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.equal(repeated, first);
+  assert.notEqual(different, first);
+});
+
 test("communication event dispatch generates documents and audit records", async () => {
   const { storage } = await import("../../server/storage");
   const originalLogAnalytics = storage.logAnalytics.bind(storage);

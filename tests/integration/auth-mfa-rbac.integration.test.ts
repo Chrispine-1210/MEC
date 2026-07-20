@@ -309,13 +309,20 @@ test("MFA challenge flow verifies login and allows privileged route", async () =
       totpSecret,
     );
 
-    const adminResponse = await requestJson(baseUrl, "/api/admin/ai-chat/conversations", {
+    const adminResponse = await requestJson(baseUrl, "/api/admin/communications/diagnostics", {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
       },
     });
     assert.equal(adminResponse.status, 200);
+
+    const paymentDiagnostics = await requestJson(baseUrl, "/api/admin/payments/diagnostics", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(paymentDiagnostics.status, 200);
+    assert.equal(paymentDiagnostics.body.provider, "stripe");
   } finally {
     await stopTestServer(server);
   }
@@ -355,7 +362,7 @@ test("Privileged role without MFA setup can access admin routes when MFA policy 
       assert.equal(loginResponse.status, 200);
       assert.equal(typeof loginResponse.body.token, "string");
 
-      const adminResponse = await requestJson(baseUrl, "/api/admin/ai-chat/conversations", {
+      const adminResponse = await requestJson(baseUrl, "/api/admin/communications/diagnostics", {
         method: "GET",
         headers: {
           Authorization: `Bearer ${loginResponse.body.token}`,
@@ -401,7 +408,7 @@ test("Viewer role is denied admin routes by RBAC guard", async () => {
 
     assert.equal(loginResponse.status, 200);
 
-    const adminResponse = await requestJson(baseUrl, "/api/admin/ai-chat/conversations", {
+    const adminResponse = await requestJson(baseUrl, "/api/admin/communications/diagnostics", {
       method: "GET",
       headers: {
         Authorization: `Bearer ${loginResponse.body.token}`,
@@ -409,6 +416,14 @@ test("Viewer role is denied admin routes by RBAC guard", async () => {
     });
     assert.equal(adminResponse.status, 403);
     assert.equal(adminResponse.body.message, "Admin access required");
+
+    const paymentResponse = await requestJson(baseUrl, "/api/admin/payments/diagnostics", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${loginResponse.body.token}` },
+    });
+    assert.equal(paymentResponse.status, 403);
+    assert.equal(paymentResponse.body.code, "INSUFFICIENT_PERMISSION");
+    assert.deepEqual(paymentResponse.body.requiredAnyOf, ["manage_payments"]);
   } finally {
     await stopTestServer(server);
   }
@@ -590,7 +605,7 @@ test("Privileged route rejects tokens that are not MFA-verified", async () => {
 
   const { server, baseUrl } = await startTestServer();
   try {
-    const response = await requestJson(baseUrl, "/api/admin/ai-chat/conversations", {
+    const response = await requestJson(baseUrl, "/api/admin/communications/diagnostics", {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,

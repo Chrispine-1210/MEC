@@ -5,13 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { 
   MessageCircle, 
   X, 
   Send, 
-  Loader2, 
   Bot,
   User,
   Minimize2,
@@ -20,7 +19,10 @@ import {
   Brain,
   ShieldCheck,
   Database,
-  ExternalLink
+  ExternalLink,
+  Copy,
+  Square,
+  Trash2,
 } from "lucide-react";
 
 type ChatRiskLevel = "low" | "medium" | "high";
@@ -69,9 +71,24 @@ interface ChatMessage {
   sender: 'user' | 'assistant';
   timestamp: Date;
   metadata?: ChatMetadata;
+  retryText?: string;
 }
 
+type StoredConversationResponse = {
+  id: string;
+  title: string | null;
+  isActive: boolean;
+  memory?: ChatMemoryState;
+  messages: Array<{
+    role: "user" | "assistant" | "system";
+    content: string;
+    createdAt: string;
+    metadata?: Record<string, unknown>;
+  }>;
+};
+
 const CONVERSATION_ID_KEY = "mtendere-ai-conversation-id";
+const CONVERSATION_TOKEN_KEY = "mtendere-ai-conversation-token";
 const CHAT_TRANSCRIPT_KEY = "mtendere-ai-chat-messages";
 const CHAT_MEMORY_ENABLED_KEY = "mtendere-ai-memory-enabled";
 
@@ -127,47 +144,166 @@ export default function AIChat() {
     if (typeof window === "undefined") return null;
     return localStorage.getItem(CONVERSATION_ID_KEY);
   });
+  const [conversationToken, setConversationToken] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem(CONVERSATION_TOKEN_KEY);
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const pendingAssistantIdRef = useRef<string | null>(null);
+  const pendingUserTextRef = useRef<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const suppressAbortErrorRef = useRef(false);
+  const { data: chatConfig } = useQuery<{ ready: boolean; message: string | null }>({
+    queryKey: ["/api/chat/config"],
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  });
 
   const chatMutation = useMutation({
     mutationFn: async (message: string) => {
-      const response = await apiRequest("POST", "/api/chat", {
+      suppressAbortErrorRef.current = false;
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+      const assistantId = `assistant-${Date.now()}`;
+      pendingAssistantIdRef.current = assistantId;
+      setMessages((previous) => [...previous, {
+        id: assistantId,
+        content: "",
+        sender: "assistant",
+        timestamp: new Date(),
+      }]);
+      const response = await apiRequest("POST", "/api/chat/stream", {
         message,
-        conversationId,
+        conversationId: conversationId || undefined,
+        conversationToken: conversationToken || undefined,
         currentPage: typeof window !== "undefined" ? window.location.pathname : undefined,
         memoryEnabled,
         memoryPreferences: memorySnapshot.userPreferences,
-      });
-      return response.json();
+      }, { signal: abortController.signal });
+      if (!response.body) throw new Error("Streaming response was not available.");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let completePayload: any = null;
+      const processBlock = (block: string) => {
+        const lines = block.split(/\r?\n/);
+        const event = lines.find((line) => line.startsWith("event:"))?.slice(6).trim() || "message";
+        const dataText = lines
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).trim())
+          .join("\n");
+        if (!dataText) return;
+        const data = JSON.parse(dataText);
+        if (event === "delta" && typeof data.delta === "string") {
+          setMessages((previous) => previous.map((item) =>
+            item.id === assistantId ? { ...item, content: item.content + data.delta } : item,
+          ));
+        } else if (event === "complete") {
+          completePayload = data;
+        } else if (event === "error") {
+          const error = new Error(data.message || "AI chat is temporarily unavailable.");
+          Object.assign(error, data);
+          throw error;
+        }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        buffer += decoder.decode(value, { stream: !done });
+        let boundary = buffer.search(/\r?\n\r?\n/);
+        while (boundary >= 0) {
+          const block = buffer.slice(0, boundary);
+          const separator = buffer.slice(boundary).match(/^\r?\n\r?\n/)?.[0] || "\n\n";
+          buffer = buffer.slice(boundary + separator.length);
+          processBlock(block);
+          boundary = buffer.search(/\r?\n\r?\n/);
+        }
+        if (done) break;
+      }
+      if (buffer.trim()) processBlock(buffer.trim());
+      if (!completePayload) throw new Error("The AI response stream ended before completion.");
+      return { ...completePayload, assistantId };
     },
     onSuccess: (data) => {
       if (data.conversationId) {
         setConversationId(data.conversationId);
         localStorage.setItem(CONVERSATION_ID_KEY, data.conversationId);
       }
+      if (data.conversationToken) {
+        setConversationToken(data.conversationToken);
+        localStorage.setItem(CONVERSATION_TOKEN_KEY, data.conversationToken);
+      }
       if (data.metadata?.memory) {
         setMemorySnapshot(data.metadata.memory);
         setMemoryEnabled(data.metadata.memory.enabled);
         localStorage.setItem(CHAT_MEMORY_ENABLED_KEY, String(data.metadata.memory.enabled));
       }
-      const assistantMessage: ChatMessage = {
-        id: Date.now().toString(),
-        content: data.response || "I received your message, but I could not generate a full response. Please try again or contact the Mtendere team directly.",
-        sender: 'assistant',
-        timestamp: new Date(),
-        metadata: data.metadata,
-      };
-      setMessages(prev => [...prev, assistantMessage]);
+      setMessages((previous) => previous.map((item) => item.id === data.assistantId
+        ? {
+            ...item,
+            content: item.content || data.response || "The AI provider returned no text.",
+            metadata: data.metadata,
+          }
+        : item));
+      pendingAssistantIdRef.current = null;
+      pendingUserTextRef.current = null;
+      abortControllerRef.current = null;
     },
     onError: (error) => {
-      const errorMessage: ChatMessage = {
-        id: Date.now().toString(),
-        content: "I'm sorry, I'm experiencing technical difficulties. Please try again later or contact our support team.",
-        sender: 'assistant',
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      const code = typeof error === "object" && error !== null && "code" in error
+        ? String((error as { code?: unknown }).code || "")
+        : "";
+      const errorName = error && typeof error === "object" && "name" in error
+        ? String((error as { name?: unknown }).name || "")
+        : "";
+      const stopped = code === "generation_stopped" || errorName === "AbortError";
+      if (stopped && suppressAbortErrorRef.current) {
+        suppressAbortErrorRef.current = false;
+        pendingAssistantIdRef.current = null;
+        pendingUserTextRef.current = null;
+        abortControllerRef.current = null;
+        return;
+      }
+      if (code.startsWith("conversation_")) {
+        setConversationId(null);
+        setConversationToken(null);
+        localStorage.removeItem(CONVERSATION_ID_KEY);
+        localStorage.removeItem(CONVERSATION_TOKEN_KEY);
+      }
+      const errorContext = error && typeof error === "object"
+        ? error as { conversationId?: string; conversationToken?: string; name?: string }
+        : {};
+      if (errorContext.conversationId) {
+        setConversationId(errorContext.conversationId);
+        localStorage.setItem(CONVERSATION_ID_KEY, errorContext.conversationId);
+      }
+      if (errorContext.conversationToken) {
+        setConversationToken(errorContext.conversationToken);
+        localStorage.setItem(CONVERSATION_TOKEN_KEY, errorContext.conversationToken);
+      }
+      const pendingId = pendingAssistantIdRef.current;
+      const message = stopped
+        ? "Generation stopped. You can retry this message."
+        : error instanceof Error ? error.message : "AI chat is temporarily unavailable.";
+      const retryText = pendingUserTextRef.current ?? undefined;
+      if (pendingId) {
+        setMessages((previous) => previous.map((item) => item.id === pendingId
+          ? { ...item, content: message, retryText }
+          : item));
+      } else {
+        setMessages((previous) => [...previous, {
+          id: Date.now().toString(),
+          content: message,
+          sender: "assistant",
+          timestamp: new Date(),
+          retryText,
+        }]);
+      }
+      pendingAssistantIdRef.current = null;
+      pendingUserTextRef.current = null;
+      abortControllerRef.current = null;
     },
   });
 
@@ -190,6 +326,65 @@ export default function AIChat() {
   }, [messages]);
 
   useEffect(() => {
+    if (!conversationId || chatMutation.isPending) return;
+    const abortController = new AbortController();
+    const headers = conversationToken ? { "x-ai-conversation-token": conversationToken } : undefined;
+
+    apiRequest(
+      "GET",
+      `/api/chat/conversations/${encodeURIComponent(conversationId)}`,
+      undefined,
+      { headers, signal: abortController.signal },
+    )
+      .then((response) => response.json() as Promise<StoredConversationResponse>)
+      .then((conversation) => {
+        const restored: ChatMessage[] = [welcomeMessage()];
+        conversation.messages.forEach((message, index) => {
+          const timestamp = new Date(message.createdAt);
+          const metadata = message.metadata ?? {};
+          restored.push({
+            id: `${message.role}-${message.createdAt}-${index}`,
+            content: message.content,
+            sender: message.role === "user" ? "user" : "assistant",
+            timestamp: Number.isNaN(timestamp.getTime()) ? new Date() : timestamp,
+            metadata: message.role === "assistant" ? metadata as ChatMetadata : undefined,
+          });
+          if (message.role === "user" && (metadata.status === "failed" || metadata.status === "pending")) {
+            restored.push({
+              id: `retry-${String(metadata.turnId ?? index)}`,
+              content: metadata.status === "pending"
+                ? "The previous response did not finish. You can retry this message."
+                : "The previous response failed. You can retry this message.",
+              sender: "assistant",
+              timestamp: Number.isNaN(timestamp.getTime()) ? new Date() : timestamp,
+              retryText: message.content,
+            });
+          }
+        });
+        setMessages(restored.slice(-31));
+        if (conversation.memory) {
+          setMemorySnapshot(conversation.memory);
+          setMemoryEnabled(conversation.memory.enabled);
+          localStorage.setItem(CHAT_MEMORY_ENABLED_KEY, String(conversation.memory.enabled));
+        }
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        const status = error && typeof error === "object" && "status" in error
+          ? Number((error as { status?: unknown }).status)
+          : 0;
+        if (status === 403 || status === 404) {
+          setConversationId(null);
+          setConversationToken(null);
+          localStorage.removeItem(CONVERSATION_ID_KEY);
+          localStorage.removeItem(CONVERSATION_TOKEN_KEY);
+        }
+      });
+
+    return () => abortController.abort();
+  }, [chatMutation.isPending, conversationId, conversationToken]);
+
+  useEffect(() => {
     if (isOpen && !isMinimized && inputRef.current) {
       inputRef.current.focus();
     }
@@ -199,20 +394,24 @@ export default function AIChat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const handleSendMessage = async () => {
-    if (!inputMessage.trim() || chatMutation.isPending) return;
-
+  const submitMessage = (message: string) => {
+    const normalized = message.trim();
+    if (!normalized || chatMutation.isPending || chatConfig?.ready !== true) return;
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
-      content: inputMessage.trim(),
+      content: normalized,
       sender: 'user',
       timestamp: new Date(),
     };
 
     setMessages(prev => [...prev, userMessage]);
     setInputMessage("");
+    pendingUserTextRef.current = normalized;
+    chatMutation.mutate(normalized);
+  };
 
-    chatMutation.mutate(inputMessage.trim());
+  const handleSendMessage = () => {
+    submitMessage(inputMessage);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -239,18 +438,7 @@ export default function AIChat() {
   ];
 
   const handleQuickAction = (action: string) => {
-    if (chatMutation.isPending) return;
-
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      content: action,
-      sender: 'user',
-      timestamp: new Date(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setInputMessage("");
-    chatMutation.mutate(action);
+    submitMessage(action);
   };
 
   const handleMemoryToggle = (enabled: boolean) => {
@@ -262,6 +450,7 @@ export default function AIChat() {
 
     apiRequest("PUT", "/api/chat/memory", {
       conversationId,
+      conversationToken: conversationToken || undefined,
       enabled,
       userPreferences: memorySnapshot.userPreferences,
     }).catch(() => {
@@ -279,7 +468,10 @@ export default function AIChat() {
       return;
     }
 
-    apiRequest("DELETE", `/api/chat/memory?conversationId=${encodeURIComponent(conversationId)}`)
+    apiRequest("DELETE", "/api/chat/memory", {
+      conversationId,
+      conversationToken: conversationToken || undefined,
+    })
       .then((response) => response.json())
       .then((data) => {
         const nextMemory = data.memory ?? emptyMemoryState(false);
@@ -304,14 +496,71 @@ export default function AIChat() {
     inputRef.current?.focus();
   };
 
-  const resetConversation = () => {
+  const clearLocalConversation = () => {
     setMessages([welcomeMessage()]);
     setInputMessage("");
     setConversationId(null);
+    setConversationToken(null);
     setMemorySnapshot(emptyMemoryState(memoryEnabled));
     localStorage.removeItem(CONVERSATION_ID_KEY);
+    localStorage.removeItem(CONVERSATION_TOKEN_KEY);
     localStorage.removeItem(CHAT_TRANSCRIPT_KEY);
     inputRef.current?.focus();
+  };
+
+  const conversationHeaders = () => conversationToken
+    ? { "x-ai-conversation-token": conversationToken }
+    : undefined;
+
+  const resetConversation = () => {
+    suppressAbortErrorRef.current = Boolean(abortControllerRef.current);
+    abortControllerRef.current?.abort();
+    const activeConversationId = conversationId;
+    const headers = conversationHeaders();
+    clearLocalConversation();
+    if (activeConversationId) {
+      apiRequest(
+        "POST",
+        `/api/chat/conversations/${encodeURIComponent(activeConversationId)}/close`,
+        undefined,
+        { headers },
+      ).catch(() => undefined);
+    }
+  };
+
+  const deleteConversation = async () => {
+    suppressAbortErrorRef.current = Boolean(abortControllerRef.current);
+    abortControllerRef.current?.abort();
+    if (!conversationId) {
+      clearLocalConversation();
+      return;
+    }
+    const shouldDelete = typeof window === "undefined"
+      || window.confirm("Delete this AI conversation and its stored history?");
+    if (!shouldDelete) return;
+    try {
+      await apiRequest(
+        "DELETE",
+        `/api/chat/conversations/${encodeURIComponent(conversationId)}`,
+        undefined,
+        { headers: conversationHeaders() },
+      );
+      clearLocalConversation();
+    } catch (error) {
+      setMessages((previous) => [...previous, {
+        id: `delete-error-${Date.now()}`,
+        content: error instanceof Error ? error.message : "Conversation could not be deleted.",
+        sender: "assistant",
+        timestamp: new Date(),
+      }]);
+    }
+  };
+
+  const stopGeneration = () => abortControllerRef.current?.abort();
+
+  const copyMessage = async (content: string) => {
+    if (typeof navigator === "undefined" || !navigator.clipboard) return;
+    await navigator.clipboard.writeText(content).catch(() => undefined);
   };
 
   const getRiskBadgeClass = (risk?: ChatRiskLevel) => {
@@ -357,12 +606,22 @@ export default function AIChat() {
                 <div>
                   <CardTitle className="text-sm font-semibold">Mtendere Assistant</CardTitle>
                   <div className="flex items-center space-x-1">
-                    <div className="w-2 h-2 bg-mtendere-green rounded-full"></div>
-                    <span className="text-xs opacity-80">Online</span>
+                    <div className={`h-2 w-2 rounded-full ${chatConfig?.ready ? "bg-mtendere-green" : "bg-amber-300"}`}></div>
+                    <span className="text-xs opacity-80">{chatConfig?.ready ? "Ready" : "Unavailable"}</span>
                   </div>
                 </div>
               </div>
               <div className="flex items-center space-x-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-white hover:bg-card hover:bg-opacity-20 w-8 h-8"
+                  onClick={deleteConversation}
+                  disabled={chatMutation.isPending && !conversationId}
+                  aria-label="Delete AI conversation"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -476,6 +735,33 @@ export default function AIChat() {
                               }`}>
                                 {formatTime(message.timestamp)}
                               </p>
+                              {message.sender === "assistant" && message.content && (
+                                <div className="mt-1 flex items-center gap-1">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={() => copyMessage(message.content)}
+                                    aria-label="Copy AI response"
+                                  >
+                                    <Copy className="h-3 w-3" />
+                                  </Button>
+                                  {message.retryText && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 px-2 text-[11px]"
+                                      onClick={() => submitMessage(message.retryText || "")}
+                                      disabled={chatMutation.isPending || chatConfig?.ready !== true}
+                                    >
+                                      <RotateCcw className="mr-1 h-3 w-3" />
+                                      Retry
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -514,6 +800,7 @@ export default function AIChat() {
                           size="sm"
                           className="w-full text-left justify-start text-xs h-8 text-muted-foreground hover:text-mtendere-blue hover:border-mtendere-blue"
                           onClick={() => handleQuickAction(action)}
+                          disabled={chatConfig?.ready !== true || chatMutation.isPending}
                         >
                           {action}
                         </Button>
@@ -532,18 +819,19 @@ export default function AIChat() {
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    disabled={chatMutation.isPending}
+                    disabled={chatMutation.isPending || chatConfig?.ready !== true}
                     maxLength={900}
                     className="flex-1 text-sm bg-background border-border/70 focus:border-mtendere-blue focus:ring-mtendere-blue"
                   />
                   <Button
-                    onClick={handleSendMessage}
-                    disabled={!inputMessage.trim() || chatMutation.isPending}
+                    onClick={chatMutation.isPending ? stopGeneration : handleSendMessage}
+                    disabled={chatMutation.isPending ? false : !inputMessage.trim() || chatConfig?.ready !== true}
                     size="icon"
                     className="bg-mtendere-blue hover:bg-mtendere-blue/90 flex-shrink-0"
+                    aria-label={chatMutation.isPending ? "Stop AI generation" : "Send message"}
                   >
                     {chatMutation.isPending ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <Square className="h-4 w-4 fill-current" />
                     ) : (
                       <Send className="w-4 h-4" />
                     )}
@@ -553,7 +841,7 @@ export default function AIChat() {
                   <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                     <div className="flex min-w-0 items-center gap-2">
                       <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0 text-mtendere-green" />
-                      <span className="truncate">Powered by AI</span>
+                      <span className="truncate">{chatConfig?.ready ? "AI ready" : chatConfig?.message || "Checking AI availability"}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Tooltip>

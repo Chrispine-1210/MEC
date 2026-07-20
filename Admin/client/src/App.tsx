@@ -27,6 +27,7 @@ import AiChat from "@/pages/admin/ai-chat";
 import Messages from "@/pages/admin/messages";
 import Subscribers from "@/pages/admin/subscribers";
 import Settings from "@/pages/admin/settings";
+import Payments from "@/pages/admin/payments";
 import Media from "@/pages/admin/media";
 import AuthPage from "@/pages/auth";
 import { AdminRealtimeProvider } from "@/hooks/use-admin-realtime";
@@ -219,6 +220,7 @@ function AdminRouter() {
         <Route path="/admin/communications" component={Communications} />
         <Route path="/admin/messages" component={Messages} />
         <Route path="/admin/subscribers" component={Subscribers} />
+        <Route path="/admin/payments" component={Payments} />
         <Route path="/admin/media" component={Media} />
         <Route path="/admin/ai-chat" component={AiChat} />
         <Route path="/admin/settings" component={Settings} />

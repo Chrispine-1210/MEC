@@ -256,6 +256,7 @@ export const resetEmailProviderCircuitBreakers = () => {
 
 type EmailEnqueueOptions = {
   awaitDelivery?: boolean;
+  idempotencyKey?: string;
 };
 
 type DeliverabilityCheck = {
@@ -784,6 +785,7 @@ const sendWithResend: Provider["send"] = async (message) => {
     headers: {
       Authorization: `Bearer ${env.RESEND_API_KEY}`,
       "Content-Type": "application/json",
+      "Idempotency-Key": message.id,
       "User-Agent": "MEC-Email-Platform/1.0",
     },
     body: JSON.stringify({
@@ -2427,11 +2429,14 @@ export const startEmailQueueWorker = () => {
 };
 
 export const enqueueEmail = async (payload: EmailPayload, options: EmailEnqueueOptions = {}): Promise<EmailEnqueueResult> => {
-  const id = randomUUID();
+  const id = options.idempotencyKey ?? randomUUID();
   const normalizedRecipient = normalizeEmail(payload.to);
   const sanitizedSubject = stripHeaderUnsafeChars(payload.subject);
 
   try {
+    if (options.idempotencyKey && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+      throw new Error("Email idempotency keys must be UUIDs");
+    }
     if (!isValidEmailAddress(normalizedRecipient)) {
       await recordEmailEvent({
         jobId: id,
@@ -2441,6 +2446,23 @@ export const enqueueEmail = async (payload: EmailPayload, options: EmailEnqueueO
         metadata: { reason: "recipient_email_failed_validation" },
       });
       return { id, status: "failed", error: "Invalid recipient email address" };
+    }
+
+    if (options.idempotencyKey) {
+      const existingJob = await storage.getEmailJob(id).catch(() => undefined);
+      if (existingJob) {
+        if (options.awaitDelivery && ["queued", "retry_scheduled"].includes(existingJob.status)) {
+          await processEmailJobNow(existingJob.id);
+        }
+        const latest = await storage.getEmailJob(id).catch(() => existingJob);
+        return {
+          id: latest?.id ?? existingJob.id,
+          status: latest?.status ?? existingJob.status,
+          provider: latest?.provider ?? existingJob.provider,
+          providerMessageId: latest?.providerMessageId ?? existingJob.providerMessageId,
+          lastError: latest?.lastError ?? existingJob.lastError,
+        };
+      }
     }
 
     if (await shouldSuppressForPreferences({ ...payload, to: normalizedRecipient })) {
@@ -2527,6 +2549,18 @@ export const enqueueEmail = async (payload: EmailPayload, options: EmailEnqueueO
 
     return { id: job.id, status: job.status };
   } catch (error) {
+    if (options.idempotencyKey) {
+      const existingJob = await storage.getEmailJob(id).catch(() => undefined);
+      if (existingJob) {
+        return {
+          id: existingJob.id,
+          status: existingJob.status,
+          provider: existingJob.provider,
+          providerMessageId: existingJob.providerMessageId,
+          lastError: existingJob.lastError,
+        };
+      }
+    }
     const message = error instanceof Error ? error.message : "Unknown email enqueue error";
     appendEmailEvent({
       id,

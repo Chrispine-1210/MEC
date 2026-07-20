@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { createHmac, randomUUID } from "crypto";
+import { createHash, createHmac, randomUUID } from "crypto";
 import { env } from "./env";
 import { enqueueEmail, renderMtendereEmail, type EmailCategory } from "./email";
 import { getNotificationProviderDiagnostics, sendNotification } from "./notifications";
@@ -11,6 +11,14 @@ export type CommunicationChannel = "email" | "sms" | "whatsapp" | "inapp" | "doc
 export type CommunicationPriority = "high" | "medium" | "low";
 export type CommunicationSource = "admin" | "client" | "system";
 export type TemplateType = "email" | "sms" | "document" | "inapp";
+
+export const createDeterministicCommunicationId = (...parts: Array<string | number>) => {
+  const bytes = createHash("sha256").update(parts.map(String).join("\u0000")).digest().subarray(0, 16);
+  bytes[6] = (bytes[6] & 0x0f) | 0x50;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+};
 
 export type CommunicationEvent = {
   event_type: string;
@@ -2011,6 +2019,7 @@ export const replayCommunicationEvent = async (
 
 export const emitCommunicationEvent = async (
   input: Omit<CommunicationEvent, "timestamp"> & { timestamp?: string },
+  options: { eventId?: string } = {},
 ) => {
   const event: CommunicationEvent = {
     ...input,
@@ -2018,7 +2027,36 @@ export const emitCommunicationEvent = async (
     payload: input.payload || {},
     timestamp: input.timestamp || new Date().toISOString(),
   };
-  const eventId = randomUUID();
+  const eventId = options.eventId ?? randomUUID();
+  if (options.eventId) {
+    const existingEvent = await storage.getCommunicationEvent(eventId).catch(() => undefined);
+    if (existingEvent?.status === "processed") {
+      const existingMessages = await storage.getCommunicationMessages(2_000).catch(() => []);
+      const results = existingMessages
+        .filter((message) => message.eventId === eventId)
+        .map((message) => ({
+          channel: message.channel,
+          recipient: message.recipient,
+          delivery: {
+            id: message.id,
+            status: message.status,
+            provider: message.provider,
+            providerMessageId: message.providerMessageId,
+            lastError: message.diagnostics && typeof message.diagnostics === "object"
+              ? String((message.diagnostics as Record<string, unknown>).error ?? "") || null
+              : null,
+          },
+        }));
+      return {
+        eventId,
+        status: "processed",
+        results,
+        documents: [],
+        workflowTasks: [],
+        deduplicated: true,
+      };
+    }
+  }
   await persistCommunicationEvent(eventId, event);
 
   if (!checkCommunicationRateLimit(event)) {
@@ -2141,7 +2179,15 @@ export const emitCommunicationEvent = async (
             },
             priority: priorityRank[priority],
           },
-          { awaitDelivery: priority === "high" },
+          {
+            awaitDelivery: priority === "high",
+            idempotencyKey: createDeterministicCommunicationId(
+              eventId,
+              "email",
+              template.template_id,
+              recipient.toLowerCase(),
+            ),
+          },
         );
         await auditCommunicationMessage({
           message_id: delivery.id,

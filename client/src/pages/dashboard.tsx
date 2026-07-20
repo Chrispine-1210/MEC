@@ -212,12 +212,7 @@ export default function Dashboard() {
                 <CardDescription>Application support deposit</CardDescription>
               </CardHeader>
               <CardContent>
-                <CheckoutButton
-                  amount={5000}
-                  currency="USD"
-                  productName="Application support deposit"
-                  productType="application_support"
-                />
+                <CheckoutButton />
               </CardContent>
             </Card>
 

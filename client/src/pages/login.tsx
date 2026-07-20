@@ -14,6 +14,10 @@ import { getRecaptchaToken } from "@/lib/recaptcha";
 export default function Login() {
   const [, setLocation] = useLocation();
   const notice = new URLSearchParams(window.location.search);
+  const requestedReturnTo = notice.get("returnTo");
+  const returnTo = requestedReturnTo?.startsWith("/") && !requestedReturnTo.startsWith("//")
+    ? requestedReturnTo
+    : "/dashboard";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
@@ -42,7 +46,7 @@ export default function Login() {
       });
       const success = await login(email, password, rememberMe, security);
       if (success) {
-        setLocation("/dashboard");
+        setLocation(returnTo);
       }
     } catch (error) {
       console.error("Login error:", error);

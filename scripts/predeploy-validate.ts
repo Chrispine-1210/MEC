@@ -3,6 +3,8 @@ process.env.DATABASE_URL =
 process.env.DATABASE_URL_UNPOOLED = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
 
 const { getEmailDeliveryDiagnostics, getTransactionalEmailActivationReadiness } = await import("../server/email");
+const { getAiActivationReadiness } = await import("../server/ai");
+const { getPaymentActivationReadiness } = await import("../server/referral-payments");
 const { env } = await import("../server/env");
 
 const strictMode = process.env.PREDEPLOY_STRICT === "true" || env.NODE_ENV === "production";
@@ -27,6 +29,10 @@ const fail = (message: string, details?: unknown) => {
 const diagnostics = getEmailDeliveryDiagnostics();
 const activation = await getTransactionalEmailActivationReadiness({ cacheTtlMs: 0, timeoutMs: 2_000 });
 const activeProviders = diagnostics.activeProviders.filter((provider) => provider !== "dry_run");
+const [paymentActivation, aiActivation] = await Promise.all([
+  getPaymentActivationReadiness({ cacheTtlMs: 5_000 }),
+  getAiActivationReadiness({ verifyProvider: true, cacheTtlMs: 5_000 }),
+]);
 
 if (strictMode && diagnostics.dryRunEnabled && !allowDryRun) {
   fail("EMAIL_DRY_RUN is enabled. Live deployment requires real transactional delivery.");
@@ -52,6 +58,14 @@ if (strictMode && activeProviders.length === 0) {
   fail("No live transactional email provider is active.");
 }
 
+if (strictMode && env.PAYMENTS_ENABLED !== false && !paymentActivation.ready) {
+  fail("Production payment activation is not ready.", paymentActivation.blockingReasons);
+}
+
+if (strictMode && env.AI_CHAT_ENABLED !== false && !aiActivation.ready) {
+  fail("Production AI activation is not ready.", aiActivation.blockingReasons);
+}
+
 if (process.exitCode) {
   process.exit();
 }
@@ -69,6 +83,22 @@ console.log(
         providerReady: activation.providerReady,
         dnsReady: activation.dnsReady,
         blockingReasons: activation.blockingReasons,
+      },
+      payments: {
+        enabled: paymentActivation.enabled,
+        ready: paymentActivation.ready,
+        mode: paymentActivation.mode,
+        providerReachable: paymentActivation.providerReachable,
+        webhookEndpointVerified: paymentActivation.webhookEndpointVerified,
+        blockingReasons: paymentActivation.blockingReasons,
+      },
+      ai: {
+        enabled: aiActivation.enabled,
+        ready: aiActivation.ready,
+        provider: aiActivation.provider,
+        model: aiActivation.model,
+        providerReachable: aiActivation.providerReachable,
+        blockingReasons: aiActivation.blockingReasons,
       },
     },
     null,

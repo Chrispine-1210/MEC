@@ -7,6 +7,7 @@ delete process.env.API_KEY;
 delete process.env.OPENAI_FALLBACK_MODEL;
 
 const aiModulePromise = import("../../server/ai");
+const cachePolicyPromise = import("../../server/ai-cache-policy");
 
 test("scholarship questions are routed through the knowledge agent with platform sources", async () => {
   const { getEnterpriseChatResponse } = await aiModulePromise;
@@ -82,4 +83,70 @@ test("memory snapshots capture preference signals from the current message", asy
   assert.equal(result.metadata.memory.userPreferences.some((item) => item.includes("Study level: masters")), true);
   assert.equal(result.metadata.memory.userPreferences.some((item) => item.includes("Preferred destination: india")), true);
   assert.equal(result.metadata.memory.userPreferences.some((item) => item.includes("Funding preference")), true);
+});
+
+test("missing production provider configuration fails closed instead of returning a fake answer", async () => {
+  const { AiServiceError, getEnterpriseChatResponse } = await aiModulePromise;
+
+  await assert.rejects(
+    () => getEnterpriseChatResponse("What scholarships are currently available?", { channel: "public" }),
+    (error: unknown) => {
+      assert.equal(error instanceof AiServiceError, true);
+      assert.equal((error as InstanceType<typeof AiServiceError>).status, 503);
+      assert.equal((error as InstanceType<typeof AiServiceError>).code, "openai_not_configured");
+      return true;
+    },
+  );
+});
+
+test("governed local test responses use the same streaming callback contract", async () => {
+  const { getEnterpriseChatResponse } = await aiModulePromise;
+  const deltas: string[] = [];
+  const result = await getEnterpriseChatResponse("Help me prepare my application documents", {
+    channel: "public",
+    forceLocal: true,
+    onDelta: (delta) => deltas.push(delta),
+  });
+
+  assert.equal(deltas.join(""), result.response);
+  assert.equal(result.metadata.provider, "local");
+  assert.equal(result.audit.totalTokens, 0);
+});
+
+test("aborted generations fail with an explicit stopped status", async () => {
+  const { AiServiceError, getEnterpriseChatResponse } = await aiModulePromise;
+  const controller = new AbortController();
+  controller.abort();
+
+  await assert.rejects(
+    () => getEnterpriseChatResponse("Help with my application", {
+      channel: "public",
+      forceLocal: true,
+      signal: controller.signal,
+    }),
+    (error: unknown) => {
+      assert.equal(error instanceof AiServiceError, true);
+      assert.equal((error as InstanceType<typeof AiServiceError>).status, 499);
+      assert.equal((error as InstanceType<typeof AiServiceError>).code, "generation_stopped");
+      return true;
+    },
+  );
+});
+
+test("public AI caching excludes personal and sensitive requests", async () => {
+  const { createPublicAiCacheKey, isPublicAiCacheEligible } = await cachePolicyPromise;
+  assert.equal(isPublicAiCacheEligible("What scholarships are available in Canada?", []), true);
+  assert.equal(isPublicAiCacheEligible("Tell me about scholarships in Canada", []), true);
+  assert.equal(isPublicAiCacheEligible("What is my application status?", []), false);
+  assert.equal(isPublicAiCacheEligible("What scholarships are right for me?", []), false);
+  assert.equal(isPublicAiCacheEligible("Tell me about scholarships for me at person@example.com", []), false);
+  assert.equal(isPublicAiCacheEligible("What are the visa fees?", ["sensitive"]), false);
+  assert.equal(
+    createPublicAiCacheKey({ message: "What scholarships?", platformContext: "A", model: "gpt" }),
+    createPublicAiCacheKey({ message: "  what   scholarships? ", platformContext: "A", model: "gpt" }),
+  );
+  assert.notEqual(
+    createPublicAiCacheKey({ message: "What scholarships?", platformContext: "A", model: "gpt" }),
+    createPublicAiCacheKey({ message: "What scholarships?", platformContext: "B", model: "gpt" }),
+  );
 });

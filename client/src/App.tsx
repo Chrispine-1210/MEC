@@ -38,6 +38,7 @@ import StudyAbroad from "@/pages/study-abroad";
 import UniversityApplications from "@/pages/university-applications";
 import CareerCounseling from "@/pages/career-counseling";
 import ResumeBuilding from "@/pages/resume-building";
+import { PaymentCancelled, PaymentSuccess } from "@/pages/payment-result";
 import {
   CompliancePage,
   PrivacyCenter,
@@ -56,6 +57,8 @@ function Router() {
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/dashboard" component={Dashboard} />
+      <Route path="/payment/success" component={PaymentSuccess} />
+      <Route path="/payment/cancelled" component={PaymentCancelled} />
       <Route path="/referrals" component={Referrals} />
       <Route path="/admin" component={Admin} />
       <Route path="/scholarships/:id" component={ScholarshipDetail} />
