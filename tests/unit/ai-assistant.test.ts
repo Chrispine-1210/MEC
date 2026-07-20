@@ -99,6 +99,22 @@ test("missing production provider configuration fails closed instead of returnin
   );
 });
 
+test("provider quota failures make activation readiness unavailable", async () => {
+  const { getAiActivationReadiness, recordAiProviderFailure } = await aiModulePromise;
+
+  recordAiProviderFailure({ code: "insufficient_quota" }, { cacheTtlMs: 30_000 });
+  const readiness = await getAiActivationReadiness({ verifyProvider: true, cacheTtlMs: 30_000 });
+
+  assert.equal(readiness.ready, false);
+  assert.equal(readiness.providerReachable, false);
+  assert.deepEqual(readiness.blockingReasons, [
+    {
+      code: "openai_insufficient_quota",
+      message: "OpenAI rejected generation because the configured project has insufficient quota or billing credits.",
+    },
+  ]);
+});
+
 test("governed local test responses use the same streaming callback contract", async () => {
   const { getEnterpriseChatResponse } = await aiModulePromise;
   const deltas: string[] = [];

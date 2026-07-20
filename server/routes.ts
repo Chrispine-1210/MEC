@@ -4500,7 +4500,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         checkedAt: new Date().toISOString(),
         blockingReasons: [{ code: "payment_readiness_check_failed", message: getErrorLogMessage(error) }],
       })),
-      getAiActivationReadiness().catch((error) => ({
+      getAiActivationReadiness({
+        verifyProvider: env.NODE_ENV === "production",
+        cacheTtlMs: env.NODE_ENV === "production" ? 120_000 : 30_000,
+      }).catch((error) => ({
         enabled: env.AI_CHAT_ENABLED !== false,
         ready: false,
         provider: "openai" as const,

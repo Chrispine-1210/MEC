@@ -41,6 +41,83 @@ export type AiActivationReadiness = {
 
 let aiReadinessCache: { expiresAt: number; value: AiActivationReadiness } | null = null;
 
+const createAiReadinessSnapshot = (
+  overrides: Partial<AiActivationReadiness> = {},
+): AiActivationReadiness => ({
+  enabled: env.AI_CHAT_ENABLED !== false,
+  ready: false,
+  provider: "openai",
+  keyConfigured: Boolean(env.OPENAI_API_KEY),
+  model: primaryModel,
+  fallbackModelConfigured: Boolean(env.OPENAI_FALLBACK_MODEL),
+  providerReachable: null,
+  checkedAt: new Date().toISOString(),
+  blockingReasons: [],
+  ...overrides,
+});
+
+const setAiReadinessCache = (value: AiActivationReadiness, cacheTtlMs = 120_000) => {
+  aiReadinessCache = {
+    value,
+    expiresAt: Date.now() + Math.max(5_000, cacheTtlMs),
+  };
+};
+
+const getOpenAiReadinessFailure = (error: unknown): AiActivationReadiness["blockingReasons"][number] => {
+  const code = getOpenAiErrorCode(error);
+  if (code === "insufficient_quota") {
+    return {
+      code: "openai_insufficient_quota",
+      message: "OpenAI rejected generation because the configured project has insufficient quota or billing credits.",
+    };
+  }
+  if (code === "invalid_api_key" || code === "401") {
+    return {
+      code: "openai_key_invalid",
+      message: "OpenAI rejected the configured API key.",
+    };
+  }
+  if (code === "model_not_found" || code === "404") {
+    return {
+      code: "openai_model_unavailable",
+      message: `OpenAI model ${primaryModel} is not available to the configured project.`,
+    };
+  }
+  if (code === "rate_limit_exceeded" || code === "429") {
+    return {
+      code: "openai_rate_limited",
+      message: "OpenAI rate limited the configured project.",
+    };
+  }
+  return {
+    code: "openai_verification_failed",
+    message: `OpenAI provider verification failed (${code}).`,
+  };
+};
+
+export const recordAiProviderFailure = (error: unknown, options: { cacheTtlMs?: number } = {}) => {
+  const reason = getOpenAiReadinessFailure(error);
+  setAiReadinessCache(
+    createAiReadinessSnapshot({
+      ready: false,
+      providerReachable: false,
+      blockingReasons: [reason],
+    }),
+    options.cacheTtlMs,
+  );
+};
+
+const recordAiProviderSuccess = (options: { cacheTtlMs?: number } = {}) => {
+  setAiReadinessCache(
+    createAiReadinessSnapshot({
+      ready: true,
+      providerReachable: true,
+      blockingReasons: [],
+    }),
+    options.cacheTtlMs,
+  );
+};
+
 export const getAiActivationReadiness = async (options: { verifyProvider?: boolean; cacheTtlMs?: number } = {}) => {
   const now = Date.now();
   if (
@@ -60,18 +137,24 @@ export const getAiActivationReadiness = async (options: { verifyProvider?: boole
 
   if (enabled && openai && options.verifyProvider) {
     try {
-      await openai.models.retrieve(primaryModel);
+      await openai.responses.create({
+        model: primaryModel,
+        instructions: "You are verifying provider readiness. Return a minimal acknowledgement.",
+        input: "Return ok.",
+        max_output_tokens: 8,
+        temperature: 0,
+        store: false,
+      });
       providerReachable = true;
     } catch (error) {
       providerReachable = false;
-      const code = error instanceof OpenAI.APIError ? error.code || error.status : "provider_unreachable";
-      blockingReasons.push({ code: "openai_verification_failed", message: `OpenAI provider verification failed (${code}).` });
+      blockingReasons.push(getOpenAiReadinessFailure(error));
     }
   }
 
   const value: AiActivationReadiness = {
     enabled,
-    ready: enabled && keyConfigured && providerReachable !== false,
+    ready: enabled && keyConfigured && (options.verifyProvider ? providerReachable === true : providerReachable !== false),
     provider: "openai",
     keyConfigured,
     model: primaryModel,
@@ -80,7 +163,7 @@ export const getAiActivationReadiness = async (options: { verifyProvider?: boole
     checkedAt: new Date().toISOString(),
     blockingReasons,
   };
-  aiReadinessCache = { value, expiresAt: now + Math.max(5_000, options.cacheTtlMs ?? 120_000) };
+  setAiReadinessCache(value, options.cacheTtlMs);
   return value;
 };
 
@@ -757,10 +840,16 @@ const buildResponseInput = (history: ChatMessage[], message: string) => {
   return transcript ? `Conversation history:\n${transcript}\n\nCurrent user message:\n${message}` : message;
 };
 
-const getOpenAiErrorCode = (error: unknown) => {
+function getOpenAiErrorCode(error: unknown) {
   if (error instanceof OpenAI.APIError) return String(error.code || error.status || error.name);
+  if (error && typeof error === "object") {
+    const record = error as { code?: unknown; status?: unknown; name?: unknown };
+    if (typeof record.code === "string" && record.code.trim()) return record.code;
+    if (typeof record.status === "number") return String(record.status);
+    if (typeof record.name === "string" && record.name.trim()) return record.name;
+  }
   return error instanceof Error ? error.name : "unknown_error";
-};
+}
 
 export async function getEnterpriseChatResponse(
   message: string,
@@ -869,6 +958,7 @@ export async function getEnterpriseChatResponse(
         modelUsed = candidateModel;
         usedFallback = modelIndex > 0;
         lastError = null;
+        recordAiProviderSuccess();
         break;
       } catch (error) {
         if (options.signal?.aborted || (error instanceof AiServiceError && error.code === "generation_stopped")) {
@@ -883,6 +973,7 @@ export async function getEnterpriseChatResponse(
           );
         }
         lastError = error;
+        recordAiProviderFailure(error);
         console.error("OpenAI request attempt failed", {
           model: candidateModel,
           code: getOpenAiErrorCode(error),
