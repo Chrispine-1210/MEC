@@ -4435,6 +4435,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return mediaDefaultReferences[moduleName] || mediaDefaultReferences.defaults;
   };
 
+  const toPublicTeamMemberWithAvailableMedia = (member: unknown) => {
+    const publicMember = toPublicTeamMember(member);
+    const imageReference = publicMember.imageUrl;
+    if (!imageReference || /^https?:\/\//i.test(imageReference) || isValidMediaReference(imageReference)) {
+      return publicMember;
+    }
+
+    // Preserve the Admin record for repair, but do not send a known-broken URL to public visitors.
+    return { ...publicMember, imageUrl: null, profileImage: null };
+  };
+
   const serveMediaAsset = (req: Request, res: Response) => {
     try {
       const requestedPath = normalizeMediaAssetReference((req.params as Record<string, string>)["0"]);
@@ -7081,7 +7092,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const teamMembers = isAdmin(requester)
         ? await storage.getAllTeamMembers()
         : await storage.getActiveTeamMembers();
-      res.json(teamMembers.map(toPublicTeamMember));
+      res.json(teamMembers.map(toPublicTeamMemberWithAvailableMedia));
     } catch (error) {
       console.error('Team members fetch error:', error);
       res.status(500).json({ message: 'Failed to fetch team members' });
@@ -7095,7 +7106,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isVisible = teamMember && (isAdmin(requester) || teamMember.isActive !== false);
 
       if (!isVisible) return res.status(404).json({ message: 'Team member not found' });
-      res.json(toPublicTeamMember(teamMember));
+      res.json(toPublicTeamMemberWithAvailableMedia(teamMember));
     } catch (error) {
       console.error('Team member detail fetch error:', error);
       res.status(500).json({ message: 'Failed to fetch team member' });
@@ -13305,7 +13316,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       payload = chatRequestSchema.parse(req.body);
       const readiness = await getAiActivationReadiness();
       if (!readiness.ready) {
-        return res.status(503).json({ message: "AI chat is temporarily unavailable.", code: "openai_not_configured" });
+        return res.status(503).json({
+          message: "AI chat is temporarily unavailable.",
+          code: readiness.blockingReasons[0]?.code || "openai_unavailable",
+        });
       }
     } catch (error) {
       return res.status(error instanceof z.ZodError ? 400 : 500).json({ message: getPublicErrorMessage(error) });
