@@ -1,16 +1,21 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const port = Number(process.env.PORT || 5000);
-const adminPort = Number(process.env.ADMIN_PORT || 5174);
+const port = Number(process.env.E2E_API_PORT || process.env.PORT || 5100);
+const clientPort = Number(process.env.E2E_CLIENT_PORT || process.env.CLIENT_PORT || process.env.VITE_CLIENT_PORT || 5176);
+const adminPort = Number(process.env.E2E_ADMIN_PORT || process.env.ADMIN_PORT || 5177);
 const apiBaseURL = process.env.E2E_API_BASE_URL || `http://127.0.0.1:${port}`;
-const clientBaseURL = process.env.E2E_CLIENT_BASE_URL || apiBaseURL;
+const clientBaseURL = process.env.E2E_CLIENT_BASE_URL || `http://localhost:${clientPort}`;
 const adminBaseURL = process.env.E2E_ADMIN_BASE_URL || `http://127.0.0.1:${adminPort}`;
 const e2eSecret = process.env.E2E_TEST_SECRET || "local-e2e-secret-32-characters";
 
 const sharedServerEnv = {
   NODE_ENV: "development",
   PORT: String(port),
+  API_ONLY: "true",
+  CLIENT_PORT: String(clientPort),
+  VITE_CLIENT_PORT: String(clientPort),
   ADMIN_PORT: String(adminPort),
+  VITE_ADMIN_PORT: String(adminPort),
   HOST: "127.0.0.1",
   DEV_API_HOST: "127.0.0.1",
   JWT_SECRET: process.env.JWT_SECRET || "playwright-e2e-jwt-secret-32-chars",
@@ -54,14 +59,21 @@ export default defineConfig({
       command: "npm run e2e:server",
       url: `${apiBaseURL}/api/health`,
       timeout: 120_000,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
+      env: sharedServerEnv,
+    },
+    {
+      command: "npm run dev:client",
+      url: clientBaseURL,
+      timeout: 120_000,
+      reuseExistingServer: false,
       env: sharedServerEnv,
     },
     {
       command: "npm run e2e:admin",
       url: `${adminBaseURL}/admin/auth`,
       timeout: 120_000,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       env: sharedServerEnv,
     },
   ],

@@ -1,8 +1,10 @@
 import { createHmac } from "node:crypto";
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
 
-const apiBaseURL = process.env.E2E_API_BASE_URL || "http://127.0.0.1:5000";
-const adminBaseURL = process.env.E2E_ADMIN_BASE_URL || "http://127.0.0.1:5174";
+const apiPort = process.env.E2E_API_PORT || process.env.PORT || "5100";
+const apiBaseURL = process.env.E2E_API_BASE_URL || `http://127.0.0.1:${apiPort}`;
+const adminPort = process.env.E2E_ADMIN_PORT || process.env.ADMIN_PORT || "5177";
+const adminBaseURL = process.env.E2E_ADMIN_BASE_URL || `http://127.0.0.1:${adminPort}`;
 const e2eSecret = process.env.E2E_TEST_SECRET || "local-e2e-secret-32-characters";
 const webhookSecret = process.env.EMAIL_WEBHOOK_SIGNING_SECRET || "playwright-webhook-secret";
 const e2eHeaders = { Authorization: `Bearer ${e2eSecret}` };
