@@ -33,11 +33,35 @@
   - `SENTRY_TRACES_SAMPLE_RATE`
 
 ## MFA Operations
+- Current handoff mode: admin MFA enforcement is disabled so available
+  administrator credentials can access the admin portal immediately.
+- To keep MFA disabled, set `ADMIN_TWO_FACTOR_REQUIRED=false` in the runtime
+  environment and keep Admin Settings → Security → Two-factor authentication off.
+- To re-enable MFA in the next security update, set
+  `ADMIN_TWO_FACTOR_REQUIRED=true` or remove the env override and enable the
+  Admin Settings toggle. Keep `MFA_ENCRYPTION_KEY` configured before enabling
+  setup in production.
 - Check MFA status: `GET /api/auth/mfa/status`
 - Start MFA setup: `POST /api/auth/mfa/setup`
 - Enable MFA: `POST /api/auth/mfa/enable`
 - Disable MFA: `POST /api/auth/mfa/disable`
 - Complete login challenge: `POST /api/auth/mfa/verify`
+
+When enforcement is disabled, previously enrolled MFA secrets are preserved but
+not required for login or privileged admin actions. This keeps the next MFA
+rollout reversible without forcing administrators through setup during the
+current handoff.
+
+## Email Action Links
+- Confirmation, unsubscribe, preference, and account verification links must
+  point to the application/API host, not a tracking-only host.
+- `EMAIL_LINK_BASE_URL` is for branded provider tracking diagnostics only. Do
+  not use it as `PUBLIC_APP_URL`, `API_APP_URL`, `FRONTEND_URL`, or
+  `VITE_SITE_URL`.
+- Supported public aliases include `/verify-email/:token`,
+  `/email/verify/:token`, `/email/preferences/:token`,
+  `/email/unsubscribe/:token`, `/subscribers/verify/:token`,
+  `/newsletter/verify/:token`, and `/newsletter/unsubscribe/:token`.
 
 ## Incident Response
 - Use the incident procedures in `docs/INCIDENT_RUNBOOK.md`.

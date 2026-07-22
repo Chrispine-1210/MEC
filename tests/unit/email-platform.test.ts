@@ -1230,6 +1230,10 @@ const installSubscriberStorage = async () => {
   await patchStorage({
     getUser: async (id: number) => (id === state.adminUser.id ? state.adminUser : undefined),
     getSubscriberByEmail: async (email: string) => state.subscribers.get(email.toLowerCase()),
+    getSubscriberByVerificationToken: async (token: string) =>
+      Array.from(state.subscribers.values()).find((subscriber) => subscriber.verificationToken === token),
+    getSubscriberByUnsubscribeToken: async (token: string) =>
+      Array.from(state.subscribers.values()).find((subscriber) => subscriber.unsubscribeToken === token),
     getAllSubscribers: async () =>
       Array.from(state.subscribers.values()).sort(
         (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
@@ -1285,6 +1289,13 @@ const installSubscriberStorage = async () => {
       };
       state.emailPreferences.set(saved.email.toLowerCase(), saved);
       return saved;
+    },
+    updateEmailPreference: async (id: number, updatePreference: Record<string, unknown>) => {
+      const existing = Array.from(state.emailPreferences.values()).find((preference) => preference.id === id);
+      if (!existing) throw new Error("Email preference not found");
+      const updated = { ...existing, ...updatePreference, updatedAt: new Date() };
+      state.emailPreferences.set(updated.email.toLowerCase(), updated);
+      return updated;
     },
     createEmailJob: async (job: any) => {
       const saved = { createdAt: new Date(), updatedAt: new Date(), ...job };
@@ -1490,6 +1501,62 @@ test("newsletter signup succeeds once the subscriber is saved and confirmation e
     assert.equal(state.emailJobs[0].status, "sent");
     assert.equal(state.deliveryEvents.some((event) => event.eventType === "queued"), true);
     assert.equal(state.deliveryEvents.some((event) => event.eventType === "sent"), true);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("email action aliases perform subscriber verification and unsubscribe", { concurrency: false }, async () => {
+  const state = await installSubscriberStorage();
+  const { server, baseUrl } = await startTestServer();
+
+  try {
+    state.subscribers.set("alias-subscriber@example.test", {
+      id: state.nextSubscriberId++,
+      email: "alias-subscriber@example.test",
+      name: "Alias Subscriber",
+      preferences: ["news", "events"],
+      source: "unit-test",
+      status: "pending",
+      verificationToken: "verify-alias-token",
+      unsubscribeToken: "unsubscribe-alias-token",
+      verifiedAt: null,
+      unsubscribedAt: null,
+      lastEmailAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    state.emailPreferences.set("alias-subscriber@example.test", {
+      id: 1,
+      userId: null,
+      email: "alias-subscriber@example.test",
+      categories: { news: true, events: true },
+      consentStatus: "pending_double_opt_in",
+      consentSource: "unit-test",
+      consentAt: null,
+      unsubscribedAt: null,
+      unsubscribeTokenHash: "hash",
+      auditTrail: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const verifyResponse = await fetch(`${baseUrl}/subscribers/verify/verify-alias-token`, {
+      redirect: "manual",
+    });
+    assert.equal(verifyResponse.status, 302);
+    assert.equal(verifyResponse.headers.get("location"), "http://public.example.test?subscription=verified");
+    assert.equal(state.subscribers.get("alias-subscriber@example.test")?.status, "active");
+    assert.equal(state.subscribers.get("alias-subscriber@example.test")?.verificationToken, null);
+    assert.equal(state.emailPreferences.get("alias-subscriber@example.test")?.consentStatus, "active");
+
+    const unsubscribeResponse = await fetch(`${baseUrl}/newsletter/unsubscribe/unsubscribe-alias-token`, {
+      redirect: "manual",
+    });
+    assert.equal(unsubscribeResponse.status, 302);
+    assert.equal(unsubscribeResponse.headers.get("location"), "http://public.example.test?subscription=unsubscribed");
+    assert.equal(state.subscribers.get("alias-subscriber@example.test")?.status, "unsubscribed");
+    assert.equal(state.emailPreferences.get("alias-subscriber@example.test")?.consentStatus, "unsubscribed");
   } finally {
     await stopTestServer(server);
   }

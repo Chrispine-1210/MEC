@@ -44,6 +44,7 @@ const envSchema = z.object({
   ADMIN_HMAC_REQUIRED: optionalEnvBoolean,
   ADMIN_HMAC_MAX_SKEW_MS: z.coerce.number().int().positive().default(300_000),
   MFA_ENCRYPTION_KEY: optionalEnvString,
+  ADMIN_TWO_FACTOR_REQUIRED: optionalEnvBoolean,
   PUBLIC_APP_URL: optionalEnvString,
   FRONTEND_URL: optionalEnvString,
   ADMIN_APP_URL: optionalEnvString,

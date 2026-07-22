@@ -196,7 +196,7 @@
     "maxLoginAttempts": 5,
     "maintenanceMode": false,
     "emailNotifications": true,
-    "twoFactorRequired": true,
+    "twoFactorRequired": false,
     "weeklySummary": false,
     "contentPublishedNotifications": true,
     "authTokenInvalidBefore": null,

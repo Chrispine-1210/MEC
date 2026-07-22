@@ -113,10 +113,27 @@ const emailLogPath = path.join(dataDir, "email-events.jsonl");
 fs.mkdirSync(dataDir, { recursive: true });
 
 const fromAddress = env.EMAIL_FROM || "Mtendere Education Consult <no-reply@mtendereeducationconsult.com>";
+const emailLinkBaseUrl = (env.EMAIL_LINK_BASE_URL || "").replace(/\/+$/, "");
 const publicAppUrl = (env.PUBLIC_APP_URL || env.FRONTEND_URL || env.VITE_SITE_URL || "").replace(/\/+$/, "");
 const apiAppUrl = (env.API_APP_URL || env.PUBLIC_APP_URL || env.VITE_API_URL || "").replace(/\/+$/, "");
-const emailBaseUrl = apiAppUrl || publicAppUrl;
-const emailLinkBaseUrl = (env.EMAIL_LINK_BASE_URL || "").replace(/\/+$/, "");
+const normalizeUrlHost = (value: string) => {
+  try {
+    return new URL(value).host.toLowerCase();
+  } catch {
+    return "";
+  }
+};
+const emailLinkHost = normalizeUrlHost(emailLinkBaseUrl);
+const isTrackingOnlyEmailHost = (value: string) => {
+  const host = normalizeUrlHost(value);
+  return Boolean(host && emailLinkHost && host === emailLinkHost);
+};
+const emailBaseUrl = [
+  apiAppUrl,
+  publicAppUrl,
+  (env.VITE_API_URL || "").replace(/\/+$/, ""),
+  (env.VITE_SITE_URL || "").replace(/\/+$/, ""),
+].find((value) => value && !isTrackingOnlyEmailHost(value)) || "";
 const isUsableSecret = (value?: string) =>
   Boolean(
     value &&

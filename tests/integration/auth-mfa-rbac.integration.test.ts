@@ -13,6 +13,7 @@ process.env.DATABASE_URL_UNPOOLED =
   process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
 process.env.JWT_SECRET =
   process.env.JWT_SECRET || "integration-test-secret-with-enough-length";
+process.env.ADMIN_TWO_FACTOR_REQUIRED = process.env.ADMIN_TWO_FACTOR_REQUIRED || "true";
 
 type MockUser = {
   id: number;
@@ -369,6 +370,55 @@ test("Privileged role without MFA setup can access admin routes when MFA policy 
         },
       });
 
+      assert.equal(adminResponse.status, 200);
+    } finally {
+      await stopTestServer(server);
+    }
+  });
+});
+
+test("Privileged role with enrolled MFA can use password login when MFA policy is off", async () => {
+  await withTwoFactorPolicy(false, async () => {
+    await withMockStorage([
+      {
+        id: 23,
+        username: "adminenrolled",
+        email: "admin-enrolled@example.com",
+        password: await bcrypt.hash("secret123", 10),
+        firstName: "Admin",
+        lastName: "Enrolled",
+        role: "admin",
+        mfaEnabled: true,
+        totpSecret: createTotpSecret(),
+        mfaConfirmedAt: new Date(),
+        profilePicture: null,
+        phone: null,
+        dateOfBirth: null,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+
+    const { server, baseUrl } = await startTestServer();
+    try {
+      const loginResponse = await requestJson(baseUrl, "/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "admin-enrolled@example.com", password: "secret123" }),
+      });
+
+      assert.equal(loginResponse.status, 200);
+      assert.equal(loginResponse.body.mfaRequired, false);
+      assert.equal(loginResponse.body.mfaVerified, true);
+      assert.equal(typeof loginResponse.body.token, "string");
+
+      const adminResponse = await requestJson(baseUrl, "/api/admin/communications/diagnostics", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${loginResponse.body.token}`,
+        },
+      });
       assert.equal(adminResponse.status, 200);
     } finally {
       await stopTestServer(server);

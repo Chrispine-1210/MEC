@@ -914,11 +914,33 @@ const isTransientDbConnectivityError = (error: unknown) => {
   );
 };
 
+const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
+
+const normalizeUrlHost = (value: string | undefined) => {
+  if (!value) return "";
+  try {
+    return new URL(value).host.toLowerCase();
+  } catch {
+    return "";
+  }
+};
+
+const isEmailTrackingOnlyBaseUrl = (value: string | undefined) => {
+  const host = normalizeUrlHost(value);
+  const trackingHost = normalizeUrlHost(env.EMAIL_LINK_BASE_URL);
+  return Boolean(host && trackingHost && host === trackingHost);
+};
+
+const firstUsableAppBaseUrl = (...values: Array<string | undefined>) =>
+  values.map((value) => trimTrailingSlash(value || "")).find((value) => value && !isEmailTrackingOnlyBaseUrl(value));
+
 const getRequestBaseUrl = (req: Request) =>
-  env.PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`;
+  firstUsableAppBaseUrl(env.PUBLIC_APP_URL, env.FRONTEND_URL, env.VITE_SITE_URL) ||
+  `${req.protocol}://${req.get("host")}`;
 
 const getApiRequestBaseUrl = (req: Request) =>
-  env.API_APP_URL || getRequestBaseUrl(req);
+  firstUsableAppBaseUrl(env.API_APP_URL, env.PUBLIC_APP_URL, env.VITE_API_URL, env.FRONTEND_URL, env.VITE_SITE_URL) ||
+  `${req.protocol}://${req.get("host")}`;
 
 const getAdminBaseUrl = (req: Request) =>
   env.ADMIN_APP_URL || `${req.protocol}://${req.get("host")}/admin`;
@@ -2233,9 +2255,9 @@ const TOTP_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 const isMfaRequiredForRole = (role: string | null | undefined) => {
   if (!role) return false;
-  const mfaPolicyOverride = process.env.ADMIN_TWO_FACTOR_REQUIRED?.trim().toLowerCase();
-  if (mfaPolicyOverride) {
-    return ["1", "true", "yes", "on"].includes(mfaPolicyOverride) && ADMIN_PORTAL_ROLES.has(role);
+  const rawOverride = process.env.ADMIN_TWO_FACTOR_REQUIRED?.trim().toLowerCase();
+  if (rawOverride) {
+    return ["1", "true", "yes", "on"].includes(rawOverride) && ADMIN_PORTAL_ROLES.has(role);
   }
   return getAdminSettings().twoFactorRequired && ADMIN_PORTAL_ROLES.has(role);
 };
@@ -2712,12 +2734,12 @@ const enforceVerifiedMfa = async (req: Request, res: Response, next: NextFunctio
       return res.status(401).json({ message: "Account is inactive or no longer exists" });
     }
 
-    const mfaConfigured = hasConfirmedMfa(user as AuthUserRecord);
     const mfaRequiredByPolicy = isMfaRequiredForRole(user.role);
-    if (!mfaConfigured && !mfaRequiredByPolicy) {
+    if (!mfaRequiredByPolicy) {
       return next();
     }
 
+    const mfaConfigured = hasConfirmedMfa(user as AuthUserRecord);
     if (!mfaConfigured) {
       return res.status(403).json({
         message: "Multi-factor authentication setup is required for this role",
@@ -4947,9 +4969,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       broadcast('user_activity', { type: 'user_logged_in', user: buildPublicUser(user) });
 
+      const mfaRequired = isMfaRequiredForRole(user.role);
       const mfaConfigured = hasConfirmedMfa(user as AuthUserRecord);
-      const mfaRequired = isMfaRequiredForRole(user.role) || mfaConfigured;
-      if (mfaConfigured) {
+      if (mfaRequired && mfaConfigured) {
         return res.status(202).json({
           message: "Multi-factor authentication required",
           mfaRequired: true,
@@ -5052,6 +5074,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/auth/verify-email/:token', verifyEmailHandler);
   app.get('/auth/verify-email/:token', verifyEmailHandler);
+  app.get('/verify-email/:token', verifyEmailHandler);
+  app.get('/email/verify/:token', verifyEmailHandler);
 
   const resendVerificationHandler = async (req: Request, res: Response) => {
     try {
@@ -5402,7 +5426,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return updated;
   };
 
-  app.get('/api/email/preferences/:token', async (req, res) => {
+  const emailPreferencesGetHandler = async (req: Request, res: Response) => {
     try {
       const preference = await getPreferenceRecord(req.params.token);
       res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -5411,9 +5435,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Email preference center error:", getErrorLogMessage(error));
       res.status(400).send("Invalid email preference link");
     }
-  });
+  };
 
-  app.post('/api/email/preferences/:token', async (req, res) => {
+  const emailPreferencesPostHandler = async (req: Request, res: Response) => {
     try {
       const isJsonRequest = req.is("application/json");
       const payload = isJsonRequest ? emailPreferenceUpdateSchema.parse(req.body) : null;
@@ -5433,9 +5457,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Email preference update error:", getErrorLogMessage(error));
       res.status(400).json({ message: "Preference update failed", error: getErrorMessage(error) });
     }
-  });
+  };
 
-  app.get('/api/email/unsubscribe/:token', async (req, res) => {
+  const emailUnsubscribeGetHandler = async (req: Request, res: Response) => {
     try {
       await updatePreferenceRecord(req.params.token, {}, true);
       res.redirect(302, `${getRequestBaseUrl(req)}/?subscription=unsubscribed`);
@@ -5443,9 +5467,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Email unsubscribe error:", getErrorLogMessage(error));
       res.status(400).send("Invalid unsubscribe link");
     }
-  });
+  };
 
-  app.post('/api/email/unsubscribe/:token', async (req, res) => {
+  const emailUnsubscribePostHandler = async (req: Request, res: Response) => {
     try {
       await updatePreferenceRecord(req.params.token, {}, true);
       res.setHeader("Cache-Control", "no-store");
@@ -5454,7 +5478,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("One-click email unsubscribe error:", getErrorLogMessage(error));
       res.status(400).json({ unsubscribed: false, message: "Invalid unsubscribe link" });
     }
-  });
+  };
+
+  app.get('/api/email/preferences/:token', emailPreferencesGetHandler);
+  app.get('/email/preferences/:token', emailPreferencesGetHandler);
+  app.get('/email-preferences/:token', emailPreferencesGetHandler);
+  app.post('/api/email/preferences/:token', emailPreferencesPostHandler);
+  app.post('/email/preferences/:token', emailPreferencesPostHandler);
+  app.post('/email-preferences/:token', emailPreferencesPostHandler);
+  app.get('/api/email/unsubscribe/:token', emailUnsubscribeGetHandler);
+  app.get('/email/unsubscribe/:token', emailUnsubscribeGetHandler);
+  app.get('/unsubscribe/:token', emailUnsubscribeGetHandler);
+  app.post('/api/email/unsubscribe/:token', emailUnsubscribePostHandler);
+  app.post('/email/unsubscribe/:token', emailUnsubscribePostHandler);
+  app.post('/unsubscribe/:token', emailUnsubscribePostHandler);
 
   const emailQueueDrainHandler = async (req: Request, res: Response) => {
     if (!env.CRON_SECRET && !isVercelCronRequest(req)) {
@@ -12757,7 +12794,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/subscribers/verify/:token', async (req, res) => {
+  const subscriberVerifyHandler = async (req: Request, res: Response) => {
     try {
       const subscriber = await storage.getSubscriberByVerificationToken(req.params.token);
       if (!subscriber) return res.status(404).json({ message: "Verification link not found" });
@@ -12795,9 +12832,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Subscriber verification error:', error);
       res.status(500).json({ message: "Failed to verify subscription" });
     }
-  });
+  };
 
-  app.get('/api/subscribers/unsubscribe/:token', async (req, res) => {
+  const subscriberUnsubscribeHandler = async (req: Request, res: Response) => {
     try {
       const subscriber = await storage.getSubscriberByUnsubscribeToken(req.params.token);
       if (!subscriber) return res.status(404).json({ message: "Unsubscribe link not found" });
@@ -12829,7 +12866,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Subscriber unsubscribe error:', error);
       res.status(500).json({ message: "Failed to unsubscribe" });
     }
-  });
+  };
+
+  app.get('/api/subscribers/verify/:token', subscriberVerifyHandler);
+  app.get('/subscribers/verify/:token', subscriberVerifyHandler);
+  app.get('/newsletter/verify/:token', subscriberVerifyHandler);
+  app.get('/subscription/verify/:token', subscriberVerifyHandler);
+  app.get('/api/subscribers/unsubscribe/:token', subscriberUnsubscribeHandler);
+  app.get('/subscribers/unsubscribe/:token', subscriberUnsubscribeHandler);
+  app.get('/newsletter/unsubscribe/:token', subscriberUnsubscribeHandler);
+  app.get('/subscription/unsubscribe/:token', subscriberUnsubscribeHandler);
 
   app.post('/api/subscribers/unsubscribe', async (req, res) => {
     try {
