@@ -63,6 +63,7 @@ const connectionHost = (() => {
 })();
 const useNodePostgresDriver =
   process.env.DATABASE_DRIVER === "pg" ||
+  (isDevelopment && nodeMajor >= 24) ||
   ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(connectionHost);
 
 type RuntimePool = {

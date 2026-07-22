@@ -2882,6 +2882,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // WebSocket setup for real-time updates
   const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+  wss.on("error", (error: NodeJS.ErrnoException) => {
+    if (error.code === "EADDRINUSE") {
+      return;
+    }
+    throw error;
+  });
   const heartbeat = setInterval(() => {
     wss.clients.forEach((client) => {
       const socket = client as SocketWithSubscriptions;

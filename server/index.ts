@@ -31,6 +31,28 @@ const log = (message: string, source = "express") => {
   console.log(`${formattedTime} [${source}] ${message}`);
 };
 
+const startupLog = (message: string) => {
+  log(message, "startup");
+};
+
+const formatStartupError = (error: unknown) => {
+  if (error instanceof Error) {
+    const code = "code" in error ? String((error as { code?: unknown }).code || "") : "";
+    return [code, error.message].filter(Boolean).join(": ");
+  }
+
+  const eventError =
+    error && typeof error === "object" && "error" in error
+      ? (error as { error?: unknown }).error
+      : undefined;
+  if (eventError instanceof Error) {
+    const code = "code" in eventError ? String((eventError as { code?: unknown }).code || "") : "";
+    return [code, eventError.message].filter(Boolean).join(": ");
+  }
+
+  return String(error);
+};
+
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "same-site" },
@@ -339,9 +361,22 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 export const ready = (async () => {
+  startupLog("Initializing cache");
   await initializeCache();
+  startupLog("Ensuring database schema");
   await ensureRuntimeDatabaseSchema();
+  startupLog("Registering routes");
   const server = await registerRoutes(app);
+  startupLog("Routes registered");
+
+  server.on("error", (error: NodeJS.ErrnoException) => {
+    if (error.code === "EADDRINUSE") {
+      log(`Port ${port} is already in use. Stop the other process or set PORT to a free value.`);
+      process.exit(1);
+    }
+    throw error;
+  });
+
   if (!isVercelRuntime) {
     startEmailQueueWorker();
   }
@@ -431,14 +466,6 @@ export const ready = (async () => {
     });
   }
 
-  server.on("error", (error: NodeJS.ErrnoException) => {
-    if (error.code === "EADDRINUSE") {
-      log(`Port ${port} is already in use. Stop the other process or set PORT to a free value.`);
-      process.exit(1);
-    }
-    throw error;
-  });
-
   if (!isVercelRuntime) {
     const listenHost = env.HOST || (isProduction ? "127.0.0.1" : "0.0.0.0");
     server.listen(port, listenHost, () => {
@@ -447,6 +474,9 @@ export const ready = (async () => {
   }
 
   return server;
-})();
+})().catch((error) => {
+  startupLog(`Startup failed: ${formatStartupError(error)}`);
+  process.exit(1);
+});
 
 export default app;
