@@ -2376,9 +2376,11 @@ const verifyStoredTotpCode = (storedSecret: string | null | undefined, code: str
   }
 };
 
+const totpIssuer = "Mtendere Education Consult";
+
 const buildTotpUri = (user: Pick<AuthUserRecord, "email">, secret: string) => {
-  const label = encodeURIComponent(`Mtendere Education:${user.email}`);
-  const issuer = encodeURIComponent("Mtendere Education");
+  const label = encodeURIComponent(`${totpIssuer}:${user.email}`);
+  const issuer = encodeURIComponent(totpIssuer);
   return `otpauth://totp/${label}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=${TOTP_DIGITS}&period=${TOTP_PERIOD_SECONDS}`;
 };
 
@@ -5859,7 +5861,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       otpauthUrl,
       qrCodeDataUrl,
       account: updatedUser.email || updatedUser.username || String(updatedUser.id),
-      issuer: "Mtendere Education",
+      issuer: totpIssuer,
       period: TOTP_PERIOD_SECONDS,
       digits: TOTP_DIGITS,
     });

@@ -35,6 +35,8 @@ const loginSchema = z.object({
 });
 
 const adminAuthPath = (path: string) => `/api/auth${path}`;
+const normalizeMfaCode = (value: string) => value.replace(/\D/g, "").slice(0, 6);
+const isCompleteMfaCode = (value: string) => /^\d{6}$/.test(value);
 
 export default function AuthPage() {
   const [, setLocation] = useLocation();
@@ -52,7 +54,7 @@ export default function AuthPage() {
   const [homepage, setHomepage] = useState("");
   const markFormStarted = () => setFormStartedAt((current) => current ?? Date.now());
   const mfaSetupAccount = pendingMfaSetup?.account || pendingCredentials?.username || "this admin account";
-  const mfaSetupIssuer = pendingMfaSetup?.issuer || "Mtendere Education";
+  const mfaSetupIssuer = pendingMfaSetup?.issuer || "Mtendere Education Consult";
 
   const loginForm = useForm({
     resolver: zodResolver(loginSchema),
@@ -129,7 +131,8 @@ export default function AuthPage() {
   }
 
   async function onVerifyMfaChallenge() {
-    if (!pendingMfaChallengeToken || !mfaCode.trim()) return;
+    const code = normalizeMfaCode(mfaCode);
+    if (!pendingMfaChallengeToken || !isCompleteMfaCode(code)) return;
     setIsLoading(true);
     try {
       const recaptchaToken = await getRecaptchaToken("mfa_verify");
@@ -143,7 +146,7 @@ export default function AuthPage() {
       });
       const res = await apiRequest("POST", adminAuthPath("/mfa/verify"), {
         challengeToken: pendingMfaChallengeToken,
-        code: mfaCode.trim(),
+        code,
         ...security,
       });
       const body = await res.json();
@@ -158,7 +161,8 @@ export default function AuthPage() {
   }
 
   async function onEnableMfaSetup() {
-    if (!pendingMfaSetup || !mfaCode.trim() || !pendingCredentials) return;
+    const code = normalizeMfaCode(mfaCode);
+    if (!pendingMfaSetup || !isCompleteMfaCode(code) || !pendingCredentials) return;
     setIsLoading(true);
     try {
       const recaptchaToken = await getRecaptchaToken("mfa_confirm");
@@ -171,7 +175,7 @@ export default function AuthPage() {
         recaptchaToken,
       });
       await apiRequest("POST", adminAuthPath("/mfa/confirm"), {
-        code: mfaCode.trim(),
+        code,
         ...security,
       });
       const loginRecaptchaToken = await getRecaptchaToken("admin_login");
@@ -186,7 +190,7 @@ export default function AuthPage() {
       const loginRes = await apiRequest("POST", adminAuthPath("/login"), {
         username: pendingCredentials.username,
         password: pendingCredentials.password,
-        mfaCode: mfaCode.trim(),
+        mfaCode: code,
         ...loginSecurity,
       });
       const loginBody = await loginRes.json();
@@ -375,18 +379,19 @@ export default function AuthPage() {
                     value={mfaCode}
                     onChange={(event) => {
                       markFormStarted();
-                      setMfaCode(event.target.value);
+                      setMfaCode(normalizeMfaCode(event.target.value));
                     }}
                     placeholder="123456"
                     maxLength={6}
                     inputMode="numeric"
+                    pattern="[0-9]*"
                     autoComplete="one-time-code"
                   />
                   <Button
                     type="button"
                     className="w-full"
                     onClick={onVerifyMfaChallenge}
-                    disabled={isLoading || mfaCode.trim().length < 6}
+                    disabled={isLoading || !isCompleteMfaCode(mfaCode)}
                   >
                     {isLoading ? "Verifying..." : "Verify MFA Code"}
                   </Button>
@@ -436,22 +441,26 @@ export default function AuthPage() {
                       <a href={pendingMfaSetup.otpauthUrl}>Open Authenticator</a>
                     </Button>
                   </div>
-                  <Input
-                    value={mfaCode}
-                    onChange={(event) => {
-                      markFormStarted();
-                      setMfaCode(event.target.value);
-                    }}
-                    placeholder="Enter 6-digit setup code"
-                    maxLength={6}
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                  />
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground">6-digit authenticator code</p>
+                    <Input
+                      value={mfaCode}
+                      onChange={(event) => {
+                        markFormStarted();
+                        setMfaCode(normalizeMfaCode(event.target.value));
+                      }}
+                      placeholder="123456"
+                      maxLength={6}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      autoComplete="one-time-code"
+                    />
+                  </div>
                   <Button
                     type="button"
                     className="w-full"
                     onClick={onEnableMfaSetup}
-                    disabled={isLoading || mfaCode.trim().length < 6}
+                    disabled={isLoading || !isCompleteMfaCode(mfaCode)}
                   >
                     {isLoading ? "Enabling..." : "Enable MFA and Continue"}
                   </Button>
