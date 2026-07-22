@@ -5858,6 +5858,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       secret,
       otpauthUrl,
       qrCodeDataUrl,
+      account: updatedUser.email || updatedUser.username || String(updatedUser.id),
+      issuer: "Mtendere Education",
       period: TOTP_PERIOD_SECONDS,
       digits: TOTP_DIGITS,
     });

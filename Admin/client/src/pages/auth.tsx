@@ -51,6 +51,8 @@ export default function AuthPage() {
   const [company, setCompany] = useState("");
   const [homepage, setHomepage] = useState("");
   const markFormStarted = () => setFormStartedAt((current) => current ?? Date.now());
+  const mfaSetupAccount = pendingMfaSetup?.account || pendingCredentials?.username || "this admin account";
+  const mfaSetupIssuer = pendingMfaSetup?.issuer || "Mtendere Education";
 
   const loginForm = useForm({
     resolver: zodResolver(loginSchema),
@@ -404,14 +406,14 @@ export default function AuthPage() {
                   <div className="rounded-xl border bg-white p-3 shadow-sm">
                     <img
                       src={pendingMfaSetup.qrCodeDataUrl}
-                      alt={`MFA QR code for ${pendingMfaSetup.account}`}
+                      alt={`MFA QR code for ${mfaSetupAccount}`}
                       className="mx-auto h-48 w-48"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-2 rounded-lg border bg-background p-3 text-xs">
                     <div>
                       <span className="text-muted-foreground">Issuer</span>
-                      <p className="font-medium text-foreground">{pendingMfaSetup.issuer}</p>
+                      <p className="font-medium text-foreground">{mfaSetupIssuer}</p>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Code format</span>
