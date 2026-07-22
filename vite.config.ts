@@ -62,7 +62,7 @@ export default defineConfig({
 
   server: {
     port: clientPort,
-    strictPort: false,
+    strictPort: true,
     fs: {
       strict: false,
     },

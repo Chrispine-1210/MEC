@@ -18,6 +18,7 @@ const isProduction = env.NODE_ENV === "production";
 const port = env.PORT;
 const adminPort = env.ADMIN_PORT;
 const isVercelRuntime = process.env.VERCEL === "1" || process.env.VERCEL === "true";
+const apiOnlyRuntime = process.env.API_ONLY === "1" || process.env.API_ONLY === "true";
 app.disable("x-powered-by");
 
 const log = (message: string, source = "express") => {
@@ -377,10 +378,6 @@ export const ready = (async () => {
     throw error;
   });
 
-  if (!isVercelRuntime) {
-    startEmailQueueWorker();
-  }
-
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     const status =
       typeof err === "object" && err !== null && "status" in err
@@ -401,7 +398,7 @@ export const ready = (async () => {
     res.status(status).json({ message });
   });
 
-  if (!isVercelRuntime && app.get("env") === "development") {
+  if (!isVercelRuntime && app.get("env") === "development" && !apiOnlyRuntime) {
     const dynamicImport = new Function("m", "return import(m)") as (
       modulePath: string,
     ) => Promise<{ setupVite: (app: Express, server: import("http").Server) => Promise<void> }>;
@@ -409,6 +406,13 @@ export const ready = (async () => {
     startupLog("Setting up Vite middleware");
     await setupVite(app, server);
     startupLog("Vite middleware ready");
+  } else if (!isVercelRuntime && app.get("env") === "development") {
+    app.get("/", (_req, res) => {
+      res.json({ status: "ok", mode: "api-only" });
+    });
+    app.get("/health", (_req, res) => {
+      res.json({ status: "ok" });
+    });
   } else {
     const clientDistPath = path.resolve(import.meta.dirname, "..", "dist", "client");
     const adminDistPath = path.resolve(import.meta.dirname, "..", "dist", "admin");
@@ -473,6 +477,7 @@ export const ready = (async () => {
     startupLog(`Starting HTTP listener on ${listenHost}:${port}`);
     server.listen(port, listenHost, () => {
       log(`Server listening on ${listenHost}:${port}`);
+      startEmailQueueWorker();
     });
   }
 

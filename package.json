@@ -7,7 +7,7 @@
     "node": ">=20 <23"
   },
   "scripts": {
-    "dev:server": "cross-env NODE_ENV=development NODE_OPTIONS=--dns-result-order=ipv4first tsx watch server/index.ts",
+    "dev:server": "cross-env NODE_ENV=development API_ONLY=true NODE_OPTIONS=--dns-result-order=ipv4first tsx watch server/index.ts",
     "dev:client": "cross-env NODE_ENV=development vite",
     "dev:admin": "cross-env NODE_ENV=development ADMIN_PORT=5174 VITE_ADMIN_PORT=5174 npm run dev --prefix ./Admin",
     "dev:Admin": "npm run dev:admin",
