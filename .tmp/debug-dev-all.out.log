@@ -1,0 +1,98 @@
+
+> rest-express@1.0.0 dev:all
+> concurrently "npm run dev:server" "npm run dev:client" "npm run dev:admin"
+
+[1] 
+[1] > rest-express@1.0.0 dev:client
+[1] > cross-env NODE_ENV=development vite
+[1] 
+[0] 
+[0] > rest-express@1.0.0 dev:server
+[0] > cross-env NODE_ENV=development NODE_OPTIONS=--dns-result-order=ipv4first tsx watch server/index.ts
+[0] 
+[2] 
+[2] > rest-express@1.0.0 dev:admin
+[2] > cross-env NODE_ENV=development ADMIN_PORT=5174 VITE_ADMIN_PORT=5174 npm run dev --prefix ./Admin
+[2] 
+[1] [2m4:03:21 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m Re-optimizing dependencies because vite config has changed
+[2] 
+[2] > rest-express@1.0.0 dev
+[2] > cross-env NODE_ENV=development vite --host 0.0.0.0
+[2] 
+[2] [2m4:03:28 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m Re-optimizing dependencies because vite config has changed
+[1] 
+[1]   [32m[1mVITE[22m v8.1.5[39m  [2mready in [0m[1m10310[22m[2m[0m ms[22m
+[1] 
+[1]   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+[1] [2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+[1] [2m4:03:30 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [optimizer] scanning dependencies...
+[0] [db] Node.js 24.13.0 is newer than the supported LTS range for this stack. Use Node 20 or 22 LTS if Neon WebSocket connections behave unexpectedly.
+[0] 4:03:33 PM [startup] Initializing cache
+[0] Redis was configured but unavailable (ERR_MODULE_NOT_FOUND). Falling back to in-memory cache.
+[0] 4:03:33 PM [startup] Ensuring database schema
+[0] (node:20936) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+[0] In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
+[0] 
+[0] To prepare for this change:
+[0] - If you want the current behavior, explicitly use 'sslmode=verify-full'
+[0] - If you want libpq compatibility now, use 'uselibpqcompat=true&sslmode=require'
+[0] 
+[0] See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
+[0] (Use `node --trace-warnings ...` to show where the warning was created)
+[1] [2m4:03:34 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [optimizer] bundling dependencies...
+[0] 4:03:37 PM [startup] Registering routes
+[0] [referrals] Scheduled commission release worker disabled in development. Set REFERRAL_RELEASE_WORKER_ENABLED=true to run it locally.
+[0] 4:03:37 PM [startup] Routes registered
+[2] 
+[2]   [32m[1mVITE[22m v8.1.5[39m  [2mready in [0m[1m15650[22m[2m[0m ms[22m
+[2] 
+[2]   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5174[22m/[39m
+[2]   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.119:[1m5174[22m/[39m
+[2] [2m4:03:40 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m4:03:42 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [optimizer] bundling dependencies...
+[2] [2m4:03:44 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m4:03:58 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/user[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[0] 4:04:59 PM [tsx] change in ./server\index.ts Restarting...
+[2] npm run dev:admin exited with code 4294967295
+[0] [db] Node.js 24.13.0 is newer than the supported LTS range for this stack. Use Node 20 or 22 LTS if Neon WebSocket connections behave unexpectedly.
+[0] 4:05:09 PM [startup] Initializing cache
+[0] Redis was configured but unavailable (ERR_MODULE_NOT_FOUND). Falling back to in-memory cache.
+[0] 4:05:09 PM [startup] Ensuring database schema
+[0] (node:22500) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+[0] In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
+[0] 
+[0] To prepare for this change:
+[0] - If you want the current behavior, explicitly use 'sslmode=verify-full'
+[0] - If you want libpq compatibility now, use 'uselibpqcompat=true&sslmode=require'
+[0] 
+[0] See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
+[0] (Use `node --trace-warnings ...` to show where the warning was created)
+[0] 4:05:13 PM [startup] Registering routes
+[0] [referrals] Scheduled commission release worker disabled in development. Set REFERRAL_RELEASE_WORKER_ENABLED=true to run it locally.
+[0] 4:05:13 PM [startup] Routes registered
+[0] 4:07:18 PM [tsx] change in ./server\index.ts Restarting...
+[0] [db] Node.js 24.13.0 is newer than the supported LTS range for this stack. Use Node 20 or 22 LTS if Neon WebSocket connections behave unexpectedly.
+[0] 4:07:30 PM [startup] Initializing cache
+[0] Redis was configured but unavailable (ERR_MODULE_NOT_FOUND). Falling back to in-memory cache.
+[0] 4:07:30 PM [startup] Ensuring database schema
+[0] (node:14032) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+[0] In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
+[0] 
+[0] To prepare for this change:
+[0] - If you want the current behavior, explicitly use 'sslmode=verify-full'
+[0] - If you want libpq compatibility now, use 'uselibpqcompat=true&sslmode=require'
+[0] 
+[0] See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
+[0] (Use `node --trace-warnings ...` to show where the warning was created)
+[0] 4:07:34 PM [startup] Registering routes
+[0] [referrals] Scheduled commission release worker disabled in development. Set REFERRAL_RELEASE_WORKER_ENABLED=true to run it locally.
+[0] 4:07:34 PM [startup] Routes registered
+[1] [2m4:09:47 PM[22m [36m[1m[vite][22m[39m [32mvite.config.ts changed, restarting server...[39m
+[1] [2m4:09:47 PM[22m [36m[1m[vite][22m[39m [32mvite.config.ts changed, restarting server...[39m
+[1] [2m4:09:48 PM[22m [36m[1m[vite][22m[39m server restarted.

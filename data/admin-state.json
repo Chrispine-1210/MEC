@@ -42,6 +42,34 @@
       "status": "published",
       "revisionHistory": [
         {
+          "id": "eb7dc938-d770-48c3-bb5a-104798b68e62",
+          "action": "status_changed",
+          "status": "published",
+          "actor": 8,
+          "createdAt": "2026-07-22T22:32:01.576Z"
+        },
+        {
+          "id": "692b5ac9-e210-4da1-8c0d-e12e940ce459",
+          "action": "status_changed",
+          "status": "published",
+          "actor": 8,
+          "createdAt": "2026-07-22T22:19:14.236Z"
+        },
+        {
+          "id": "68a30c52-b804-4fb3-8503-85f1f87b8bb2",
+          "action": "status_changed",
+          "status": "published",
+          "actor": 8,
+          "createdAt": "2026-07-22T21:50:48.927Z"
+        },
+        {
+          "id": "88723b37-186e-48d1-9fd0-80643f69f240",
+          "action": "status_changed",
+          "status": "published",
+          "actor": 8,
+          "createdAt": "2026-07-22T14:12:14.186Z"
+        },
+        {
           "id": "5949eebc-d7e3-49d7-9638-a106b8dd03f3",
           "action": "status_changed",
           "status": "published",
@@ -123,7 +151,9 @@
         "view_analytics",
         "publish",
         "export",
-        "manage_security"
+        "manage_security",
+        "manage_automation",
+        "manage_payments"
       ],
       "isActive": true,
       "createdAt": "2026-06-09T06:14:22.935Z",
@@ -150,7 +180,9 @@
         "publish",
         "export",
         "manage_security",
-        "manage_webhooks"
+        "manage_webhooks",
+        "manage_automation",
+        "manage_payments"
       ],
       "isActive": true,
       "createdAt": "2026-04-02T12:07:01.829Z",
@@ -164,12 +196,12 @@
     "maxLoginAttempts": 5,
     "maintenanceMode": false,
     "emailNotifications": true,
-    "twoFactorRequired": false,
+    "twoFactorRequired": true,
     "weeklySummary": false,
     "contentPublishedNotifications": true,
     "authTokenInvalidBefore": null,
     "cacheVersion": 1,
-    "updatedAt": "2026-05-20T10:55:30.257Z"
+    "updatedAt": "2026-07-22T22:10:15.762Z"
   },
   "readNotificationIds": [
     "analytics-10",

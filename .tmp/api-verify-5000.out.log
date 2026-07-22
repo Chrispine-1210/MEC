@@ -1,0 +1,14 @@
+
+> rest-express@1.0.0 e2e:server
+> cross-env NODE_ENV=development NODE_OPTIONS=--dns-result-order=ipv4first tsx server/index.ts
+
+3:38:11 PM [startup] Initializing cache
+3:38:11 PM [startup] Ensuring database schema
+3:38:15 PM [startup] Registering routes
+[referrals] Scheduled commission release worker disabled in development. Set REFERRAL_RELEASE_WORKER_ENABLED=true to run it locally.
+3:38:15 PM [startup] Routes registered
+3:38:17 PM [startup] Setting up Vite middleware
+3:38:17 PM [startup] Vite middleware ready
+3:38:17 PM [startup] Starting HTTP listener on 0.0.0.0:5000
+3:38:17 PM [express] Server listening on 0.0.0.0:5000
+3:38:36 PM [express] [deb06859-151d-4e64-832f-a0b53a226413] GET /api/user 401 in 14ms :: {"message":"Access token required"}

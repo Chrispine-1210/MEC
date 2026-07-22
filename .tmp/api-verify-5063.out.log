@@ -1,0 +1,13 @@
+
+> rest-express@1.0.0 e2e:server
+> cross-env NODE_ENV=development NODE_OPTIONS=--dns-result-order=ipv4first tsx server/index.ts
+
+3:36:38 PM [startup] Initializing cache
+3:36:38 PM [startup] Ensuring database schema
+3:36:44 PM [startup] Registering routes
+[referrals] Scheduled commission release worker disabled in development. Set REFERRAL_RELEASE_WORKER_ENABLED=true to run it locally.
+3:36:44 PM [startup] Routes registered
+3:36:45 PM [startup] Setting up Vite middleware
+3:36:45 PM [startup] Vite middleware ready
+3:36:46 PM [startup] Starting HTTP listener on 0.0.0.0:5063
+3:36:46 PM [express] Server listening on 0.0.0.0:5063

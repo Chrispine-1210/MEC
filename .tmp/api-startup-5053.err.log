@@ -1,0 +1,91 @@
+[db] Node.js 24.13.0 is newer than the supported LTS range for this stack. Use Node 20 or 22 LTS if Neon WebSocket connections behave unexpectedly.
+Redis was configured but unavailable (ERR_MODULE_NOT_FOUND). Falling back to in-memory cache.
+
+file:///C:/Users/Chrispine%20Mndala/OneDrive/Desktop/MEC/node_modules/@neondatabase/serverless/index.mjs:1087
+n=o,t=u}).catch(o=>{throw Error.captureStackTrace(o),o});return{callback:i,result:s}}a(Dt,"promisify");
+                                ^
+ErrorEvent {
+  Symbol(kTarget): WebSocket {
+    _events: [Object: null prototype] {
+      error: [Function: onError] {
+        Symbol(kIsForOnEventAttribute): false,
+        Symbol(kListener): [Function (anonymous)]
+      },
+      message: [Function: onMessage] {
+        Symbol(kIsForOnEventAttribute): false,
+        Symbol(kListener): [Function (anonymous)]
+      },
+      close: [Function: onClose] {
+        Symbol(kIsForOnEventAttribute): false,
+        Symbol(kListener): [Function (anonymous)]
+      },
+      open: [Function: onOpen] {
+        Symbol(kIsForOnEventAttribute): false,
+        Symbol(kListener): [Function: handleWebSocketOpen]
+      }
+    },
+    _eventsCount: 4,
+    _maxListeners: undefined,
+    _binaryType: 'arraybuffer',
+    _closeCode: 1006,
+    _closeFrameReceived: false,
+    _closeFrameSent: false,
+    _closeMessage: Buffer(0) [Uint8Array] [],
+    _closeTimer: null,
+    _errorEmitted: true,
+    _extensions: {},
+    _paused: false,
+    _protocol: '',
+    _readyState: 3,
+    _receiver: null,
+    _sender: null,
+    _socket: null,
+    _bufferedAmount: 0,
+    _isServer: false,
+    _redirects: 0,
+    _autoPong: true,
+    _closeTimeout: 30000,
+    _url: 'wss://ep-billowing-feather-ahlf48a6.c-3.us-east-1.aws.neon.tech/v2',
+    _req: null,
+    Symbol(shapeMode): false,
+    Symbol(kCapture): false
+  },
+  Symbol(kType): 'error',
+  Symbol(kError): AggregateError [EACCES]: 
+      at internalConnectMultiple (node:net:1134:18)
+      at afterConnectMultiple (node:net:1715:7) {
+    code: 'EACCES',
+    [errors]: [
+      Error: connect EACCES 23.21.74.185:443
+          at createConnectionError (node:net:1678:14)
+          at afterConnectMultiple (node:net:1708:16) {
+        errno: -4092,
+        code: 'EACCES',
+        syscall: 'connect',
+        address: '23.21.74.185',
+        port: 443
+      },
+      Error: connect EACCES 18.215.6.120:443
+          at createConnectionError (node:net:1678:14)
+          at afterConnectMultiple (node:net:1708:16) {
+        errno: -4092,
+        code: 'EACCES',
+        syscall: 'connect',
+        address: '18.215.6.120',
+        port: 443
+      },
+      Error: connect EACCES 98.89.62.209:443
+          at createConnectionError (node:net:1678:14)
+          at afterConnectMultiple (node:net:1708:16) {
+        errno: -4092,
+        code: 'EACCES',
+        syscall: 'connect',
+        address: '98.89.62.209',
+        port: 443
+      }
+    ]
+  },
+  Symbol(kMessage): ''
+}
+
+Node.js v24.13.0

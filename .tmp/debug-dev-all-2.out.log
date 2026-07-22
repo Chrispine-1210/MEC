@@ -1,0 +1,222 @@
+
+> rest-express@1.0.0 dev:all
+> concurrently "npm run dev:server" "npm run dev:client" "npm run dev:admin"
+
+[0] 
+[0] > rest-express@1.0.0 dev:server
+[0] > cross-env NODE_ENV=development NODE_OPTIONS=--dns-result-order=ipv4first tsx watch server/index.ts
+[0] 
+[2] 
+[2] > rest-express@1.0.0 dev:admin
+[2] > cross-env NODE_ENV=development ADMIN_PORT=5174 VITE_ADMIN_PORT=5174 npm run dev --prefix ./Admin
+[2] 
+[1] 
+[1] > rest-express@1.0.0 dev:client
+[1] > cross-env NODE_ENV=development vite
+[1] 
+[1] Port 5173 is in use, trying another one...
+[1] 
+[1]   [32m[1mVITE[22m v8.1.5[39m  [2mready in [0m[1m1231[22m[2m[0m ms[22m
+[1] 
+[1]   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5174[22m/[39m
+[1] [2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+[2] 
+[2] > rest-express@1.0.0 dev
+[2] > cross-env NODE_ENV=development vite --host 0.0.0.0
+[2] 
+[2] 
+[2]   [32m[1mVITE[22m v8.1.5[39m  [2mready in [0m[1m1651[22m[2m[0m ms[22m
+[2] 
+[2]   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5174[22m/[39m
+[2]   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.119:[1m5174[22m/[39m
+[0] [db] Node.js 24.13.0 is newer than the supported LTS range for this stack. Use Node 20 or 22 LTS if Neon WebSocket connections behave unexpectedly.
+[0] 4:06:01 PM [startup] Initializing cache
+[0] Redis was configured but unavailable (ERR_MODULE_NOT_FOUND). Falling back to in-memory cache.
+[0] 4:06:01 PM [startup] Ensuring database schema
+[0] (node:2456) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+[0] In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
+[0] 
+[0] To prepare for this change:
+[0] - If you want the current behavior, explicitly use 'sslmode=verify-full'
+[0] - If you want libpq compatibility now, use 'uselibpqcompat=true&sslmode=require'
+[0] 
+[0] See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
+[0] (Use `node --trace-warnings ...` to show where the warning was created)
+[0] 4:06:05 PM [startup] Registering routes
+[0] [referrals] Scheduled commission release worker disabled in development. Set REFERRAL_RELEASE_WORKER_ENABLED=true to run it locally.
+[0] 4:06:05 PM [startup] Routes registered
+[1] [2m4:06:09 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/chat/config[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:06:09 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:06:09 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/user/profile[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:06:09 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:06:09 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/auth/refresh[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:06:09 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mFailed to fetch user profile: Error: Bad Gateway
+[1]     at throwIfResNotOk (http://localhost:5174/src/lib/queryClient.ts:48:17)
+[1]     at async apiRequest (http://localhost:5174/src/lib/queryClient.ts:129:2)
+[1]     at async fetchUserProfile (http://localhost:5174/src/hooks/use-auth.tsx:36:21)
+[1] [2m4:06:12 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:06:12 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:06:15 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:06:15 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:06:18 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:06:18 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:06:21 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:06:21 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:06:24 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:06:24 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:06:27 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:06:27 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:06:30 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:06:30 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:06:34 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:06:34 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:06:37 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:06:37 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:06:40 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:06:40 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:06:43 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:06:43 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:06:46 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:06:46 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:06:49 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:06:49 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:06:52 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:06:52 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:06:55 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:06:55 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:06:58 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:06:58 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:07:01 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:07:01 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:07:04 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:07:04 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:07:07 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:07:07 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:07:10 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:07:10 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:07:13 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:07:13 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:07:16 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:07:16 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[0] 4:07:18 PM [tsx] change in ./server\index.ts Restarting...
+[1] [2m4:07:19 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:07:19 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:07:23 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:07:23 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:07:26 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:07:26 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[2] npm run dev:admin exited with code 4294967295
+[1] [2m4:07:29 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:07:29 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[0] [db] Node.js 24.13.0 is newer than the supported LTS range for this stack. Use Node 20 or 22 LTS if Neon WebSocket connections behave unexpectedly.
+[0] 4:07:30 PM [startup] Initializing cache
+[0] Redis was configured but unavailable (ERR_MODULE_NOT_FOUND). Falling back to in-memory cache.
+[0] 4:07:30 PM [startup] Ensuring database schema
+[0] (node:22756) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+[0] In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
+[0] 
+[0] To prepare for this change:
+[0] - If you want the current behavior, explicitly use 'sslmode=verify-full'
+[0] - If you want libpq compatibility now, use 'uselibpqcompat=true&sslmode=require'
+[0] 
+[0] See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
+[0] (Use `node --trace-warnings ...` to show where the warning was created)
+[1] [2m4:07:32 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:07:32 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[0] 4:07:34 PM [startup] Registering routes
+[0] [referrals] Scheduled commission release worker disabled in development. Set REFERRAL_RELEASE_WORKER_ENABLED=true to run it locally.
+[0] 4:07:34 PM [startup] Routes registered
+[1] [2m4:07:36 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:07:36 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:07:40 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:07:40 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:07:44 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:07:44 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:07:48 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:07:48 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:07:56 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:07:56 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:08:00 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:08:00 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:08:04 PM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m4:08:04 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m4:09:47 PM[22m [36m[1m[vite][22m[39m [32mvite.config.ts changed, restarting server...[39m
+[1] [2m4:09:47 PM[22m [36m[1m[vite][22m[39m [32mvite.config.ts changed, restarting server...[39m
+[1] [33mPort 5174 is in use on a wildcard address, but localhost:5174 is available. There may be another server running on a wildcard IP on port 5174.[39m
+[1] [2m4:09:49 PM[22m [36m[1m[vite][22m[39m server restarted.

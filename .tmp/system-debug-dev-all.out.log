@@ -1,0 +1,1029 @@
+
+> rest-express@1.0.0 dev:all
+> concurrently "npm run dev:server" "npm run dev:client" "npm run dev:admin"
+
+[0] 
+[0] > rest-express@1.0.0 dev:server
+[0] > cross-env NODE_ENV=development API_ONLY=true NODE_OPTIONS=--dns-result-order=ipv4first tsx watch server/index.ts
+[0] 
+[1] 
+[1] > rest-express@1.0.0 dev:client
+[1] > cross-env NODE_ENV=development vite
+[1] 
+[2] 
+[2] > rest-express@1.0.0 dev:admin
+[2] > cross-env NODE_ENV=development ADMIN_PORT=5174 VITE_ADMIN_PORT=5174 npm run dev --prefix ./Admin
+[2] 
+[1] 
+[1]   [32m[1mVITE[22m v8.1.5[39m  [2mready in [0m[1m1291[22m[2m[0m ms[22m
+[1] 
+[1]   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+[1] [2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+[2] 
+[2] > rest-express@1.0.0 dev
+[2] > cross-env NODE_ENV=development vite --host 0.0.0.0
+[2] 
+[2] 
+[2]   [32m[1mVITE[22m v8.1.5[39m  [2mready in [0m[1m1359[22m[2m[0m ms[22m
+[2] 
+[2]   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5174[22m/[39m
+[2]   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.119:[1m5174[22m/[39m
+[0] [db] Node.js 24.13.0 is newer than the supported LTS range for this stack. Use Node 20 or 22 LTS if Neon WebSocket connections behave unexpectedly.
+[0] 11:52:18 PM [startup] Initializing cache
+[0] Redis was configured but unavailable (ERR_MODULE_NOT_FOUND). Falling back to in-memory cache.
+[0] 11:52:18 PM [startup] Ensuring database schema
+[0] (node:18708) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+[0] In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
+[0] 
+[0] To prepare for this change:
+[0] - If you want the current behavior, explicitly use 'sslmode=verify-full'
+[0] - If you want libpq compatibility now, use 'uselibpqcompat=true&sslmode=require'
+[0] 
+[0] See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
+[0] (Use `node --trace-warnings ...` to show where the warning was created)
+[0] 11:52:23 PM [startup] Registering routes
+[0] [referrals] Scheduled commission release worker disabled in development. Set REFERRAL_RELEASE_WORKER_ENABLED=true to run it locally.
+[0] 11:52:23 PM [startup] Routes registered
+[0] 11:52:23 PM [startup] Starting HTTP listener on 0.0.0.0:5000
+[0] 11:52:23 PM [express] Server listening on 0.0.0.0:5000
+[0] 11:53:35 PM [express] [b95f3378-f4d2-4f01-886a-3fd484fd3bd4] GET /api/health 200 in 338ms :: {"status":"ok","deployment":{"commit":null,"environment":"development","vercel":false},"database":{"ready"...
+[0] 11:53:35 PM [express] [25b68c31-2cf3-417f-a0a4-3e3554d3e8f7] GET /api/health 200 in 317ms :: {"status":"ok","deployment":{"commit":null,"environment":"development","vercel":false},"database":{"ready"...
+[0] 11:55:33 PM [express] [1fc3dcee-964a-4b89-92b4-4623bcccd496] GET /api/health 200 in 336ms :: {"status":"ok","deployment":{"commit":null,"environment":"development","vercel":false},"database":{"ready"...
+[0] 11:55:34 PM [express] [1e8542f9-e739-49b0-8ed1-bf6bc1be56c7] GET /api/health 200 in 318ms :: {"status":"ok","deployment":{"commit":null,"environment":"development","vercel":false},"database":{"ready"...
+[0] 11:58:15 PM [express] [fe3adfd5-5674-4d65-bf74-c35eab6d2793] GET /api/health 200 in 327ms :: {"status":"ok","deployment":{"commit":null,"environment":"development","vercel":false},"database":{"ready"...
+[0] 11:58:15 PM [express] [05337983-67c3-46f0-806e-add5dccff0a1] GET /api/health 200 in 316ms :: {"status":"ok","deployment":{"commit":null,"environment":"development","vercel":false},"database":{"ready"...
+[0] 11:58:26 PM [express] [06612e4b-365f-4a70-b015-652fd1d88c7d] GET /api/chat/config 200 in 3ms :: {"enabled":true,"ready":false,"provider":"openai","message":"AI chat is temporarily unavailable."}
+[0] 11:58:59 PM [express] [301d15cb-44d1-4ce0-a669-10d37c882d32] GET /api/chat/config 200 in 2ms :: {"enabled":true,"ready":false,"provider":"openai","message":"AI chat is temporarily unavailable."}
+[0] [email:account_verification] Verify your Mtendere account -> e2e-student-1784757535714-9d6fou@example.test
+[0] 11:59:23 PM [express] [bd5477ee-5b84-4aea-bdb9-1e0769753c26] POST /api/auth/register 201 in 17182ms :: {"message":"Account created. You can start using your account now; please verify your email when...
+[0] 11:59:24 PM [express] [454bf8ae-907b-4ba1-be51-25803ee6f1cb] GET /api/e2e/email-verification-link 503 in 2ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 11:59:24 PM [express] [8ce0df50-d990-41aa-8fbf-abeae4c6d538] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 11:59:25 PM [express] [a2eba31d-1bdc-4e9c-96bd-be194764a793] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 11:59:25 PM [express] [d0ccdc60-0c9f-48a6-bea1-1a6603239e8c] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 11:59:26 PM [express] [9cae1132-908d-488c-83d3-b7f64f71fe95] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] [email:welcome] Welcome to Mtendere Education Consult, E2E Student -> e2e-student-1784757535714-9d6fou@example.test
+[0] 11:59:27 PM [express] [2485ada3-c8c9-4e9e-8ee6-11f1f326fadc] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 11:59:27 PM [express] [41a241e7-a620-4945-b12f-0c8369ab9be5] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 11:59:28 PM [express] [e45a434d-0eb9-460c-af7f-b0a6cd998a4b] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 11:59:29 PM [express] [80fb62f6-f2a7-4ca9-a088-78d59255353b] GET /api/e2e/email-verification-link 503 in 4ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 11:59:29 PM [express] [b5b3d376-4a2e-4224-84c2-9277ae902462] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 11:59:30 PM [express] [8ae0589b-cdc3-4c7c-851d-294b1b7528e8] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 11:59:30 PM [express] [5e0c3b72-9d18-4ef5-ae53-179b54db94c5] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 11:59:31 PM [express] [4fa33a0a-bea3-4f57-9acd-f9a4f23eb791] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 11:59:31 PM [express] [23c1e4e2-945e-45b4-959a-5c94a934874b] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 11:59:32 PM [express] [72d6bd1e-dc30-48b1-bf90-1677079db0c0] GET /api/e2e/email-verification-link 503 in 2ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 11:59:33 PM [express] [3da6892b-ab80-4704-8efe-04d7f69175e4] GET /api/e2e/email-verification-link 503 in 7ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 11:59:34 PM [express] [5c18c3e4-52c4-4ee3-8ebe-ad6f309bc17e] GET /api/e2e/email-verification-link 503 in 3ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 11:59:34 PM [express] [ae100e56-302a-42ed-b8ed-89b7136065c7] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 11:59:35 PM [express] [4f9c91d3-940e-49f7-a414-ad81c608242d] GET /api/e2e/email-verification-link 503 in 4ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 11:59:36 PM [express] [6be5a6db-55c2-4dc9-b332-008527c7476f] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] [email:account_verification] Verify your Mtendere account -> e2e-student-1784757804056-kbuc70@example.test
+[0] 12:03:57 AM [express] [c8611329-1429-4b05-ac47-6c956cb688d2] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 12:03:57 AM [express] [d4859d3b-afe5-4e3a-af9f-949ca02705cb] GET /api/e2e/email-verification-link 503 in 0ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 12:03:58 AM [express] [bd1c05b3-213a-42ea-82bb-60bfaa9d3bfe] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 12:03:58 AM [express] [2aa20e29-c5b7-4043-b77f-25e8a04675d4] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 12:03:59 AM [express] [731ca5b6-ae56-4025-ace8-b11d108167ba] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 12:04:00 AM [express] [21a73bfb-2f26-4981-901b-59b8d5c48704] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 12:04:00 AM [express] [bfb24829-6b2a-4472-9194-7e41fc2222d1] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 12:04:01 AM [express] [bf5acc9f-3671-4fc5-85b4-2c03e8aabed2] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 12:04:01 AM [express] [84da4775-3b2a-404e-9d1f-9645c19d72b1] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 12:04:02 AM [express] [53b2aef2-07af-422e-9ac2-34387218ab03] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 12:04:02 AM [express] [5a3d66d5-faa6-4c14-828a-0b68f6534871] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 12:04:03 AM [express] [aa348cad-6819-42e0-9fe0-b1795878f330] GET /api/e2e/email-verification-link 503 in 2ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 12:04:03 AM [express] [474b3786-4555-44d7-864c-477821ff791f] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 12:04:04 AM [express] [ae3b0159-4cfd-4827-bf24-74d4603b21d0] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 12:04:04 AM [express] [708f5758-44b4-4d02-996e-5b0a96644b09] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 12:04:05 AM [express] [91b8a3ae-9b26-45a6-b0ea-125330eb0672] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 12:04:05 AM [express] [2a54acc2-5cae-49cb-9d5d-5c6de21c678d] GET /api/e2e/email-verification-link 503 in 0ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 12:04:06 AM [express] [5070ca2c-d766-4493-a677-4c57affcfdf1] GET /api/e2e/email-verification-link 503 in 0ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 12:04:06 AM [express] [6767a7f9-395b-4ace-b76f-f008353872a7] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 12:04:07 AM [express] [6265528a-cc7b-43ee-ac28-f28be3a75dd7] GET /api/e2e/email-verification-link 503 in 1ms :: {"message":"E2E support is disabled. Set E2E_TEST_SECRET to enable it."}
+[0] 12:07:02 AM [express] [de3bac39-bb4c-40b8-9640-e0b27d2da4d4] POST /api/auth/login 202 in 2253ms :: {"message":"Multi-factor authentication required","mfaRequired":true,"challengeToken":"eyJhbGciOiJIU...
+[0] 12:07:08 AM [express] [f45ff11e-b47b-44c8-9890-b42b864d8dcc] POST /api/auth/mfa/verify 200 in 675ms :: {"message":"MFA verified","token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MTAzLCJlbWFpbCI6...
+[0] 12:07:09 AM [express] [f88b05c4-f050-405c-bdfb-269a4d97b932] GET /api/auth/mfa/status 200 in 699ms :: {"mfaSupported":true,"mfaEnabled":true,"mfaRequiredForRole":true,"mfaVerified":true,"role":"super...
+[0] 12:07:13 AM [express] [7b599bf8-3793-4b23-bd59-a07e10b880c1] GET /api/user 200 in 2670ms :: {"id":103,"username":"e2e_super_1784758012415_k02lk8","email":"e2e_super_1784758012415_k02lk8@example.test"...
+[0] 12:07:19 AM [express] [24d8551d-5dae-44fe-a6ff-2aa0196a7473] GET /api/admin/notifications 200 in 4718ms :: {"notifications":[{"id":"analytics-806","title":"mfa_verified","message":"{\"role\":\"super_...
+[0] 12:07:19 AM [express] [c5d70dff-bbc5-4320-92d2-58905266d269] GET /api/admin/users 200 in 5576ms :: {"users":[{"id":"103","username":"e2e_super_1784758012415_k02lk8","email":"e2e_super_1784758012415_k...
+[0] 12:07:21 AM [express] [60924e92-beab-4135-a8fb-a76e4373924e] GET /api/admin/dashboard/stats 200 in 7521ms :: {"totalUsers":54,"totalScholarships":6,"totalJobs":4,"totalPartners":9,"totalBlogPosts":4,...
+[0] 12:13:15 AM [express] [e9971707-6d59-4797-94c2-308736cb3afa] GET /api/partner-videos 200 in 373ms :: [{"id":4,"partnerId":4,"partnerName":"GEDU Global Education","title":"GEDU Global Education Partne...
+[0] 12:13:15 AM [express] [12689f1e-8b0f-4e73-b2b1-deb01588567a] GET /api/blog-posts 200 in 639ms :: [{"id":2,"title":"India Education Expo 2024 at Crossroads Hotel","content":"# India Education Expo 202...
+[0] 12:13:15 AM [express] [33f19984-2e4f-4d68-9d80-984ec643d036] GET /api/chat/config 200 in 2ms :: {"enabled":true,"ready":false,"provider":"openai","message":"AI chat is temporarily unavailable."}
+[0] 12:13:30 AM [express] [6b6b7b89-64fe-4ff2-90fa-9ca425f23826] GET /api/team-members 200 in 15204ms :: [{"id":17,"name":"Dave ","position":"Recruitment & Client Support Officer","bio":"<p><span><i>I as...
+[0] 12:13:30 AM [express] [111c3d83-b306-4b6f-b8f4-c0a001596b3a] GET /api/partner-videos 200 in 14573ms :: [{"id":4,"partnerId":4,"partnerName":"GEDU Global Education","title":"GEDU Global Education Part...
+[0] Partners fetch error: DrizzleQueryError: Failed query: select "id", "name", "description", "logo_url", "cover_image", "website", "contact_name", "contact_email", "contact_phone", "social_links", "industry_category", "partnership_level", "sponsorship_tier", "status", "country", "region", "address", "documents", "agreements", "notes", "internal_comments", "linked_events", "linked_sponsorships", "linked_opportunities", "partnership_history", "student_count", "ranking", "programs", "is_active", "created_at", "updated_at" from "partners" where "partners"."is_active" = $1 order by "partners"."created_at" desc
+[0] params: true
+[0]     at NodePgPreparedQuery.queryWithCache (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\pg-core\session.ts:73:11)
+[0]     at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[0]     at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:154:19)
+[0]     at async DatabaseStorage.getActivePartners (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\storage.ts:432:12)
+[0]     at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\routes.ts:6804:11) {
+[0]   query: 'select "id", "name", "description", "logo_url", "cover_image", "website", "contact_name", "contact_email", "contact_phone", "social_links", "industry_category", "partnership_level", "sponsorship_tier", "status", "country", "region", "address", "documents", "agreements", "notes", "internal_comments", "linked_events", "linked_sponsorships", "linked_opportunities", "partnership_history", "student_count", "ranking", "programs", "is_active", "created_at", "updated_at" from "partners" where "partners"."is_active" = $1 order by "partners"."created_at" desc',
+[0]   params: [ true ],
+[0]   cause: Error: Connection terminated due to connection timeout
+[0]       at C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg-pool\index.js:45:11
+[0]       at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:161:13)
+[0]       at async NodePgPreparedQuery.queryWithCache (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\pg-core\session.ts:71:12)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:154:19)
+[0]       at async DatabaseStorage.getActivePartners (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\storage.ts:432:12)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\routes.ts:6804:11) {
+[0]     [cause]: Error: Connection terminated unexpectedly
+[0]         at Connection.<anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg\lib\client.js:199:73)
+[0]         at Object.onceWrapper (node:events:622:28)
+[0]         at Connection.emit (node:events:508:28)
+[0]         at Socket.<anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg\lib\connection.js:63:12)
+[0]         at Socket.emit (node:events:508:28)
+[0]         at TCP.<anonymous> (node:net:346:12)
+[0]   }
+[0] }
+[0] 12:13:30 AM [express] [27af24c6-fff1-4f8f-b258-5345da2fe45e] GET /api/partners 500 in 15369ms :: {"message":"Failed to fetch partners"}
+[0] Testimonials fetch error: DrizzleQueryError: Failed query: select "id", "user_id", "author_name", "credential", "content", "rating", "image_url", "is_approved", "created_at", "updated_at" from "testimonials" where "testimonials"."is_approved" = $1 order by "testimonials"."created_at" desc
+[0] params: true
+[0]     at NodePgPreparedQuery.queryWithCache (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\pg-core\session.ts:73:11)
+[0]     at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[0]     at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:154:19)
+[0]     at async DatabaseStorage.getApprovedTestimonials (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\storage.ts:469:12)
+[0]     at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\routes.ts:6875:11) {
+[0]   query: 'select "id", "user_id", "author_name", "credential", "content", "rating", "image_url", "is_approved", "created_at", "updated_at" from "testimonials" where "testimonials"."is_approved" = $1 order by "testimonials"."created_at" desc',
+[0]   params: [ true ],
+[0]   cause: Error: Connection terminated due to connection timeout
+[0]       at C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg-pool\index.js:45:11
+[0]       at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:161:13)
+[0]       at async NodePgPreparedQuery.queryWithCache (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\pg-core\session.ts:71:12)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:154:19)
+[0]       at async DatabaseStorage.getApprovedTestimonials (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\storage.ts:469:12)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\routes.ts:6875:11) {
+[0]     [cause]: Error: Connection terminated unexpectedly
+[0]         at Connection.<anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg\lib\client.js:199:73)
+[0]         at Object.onceWrapper (node:events:622:28)
+[0]         at Connection.emit (node:events:508:28)
+[0]         at Socket.<anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg\lib\connection.js:63:12)
+[0]         at Socket.emit (node:events:508:28)
+[0]         at TCP.<anonymous> (node:net:346:12)
+[0]   }
+[0] }
+[0] 12:13:30 AM [express] [d320696f-9fed-4603-a93d-49fd7b731fd0] GET /api/testimonials 500 in 15369ms :: {"message":"Failed to fetch testimonials"}
+[0] Jobs fetch error: DrizzleQueryError: Failed query: select "id", "title", "description", "company", "location", "salary", "currency", "job_type", "requirements", "benefits", "is_remote", "deadline", "is_active", "created_by", "created_at", "updated_at" from "jobs" where "jobs"."is_active" = $1 order by "jobs"."created_at" desc
+[0] params: true
+[0]     at NodePgPreparedQuery.queryWithCache (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\pg-core\session.ts:73:11)
+[0]     at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[0]     at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:154:19)
+[0]     at async DatabaseStorage.getActiveJobs (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\storage.ts:340:12)
+[0]     at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\routes.ts:6459:11) {
+[0]   query: 'select "id", "title", "description", "company", "location", "salary", "currency", "job_type", "requirements", "benefits", "is_remote", "deadline", "is_active", "created_by", "created_at", "updated_at" from "jobs" where "jobs"."is_active" = $1 order by "jobs"."created_at" desc',
+[0]   params: [ true ],
+[0]   cause: Error: Connection terminated due to connection timeout
+[0]       at C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg-pool\index.js:45:11
+[0]       at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:161:13)
+[0]       at async NodePgPreparedQuery.queryWithCache (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\pg-core\session.ts:71:12)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:154:19)
+[0]       at async DatabaseStorage.getActiveJobs (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\storage.ts:340:12)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\routes.ts:6459:11) {
+[0]     [cause]: Error: Connection terminated unexpectedly
+[0]         at Connection.<anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg\lib\client.js:199:73)
+[0]         at Object.onceWrapper (node:events:622:28)
+[0]         at Connection.emit (node:events:508:28)
+[0]         at Socket.<anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg\lib\connection.js:63:12)
+[0]         at Socket.emit (node:events:508:28)
+[0]         at TCP.<anonymous> (node:net:346:12)
+[0]   }
+[0] }
+[0] 12:13:30 AM [express] [b3980f0e-45a5-46ff-835f-8b7aa608bb68] GET /api/jobs 500 in 15400ms :: {"message":"Failed to fetch jobs"}
+[0] Scholarships fetch error: DrizzleQueryError: Failed query: select "id", "title", "description", "institution", "country", "amount", "currency", "deadline", "requirements", "category", "image_url", "is_active", "created_by", "created_at", "updated_at" from "scholarships" where ("scholarships"."is_active" = $1 and "scholarships"."deadline" > NOW()) order by "scholarships"."created_at" desc
+[0] params: true
+[0]     at NodePgPreparedQuery.queryWithCache (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\pg-core\session.ts:73:11)
+[0]     at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[0]     at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:154:19)
+[0]     at async DatabaseStorage.getActiveScholarships (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\storage.ts:285:12)
+[0]     at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\routes.ts:6362:11) {
+[0]   query: 'select "id", "title", "description", "institution", "country", "amount", "currency", "deadline", "requirements", "category", "image_url", "is_active", "created_by", "created_at", "updated_at" from "scholarships" where ("scholarships"."is_active" = $1 and "scholarships"."deadline" > NOW()) order by "scholarships"."created_at" desc',
+[0]   params: [ true ],
+[0]   cause: Error: Connection terminated due to connection timeout
+[0]       at C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg-pool\index.js:45:11
+[0]       at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:161:13)
+[0]       at async NodePgPreparedQuery.queryWithCache (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\pg-core\session.ts:71:12)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:154:19)
+[0]       at async DatabaseStorage.getActiveScholarships (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\storage.ts:285:12)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\routes.ts:6362:11) {
+[0]     [cause]: Error: Connection terminated unexpectedly
+[0]         at Connection.<anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg\lib\client.js:199:73)
+[0]         at Object.onceWrapper (node:events:622:28)
+[0]         at Connection.emit (node:events:508:28)
+[0]         at Socket.<anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg\lib\connection.js:63:12)
+[0]         at Socket.emit (node:events:508:28)
+[0]         at TCP.<anonymous> (node:net:346:12)
+[0]   }
+[0] }
+[0] 12:13:30 AM [express] [07a7ef7b-79e6-4242-919e-4ef0838ce8e1] GET /api/scholarships 500 in 15528ms :: {"message":"Failed to fetch scholarships"}
+[0] 12:13:31 AM [express] [1ddea882-d441-4985-9662-d25b64abb155] GET /api/jobs 200 in 469ms :: [{"id":1,"title":"Software Engineer (Junior)","description":"Join our growing tech team as a Junior Software...
+[0] 12:13:31 AM [express] [04fb5135-350d-4ac5-b455-a6b705d0fc12] GET /api/scholarships 200 in 793ms :: [{"id":2,"title":"Commonwealth Scholarship for Africa","description":"Fully-funded scholarship for A...
+[0] 12:13:33 AM [express] [a12f317f-0335-4b20-860b-50da42de4bb6] GET /api/blog-posts 200 in 2975ms :: [{"id":2,"title":"India Education Expo 2024 at Crossroads Hotel","content":"# India Education Expo 20...
+[0] 12:13:47 AM [express] [65f468f2-184e-4ed2-9337-88b96eabcde9] GET /api/team-members 200 in 16643ms :: [{"id":17,"name":"Dave ","position":"Recruitment & Client Support Officer","bio":"<p><span><i>I as...
+[0] 12:13:47 AM [express] [dac2823f-1bb4-4ce2-996c-a0d260c1573b] GET /api/partners 200 in 16755ms :: [{"id":10,"name":"Stellenbosch University","description":"Leading South African research university wi...
+[0] 12:13:47 AM [express] [e8427894-1959-4af1-b8a9-c36371acba95] GET /api/testimonials 200 in 16767ms :: [{"id":2,"userId":33,"authorName":"Janet Kandulu","credential":"Bs Nutrition and Dietetics, Chandi...
+[0] 12:14:11 AM [express] [bc3c245a-d250-4950-adb3-e52a83104b98] POST /api/auth/login 200 in 1404ms :: {"message":"Login successful","token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NjUsImVtYWlsIjoi...
+[0] 12:14:12 AM [express] [7f182346-ca3a-491a-b5f3-7407e84c6946] GET /api/auth/mfa/status 200 in 638ms :: {"mfaSupported":true,"mfaEnabled":false,"mfaRequiredForRole":true,"mfaVerified":false,"role":"sup...
+[0] 12:14:12 AM [express] [74cb2ed2-0c8c-42ac-8086-f0391e641633] GET /api/user 200 in 668ms :: {"id":65,"username":"mec_super_admin","email":"super-admin@mtendereeducationconsult.com","firstName":"Super"...
+[0] 12:14:14 AM [express] [4242e46c-f0df-4750-81d2-56a5cf86b157] POST /api/auth/mfa/setup 200 in 1482ms :: {"secret":"NCM45QEA3XOP3ZLIQSOZ6PKPLCHAF4ZO","otpauthUrl":"otpauth://totp/Mtendere%20Education%3...
+[0] 12:14:38 AM [express] [f8e1a13c-18d8-493d-b68d-d36e3db61cbc] POST /api/auth/mfa/confirm 401 in 1079ms :: {"message":"Invalid MFA code"}
+[0] 12:14:39 AM [express] [b9fac5c9-38c3-489e-ac3a-310cab039ff1] POST /api/auth/refresh 200 in 318ms :: {"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NjUsImVtYWlsIjoic3VwZXItYWRtaW5AbXRlbmRlcmVl...
+[0] 12:14:40 AM [express] [6fea346f-3165-4f0d-a226-a5cfdb6c3f68] POST /api/auth/mfa/confirm 401 in 984ms :: {"message":"Invalid MFA code"}
+[0] 12:14:59 AM [express] [c8cbb954-ddd1-4f17-a6f7-24656f61df33] POST /api/auth/mfa/confirm 401 in 964ms :: {"message":"Invalid MFA code"}
+[0] 12:15:00 AM [express] [77efceea-2506-4387-9352-db2462001897] POST /api/auth/refresh 200 in 322ms :: {"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NjUsImVtYWlsIjoic3VwZXItYWRtaW5AbXRlbmRlcmVl...
+[0] 12:15:01 AM [express] [81131fef-a050-4cb0-b075-d8bf1c25a8aa] POST /api/auth/mfa/confirm 401 in 958ms :: {"message":"Invalid MFA code"}
+[0] 12:15:18 AM [express] [b515561b-2d11-42ac-907a-dcbadc0fe546] POST /api/auth/mfa/confirm 401 in 951ms :: {"message":"Invalid MFA code"}
+[0] 12:15:18 AM [express] [cb210dfb-9b5f-4ec0-9a69-e0204ef9e9e2] POST /api/auth/refresh 200 in 317ms :: {"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NjUsImVtYWlsIjoic3VwZXItYWRtaW5AbXRlbmRlcmVl...
+[0] 12:15:19 AM [express] [de2b0de3-e74e-47f5-9185-0348f73a9130] POST /api/auth/mfa/confirm 429 in 667ms :: {"message":"Too many requests. Please try again later.","retryAfterSeconds":20}
+[0] 12:15:54 AM [express] [05557f3b-0dbc-450f-9d68-0b7c09865fcc] GET /api/scholarships 200 in 356ms :: [{"id":2,"title":"Commonwealth Scholarship for Africa","description":"Fully-funded scholarship for A...
+[0] 12:16:09 AM [express] [571f690b-dbe7-47b5-b9c0-a27966267d63] GET /api/team-members 200 in 15001ms :: [{"id":17,"name":"Dave ","position":"Recruitment & Client Support Officer","bio":"<p><span><i>I as...
+[0] 12:16:09 AM [express] [58af6310-0618-413c-a975-03268a692842] GET /api/partner-videos 200 in 14794ms :: [{"id":4,"partnerId":4,"partnerName":"GEDU Global Education","title":"GEDU Global Education Part...
+[0] 12:16:09 AM [express] [a749f6a3-8351-4396-8c5d-610ecabc7ab9] GET /api/chat/config 304 in 3ms :: {"enabled":true,"ready":false,"provider":"openai","message":"AI chat is temporarily unavailable."}
+[0] Blog posts fetch error: DrizzleQueryError: Failed query: select "id", "title", "content", "excerpt", "image_url", "category", "tags", "is_published", "author_id", "likes", "created_at", "updated_at" from "blog_posts" where "blog_posts"."is_published" = $1 order by "blog_posts"."created_at" desc
+[0] params: true
+[0]     at NodePgPreparedQuery.queryWithCache (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\pg-core\session.ts:73:11)
+[0]     at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[0]     at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:154:19)
+[0]     at async DatabaseStorage.getPublishedBlogPosts (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\storage.ts:506:12)
+[0]     at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\routes.ts:6951:11) {
+[0]   query: 'select "id", "title", "content", "excerpt", "image_url", "category", "tags", "is_published", "author_id", "likes", "created_at", "updated_at" from "blog_posts" where "blog_posts"."is_published" = $1 order by "blog_posts"."created_at" desc',
+[0]   params: [ true ],
+[0]   cause: Error: Connection terminated due to connection timeout
+[0]       at C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg-pool\index.js:45:11
+[0]       at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:161:13)
+[0]       at async NodePgPreparedQuery.queryWithCache (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\pg-core\session.ts:71:12)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:154:19)
+[0]       at async DatabaseStorage.getPublishedBlogPosts (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\storage.ts:506:12)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\routes.ts:6951:11) {
+[0]     [cause]: Error: Connection terminated unexpectedly
+[0]         at Connection.<anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg\lib\client.js:199:73)
+[0]         at Object.onceWrapper (node:events:622:28)
+[0]         at Connection.emit (node:events:508:28)
+[0]         at Socket.<anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg\lib\connection.js:63:12)
+[0]         at Socket.emit (node:events:508:28)
+[0]         at TCP.<anonymous> (node:net:346:12)
+[0]   }
+[0] }
+[0] 12:16:09 AM [express] [6584c08f-7694-439b-b1ce-ce2ac583e75b] GET /api/blog-posts 500 in 15091ms :: {"message":"Failed to fetch blog posts"}
+[0] Testimonials fetch error: DrizzleQueryError: Failed query: select "id", "user_id", "author_name", "credential", "content", "rating", "image_url", "is_approved", "created_at", "updated_at" from "testimonials" where "testimonials"."is_approved" = $1 order by "testimonials"."created_at" desc
+[0] params: true
+[0]     at NodePgPreparedQuery.queryWithCache (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\pg-core\session.ts:73:11)
+[0]     at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[0]     at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:154:19)
+[0]     at async DatabaseStorage.getApprovedTestimonials (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\storage.ts:469:12)
+[0]     at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\routes.ts:6875:11) {
+[0]   query: 'select "id", "user_id", "author_name", "credential", "content", "rating", "image_url", "is_approved", "created_at", "updated_at" from "testimonials" where "testimonials"."is_approved" = $1 order by "testimonials"."created_at" desc',
+[0]   params: [ true ],
+[0]   cause: Error: Connection terminated due to connection timeout
+[0]       at C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg-pool\index.js:45:11
+[0]       at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:161:13)
+[0]       at async NodePgPreparedQuery.queryWithCache (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\pg-core\session.ts:71:12)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:154:19)
+[0]       at async DatabaseStorage.getApprovedTestimonials (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\storage.ts:469:12)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\routes.ts:6875:11) {
+[0]     [cause]: Error: Connection terminated unexpectedly
+[0]         at Connection.<anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg\lib\client.js:199:73)
+[0]         at Object.onceWrapper (node:events:622:28)
+[0]         at Connection.emit (node:events:508:28)
+[0]         at Socket.<anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg\lib\connection.js:63:12)
+[0]         at Socket.emit (node:events:508:28)
+[0]         at TCP.<anonymous> (node:net:346:12)
+[0]   }
+[0] }
+[0] 12:16:09 AM [express] [d53c9b3a-e160-4d06-a6e3-8d32621f5d50] GET /api/testimonials 500 in 15099ms :: {"message":"Failed to fetch testimonials"}
+[0] Partners fetch error: DrizzleQueryError: Failed query: select "id", "name", "description", "logo_url", "cover_image", "website", "contact_name", "contact_email", "contact_phone", "social_links", "industry_category", "partnership_level", "sponsorship_tier", "status", "country", "region", "address", "documents", "agreements", "notes", "internal_comments", "linked_events", "linked_sponsorships", "linked_opportunities", "partnership_history", "student_count", "ranking", "programs", "is_active", "created_at", "updated_at" from "partners" where "partners"."is_active" = $1 order by "partners"."created_at" desc
+[0] params: true
+[0]     at NodePgPreparedQuery.queryWithCache (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\pg-core\session.ts:73:11)
+[0]     at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[0]     at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:154:19)
+[0]     at async DatabaseStorage.getActivePartners (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\storage.ts:432:12)
+[0]     at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\routes.ts:6804:11) {
+[0]   query: 'select "id", "name", "description", "logo_url", "cover_image", "website", "contact_name", "contact_email", "contact_phone", "social_links", "industry_category", "partnership_level", "sponsorship_tier", "status", "country", "region", "address", "documents", "agreements", "notes", "internal_comments", "linked_events", "linked_sponsorships", "linked_opportunities", "partnership_history", "student_count", "ranking", "programs", "is_active", "created_at", "updated_at" from "partners" where "partners"."is_active" = $1 order by "partners"."created_at" desc',
+[0]   params: [ true ],
+[0]   cause: Error: Connection terminated due to connection timeout
+[0]       at C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg-pool\index.js:45:11
+[0]       at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:161:13)
+[0]       at async NodePgPreparedQuery.queryWithCache (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\pg-core\session.ts:71:12)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:154:19)
+[0]       at async DatabaseStorage.getActivePartners (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\storage.ts:432:12)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\routes.ts:6804:11) {
+[0]     [cause]: Error: Connection terminated unexpectedly
+[0]         at Connection.<anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg\lib\client.js:199:73)
+[0]         at Object.onceWrapper (node:events:622:28)
+[0]         at Connection.emit (node:events:508:28)
+[0]         at Socket.<anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg\lib\connection.js:63:12)
+[0]         at Socket.emit (node:events:508:28)
+[0]         at TCP.<anonymous> (node:net:346:12)
+[0]   }
+[0] }
+[0] 12:16:09 AM [express] [a6be0d41-612c-46e9-84d7-4461acabacb4] GET /api/partners 500 in 15111ms :: {"message":"Failed to fetch partners"}
+[0] Jobs fetch error: DrizzleQueryError: Failed query: select "id", "title", "description", "company", "location", "salary", "currency", "job_type", "requirements", "benefits", "is_remote", "deadline", "is_active", "created_by", "created_at", "updated_at" from "jobs" where "jobs"."is_active" = $1 order by "jobs"."created_at" desc
+[0] params: true
+[0]     at NodePgPreparedQuery.queryWithCache (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\pg-core\session.ts:73:11)
+[0]     at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[0]     at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:154:19)
+[0]     at async DatabaseStorage.getActiveJobs (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\storage.ts:340:12)
+[0]     at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\routes.ts:6459:11) {
+[0]   query: 'select "id", "title", "description", "company", "location", "salary", "currency", "job_type", "requirements", "benefits", "is_remote", "deadline", "is_active", "created_by", "created_at", "updated_at" from "jobs" where "jobs"."is_active" = $1 order by "jobs"."created_at" desc',
+[0]   params: [ true ],
+[0]   cause: Error: Connection terminated due to connection timeout
+[0]       at C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg-pool\index.js:45:11
+[0]       at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:161:13)
+[0]       at async NodePgPreparedQuery.queryWithCache (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\pg-core\session.ts:71:12)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\src\node-postgres\session.ts:154:19)
+[0]       at async DatabaseStorage.getActiveJobs (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\storage.ts:340:12)
+[0]       at async <anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\server\routes.ts:6459:11) {
+[0]     [cause]: Error: Connection terminated unexpectedly
+[0]         at Connection.<anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg\lib\client.js:199:73)
+[0]         at Object.onceWrapper (node:events:622:28)
+[0]         at Connection.emit (node:events:508:28)
+[0]         at Socket.<anonymous> (C:\Users\Chrispine Mndala\OneDrive\Desktop\MEC\node_modules\pg\lib\connection.js:63:12)
+[0]         at Socket.emit (node:events:508:28)
+[0]         at TCP.<anonymous> (node:net:346:12)
+[0]   }
+[0] }
+[0] 12:16:09 AM [express] [1856a528-a4b3-4a01-9293-4bb87cf88ce0] GET /api/jobs 500 in 15126ms :: {"message":"Failed to fetch jobs"}
+[0] 12:16:11 AM [express] [636ddd67-ab10-4ad9-b3b9-8b941256d28c] GET /api/scholarships 200 in 342ms :: [{"id":2,"title":"Commonwealth Scholarship for Africa","description":"Fully-funded scholarship for A...
+[0] 12:16:19 AM [tsx] change in ./server\routes.ts Restarting...
+[1] [2m12:16:24 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/team-members[39m
+[1] Error: read ECONNRESET
+[1]     at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+[1] [2m12:16:24 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/testimonials[39m
+[1] Error: read ECONNRESET
+[1]     at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+[1] [2m12:16:24 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: read ECONNRESET
+[1]     at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+[1] [2m12:16:24 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: read ECONNRESET
+[1]     at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+[1] [2m12:16:24 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/partners[39m
+[1] Error: read ECONNRESET
+[1]     at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+[1] [2m12:16:24 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/blog-posts[39m
+[1] Error: read ECONNRESET
+[1]     at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+[1] [2m12:16:24 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs[39m
+[1] Error: read ECONNRESET
+[1]     at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+[1] [2m12:16:24 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/partner-videos[39m
+[1] Error: read ECONNRESET
+[1]     at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+[2] [2m12:16:24 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: read ECONNRESET
+[2]     at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+[2] [2m12:16:26 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/index.css?direct, /src/pages/auth.tsx[22m
+[2] [2m12:16:26 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/index.css?direct, /src/pages/auth.tsx[22m
+[1] [2m12:16:26 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/scholarships[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:27 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:27 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:16:30 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:30 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:16:33 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:33 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:16:33 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:33 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/partner-videos[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:33 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/scholarships[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:33 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:33 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/partners[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:33 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/testimonials[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:33 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/blog-posts[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:33 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/team-members[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:33 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/chat/config[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:36 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:36 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:16:37 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:40 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:16:40 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/team-members[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:40 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/testimonials[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:40 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/partners[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:40 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:40 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/blog-posts[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:40 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:40 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/partner-videos[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:40 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:16:42 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/scholarships[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:43 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:44 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:16:44 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:44 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[2] [2m12:16:46 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:16:46 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:16:47 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:47 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:16:47 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:16:50 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:50 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:16:51 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:53 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:16:53 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:53 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[2] [2m12:16:53 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:54 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:54 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:16:56 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:56 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:16:57 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/partners[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:57 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/testimonials[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:57 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/team-members[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:57 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/blog-posts[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:57 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:57 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:57 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/partner-videos[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:57 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:16:57 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/scholarships[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:58 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:58 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[2] [2m12:16:59 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[2] [2m12:16:59 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:16:59 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:16:59 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:16:59 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:01 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:01 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:01 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:01 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:02 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:02 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[2] [2m12:17:02 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:17:02 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:17:04 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:04 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:05 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:05 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:05 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:05 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[2] [2m12:17:06 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:17:06 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:17:07 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:07 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:08 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:08 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[2] [2m12:17:10 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:17:10 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:17:11 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:11 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:13 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/partners[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:13 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/testimonials[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:13 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/team-members[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:13 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:13 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/blog-posts[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:13 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/partner-videos[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:13 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/scholarships[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:14 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:14 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:15 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:15 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:17 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:17:18 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:18 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:17:20 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:17:20 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:20 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:20 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:23 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:23 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[2] [2m12:17:23 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:17:23 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:17:25 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:27 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:27 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:28 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:29 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:29 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/partners[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:29 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/testimonials[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:29 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/team-members[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:29 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:29 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/blog-posts[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:29 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/partner-videos[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:29 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/scholarships[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:31 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:31 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:32 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:35 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:17:36 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:17:36 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:17:37 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:37 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:38 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[2] [2m12:17:40 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:17:40 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:17:40 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:43 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:43 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:43 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:17:43 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:43 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[2] [2m12:17:43 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:17:44 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/partners[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:45 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/testimonials[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:45 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/team-members[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:45 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:45 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/blog-posts[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:45 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/partner-videos[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:45 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/scholarships[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:46 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:46 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[2] [2m12:17:47 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:17:47 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:17:47 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:47 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:49 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:51 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:51 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[2] [2m12:17:52 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:17:52 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:17:52 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:53 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:54 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[2] [2m12:17:55 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:17:55 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:17:57 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:57 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:59 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:59 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:17:59 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:17:59 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[2] [2m12:17:59 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:17:59 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:17:59 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/partners[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:00 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/testimonials[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:00 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/team-members[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:00 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/scholarships[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:00 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:00 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/blog-posts[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:00 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/partner-videos[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:18:03 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:18:03 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:18:03 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:03 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:18:03 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:04 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/chat/config[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:04 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:05 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:18:05 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:05 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[2] [2m12:18:07 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:18:07 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[0] [db] Node.js 24.13.0 is newer than the supported LTS range for this stack. Use Node 20 or 22 LTS if Neon WebSocket connections behave unexpectedly.
+[1] [2m12:18:08 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:08 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:18:08 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:18:08 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:08 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:18:11 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:11 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[2] [2m12:18:11 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:18:11 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:18:12 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:13 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:13 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:18:14 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:14 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:18:14 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:14 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/partners[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:15 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/testimonials[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:18:15 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:18:15 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:18:15 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/team-members[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:16 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/scholarships[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:16 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:16 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/blog-posts[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:16 AM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/partner-videos[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:17 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:18:17 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:17 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[2] [2m12:18:19 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:18:19 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:18:20 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:20 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:18:20 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:20 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[0] 12:18:20 AM [startup] Initializing cache
+[0] Redis was configured but unavailable (ERR_MODULE_NOT_FOUND). Falling back to in-memory cache.
+[0] 12:18:21 AM [startup] Ensuring database schema
+[0] (node:7460) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+[0] In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
+[0] 
+[0] To prepare for this change:
+[0] - If you want the current behavior, explicitly use 'sslmode=verify-full'
+[0] - If you want libpq compatibility now, use 'uselibpqcompat=true&sslmode=require'
+[0] 
+[0] See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
+[0] (Use `node --trace-warnings ...` to show where the warning was created)
+[2] [2m12:18:23 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:18:23 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:18:23 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:23 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:18:23 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:24 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:18:25 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:25 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:18:26 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:18:26 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[0] 12:18:28 AM [startup] Registering routes
+[0] [referrals] Scheduled commission release worker disabled in development. Set REFERRAL_RELEASE_WORKER_ENABLED=true to run it locally.
+[0] 12:18:30 AM [startup] Routes registered
+[0] 12:18:30 AM [startup] Starting HTTP listener on 0.0.0.0:5000
+[0] 12:18:30 AM [express] Port 5000 is already in use. Stop the other process or set PORT to a free value.
+[1] [2m12:19:22 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[0] 12:30:57 AM [tsx] change in ./server\routes.ts Rerunning...
+[2] [2m12:30:57 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: read ECONNRESET
+[2]     at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+[1] [2m12:30:57 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: read ECONNRESET
+[1]     at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+[1] [2m12:30:57 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: read ECONNRESET
+[1]     at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+[1] [2m12:30:57 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: read ECONNRESET
+[1]     at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+[1] [2m12:30:57 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: read ECONNRESET
+[1]     at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+[2] [2m12:31:01 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:31:01 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:31:02 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:31:02 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:31:02 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:31:02 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:31:02 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:31:02 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:31:02 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:31:04 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:31:04 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:31:05 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:31:06 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:31:06 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:31:06 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:31:06 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[2] [2m12:31:07 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:31:07 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:31:08 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:31:08 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:31:08 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[0] [db] Node.js 24.13.0 is newer than the supported LTS range for this stack. Use Node 20 or 22 LTS if Neon WebSocket connections behave unexpectedly.
+[2] [2m12:31:09 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/index.css?direct, /src/pages/auth.tsx[22m
+[2] [2m12:31:11 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[0] 12:31:11 AM [startup] Initializing cache
+[0] Redis was configured but unavailable (ERR_MODULE_NOT_FOUND). Falling back to in-memory cache.
+[0] 12:31:11 AM [startup] Ensuring database schema
+[0] (node:12256) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+[0] In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
+[0] 
+[0] To prepare for this change:
+[0] - If you want the current behavior, explicitly use 'sslmode=verify-full'
+[0] - If you want libpq compatibility now, use 'uselibpqcompat=true&sslmode=require'
+[0] 
+[0] See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
+[0] (Use `node --trace-warnings ...` to show where the warning was created)
+[2] [2m12:31:12 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:31:14 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:31:14 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[2] [2m12:31:14 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[2] Error: connect ECONNREFUSED 127.0.0.1:5000
+[2]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2] [2m12:31:14 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mAdmin realtime socket error: {"isTrusted":true}
+[1] [2m12:31:14 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:31:14 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:31:14 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[1] [2m12:31:14 AM[22m [31m[1m[vite][22m[39m [31mws proxy error:[39m
+[1] Error: connect ECONNREFUSED 127.0.0.1:5000
+[1]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[1] [2m12:31:14 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mWebSocket error: {"isTrusted":true}
+[0] 12:31:15 AM [startup] Registering routes
+[0] [referrals] Scheduled commission release worker disabled in development. Set REFERRAL_RELEASE_WORKER_ENABLED=true to run it locally.
+[0] 12:31:15 AM [startup] Routes registered
+[0] 12:31:15 AM [startup] Starting HTTP listener on 0.0.0.0:5000
+[0] 12:31:15 AM [express] Port 5000 is already in use. Stop the other process or set PORT to a free value.
+[2] [2m12:31:21 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/index.css?direct, /src/pages/auth.tsx[22m
