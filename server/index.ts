@@ -406,7 +406,9 @@ export const ready = (async () => {
       modulePath: string,
     ) => Promise<{ setupVite: (app: Express, server: import("http").Server) => Promise<void> }>;
     const { setupVite } = await dynamicImport("./vite");
+    startupLog("Setting up Vite middleware");
     await setupVite(app, server);
+    startupLog("Vite middleware ready");
   } else {
     const clientDistPath = path.resolve(import.meta.dirname, "..", "dist", "client");
     const adminDistPath = path.resolve(import.meta.dirname, "..", "dist", "admin");
@@ -468,6 +470,7 @@ export const ready = (async () => {
 
   if (!isVercelRuntime) {
     const listenHost = env.HOST || (isProduction ? "127.0.0.1" : "0.0.0.0");
+    startupLog(`Starting HTTP listener on ${listenHost}:${port}`);
     server.listen(port, listenHost, () => {
       log(`Server listening on ${listenHost}:${port}`);
     });
