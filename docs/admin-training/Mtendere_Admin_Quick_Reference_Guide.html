@@ -1,0 +1,15 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@page{size:A4;margin:14mm} body{font-family:Arial,sans-serif;color:#0F172A;line-height:1.35} h1,h2{color:#166534} h1{font-size:28px;border-bottom:4px solid #F2B705;padding-bottom:6px} table{border-collapse:collapse;width:100%;font-size:12px} th{background:#166534;color:white;text-align:left} th,td{border:1px solid #CBD5E1;padding:7px;vertical-align:top}.box{background:#F8FAFC;border-left:5px solid #166534;padding:10px;margin:10px 0}.warn{background:#FEF2F2;border-left:5px solid #DC2626;padding:10px}</style></head><body>
+<h1>Mtendere Admin Quick Reference Guide</h1><p><strong>Version 1.0</strong> · 23 July 2026 · Prepared by Chrispine Mndala / Aöthothe Technologies</p>
+<h2>Role access at a glance</h2>
+  <table><thead><tr><th>Role</th><th>Primary purpose</th><th>Typical access</th></tr></thead><tbody>
+  <tr><td>Super Admin</td><td>Owns the platform, accounts, roles and settings.</td><td>All admin modules, including Users, Roles & Permissions and Settings.</td></tr>
+  <tr><td>Admin</td><td>Runs daily operations and reviews platform activity.</td><td>Applications, Messages, Subscribers, Communications, Analytics, Activity, Payments and content modules.</td></tr>
+  <tr><td>Writer / Content Manager</td><td>Maintains public content.</td><td>Scholarships, Job Opportunities, Events, Partners, Blog Posts, Team Members and Media Governance.</td></tr>
+  <tr><td>Viewer</td><td>Reads high-level operational status only.</td><td>Dashboard only.</td></tr>
+  </tbody></table>
+<h2>Daily operating flow</h2><ol><li>Sign in.</li><li>Review Dashboard.</li><li>Check Applications and Messages.</li><li>Handle Subscribers/Communications alerts.</li><li>Update urgent Scholarships, Jobs, Events or Blog records.</li><li>Record decisions and escalate technical issues.</li></ol>
+<div class="warn"><strong>Security:</strong> MFA is currently disabled for administrator handoff. Re-enable after the next authentication update. Never share accounts or expose credentials, MFA secrets, applicant data or payment information.</div>
+<h2>Top troubleshooting</h2><table><tr><th>Issue</th><th>Do this first</th></tr><tr><td>Access denied</td><td>Check assigned role against the manual role matrix.</td></tr><tr><td>Email confirmation/unsubscribe link fails</td><td>Stop sending campaigns; verify public base URL, token route and deployed action page.</td></tr><tr><td>Save fails</td><td>Check required fields, refresh, sign in again, then escalate with sanitized screenshot and timestamp.</td></tr><tr><td>Payment issue</td><td>Do not retry blindly; escalate with transaction reference and timestamp.</td></tr></table>
+<h2>Escalation details to capture</h2><div class="box">Page/module, account role, exact action, timestamp, browser, exact error message and screenshot with sensitive information hidden.</div>
+</body></html>

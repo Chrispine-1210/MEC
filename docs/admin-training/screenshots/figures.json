@@ -1,0 +1,101 @@
+{
+  "capturedAt": "2026-07-22T23:35:23.035Z",
+  "apiBase": "http://127.0.0.1:5330",
+  "adminBase": "http://127.0.0.1:5404",
+  "figures": [
+    {
+      "file": "02-dashboard.png",
+      "caption": "Main dashboard with overview metrics and recent activity."
+    },
+    {
+      "file": "03-navigation-menu.png",
+      "caption": "Admin navigation menu grouped by Overview, Content, People, Intelligence, and System."
+    },
+    {
+      "file": "04-users-list.png",
+      "caption": "Users page for super administrator account creation and management."
+    },
+    {
+      "file": "05-roles-permissions.png",
+      "caption": "Roles and Permissions page showing access-control configuration."
+    },
+    {
+      "file": "06-scholarships.png",
+      "caption": "Scholarships management list and publishing controls."
+    },
+    {
+      "file": "07-job-opportunities.png",
+      "caption": "Job Opportunities management list."
+    },
+    {
+      "file": "08-applications.png",
+      "caption": "Applications review page with status controls and export action."
+    },
+    {
+      "file": "09-consultation-messages.png",
+      "caption": "Messages inbox for consultation and contact requests."
+    },
+    {
+      "file": "10-blog-posts.png",
+      "caption": "Blog Posts content management page."
+    },
+    {
+      "file": "11-events.png",
+      "caption": "Events management page for event records and registrations."
+    },
+    {
+      "file": "12-partners.png",
+      "caption": "Partners management page."
+    },
+    {
+      "file": "13-team-members.png",
+      "caption": "Team Members management page."
+    },
+    {
+      "file": "14-subscribers.png",
+      "caption": "Newsletter subscriber management page."
+    },
+    {
+      "file": "15-communications.png",
+      "caption": "Communications center for templates, campaigns, workflow, and audit."
+    },
+    {
+      "file": "16-payments.png",
+      "caption": "Payments page for Stripe transaction operations where configured."
+    },
+    {
+      "file": "17-media-governance.png",
+      "caption": "Media Governance page for assets and audit."
+    },
+    {
+      "file": "18-analytics.png",
+      "caption": "Analytics page with content and application metrics."
+    },
+    {
+      "file": "19-activity.png",
+      "caption": "Activity page for administrative progress and recent activity."
+    },
+    {
+      "file": "20-ai-chat.png",
+      "caption": "AI Chat Assistant monitoring page, currently marked Beta."
+    },
+    {
+      "file": "21-settings.png",
+      "caption": "Settings page for security, sessions, cache, and platform configuration."
+    },
+    {
+      "file": "22-scholarship-form-or-create.png",
+      "caption": "Scholarship create/edit workflow entry point."
+    },
+    {
+      "file": "23-mobile-subscribers.png",
+      "caption": "Responsive mobile view of the Subscribers page."
+    }
+  ],
+  "accounts": [
+    "super_admin",
+    "admin",
+    "writer",
+    "viewer"
+  ]
+}
