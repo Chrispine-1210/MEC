@@ -57,7 +57,7 @@ const run = async () => {
         WHERE id = ANY($1::int[])
       `, [quarantineIds]);
       await client.query(`
-        INSERT INTO analytics (event, metadata, created_at)
+        INSERT INTO analytics (event, metadata, "timestamp")
         VALUES ('admin_production_user_cleanup', $1::jsonb, now())
       `, [JSON.stringify({ quarantinedUserIds: quarantineIds, retainedForReview: report.filter((row) => row.proposed_action !== "quarantine").map((row) => row.id) })]);
     }
