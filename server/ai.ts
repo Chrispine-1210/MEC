@@ -141,7 +141,8 @@ export const getAiActivationReadiness = async (options: { verifyProvider?: boole
         model: primaryModel,
         instructions: "You are verifying provider readiness. Return a minimal acknowledgement.",
         input: "Return ok.",
-        max_output_tokens: 8,
+        // The Responses API rejects readiness probes below its minimum output budget.
+        max_output_tokens: 16,
         temperature: 0,
         store: false,
       });
