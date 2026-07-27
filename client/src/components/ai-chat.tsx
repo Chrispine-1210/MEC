@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { 
   MessageCircle, 
@@ -134,6 +134,7 @@ const emptyMemoryState = (enabled = true): ChatMemoryState => ({
 });
 
 export default function AIChat() {
+  const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>(loadStoredMessages);
@@ -259,6 +260,9 @@ export default function AIChat() {
         ? String((error as { name?: unknown }).name || "")
         : "";
       const stopped = code === "generation_stopped" || errorName === "AbortError";
+      if (!stopped) {
+        void queryClient.invalidateQueries({ queryKey: ["/api/chat/config"] });
+      }
       if (stopped && suppressAbortErrorRef.current) {
         suppressAbortErrorRef.current = false;
         pendingAssistantIdRef.current = null;

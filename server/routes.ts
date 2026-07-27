@@ -13327,7 +13327,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get('/api/chat/config', async (_req, res) => {
-    const readiness = await getAiActivationReadiness();
+    const readiness = await getAiActivationReadiness({ verifyProvider: true });
     res.setHeader("Cache-Control", "private, max-age=30");
     res.json({
       enabled: readiness.enabled,
@@ -13370,7 +13370,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     let payload: z.infer<typeof chatRequestSchema>;
     try {
       payload = chatRequestSchema.parse(req.body);
-      const readiness = await getAiActivationReadiness();
+      const readiness = await getAiActivationReadiness({ verifyProvider: true });
       if (!readiness.ready) {
         return res.status(503).json({
           message: "AI chat is temporarily unavailable.",
