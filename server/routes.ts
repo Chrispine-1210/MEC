@@ -192,6 +192,7 @@ import {
 import { normalizeSearchQuery, parsePagination, searchAndRank } from "./search";
 import { renderPrometheusMetrics } from "./observability";
 import { isVercelRuntime, resolveWritableRuntimePath } from "./runtime-paths";
+import { ACCOUNT_STATUSES, USER_ROLES, assertProductionIdentity, normalizeRole, type AppEnvironment } from "./user-governance";
 import { verifyResendWebhook } from "./webhook-signatures";
 import {
   createBotDefenseMiddleware,
@@ -207,6 +208,8 @@ const ADMIN_SELF_SERVICE_ROLES = new Set(["viewer", "writer"]);
 const ADMIN_ASSIGNABLE_ROLES = new Set(["viewer", "writer", "admin"]);
 const ADMIN_CONTENT_ROLES = new Set(["writer", "editor", "admin", "super_admin"]);
 const PROTECTED_ADMIN_ROLES = new Set(["super_admin"]);
+const currentAppEnvironment: AppEnvironment = env.APP_ENV ||
+  (process.env.VERCEL_ENV === "production" ? "production" : env.NODE_ENV === "test" ? "test" : "development");
 const COMMON_WEAK_PASSWORDS = [
   "password",
   "password123",
@@ -1418,6 +1421,17 @@ const toAdminUser = (user: {
   isActive?: boolean | null;
   createdAt?: Date | null;
   updatedAt?: Date | null;
+  accountStatus?: string | null;
+  accountSource?: string | null;
+  environment?: string | null;
+  isTestAccount?: boolean | null;
+  verifiedAt?: Date | null;
+  deletedAt?: Date | null;
+  lastLoginAt?: Date | null;
+  lastLoginIp?: string | null;
+  lastLoginUserAgent?: string | null;
+  failedLoginCount?: number | null;
+  lastFailedLoginAt?: Date | null;
 }) => {
   const meta = getUserMeta(user.id);
 
@@ -1427,7 +1441,7 @@ const toAdminUser = (user: {
     email: user.email,
     firstName: user.firstName,
     lastName: user.lastName,
-    role: user.role,
+    role: normalizeRole(user.role),
     profileImage: user.profilePicture ?? null,
     bio: meta.bio ?? "",
     avatar: meta.avatar ?? user.profilePicture ?? null,
@@ -1442,8 +1456,20 @@ const toAdminUser = (user: {
     suspendedAt: meta.suspendedAt ?? null,
     suspensionReason: meta.suspensionReason ?? null,
     region: meta.region ?? null,
-    isActive: user.isActive ?? true,
-    lastLogin: null,
+    isActive: user.isActive ?? user.accountStatus === "active",
+    status: user.accountStatus ?? (user.isActive === false ? "suspended" : "active"),
+    accountStatus: user.accountStatus ?? (user.isActive === false ? "suspended" : "active"),
+    accountSource: user.accountSource ?? "self_registration",
+    environment: user.environment ?? "production",
+    isTestAccount: user.isTestAccount ?? false,
+    verifiedAt: user.verifiedAt ?? null,
+    deletedAt: user.deletedAt ?? null,
+    lastLogin: user.lastLoginAt ?? null,
+    lastLoginAt: user.lastLoginAt ?? null,
+    lastLoginIp: user.lastLoginIp ?? null,
+    lastLoginUserAgent: user.lastLoginUserAgent ?? null,
+    failedLoginCount: user.failedLoginCount ?? 0,
+    lastFailedLoginAt: user.lastFailedLoginAt ?? null,
     createdAt: user.createdAt ?? null,
     updatedAt: user.updatedAt ?? null,
   };
@@ -4935,7 +4961,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         return res.status(401).json({ message: 'Invalid credentials' });
       }
-      if (user.isActive === false) {
+      if (user.isActive === false || ["suspended", "disabled", "locked", "deleted"].includes(user.accountStatus)) {
+        await storage.updateUser(user.id, {
+          failedLoginCount: (user.failedLoginCount ?? 0) + 1,
+          lastFailedLoginAt: new Date(),
+        } as any).catch(() => undefined);
         registerLoginFailure(normalizedIdentifier);
         void recordFingerprintEvent(req, "failed_login").catch((error) => {
           console.warn("Fingerprint tracking failed:", getErrorLogMessage(error));
@@ -4946,6 +4976,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check password
       const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) {
+        await storage.updateUser(user.id, {
+          failedLoginCount: (user.failedLoginCount ?? 0) + 1,
+          lastFailedLoginAt: new Date(),
+        } as any).catch(() => undefined);
         registerLoginFailure(normalizedIdentifier);
         void recordFingerprintEvent(req, "failed_login").catch((error) => {
           console.warn("Fingerprint tracking failed:", getErrorLogMessage(error));
@@ -4981,13 +5015,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const mfaVerified = !mfaRequired;
-      setRefreshCookie(res, user, { mfaVerified, rememberMe: loginPayload.rememberMe });
+      const authenticatedUser = mfaVerified
+        ? await storage.updateUser(user.id, {
+            lastLoginAt: new Date(),
+            lastLoginIp: req.ip,
+            lastLoginUserAgent: req.get("user-agent") || null,
+            lastSeenAt: new Date(),
+            failedLoginCount: 0,
+          } as any)
+        : user;
+      setRefreshCookie(res, authenticatedUser, { mfaVerified, rememberMe: loginPayload.rememberMe });
       res.json({
         message: 'Login successful',
-        token: signToken(user, { mfaVerified, rememberMe: loginPayload.rememberMe }),
+        token: signToken(authenticatedUser, { mfaVerified, rememberMe: loginPayload.rememberMe }),
         mfaRequired,
         mfaVerified,
-        user: buildPublicUser(user),
+        user: buildPublicUser(authenticatedUser),
       });
     } catch (error) {
       console.error('Login error:', error);
@@ -5999,12 +6042,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       userAgent: req.get("user-agent"),
     });
 
-    setRefreshCookie(res, user, { mfaVerified: true, rememberMe: decoded.rememberMe !== false });
+    const authenticatedUser = await storage.updateUser(user.id, {
+      lastLoginAt: new Date(),
+      lastLoginIp: req.ip,
+      lastLoginUserAgent: req.get("user-agent") || null,
+      lastSeenAt: new Date(),
+      failedLoginCount: 0,
+    } as any);
+    setRefreshCookie(res, authenticatedUser, { mfaVerified: true, rememberMe: decoded.rememberMe !== false });
     res.json({
       message: "MFA verified",
-      token: signToken(user as AuthUserRecord, { mfaVerified: true, rememberMe: decoded.rememberMe !== false }),
+      token: signToken(authenticatedUser as AuthUserRecord, { mfaVerified: true, rememberMe: decoded.rememberMe !== false }),
       mfaVerified: true,
-      user: buildPublicUser(user),
+      user: buildPublicUser(authenticatedUser),
     });
   };
 
@@ -8732,22 +8782,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/admin/users', authenticateToken, requireSuperAdmin, async (req, res) => {
     try {
-      const page = Number(req.query.page ?? 1);
-      const limit = Number(req.query.limit ?? 50);
+      const page = Math.max(1, Number(req.query.page ?? 1));
+      const limit = [10, 25, 50, 100].includes(Number(req.query.limit)) ? Number(req.query.limit) : 10;
       const search = normalizeSearchQuery(req.query.search);
-
-      const allUsers = await storage.getAllUsers();
-      const filtered = searchAndRank(allUsers, search, (user) => [
-        user.username,
-        user.email,
-        user.firstName,
-        user.lastName,
-        user.role,
-        getUserMeta(user.id).region,
-      ]);
-
-      const { items, total } = paginate(filtered, page, limit);
-      res.json({ users: items.map(toAdminUser), total });
+      const role = typeof req.query.role === "string" && USER_ROLES.includes(req.query.role as any) ? req.query.role : undefined;
+      const status = typeof req.query.status === "string" && ACCOUNT_STATUSES.includes(req.query.status as any) ? req.query.status : undefined;
+      const result = await storage.getManagedUsers({
+        page, pageSize: limit, search, role, status,
+        includeTest: req.query.includeTest === "true",
+        sort: ["createdAt", "lastLoginAt", "username", "email"].includes(String(req.query.sort)) ? req.query.sort as any : "createdAt",
+        direction: req.query.direction === "asc" ? "asc" : "desc",
+      });
+      res.json({
+        items: result.items.map(toAdminUser),
+        users: result.items.map(toAdminUser),
+        pagination: { page, pageSize: limit, totalItems: result.totalItems, totalPages: Math.ceil(result.totalItems / limit) },
+        summary: result.summary,
+        total: result.totalItems,
+      });
     } catch (error) {
       console.error("Admin users error:", error);
       res.status(500).json({ message: "Failed to fetch users" });
@@ -8770,8 +8822,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/admin/users', authenticateToken, requireSuperAdmin, async (req, res) => {
     try {
       const userData = insertUserSchema.parse(req.body);
-      userData.email = userData.email.trim().toLowerCase();
-      userData.username = userData.username.trim();
+      const identity = assertProductionIdentity(userData.email, userData.username, currentAppEnvironment);
+      userData.email = identity.email;
+      userData.username = identity.username;
       const requestedRole = normalizeAssignableAdminRole(userData.role);
       if (!requestedRole) {
         return res.status(403).json({
@@ -8790,6 +8843,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const user = await storage.createUser({
         ...userData,
+        accountSource: "admin_created",
+        environment: currentAppEnvironment,
+        isTestAccount: false,
+        accountStatus: "active",
+        createdBy: getAuthenticatedUser(req).id,
         password: await bcrypt.hash(userData.password, PASSWORD_HASH_ROUNDS),
       });
       if (req.body.region) {
@@ -8833,8 +8891,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!existingUser) return res.status(404).json({ message: "User not found" });
 
       const updateData = insertUserSchema.partial().parse(req.body);
-      if (updateData.email) updateData.email = updateData.email.trim().toLowerCase();
-      if (updateData.username) updateData.username = updateData.username.trim();
+      if (updateData.email || updateData.username) {
+        const identity = assertProductionIdentity(
+          updateData.email || existingUser.email,
+          updateData.username || existingUser.username,
+          currentAppEnvironment,
+        );
+        if (updateData.email) updateData.email = identity.email;
+        if (updateData.username) updateData.username = identity.username;
+      }
       if (id === requester.id && updateData.isActive === false) {
         return res.status(400).json({ message: "You cannot deactivate your own account" });
       }
@@ -8893,9 +8958,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Super administrator accounts cannot be deleted from admin management" });
       }
 
-      const success = await storage.deleteUser(id);
-      deleteUserMeta(id);
-      if (!success) return res.status(404).json({ message: "User not found" });
+      await storage.updateUser(id, {
+        accountStatus: "deleted",
+        isActive: false,
+        deletedAt: new Date(),
+        deletionReason: String(req.body?.reason || "Deleted by super administrator"),
+      } as any);
       await emitAdminRealtimeEvent(req, {
         event: "user_deleted",
         channel: "user_activity",
@@ -8923,8 +8991,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isProtectedAdminRole(target.role)) {
         return res.status(403).json({ message: "Super administrator accounts cannot be suspended from admin management" });
       }
-      const isActive = req.body.isActive !== false;
-      const user = await storage.updateUser(id, { isActive });
+      const requestedStatus = typeof req.body.status === "string"
+        ? req.body.status
+        : req.body.isActive === false ? "suspended" : "active";
+      if (!ACCOUNT_STATUSES.includes(requestedStatus as any) || requestedStatus === "deleted") {
+        return res.status(400).json({ message: "Invalid account status" });
+      }
+      const isActive = requestedStatus === "active";
+      const user = await storage.updateUser(id, {
+        isActive,
+        accountStatus: requestedStatus,
+        lockedAt: requestedStatus === "locked" ? new Date() : null,
+        lockReason: requestedStatus === "locked" ? String(req.body.reason || "Administrative lock") : null,
+      } as any);
       setUserMeta(id, {
         suspendedAt: isActive ? null : new Date().toISOString(),
         suspensionReason: isActive ? null : String(req.body.reason ?? "Administrative suspension"),

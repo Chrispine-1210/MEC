@@ -14,7 +14,6 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Users, UserPlus, ShieldCheck } from "lucide-react";
 import type { User } from "@shared/schema";
@@ -53,13 +52,17 @@ const assignableRoleOptions = [
 ];
 
 const roleLabel = (role: string) =>
-  role === "super_admin"
-    ? "Super Admin"
-    : role === "admin"
-      ? "Legacy Admin"
-      : role === "editor"
-        ? "Legacy Editor"
-        : role.charAt(0).toUpperCase() + role.slice(1);
+  ({ super_admin: "Super Admin", admin: "Admin", editor: "Editor", writer: "Writer", viewer: "Viewer", user: "User" })[role]
+    ?? "User";
+
+const statusLabel: Record<string, string> = {
+  pending_verification: "Pending Verification",
+  active: "Active",
+  suspended: "Suspended",
+  disabled: "Disabled",
+  locked: "Locked",
+  deleted: "Deleted",
+};
 
 const getEditableRole = (role: string) => {
   if (role === "viewer" || role === "writer" || role === "super_admin") return role;
@@ -75,7 +78,13 @@ export default function UsersPage() {
   const { toast } = useToast();
   const { data: currentUser } = useQuery<User>({ queryKey: ["/api/user"] });
 
-  const { data, isLoading } = useQuery<{ users: User[], total: number }>({
+  const { data, isLoading } = useQuery<{
+    items: User[];
+    users: User[];
+    total: number;
+    pagination: { page: number; pageSize: number; totalItems: number; totalPages: number };
+    summary: { all: number; active: number; pending: number; suspended: number; admins: number };
+  }>({
     queryKey: ["/api/admin/users", page, limit, search],
     queryFn: async () => {
       const response = await authFetch(`/api/admin/users?page=${page}&limit=${limit}&search=${search}`);
@@ -107,15 +116,6 @@ export default function UsersPage() {
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message || "Failed to update user", variant: "destructive" });
-    },
-  });
-
-  const toggleActiveMutation = useMutation({
-    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
-      apiRequest("PUT", `/api/admin/users/${id}`, { isActive }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      toast({ title: "Status updated" });
     },
   });
 
@@ -208,21 +208,18 @@ export default function UsersPage() {
       )
     },
     {
-      key: "isActive",
+      key: "accountStatus",
       header: "Status",
-      render: (value: boolean, row: any) => (
-        <Switch
-          checked={value}
-          onCheckedChange={(checked) => toggleActiveMutation.mutate({ id: row.id, isActive: checked })}
-          disabled={row.role === "super_admin" || String(row.id) === String(currentUser?.id)}
-          aria-label="Toggle active status"
-        />
-      )
+      render: (value: string, row: any) => (
+        <Badge variant={value === "active" ? "default" : "secondary"}>
+          {statusLabel[value || (row.isActive ? "active" : "suspended")] || "Unknown"}
+        </Badge>
+      ),
     },
     {
       key: "lastLogin",
       header: "Last Login",
-      render: (v: string) => v ? <span className="text-xs text-muted-foreground">{new Date(v).toLocaleDateString()}</span> : <span className="text-xs text-muted-foreground/70">Never</span>
+      render: (v: string) => v ? <span className="text-xs text-muted-foreground">{new Date(v).toLocaleString()}</span> : <span className="text-xs text-muted-foreground/70">Never</span>
     },
     {
       key: "actions",
@@ -263,7 +260,7 @@ export default function UsersPage() {
             Users Management
           </h1>
           <p className="text-muted-foreground mt-1">
-            {data?.total ?? 0} user{(data?.total ?? 0) !== 1 ? "s" : ""} registered on the platform
+            {data?.summary?.all ?? 0} legitimate production user{(data?.summary?.all ?? 0) !== 1 ? "s" : ""}
           </p>
         </div>
         <Button onClick={handleCreate} className="shadow-sm hover:shadow-md transition-all">
@@ -274,9 +271,9 @@ export default function UsersPage() {
 
       <DataTable
         columns={columns}
-        data={data?.users || []}
+        data={data?.items || data?.users || []}
         loading={isLoading}
-        pagination={{ page, limit, total: data?.total || 0, onPageChange: setPage, onLimitChange: setLimit }}
+        pagination={{ page, limit, total: data?.pagination?.totalItems ?? data?.total ?? 0, onPageChange: setPage, onLimitChange: setLimit }}
         searchPlaceholder="Search users by name, email, role, or region..."
         onSearch={(value) => {
           setSearch(value);

@@ -21,6 +21,28 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, or, ilike, count, sql, gte, lte, inArray, isNull } from "drizzle-orm";
+import { env } from "./env";
+import { assertProductionIdentity, isTestIdentity, normalizeRole, type AppEnvironment } from "./user-governance";
+
+const currentAppEnvironment = (): AppEnvironment =>
+  env.APP_ENV || (process.env.VERCEL_ENV === "production" ? "production" : env.NODE_ENV === "test" ? "test" : "development");
+
+export type ManagedUsersQuery = {
+  page: number;
+  pageSize: number;
+  search?: string;
+  role?: string;
+  status?: string;
+  includeTest?: boolean;
+  sort?: "createdAt" | "lastLoginAt" | "username" | "email";
+  direction?: "asc" | "desc";
+};
+
+export type ManagedUsersResult = {
+  items: User[];
+  totalItems: number;
+  summary: { all: number; active: number; pending: number; suspended: number; admins: number };
+};
 
 export interface IStorage {
   // Users
@@ -32,6 +54,7 @@ export interface IStorage {
   deleteUser(id: number): Promise<boolean>;
   getAllUsers(): Promise<User[]>;
   getUsersByRoles(roles: string[], onlyActive?: boolean): Promise<User[]>;
+  getManagedUsers(query: ManagedUsersQuery): Promise<ManagedUsersResult>;
 
 
 
@@ -224,24 +247,47 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
+    const [user] = await db.select().from(users).where(sql`lower(${users.username}) = lower(${username})`);
     return user || undefined;
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
+    const [user] = await db.select().from(users).where(sql`lower(${users.email}) = lower(${email})`);
     return user || undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser).returning();
+    const appEnvironment = currentAppEnvironment();
+    const identity = assertProductionIdentity(insertUser.email, insertUser.username, appEnvironment);
+    const testAccount = isTestIdentity(identity.email, identity.username);
+    const [user] = await db.insert(users).values({
+      ...insertUser,
+      ...identity,
+      role: normalizeRole(insertUser.role || "user"),
+      environment: insertUser.environment || (testAccount ? "test" : appEnvironment),
+      isTestAccount: insertUser.isTestAccount ?? testAccount,
+      accountStatus: insertUser.accountStatus || (insertUser.isActive === false ? "suspended" : "active"),
+    }).returning();
     return user;
   }
 
   async updateUser(id: number, updateUser: Partial<InsertUser>): Promise<User> {
+    const existing = await this.getUser(id);
+    if (!existing) throw new Error("User not found");
+    const identity = assertProductionIdentity(
+      updateUser.email || existing.email,
+      updateUser.username || existing.username,
+      currentAppEnvironment(),
+    );
     const [user] = await db
       .update(users)
-      .set({ ...updateUser, updatedAt: new Date() })
+      .set({
+        ...updateUser,
+        ...(updateUser.email ? { email: identity.email } : {}),
+        ...(updateUser.username ? { username: identity.username } : {}),
+        ...(updateUser.role ? { role: normalizeRole(updateUser.role) } : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(users.id, id))
       .returning();
     return user;
@@ -269,6 +315,52 @@ export class DatabaseStorage implements IStorage {
           : inArray(users.role, normalizedRoles),
       )
       .orderBy(desc(users.createdAt));
+  }
+
+  async getManagedUsers(query: ManagedUsersQuery): Promise<ManagedUsersResult> {
+    const governed = query.includeTest
+      ? isNull(users.deletedAt)
+      : and(eq(users.environment, "production"), eq(users.isTestAccount, false), isNull(users.deletedAt));
+    const filters = [governed];
+    if (query.search) {
+      const term = `%${query.search.trim()}%`;
+      filters.push(or(
+        ilike(users.username, term), ilike(users.email, term), ilike(users.firstName, term),
+        ilike(users.lastName, term), ilike(users.role, term), sql`CAST(${users.id} AS TEXT) ILIKE ${term}`,
+      ));
+    }
+    if (query.role) filters.push(eq(users.role, query.role));
+    if (query.status) filters.push(eq(users.accountStatus, query.status));
+    const where = and(...filters);
+    const orderColumn = query.sort === "username" ? users.username
+      : query.sort === "email" ? users.email
+      : query.sort === "lastLoginAt" ? users.lastLoginAt
+      : users.createdAt;
+    const order = query.direction === "asc" ? asc(orderColumn) : desc(orderColumn);
+    const offset = (query.page - 1) * query.pageSize;
+
+    const [items, totalRows, summaryRows] = await Promise.all([
+      db.select().from(users).where(where).orderBy(order).limit(query.pageSize).offset(offset),
+      db.select({ total: count() }).from(users).where(where),
+      db.select({
+        all: count(),
+        active: sql<number>`count(*) filter (where ${users.accountStatus} = 'active')`,
+        pending: sql<number>`count(*) filter (where ${users.accountStatus} = 'pending_verification')`,
+        suspended: sql<number>`count(*) filter (where ${users.accountStatus} in ('suspended','disabled','locked'))`,
+        admins: sql<number>`count(*) filter (where ${users.role} in ('super_admin','admin','editor','writer','viewer'))`,
+      }).from(users).where(governed),
+    ]);
+
+    const summary = summaryRows[0];
+    return {
+      items,
+      totalItems: Number(totalRows[0]?.total ?? 0),
+      summary: {
+        all: Number(summary?.all ?? 0), active: Number(summary?.active ?? 0),
+        pending: Number(summary?.pending ?? 0), suspended: Number(summary?.suspended ?? 0),
+        admins: Number(summary?.admins ?? 0),
+      },
+    };
   }
 
   // Scholarships

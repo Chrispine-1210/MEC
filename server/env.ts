@@ -32,6 +32,8 @@ const optionalEnvBoolean = z.preprocess((value) => {
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+  APP_ENV: z.enum(["production", "staging", "development", "test"]).optional(),
+  TEST_DATABASE_URL: optionalEnvString,
   HOST: optionalEnvString,
   PORT: z.coerce.number().int().positive().default(5000),
   ADMIN_PORT: z.coerce.number().int().positive().default(5174),

@@ -6,6 +6,7 @@ import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
 import ws from "ws";
 import * as schema from "@shared/schema";
 import { selectDatabaseUrl } from "./database-url";
+import { assertTestDatabaseIsolation } from "./user-governance";
 
 const nodeMajor = Number(process.versions.node.split(".")[0]);
 if (nodeMajor >= 25) {
@@ -23,8 +24,16 @@ if (nodeMajor >= 24) {
 
 neonConfig.webSocketConstructor = ws;
 const isDevelopment = process.env.NODE_ENV !== "production";
+const isTestRuntime = process.env.NODE_ENV === "test";
 const isVercelRuntime = process.env.VERCEL === "1" || process.env.VERCEL === "true";
+if (isTestRuntime) {
+  assertTestDatabaseIsolation(
+    process.env.TEST_DATABASE_URL,
+    process.env.DATABASE_URL || process.env.POSTGRES_URL,
+  );
+}
 const databaseUrlCandidates: Array<[string, string | undefined]> = [
+  ...(isTestRuntime ? [["TEST_DATABASE_URL", process.env.TEST_DATABASE_URL] as [string, string | undefined]] : []),
   ...(isDevelopment
     ? [
         ["DATABASE_URL_UNPOOLED", process.env.DATABASE_URL_UNPOOLED] as [string, string | undefined],

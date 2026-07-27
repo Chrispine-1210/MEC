@@ -10,6 +10,7 @@ import express from "express";
 process.env.NODE_ENV = "test";
 process.env.VERCEL = "1";
 process.env.DATABASE_URL = process.env.DATABASE_URL || "postgresql://test:test@localhost:5432/test_db";
+process.env.TEST_DATABASE_URL = process.env.TEST_DATABASE_URL || "postgresql://test:test@localhost:5432/mec_test";
 process.env.DATABASE_URL_UNPOOLED = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
 process.env.JWT_SECRET = "platform-smoke-test-secret-32-chars";
 process.env.PUBLIC_APP_URL = "http://public.example.test";
