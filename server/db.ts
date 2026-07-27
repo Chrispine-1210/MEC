@@ -16,7 +16,7 @@ if (nodeMajor >= 25) {
 if (nodeMajor >= 24) {
   console.warn(
     `[db] Node.js ${process.versions.node} is newer than the supported LTS range for this stack. ` +
-      "Use Node 20 or 22 LTS if Neon WebSocket connections behave unexpectedly.",
+      "Using the PostgreSQL TCP driver for production/serverless compatibility.",
   );
 }
 
@@ -62,6 +62,7 @@ const connectionHost = (() => {
   }
 })();
 const useNodePostgresDriver =
+  isVercelRuntime ||
   process.env.DATABASE_DRIVER === "pg" ||
   (isDevelopment && nodeMajor >= 24) ||
   ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(connectionHost);
