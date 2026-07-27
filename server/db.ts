@@ -5,6 +5,7 @@ import { Pool as PgPool } from "pg";
 import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
 import ws from "ws";
 import * as schema from "@shared/schema";
+import { selectDatabaseUrl } from "./database-url";
 
 const nodeMajor = Number(process.versions.node.split(".")[0]);
 if (nodeMajor >= 25) {
@@ -23,13 +24,6 @@ if (nodeMajor >= 24) {
 neonConfig.webSocketConstructor = ws;
 const isDevelopment = process.env.NODE_ENV !== "production";
 const isVercelRuntime = process.env.VERCEL === "1" || process.env.VERCEL === "true";
-const isUsableConnectionString = (value: string | undefined) =>
-  Boolean(
-    value?.trim() &&
-      /^postgres(?:ql)?:\/\//i.test(value.trim()) &&
-      !/(placeholder|changeme|change-me|example|your_)/i.test(value),
-  );
-
 const databaseUrlCandidates: Array<[string, string | undefined]> = [
   ...(isDevelopment
     ? [
@@ -46,7 +40,7 @@ const databaseUrlCandidates: Array<[string, string | undefined]> = [
 ];
 
 const [connectionStringSource, connectionString] =
-  databaseUrlCandidates.find(([, value]) => isUsableConnectionString(value)) || [];
+  selectDatabaseUrl(databaseUrlCandidates);
 
 if (!connectionString) {
   throw new Error("DATABASE_URL or a compatible POSTGRES_URL is required to start the server.");
