@@ -15,6 +15,29 @@ const rewriteRequestUrl = (req) => {
   req.url = `/${cleanPath}${requestUrl.search}`;
 };
 
+const describeStartupError = (error) => {
+  if (error instanceof Error) {
+    const cause = error.cause instanceof Error ? `; cause: ${error.cause.message}` : "";
+    return `${error.name}: ${error.message}${cause}`;
+  }
+
+  if (error && typeof error === "object") {
+    const code = typeof error.code === "string" ? error.code : "";
+    const message = typeof error.message === "string" ? error.message : "";
+    const nested = error.error instanceof Error ? error.error.message : "";
+    const details = [code, message, nested].filter(Boolean).join(": ");
+    if (details) return details;
+
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return Object.prototype.toString.call(error);
+    }
+  }
+
+  return String(error || "Unknown server startup error");
+};
+
 export default async function handler(req, res) {
   try {
     rewriteRequestUrl(req);
@@ -22,14 +45,16 @@ export default async function handler(req, res) {
     await appModule.ready;
     return appModule.default(req, res);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown server startup error";
-    const status = message.includes("is required") ? 503 : 500;
+    const detail = describeStartupError(error);
+    const status = /required|authentication|password|database|connect|timeout/i.test(detail) ? 503 : 500;
+
+    console.error("MEC API startup failure:", error);
 
     return res.status(status).json({
       message: "API startup failed",
-      detail: message,
+      detail,
       hint:
-        "Check Vercel Production Environment Variables (JWT_SECRET, DATABASE_URL, and related runtime config).",
+        "Verify Vercel Production variables, especially JWT_SECRET and a valid pooled DATABASE_URL/POSTGRES_URL, then redeploy without build cache.",
     });
   }
 }
