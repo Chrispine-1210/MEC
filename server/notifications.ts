@@ -140,6 +140,7 @@ const getAdminRoleEnvEmails = (role: AdminRole) => {
 
 export const resolveAdminRoleEmailRecipients = async (
   roles?: AdminRole[],
+  options: { includeSenderFallback?: boolean } = {},
 ): Promise<AdminRoleEmailRecipient[]> => {
   const targetRoles = normalizeAdminRoles(roles);
   const recipients = new Map<string, AdminRoleEmailRecipient>();
@@ -163,7 +164,7 @@ export const resolveAdminRoleEmailRecipients = async (
     console.warn("Admin role email recipient lookup skipped:", getErrorMessage(error));
   }
 
-  if (recipients.size === 0) {
+  if (recipients.size === 0 && options.includeSenderFallback !== false) {
     for (const email of parseEmailList(env.ADMIN_NOTIFICATION_EMAIL || env.EMAIL_FROM)) {
       recipients.set(`fallback:${email}`, {
         role: "admin",

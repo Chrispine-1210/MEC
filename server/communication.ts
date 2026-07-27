@@ -3,7 +3,11 @@ import path from "path";
 import { createHash, createHmac, randomUUID } from "crypto";
 import { env } from "./env";
 import { enqueueEmail, renderMtendereEmail, type EmailCategory } from "./email";
-import { getNotificationProviderDiagnostics, sendNotification } from "./notifications";
+import {
+  getNotificationProviderDiagnostics,
+  resolveAdminRoleEmailRecipients,
+  sendNotification,
+} from "./notifications";
 import { resolveWritableRuntimePath } from "./runtime-paths";
 import { storage } from "./storage";
 
@@ -902,9 +906,18 @@ const routeMatchesCondition = (event: CommunicationEvent, route: RouteDefinition
   return true;
 };
 
-const resolveRecipient = (event: CommunicationEvent, route: RouteDefinition) => {
+const resolveRecipient = async (event: CommunicationEvent, route: RouteDefinition) => {
   const field = route.recipientField;
-  if (field === "admin_notification_email") return supportEmail;
+  if (field === "admin_notification_email") {
+    const configuredRecipient = extractEmailAddress(env.ADMIN_NOTIFICATION_EMAIL);
+    if (configuredRecipient) return configuredRecipient;
+
+    const roleRecipients = await resolveAdminRoleEmailRecipients(
+      ["super_admin", "admin"],
+      { includeSenderFallback: false },
+    );
+    return roleRecipients[0]?.email || null;
+  }
   if (field === "admin_phone") return env.ADMIN_NOTIFICATION_PHONE || null;
   if (!field) return null;
 
@@ -2140,7 +2153,7 @@ export const emitCommunicationEvent = async (
       }
 
       const rendered = renderTemplate(template, event, additions);
-      const recipient = resolveRecipient(event, route);
+      const recipient = await resolveRecipient(event, route);
       const priority = event.priority || route.priority;
 
       if (route.channel === "email") {

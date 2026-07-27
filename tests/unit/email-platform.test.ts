@@ -147,6 +147,20 @@ test("admin role notifications resolve active role inboxes with role ownership",
   assert.equal(recipients.filter((recipient) => recipient.email === "admin@example.test").length, 2);
 });
 
+test("security recipient lookup does not treat the sender address as an administrator", { concurrency: false }, async () => {
+  const { resolveAdminRoleEmailRecipients } = await import("../../server/notifications");
+  await patchStorage({
+    getUsersByRoles: async () => [],
+  });
+
+  const recipients = await resolveAdminRoleEmailRecipients(
+    ["admin", "super_admin"],
+    { includeSenderFallback: false },
+  );
+
+  assert.deepEqual(recipients, []);
+});
+
 test("Resend sender domain readiness requires a verified Resend domain", { concurrency: false }, async () => {
   const { getResendSenderDomainReadiness } = await emailModulePromise;
 
