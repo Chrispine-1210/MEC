@@ -9,7 +9,14 @@ permissions:
   contents: read
 
 jobs:
-  probe:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Runner health
+        run: echo MEC_RUNNER_OK
+
+  private-checkout:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
